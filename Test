@@ -1,25 +1,59 @@
-renderGroup={(params) => (
-    <React.Fragment key={params.key}>
+<Autocomplete
+  value={branch}
+  options={Array.isArray(branchList) ? branchList : []}
+  loading={branchLoading}
+  disabled={!circle}
+  getOptionLabel={(o) =>
+    o?.branchCode ? `${o.branchCode} - ${o.branchName}` : ""
+  }
+  isOptionEqualToValue={(o, v) =>
+    o?.branchCode === v?.branchCode
+  }
+  onChange={(e, v) => setBranch(v)}
+  renderInput={(params) => (
+    <TextField
+      {...params}
+      label="Select Branch"
+      InputProps={{
+        ...params.InputProps,
+        endAdornment: (
+          <>
+            {branchLoading && <CircularProgress size={18} />}
+            {params.InputProps.endAdornment}
+          </>
+        ),
+      }}
+    />
+  )}
+  ListboxProps={{
+    style: { maxHeight: 300, overflow: "auto" },
+  }}
+  renderOption={(props, option) => (
+    <li {...props}>
+      {option.branchCode} - {option.branchName}
+    </li>
+  )}
+  renderGroup={(params) => (
+    <>
       {params.children}
 
-      {branchHasMore && (
+      {branchHasMore && !branchLoading && (
         <li
           style={{
             textAlign: "center",
-            padding: "10px",
+            padding: "8px",
             cursor: "pointer",
-            fontWeight: 600,
+            fontWeight: 500,
             color: "#1976d2",
           }}
-          onMouseDown={(e) => {
-            // 👈 THIS IS CRITICAL
-            e.preventDefault();
-          }}
-          onClick={() => {
-            fetchBranches(circle, branchSize + 20);
-          }}
+          onMouseDown={(e) => e.preventDefault()} // 🔴 VERY IMPORTANT
+          onClick={() =>
+            fetchBranches(circle, branchSize + 20)
+          }
         >
-          {branchLoading ? "Loading more…" : "⬇ Show more branches"}
+          Show more branches…
         </li>
       )}
-    </React.Fragment>
+    </>
+  )}
+/>
