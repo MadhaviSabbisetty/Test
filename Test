@@ -57,3 +57,33 @@
     </>
   )}
 />
+
+
+
+
+const fetchBranches = async (circle, size = 20) => {
+  if (!circle?.circleCode || branchLoading) return;
+
+  try {
+    setBranchLoading(true);
+
+    const res = await callApi(
+      `/CM/common-master/indian-foreign-branches?circleCode=${circle.circleCode}&size=${size}`,
+      null,
+      "GET"
+    );
+
+    const branches = Array.isArray(res?.data?.data?.data)
+      ? res.data.data.data
+      : [];
+
+    setBranchList(branches);
+    setBranchHasMore(branches.length === size);
+    setBranchSize(size);
+  } catch (e) {
+    console.error(e);
+    setBranchList([]);
+  } finally {
+    setBranchLoading(false);
+  }
+};
