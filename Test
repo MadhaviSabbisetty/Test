@@ -1,11 +1,35 @@
-const startProgressTimer = () => {
-  progressTimerRef.current = setTimeout(() => {
-    setShowProgress(true);
-  }, 1000); // 1 second delay
-};
+<Autocomplete
+  value={branch}
+  options={branchList}
+  loading={branchLoading}
+  disabled={!circle}
+  getOptionLabel={(o) => `${o.branchCode} - ${o.branchName}`}
+  onChange={(e, v) => setBranch(v)}
+  ListboxProps={{
+    onScroll: (event) => {
+      const listboxNode = event.currentTarget;
+      const isBottom =
+        listboxNode.scrollTop + listboxNode.clientHeight >=
+        listboxNode.scrollHeight - 1;
 
-const stopProgressTimer = () => {
-  clearTimeout(progressTimerRef.current);
-  progressTimerRef.current = null;
-  setShowProgress(false);
-};
+      if (isBottom && branchHasMore && !branchLoading) {
+        fetchBranches(circle, branchPage + 1); // 🔥 load next page
+      }
+    },
+  }}
+  renderInput={(params) => (
+    <TextField
+      {...params}
+      label="Select Branch"
+      InputProps={{
+        ...params.InputProps,
+        endAdornment: (
+          <>
+            {branchLoading && <CircularProgress size={20} />}
+            {params.InputProps.endAdornment}
+          </>
+        ),
+      }}
+    />
+  )}
+/>
