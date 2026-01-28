@@ -33,3 +33,44 @@
     />
   )}
 />
+
+
+const fetchBranches = async (circle, page = 0) => {
+  if (!circle?.circleCode || branchLoading || !branchHasMore) return;
+
+  try {
+    setBranchLoading(true);
+
+    const res = await callApi(
+      "/CM/common-master/indian-foreign-branches",
+      {
+        circleCode: circle.circleCode,
+        page,
+        size: 20,
+      },
+      "GET"
+    );
+
+    // 🔥 SAFELY extract array
+    const newBranches = Array.isArray(res?.data?.content)
+      ? res.data.content
+      : Array.isArray(res?.data)
+      ? res.data
+      : [];
+
+    setBranchList((prev) =>
+      page === 0 ? newBranches : [...prev, ...newBranches]
+    );
+
+    // pagination flags
+    setBranchHasMore(
+      res?.data?.last !== undefined ? !res.data.last : newBranches.length === 20
+    );
+
+    setBranchPage(page);
+  } catch {
+    // do NOT break UI
+  } finally {
+    setBranchLoading(false);
+  }
+};
