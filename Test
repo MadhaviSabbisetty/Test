@@ -1,21 +1,45 @@
 <Autocomplete
   value={branch}
-  options={branchList}
+  options={
+    branchHasMore
+      ? [...branchList, SHOW_MORE_OPTION]
+      : branchList
+  }
   loading={branchLoading}
   disabled={!circle}
-  getOptionLabel={(o) => `${o.branchCode} - ${o.branchName}`}
-  onChange={(e, v) => setBranch(v)}
-  ListboxProps={{
-    onScroll: (event) => {
-      const listboxNode = event.currentTarget;
-      const isBottom =
-        listboxNode.scrollTop + listboxNode.clientHeight >=
-        listboxNode.scrollHeight - 1;
+  getOptionLabel={(option) =>
+    option.__type === "SHOW_MORE"
+      ? option.label
+      : `${option.branchCode} - ${option.branchName}`
+  }
+  isOptionEqualToValue={(o, v) =>
+    o.__type === "SHOW_MORE"
+      ? false
+      : o.branchCode === v.branchCode
+  }
+  onChange={(e, value) => {
+    if (!value) return;
 
-      if (isBottom && branchHasMore && !branchLoading) {
-        fetchBranches(circle, branchPage + 1); // 🔥 load next page
-      }
-    },
+    if (value.__type === "SHOW_MORE") {
+      fetchBranches(circle, branchPage + 1);
+      return;
+    }
+
+    setBranch(value);
+  }}
+  renderOption={(props, option) => {
+    if (option.__type === "SHOW_MORE") {
+      return (
+        <li {...props} style={{ textAlign: "center", fontWeight: 600 }}>
+          🔽 Show more branches…
+        </li>
+      );
+    }
+    return (
+      <li {...props}>
+        {option.branchCode} - {option.branchName}
+      </li>
+    );
   }}
   renderInput={(params) => (
     <TextField
@@ -33,44 +57,3 @@
     />
   )}
 />
-
-
-const fetchBranches = async (circle, page = 0) => {
-  if (!circle?.circleCode || branchLoading || !branchHasMore) return;
-
-  try {
-    setBranchLoading(true);
-
-    const res = await callApi(
-      "/CM/common-master/indian-foreign-branches",
-      {
-        circleCode: circle.circleCode,
-        page,
-        size: 20,
-      },
-      "GET"
-    );
-
-    // 🔥 SAFELY extract array
-    const newBranches = Array.isArray(res?.data?.content)
-      ? res.data.content
-      : Array.isArray(res?.data)
-      ? res.data
-      : [];
-
-    setBranchList((prev) =>
-      page === 0 ? newBranches : [...prev, ...newBranches]
-    );
-
-    // pagination flags
-    setBranchHasMore(
-      res?.data?.last !== undefined ? !res.data.last : newBranches.length === 20
-    );
-
-    setBranchPage(page);
-  } catch {
-    // do NOT break UI
-  } finally {
-    setBranchLoading(false);
-  }
-};
