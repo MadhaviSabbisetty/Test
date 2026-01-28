@@ -1,46 +1,73 @@
 <Autocomplete
+  open={branchOpen}
+  onOpen={() => setBranchOpen(true)}
+  onClose={() => setBranchOpen(false)}
+
   value={branch}
   options={
     branchHasMore
       ? [...branchList, SHOW_MORE_OPTION]
       : branchList
   }
+
   loading={branchLoading}
   disabled={!circle}
-  getOptionLabel={(option) =>
-    option.__type === "SHOW_MORE"
-      ? option.label
-      : `${option.branchCode} - ${option.branchName}`
-  }
-  isOptionEqualToValue={(o, v) =>
-    o.__type === "SHOW_MORE"
-      ? false
-      : o.branchCode === v.branchCode
-  }
+
+  getOptionLabel={(option) => {
+    if (option.__type === "SHOW_MORE") return option.label;
+    return `${option.branchCode} - ${option.branchName}`;
+  }}
+
+  isOptionEqualToValue={(o, v) => {
+    if (!o || !v) return false;
+    if (o.__type === "SHOW_MORE" || v.__type === "SHOW_MORE") return false;
+    return o.branchCode === v.branchCode;
+  }}
+
   onChange={(e, value) => {
+    // 🚫 Block default behavior
+    e.preventDefault();
+
     if (!value) return;
 
+    // 🔽 SHOW MORE CLICK
     if (value.__type === "SHOW_MORE") {
-      fetchBranches(circle, branchPage + 1);
+      fetchBranches(circle, branchSize + 20);
+
+      // ✅ KEEP DROPDOWN OPEN
+      setTimeout(() => setBranchOpen(true), 0);
       return;
     }
 
+    // ✅ Normal branch selection
     setBranch(value);
+    setBranchOpen(false);
   }}
+
   renderOption={(props, option) => {
     if (option.__type === "SHOW_MORE") {
       return (
-        <li {...props} style={{ textAlign: "center", fontWeight: 600 }}>
-          🔽 Show more branches…
+        <li
+          {...props}
+          style={{
+            textAlign: "center",
+            fontWeight: 600,
+            color: "#1976d2",
+            cursor: "pointer",
+          }}
+        >
+          ⬇ Show more branches…
         </li>
       );
     }
+
     return (
       <li {...props}>
         {option.branchCode} - {option.branchName}
       </li>
     );
   }}
+
   renderInput={(params) => (
     <TextField
       {...params}
