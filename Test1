@@ -1,0 +1,392 @@
+import React, { useEffect, useState } from "react";
+import {
+  Box,
+  Card,
+  Stack,
+  TextField,
+  Button,
+  CircularProgress,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  Fade,
+  Typography,
+  LinearProgress,
+  Grow,
+} from "@mui/material";
+import Autocomplete from "@mui/material/Autocomplete";
+import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import dayjs from "dayjs";
+import CloudDownloadTwoTone from "@mui/icons-material/CloudDownloadTwoTone";
+
+import useApi from "../../hooks/useApi"; // <-- your existing hook
+import CustomChip from "../../components/CustomChip";
+
+/* ============================
+   COMPONENT
+============================ */
+export default function ReportsBranchWise() {
+  const { callApi } = useApi();
+
+  /* ============================
+     STATES
+  ============================ */
+
+  // Radio
+  const [bankType, setBankType] = useState("Indian");
+
+  // Master selections
+  const [zone, setZone] = useState(null);
+  const [circle, setCircle] = useState(null);
+  const [branch, setBranch] = useState(null);
+
+  // Lists
+  const [zoneList, setZoneList] = useState([]);
+  const [circleList, setCircleList] = useState([]);
+  const [branchList, setBranchList] = useState([]);
+  const [reportList, setReportList] = useState([]);
+
+  // Loading
+  const [zoneLoading, setZoneLoading] = useState(false);
+  const [circleLoading, setCircleLoading] = useState(false);
+  const [branchLoading, setBranchLoading] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
+
+  // Report selection (IMPORTANT – GLIF MATCH)
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
+
+  // Download
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadedMB, setDownloadedMB] = useState(null);
+  const [disableInputs, setDisableInputs] = useState(false);
+
+  const [dateError, setDateError] = useState(null);
+
+  /* ============================
+     RADIO CHANGE
+  ============================ */
+
+  const handleBankTypeChange = (e) => {
+    const value = e.target.value;
+    setBankType(value);
+
+    // reset dependent fields
+    setZone(null);
+    setCircle(null);
+    setBranch(null);
+    setCircleList([]);
+    setBranchList([]);
+    setSelectedReport(null);
+    setSelectedDate(null);
+  };
+
+  /* ============================
+     API CALLS
+  ============================ */
+
+  // ZONES
+  const fetchZones = async () => {
+    setZoneLoading(true);
+    try {
+      const res = await callApi(
+        "/api/common-master/indian-zones",
+        {},
+        "GET"
+      );
+      setZoneList(res?.data || []);
+    } catch {
+      setZoneList([]);
+    } finally {
+      setZoneLoading(false);
+    }
+  };
+
+  // CIRCLES (INDIAN + FOREIGN SAME API)
+  const fetchCircles = async (zoneObj) => {
+    if (!zoneObj?.zoneCode) {
+      setCircleList([]);
+      return;
+    }
+
+    setCircleLoading(true);
+    try {
+      const res = await callApi(
+        `/api/common-master/indian-foreign-circles?bankType=${bankType}&zoneCode=${zoneObj.zoneCode}`,
+        null,
+        "GET"
+      );
+      setCircleList(res?.data || []);
+    } catch {
+      setCircleList([]);
+    } finally {
+      setCircleLoading(false);
+    }
+  };
+
+  // BRANCHES
+  const fetchBranches = async (circleObj) => {
+    if (!circleObj?.circleCode) {
+      setBranchList([]);
+      return;
+    }
+
+    setBranchLoading(true);
+    try {
+      const res = await callApi(
+        "/api/common-master/indian-foreign-branches",
+        { circleCode: circleObj.circleCode },
+        "POST"
+      );
+      setBranchList(res?.data || []);
+    } catch {
+      setBranchList([]);
+    } finally {
+      setBranchLoading(false);
+    }
+  };
+
+  // REPORT TYPES
+  const fetchReports = async () => {
+    setReportLoading(true);
+    try {
+      const res = await callApi("/RS/reports/types", {}, "GET");
+      setReportList(res?.data || []);
+    } catch {
+      setReportList([]);
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  /* ============================
+     EFFECTS
+  ============================ */
+
+  useEffect(() => {
+    fetchZones();
+    fetchReports();
+  }, []);
+
+  useEffect(() => {
+    if (zone) fetchCircles(zone);
+  }, [zone, bankType]);
+
+  useEffect(() => {
+    if (circle) fetchBranches(circle);
+  }, [circle]);
+
+  /* ============================
+     DOWNLOAD (GLIF MATCH)
+  ============================ */
+
+  const handleDownload = async () => {
+    if (!selectedReport || !selectedDate || !branch) return;
+
+    setIsDownloading(true);
+    setDisableInputs(true);
+    setDownloadedMB(null);
+
+    try {
+      await callApi(
+        "/RS/reports/download",
+        {
+          reportId: selectedReport.id,
+          reportDate: selectedDate.format("YYYY-MM-DD"),
+          branchCode: branch.branchCode,
+        },
+        "POST",
+        "blob",
+        {
+          onDownloadProgress: (e) => {
+            const mb = (e.loaded / (1024 * 1024)).toFixed(2);
+            setDownloadedMB(mb);
+          },
+        },
+        false
+      );
+    } catch (e) {
+      console.error("Download failed", e);
+    } finally {
+      setIsDownloading(false);
+      setDisableInputs(false);
+    }
+  };
+
+  /* ============================
+     UI
+  ============================ */
+
+  return (
+    <Grow in>
+      <Stack spacing={2}>
+        <Card sx={{ p: 3 }}>
+          <Stack spacing={2}>
+
+            {/* RADIO */}
+            <RadioGroup row value={bankType} onChange={handleBankTypeChange}>
+              <FormControlLabel value="Indian" control={<Radio />} label="Indian" />
+              <FormControlLabel value="Foreign" control={<Radio />} label="Foreign" />
+            </RadioGroup>
+
+            {/* ZONE */}
+            <Autocomplete
+              sx={{ width: "40vh" }}
+              value={zone}
+              options={zoneList}
+              loading={zoneLoading}
+              getOptionLabel={(o) => o?.description || ""}
+              onChange={(e, v) => setZone(v)}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Zone"
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {zoneLoading && <CircularProgress size={18} />}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+            />
+
+            {/* CIRCLE */}
+            <Autocomplete
+              sx={{ width: "40vh" }}
+              value={circle}
+              options={circleList}
+              loading={circleLoading}
+              disabled={!zone}
+              getOptionLabel={(o) =>
+                o?.circleCode ? `${o.circleCode} - ${o.circleName}` : ""
+              }
+              onChange={(e, v) => setCircle(v)}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Circle Code"
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {circleLoading && <CircularProgress size={18} />}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+            />
+
+            {/* BRANCH */}
+            <Autocomplete
+              sx={{ width: "40vh" }}
+              value={branch}
+              options={branchList}
+              loading={branchLoading}
+              disabled={!circle}
+              getOptionLabel={(o) =>
+                o?.branchCode ? `${o.branchCode} - ${o.branchName}` : ""
+              }
+              onChange={(e, v) => setBranch(v)}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Branch Code"
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {branchLoading && <CircularProgress size={18} />}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+            />
+
+            {/* REPORT + DATE (ONLY AFTER BRANCH) */}
+            {branch && (
+              <>
+                <Autocomplete
+                  sx={{ width: "40vh" }}
+                  value={selectedReport}
+                  options={reportList}
+                  loading={reportLoading}
+                  getOptionLabel={(o) => o?.reportName || ""}
+                  onChange={(e, v) => setSelectedReport(v)}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Report Name"
+                      InputProps={{
+                        ...params.InputProps,
+                        endAdornment: (
+                          <>
+                            {reportLoading && <CircularProgress size={18} />}
+                            {params.InputProps.endAdornment}
+                          </>
+                        ),
+                      }}
+                    />
+                  )}
+                />
+
+                <LocalizationProvider dateAdapter={AdapterDayjs}>
+                  <DatePicker
+                    sx={{ width: "40vh" }}
+                    label="Report Date"
+                    value={selectedDate}
+                    maxDate={dayjs()}
+                    onChange={(v) => setSelectedDate(v)}
+                    onError={(err) => setDateError(err)}
+                  />
+                </LocalizationProvider>
+              </>
+            )}
+
+            {/* DOWNLOAD BUTTON */}
+            <Button
+              variant="contained"
+              endIcon={<CloudDownloadTwoTone />}
+              onClick={handleDownload}
+              disabled={
+                disableInputs ||
+                !selectedReport ||
+                !selectedDate ||
+                !!dateError
+              }
+            >
+              {isDownloading ? "Downloading..." : "Fetch & Download"}
+            </Button>
+
+            {/* PROGRESS */}
+            <Fade in={isDownloading}>
+              <Box>
+                <Typography variant="caption">
+                  {downloadedMB
+                    ? `Streaming… ${downloadedMB} MB downloaded`
+                    : "Preparing download…"}
+                </Typography>
+                <LinearProgress />
+                {downloadedMB && (
+                  <CustomChip
+                    label={`${downloadedMB} MB`}
+                    color="error"
+                  />
+                )}
+              </Box>
+            </Fade>
+
+          </Stack>
+        </Card>
+      </Stack>
+    </Grow>
+  );
+}
