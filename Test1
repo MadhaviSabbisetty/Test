@@ -1,391 +1,654 @@
-import React, { useEffect, useState } from "react";
+import React,{ useEffect, useState, forwardRef } from "react";
 import {
   Box,
   Card,
   Stack,
-  TextField,
-  Button,
-  CircularProgress,
   RadioGroup,
+  Typography,
   FormControlLabel,
   Radio,
-  Fade,
-  Typography,
+  TextField,
+  Button,
+   Grow,
+  CircularProgress,
   LinearProgress,
-  Grow,
+  Fade,
 } from "@mui/material";
 import Autocomplete from "@mui/material/Autocomplete";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs from "dayjs";
-import CloudDownloadTwoTone from "@mui/icons-material/CloudDownloadTwoTone";
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import { useSelector} from "react-redux";
+import { useTheme } from "@mui/material/styles";
 
-import useApi from "../../hooks/useApi"; // <-- your existing hook
-import CustomChip from "../../components/CustomChip";
+import GlifReportsStyles from "./GlifReportsStyles";
+import {
+  Summarize,
+  CloudDownloadTwoTone,
+  LooksOne,
+  LooksTwo,
+  Looks3,
+  Looks4,
+} from "@mui/icons-material";
+import CustomChip from "../../utils/CustomChip";
 
-/* ============================
-   COMPONENT
-============================ */
-export default function ReportsBranchWise() {
+const moduleType="BRANCH_WISE";
+
+export default function BranchWiseReports() {
+  const user=useSelector((state)=> state.auth.user);
   const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  
+  const theme = useTheme();
+  const styles = GlifReportsStyles(theme);
 
-  /* ============================
-     STATES
-  ============================ */
+  const [minDate, setMinDate] = useState(dayjs("2020-01-01"));
 
-  // Radio
-  const [bankType, setBankType] = useState("Indian");
 
-  // Master selections
-  const [zone, setZone] = useState(null);
-  const [circle, setCircle] = useState(null);
-  const [branch, setBranch] = useState(null);
+  /* ---------------- RADIO ---------------- */
+  const [countryType, setCountryType] = useState("INDIAN");
 
-  // Lists
+  /* ---------------- MASTER DATA ---------------- */
   const [zoneList, setZoneList] = useState([]);
   const [circleList, setCircleList] = useState([]);
   const [branchList, setBranchList] = useState([]);
   const [reportList, setReportList] = useState([]);
 
-  // Loading
-  const [zoneLoading, setZoneLoading] = useState(false);
-  const [circleLoading, setCircleLoading] = useState(false);
-  const [branchLoading, setBranchLoading] = useState(false);
-  const [reportLoading, setReportLoading] = useState(false);
+  /* ---------------- SELECTED VALUES ---------------- */
+  const [zone, setZone] = useState(null);
+  const [circle, setCircle] = useState(null);
+  const [branch, setBranch] = useState(null);
+  const [selectedReport, setReport] = useState(null);
+  const [selectedDate, setReportDate] = useState(null);
 
-  // Report selection (IMPORTANT – GLIF MATCH)
-  const [selectedReport, setSelectedReport] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(null);
-
-  // Download
   const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadedMB, setDownloadedMB] = useState(null);
-  const [disableInputs, setDisableInputs] = useState(false);
 
-  const [dateError, setDateError] = useState(null);
+  const [circleLoading,setCircleLoading]=useState(false);
+  const [branchLoading,setBranchLoading]=useState(false);
+  const [reportLoading,setReportLoading]=useState(false);
 
-  /* ============================
-     RADIO CHANGE
-  ============================ */
+  const [branchHasMore, setBranchHasMore]=useState(true);
 
-  const handleBankTypeChange = (e) => {
+  const [dateError,setDateError]=useState(null);
+
+  const [branchSize,setBranchSize]=useState(20);
+    const [isLoading, setIsLoading] = useState(false);
+     const [downloadedBytes, setDownloadedBytes] = useState(0);
+
+        const downloadedMB =
+    downloadedBytes > 0 ? (downloadedBytes / (1024 * 1024)).toFixed(2) : null;
+  
+  const disableInputs = isLoading || isDownloading;
+  
+
+  /* ---------------- INITIAL LOAD ---------------- */
+  useEffect(() => {
+    fetchZones();
+  }, []);
+
+  
+
+  /* ---------------- RADIO CHANGE ---------------- */
+  const handleCountryChange = (e) => {
     const value = e.target.value;
-    setBankType(value);
-
-    // reset dependent fields
+    setCountryType(value);
     setZone(null);
     setCircle(null);
     setBranch(null);
     setCircleList([]);
     setBranchList([]);
-    setSelectedReport(null);
-    setSelectedDate(null);
+    setReport(null);
+    setReportList([]);
+    setReportDate(null);
+
+    if (value === "FOREIGN") {
+      setZone({ zoneCode: 4, zoneDesc: "Foreign Office" });
+    }
   };
 
-  /* ============================
-     API CALLS
-  ============================ */
+  /* ---------------- API CALLS ---------------- */
 
-  // ZONES
   const fetchZones = async () => {
-    setZoneLoading(true);
-    try {
-      const res = await callApi(
-        "/api/common-master/indian-zones",
-        {},
-        "GET"
-      );
+      try{
+        const res = await callApi("/CM/common-master/indian-zones", {}, "GET");
       setZoneList(res?.data || []);
-    } catch {
-      setZoneList([]);
-    } finally {
-      setZoneLoading(false);
-    }
+      }
+      catch{
+        setZoneList([]);
+      }
   };
 
-  // CIRCLES (INDIAN + FOREIGN SAME API)
-  const fetchCircles = async (zoneObj) => {
-    if (!zoneObj?.zoneCode) {
-      setCircleList([]);
-      return;
-    }
+  useEffect(() => {
+    if(!zone?.zoneCode) return;
 
-    setCircleLoading(true);
+    setCircle(null);
+    setBranch(null);
+    setCircleList([]);
+    setBranchList([]);
+    setReport(null);
+    setReportList([]);
+    setReportDate(null);
+
+    fetchCircles(zone);
+    
+  }, [zone, countryType]);
+
+
+
+  const fetchCircles = async (zone) => {
     try {
+      setCircleLoading(true);
+      const bankType =
+        countryType === "Foreign" ? "Foreign Office" : "Indian";
       const res = await callApi(
-        `/api/common-master/indian-foreign-circles?bankType=${bankType}&zoneCode=${zoneObj.zoneCode}`,
+        `/CM/common-master/indian-foreign-circles?bankType=${encodeURIComponent(
+          bankType
+        )}&zoneCode=${zone.zoneCode}`,
         null,
         "GET"
       );
       setCircleList(res?.data || []);
-    } catch {
+    }
+    catch 
+    {
       setCircleList([]);
-    } finally {
+    }
+    finally
+    {
       setCircleLoading(false);
     }
   };
 
-  // BRANCHES
-  const fetchBranches = async (circleObj) => {
-    if (!circleObj?.circleCode) {
-      setBranchList([]);
+
+  useEffect(()=>{
+    if(!circle?.circleCode)return;
+    setBranch(null);
+    setBranchList([]);
+    setBranchSize(20);
+    setBranchHasMore(true);
+    fetchBranches(circle,20);
+  },[circle]);
+
+
+const fetchBranches = async (circle, size = 20) => {
+  if (!circle?.circleCode || branchLoading) return;
+
+  try {
+    setBranchLoading(true);
+
+    const res = await callApi(
+      `/CM/common-master/indian-foreign-branches?circleCode=${circle.circleCode}&size=${size}`,
+      null,
+      "GET"
+    );
+
+    const branches=res?.data?.data?.data || res?.data?.data || [];
+        setBranchList(branches);
+        setBranchHasMore(branches.length === size);
+        setBranchSize(size);
+      } catch (e) {
+        console.error(e);
+        setBranchList([]);
+      } finally {
+        setBranchLoading(false);
+      }
+};
+
+ useEffect(()=>{
+    if(!branch?.branchCode) return;
+     
+      setReportList([]);
+      setReport(null);
+      setReportDate(null);
+      fetchReports(branch);
+  },[branch]);
+
+const fetchReports = async (branch) => {
+     try {
+      setReportLoading(true);
+    const res = await callApi(
+      "/RS/reports/types", {
+      moduleType:moduleType,
+      countryType,
+      zoneId: zone?.zoneCode,
+      circleCode: circle?.circleCode,
+      branchCode: branch?.branchCode,
+      roleId:user.role,
+    },
+   "POST");
+   const reports=res?.data || [];
+      setReportList(reports);
+      if(reports.length>0 && reports[0].selectedDate){
+        setMinDate(dayjs(reports[0].selectedDate).startOf("day"));
+      }
+
+    } catch {
+      setReportList([]);
+    }
+    finally
+    {
+      setReportLoading(false);
+    }
+};
+
+
+  // --- Download Logic ---
+  const handleFetchReportData = async () => {
+    if (!selectedReport?.fileName || !selectedDate) return;
+
+    if (dateError) {
+      showSnackBar(getErrorMessage(dateError), "error");
       return;
     }
 
-    setBranchLoading(true);
-    try {
-      const res = await callApi(
-        "/api/common-master/indian-foreign-branches",
-        { circleCode: circleObj.circleCode },
-        "POST"
-      );
-      setBranchList(res?.data || []);
-    } catch {
-      setBranchList([]);
-    } finally {
-      setBranchLoading(false);
-    }
-  };
-
-  // REPORT TYPES
-  const fetchReports = async () => {
-    setReportLoading(true);
-    try {
-      const res = await callApi("/RS/reports/types", {}, "GET");
-      setReportList(res?.data || []);
-    } catch {
-      setReportList([]);
-    } finally {
-      setReportLoading(false);
-    }
-  };
-
-  /* ============================
-     EFFECTS
-  ============================ */
-
-  useEffect(() => {
-    fetchZones();
-    fetchReports();
-  }, []);
-
-  useEffect(() => {
-    if (zone) fetchCircles(zone);
-  }, [zone, bankType]);
-
-  useEffect(() => {
-    if (circle) fetchBranches(circle);
-  }, [circle]);
-
-  /* ============================
-     DOWNLOAD (GLIF MATCH)
-  ============================ */
-
-  const handleDownload = async () => {
-    if (!selectedReport || !selectedDate || !branch) return;
-
+    setIsLoading(true);
     setIsDownloading(true);
-    setDisableInputs(true);
-    setDownloadedMB(null);
+    setDownloadedBytes(0);
+
+    const payload = {
+      moduleType:moduleType,
+      fileName: selectedReport.fileName,
+      date: selectedDate.format("YYYY-MM-DD"),
+      roleId: user.role,
+    };
 
     try {
-      await callApi(
+      const response = await callApi(
         "/RS/reports/download",
-        {
-          reportId: selectedReport.id,
-          reportDate: selectedDate.format("YYYY-MM-DD"),
-          branchCode: branch.branchCode,
-        },
+        payload,
         "POST",
         "blob",
+        "application/json",
         {
-          onDownloadProgress: (e) => {
-            const mb = (e.loaded / (1024 * 1024)).toFixed(2);
-            setDownloadedMB(mb);
+          onDownloadProgress: (event) => {
+            setIsDownloading(true);
+            if (event && typeof event.loaded === "number") {
+              setDownloadedBytes(event.loaded);
+            }
           },
         },
         false
       );
-    } catch (e) {
-      console.error("Download failed", e);
+
+      if (response.data && response.data.size > 22) {
+        const contentDisposition =
+          response.headers["content-disposition"] ||
+          response.headers["Content-Disposition"];
+          
+        let filename = "report.zip";
+        if (
+          contentDisposition &&
+          contentDisposition.indexOf("attachment") !== -1
+        ) {
+          const filenameMatch = contentDisposition.match(/filename="(.+?)"/);
+          if (filenameMatch && filenameMatch.length > 1) {
+            filename = filenameMatch[1];
+          }
+        }
+
+        const downloadUrl = window.URL.createObjectURL(response.data);
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+        showSnackBar(
+          `Reports "${filename}" downloaded successfully`,
+          "success"
+        );
+      } else {
+        showSnackBar(
+          "No reports found matching your current filter criteria",
+          "warning"
+        );
+      }
+    } catch (error) {
+      console.log("error", error);
+
+      if (error && error instanceof Blob) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const errorJson = JSON.parse(reader.result);
+            console.error(errorJson.message);
+            showSnackBar(
+              errorJson.message || "No reports found matching your criteria",
+              "error"
+            );
+          } catch (e) {
+            console.error(e);
+            showSnackBar("Something went wrong, kindly try again.", "error");
+          }
+        };
+        reader.readAsText(error);
+      } else {
+        showSnackBar("Network Error: Could not connect to server", "error");
+      }
     } finally {
+      setIsLoading(false);
       setIsDownloading(false);
-      setDisableInputs(false);
+      setDownloadedBytes(0);
     }
   };
 
-  /* ============================
-     UI
-  ============================ */
 
+const getErrorMessage = (error) => {
+    const minDateStr = minDate?.isValid()
+      ? minDate.format("DD/MM/YYYY")
+      : "Allowed Min Date";
+
+    switch (error) {
+      case "maxDate":
+        return "Date cannot be in the future (Today is max)";
+      case "minDate":
+        return `Date cannot be prior to ${minDateStr}`;
+      case "invalidDate":
+        // This covers cases like 31st Feb or 31st April
+        return "Invalid date (Check day for this month)";
+      default:
+        // When no error, return instructions 
+        return `Allowed Range: ${minDateStr} - Today`;
+    }
+};
+
+
+const branchListBox=React.forwardRef(function
+    branchListBox(
+      props,ref
+    )
+    {
+      const {children,...other}=props;
+      return(
+      <ul ref={ref} {...other}>
+        {children}
+            
+            {branchHasMore && !branchLoading && (
+              <li
+                style={{
+                  textAlign: "center",
+                  padding: "8px",
+                  cursor: "pointer",
+                  fontWeight: 500,
+                  color: "#1976d2",
+                }}
+                onMouseDown={(e) => e.preventDefault()} 
+                onClick={() =>
+                  fetchBranches(circle, branchSize + 20)
+                }
+              >
+                Show more branches...
+              </li>
+        )}
+      </ul>
+  );
+});
+
+  /* ---------------- UI ---------------- */
   return (
-    <Grow in>
-      <Stack spacing={2}>
-        <Card sx={{ p: 3 }}>
-          <Stack spacing={2}>
-
-            {/* RADIO */}
-            <RadioGroup row value={bankType} onChange={handleBankTypeChange}>
-              <FormControlLabel value="Indian" control={<Radio />} label="Indian" />
-              <FormControlLabel value="Foreign" control={<Radio />} label="Foreign" />
-            </RadioGroup>
-
-            {/* ZONE */}
+     <Grow in timeout={500}>
+          <Stack spacing={4} flexGrow={1} sx={{pb:2}}>
+            <Box sx={styles.rootBox} elevation={10}  display="flex" justifyContent="center" alignItems="center">
+              <Stack
+                spacing={3}
+                direction={"column"}
+                alignItems="center"
+                justifyContent="center"
+              >
+              <Card sx={{...styles.card,display:"flex", flexDirection:"column" }}>
+          <Box sx={{...styles.headerContainer}} >
+                          <Box sx={styles.headerIconWrapper}>
+                            <Summarize sx={styles.summaryIcon} />
+                          </Box>
+                          <Box sx={styles.headerTextBox}>
+                            <Typography
+                              variant="h5"
+                              fontWeight="bold"
+                              sx={styles.headerTitle}
+                            >
+                              Reports Generation
+                            </Typography>
+                            <Typography variant="body2" sx={styles.headerSubtitle}>
+                              Choose a specific required report type and date using the
+                              criteria below to download reports
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Box sx={styles.noteContainer}>
+                <Typography variant="body2" sx={styles.noteText}>
+                  Note: The generated reports cannot be viewed on-screen it can
+                  only be downloaded.
+                </Typography>
+                <Stack direction="row" spacing={2} sx={{...styles.stepsStack,mb:-2}} >
+                  <CustomChip
+                    label="Select Zone , Circle & Branch"
+                    variant="outlined"
+                    icon={<LooksOne />}
+                    color="info"
+                    sx={{ px: 1}}
+                  />
+                  <CustomChip
+                    label="Select a report"
+                    variant="outlined"
+                    icon={<LooksTwo />}
+                    color="info"
+                    sx={{ px: 1}}
+                  />
+                  <CustomChip
+                    label="Select the report date"
+                    variant="outlined"
+                    icon={<Looks3 />}
+                    color="info"
+                    sx={{ px: 1 }}
+                  />
+                  <CustomChip
+                    label="Click Fetch & Download button"
+                    variant="outlined"
+                    icon={<Looks4 />}
+                    color="info"
+                    sx={{ px: 1 }}
+                  />
+                </Stack>
+              </Box>
+          <RadioGroup row value={countryType} onChange={handleCountryChange} sx={{ justifyContent:"center" , gap:10}}>
+            <FormControlLabel value="INDIAN" control={<Radio />} label="Indian" />
+            <FormControlLabel value="FOREIGN" control={<Radio />} label="Foreign" />
+          </RadioGroup>
+        
+              <Box sx={styles.inputOuterBox}>
+                <Box sx={styles.inputInnerBox}>
+          {countryType === "INDIAN" && (
             <Autocomplete
-              sx={{ width: "40vh" }}
+             sx={{width:"40vh"}}
               value={zone}
               options={zoneList}
-              loading={zoneLoading}
-              getOptionLabel={(o) => o?.description || ""}
-              onChange={(e, v) => setZone(v)}
+              getOptionLabel={(o) => o?.zoneDesc || ""}
+              isOptionEqualToValue={(o, v) => o.zoneCode === v.zoneCode}
+              onChange={(e, v) => {
+                setZone(v);
+              }}
               renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Zone"
-                  InputProps={{
-                    ...params.InputProps,
-                    endAdornment: (
-                      <>
-                        {zoneLoading && <CircularProgress size={18} />}
-                        {params.InputProps.endAdornment}
-                      </>
-                    ),
-                  }}
-                />
+                <TextField {...params} label="Select a Zone" />
               )}
             />
+          )}
 
-            {/* CIRCLE */}
-            <Autocomplete
-              sx={{ width: "40vh" }}
-              value={circle}
-              options={circleList}
-              loading={circleLoading}
-              disabled={!zone}
-              getOptionLabel={(o) =>
-                o?.circleCode ? `${o.circleCode} - ${o.circleName}` : ""
-              }
-              onChange={(e, v) => setCircle(v)}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Circle Code"
-                  InputProps={{
-                    ...params.InputProps,
-                    endAdornment: (
-                      <>
-                        {circleLoading && <CircularProgress size={18} />}
-                        {params.InputProps.endAdornment}
-                      </>
-                    ),
-                  }}
-                />
-              )}
-            />
-
-            {/* BRANCH */}
-            <Autocomplete
-              sx={{ width: "40vh" }}
-              value={branch}
-              options={branchList}
-              loading={branchLoading}
-              disabled={!circle}
-              getOptionLabel={(o) =>
-                o?.branchCode ? `${o.branchCode} - ${o.branchName}` : ""
-              }
-              onChange={(e, v) => setBranch(v)}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Branch Code"
-                  InputProps={{
-                    ...params.InputProps,
-                    endAdornment: (
-                      <>
-                        {branchLoading && <CircularProgress size={18} />}
-                        {params.InputProps.endAdornment}
-                      </>
-                    ),
-                  }}
-                />
-              )}
-            />
-
-            {/* REPORT + DATE (ONLY AFTER BRANCH) */}
-            {branch && (
-              <>
-                <Autocomplete
-                  sx={{ width: "40vh" }}
-                  value={selectedReport}
-                  options={reportList}
-                  loading={reportLoading}
-                  getOptionLabel={(o) => o?.reportName || ""}
-                  onChange={(e, v) => setSelectedReport(v)}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Report Name"
-                      InputProps={{
-                        ...params.InputProps,
-                        endAdornment: (
-                          <>
-                            {reportLoading && <CircularProgress size={18} />}
-                            {params.InputProps.endAdornment}
-                          </>
-                        ),
-                      }}
-                    />
-                  )}
-                />
-
-                <LocalizationProvider dateAdapter={AdapterDayjs}>
-                  <DatePicker
-                    sx={{ width: "40vh" }}
-                    label="Report Date"
-                    value={selectedDate}
-                    maxDate={dayjs()}
-                    onChange={(v) => setSelectedDate(v)}
-                    onError={(err) => setDateError(err)}
-                  />
-                </LocalizationProvider>
-              </>
+          <Autocomplete
+            sx={{width:"40vh"}}
+            value={circle}
+            options={circleList}
+            loading={circleLoading}
+            disabled={!zone}
+            getOptionLabel={(o) => `${o.circleCode}-${o.circleName}`}
+            isOptionEqualToValue={(o, v) => o.circleCode === v.circleCode}
+            onChange={(e, v) => {
+              setCircle(v);
+            }}
+            renderInput={(params) => (
+              <TextField {...params} label="Select a Circle" 
+              InputProps={{
+                ...params.InputProps,
+                endAdornment:(
+                  <>
+                  {circleLoading && <CircularProgress  size={20}/>}
+                  {params.InputProps.endAdornment}
+                  </>
+                ),
+              }}/>
             )}
+          />
 
-            {/* DOWNLOAD BUTTON */}
-            <Button
-              variant="contained"
-              endIcon={<CloudDownloadTwoTone />}
-              onClick={handleDownload}
-              disabled={
-                disableInputs ||
-                !selectedReport ||
-                !selectedDate ||
-                !!dateError
-              }
-            >
-              {isDownloading ? "Downloading..." : "Fetch & Download"}
-            </Button>
-
-            {/* PROGRESS */}
-            <Fade in={isDownloading}>
-              <Box>
-                <Typography variant="caption">
-                  {downloadedMB
-                    ? `Streaming… ${downloadedMB} MB downloaded`
-                    : "Preparing download…"}
-                </Typography>
-                <LinearProgress />
-                {downloadedMB && (
-                  <CustomChip
-                    label={`${downloadedMB} MB`}
-                    color="error"
-                  />
-                )}
+        <Autocomplete
+          sx={{width:"40vh"}}
+          value={branch}
+          options={Array.isArray(branchList) ? branchList : []}
+          loading={branchLoading}
+          disabled={!circle}
+          ListboxComponent={branchListBox}
+          getOptionLabel={(o) =>
+            o?.branchCode ? `${o.branchCode} - ${o.branchName}` : ""
+          }
+          isOptionEqualToValue={(o, v) =>
+            o?.branchCode === v?.branchCode
+          }
+          onChange={(e, v) => setBranch(v)}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Select Branch"
+              InputProps={{
+                ...params.InputProps,
+                endAdornment: (
+                  <>
+                    {branchLoading && <CircularProgress size={18} />}
+                    {params.InputProps.endAdornment}
+                  </>
+                ),
+              }}
+            />
+          )}
+        />
+         </Box>
               </Box>
-            </Fade>
 
+ <Box sx={styles.inputOuterBox}>
+                <Box sx={styles.inputInnerBox}>
+
+          {branch && (
+            <>
+              <Autocomplete
+             sx={{width:"40vh"}}
+                value={selectedReport}
+                options={reportList}
+                loading={reportLoading}
+                getOptionLabel={(o) => o?.reportName || ""}
+                isOptionEqualToValue={(o, v) => o.id === v.id}
+                onChange={(e, v) => setReport(v)}
+                renderInput={(params) => (
+                  <TextField {...params} label="Select a report" 
+                  InputProps={{
+                ...params.InputProps,
+                endAdornment:(
+                  <>
+                  {reportLoading && <CircularProgress  size={20}/>}
+                  {params.InputProps.endAdornment}
+                  </>
+                ),
+              }}/>
+                )}
+              />
+
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <DatePicker
+             sx={{width:"40vh"}}
+                  label="Select report date"
+                  format="DD/MM/YYYY"
+                  minDate={minDate}
+                  maxDate={dayjs().endOf("day")}
+                  value={selectedDate}
+                  onChange={(v)=>setReportDate(v)}
+                  onError={(err)=>setDateError(err)}
+                  slotProps={{
+                    textField:{
+                      error:!!dateError,
+                      helperText:dateError
+                      ?getErrorMessage(dateError)
+                      :"",
+                    },
+                  }}
+                />
+              </LocalizationProvider>
+            </>
+          )}
+           </Box>
+              </Box>
+
+
+          <Box sx={styles.buttonContainer}>
+                <Button
+                  sx={styles.downloadButton}
+                  endIcon={<CloudDownloadTwoTone />}
+                  variant="contained"
+                  onClick={handleFetchReportData}
+                  disabled={
+                    disableInputs ||
+                    !selectedReport ||
+                    !selectedDate ||
+                    !!dateError
+                  }
+                >
+                  {isDownloading ? "Downloading..." : "Fetch & Download"}
+                </Button>
+
+                <Fade in={isDownloading} unmountOnExit>
+                  <Box sx={styles.progressContainer}>
+                    <Box sx={styles.progressHeader}>
+                      <Box sx={styles.progressIconWrapper}>
+                        <CloudDownloadTwoTone sx={styles.innerDownloadIcon} />
+                      </Box>
+                      <Box sx={styles.progressHeaderTextBox}>
+                        <Typography variant="body2" fontWeight={600}>
+                          Downloading{" "}
+                          {selectedReport?.reportName ?? "the selected report"}{" "}
+                          for the period{" "}
+                          {selectedDate?.isValid()
+                            ? selectedDate.format("YYYY-MM-DD")
+                            : "an unknown period"}{" "}
+                          is in progress.
+                        </Typography>
+
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={styles.progressCaption}
+                        >
+                          {downloadedMB
+                            ? `Streaming report data… ${downloadedMB} MB received`
+                            : "Preparing your report stream…"}
+                        </Typography>
+                      </Box>
+
+                      {downloadedMB && (
+                        <CustomChip
+                          color="error"
+                          label={`${downloadedMB} MB downloaded`}
+                          variant="filled"
+                        />
+                      )}
+                    </Box>
+                    <LinearProgress
+                      variant="indeterminate"
+                      sx={styles.progressBar}
+                    />
+                  </Box>
+                </Fade>
+              </Box>
+            </Card>
           </Stack>
-        </Card>
+        </Box>
       </Stack>
     </Grow>
   );
