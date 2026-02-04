@@ -1,4 +1,4 @@
-import React,{ useEffect, useState, forwardRef } from "react";
+import React,{ useEffect, useState, useContext } from "react";
 import {
   Box,
   Card,
@@ -14,6 +14,9 @@ import {
   LinearProgress,
   Fade,
 } from "@mui/material";
+
+import PublicIcon from '@mui/icons-material/Public';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import Autocomplete from "@mui/material/Autocomplete";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
@@ -31,6 +34,8 @@ import {
   LooksTwo,
   Looks3,
   Looks4,
+  BorderColor,
+  Looks5,
 } from "@mui/icons-material";
 import CustomChip from "../../utils/CustomChip";
 
@@ -71,16 +76,25 @@ export default function BranchWiseReports() {
 
   const [branchHasMore, setBranchHasMore]=useState(true);
 
+  const [branchOpen,setBranchOpen]=useState(false);
+  
+
   const [dateError,setDateError]=useState(null);
 
-  const [branchSize,setBranchSize]=useState(20);
-    const [isLoading, setIsLoading] = useState(false);
-     const [downloadedBytes, setDownloadedBytes] = useState(0);
+  const branchListRef = React.useRef(null);
+  const branchScrollTopRef = React.useRef(0);
+  const skipNextCloseRef=React.useRef(false);
 
-        const downloadedMB =
+  const [branchSize,setBranchSize]=useState(20);
+  const [isLoading, setIsLoading] = useState(false);
+  const [downloadedBytes, setDownloadedBytes] = useState(0);
+
+  const downloadedMB =
     downloadedBytes > 0 ? (downloadedBytes / (1024 * 1024)).toFixed(2) : null;
   
   const disableInputs = isLoading || isDownloading;
+  //const DowloadProvider=createContext(null);
+
   
 
   /* ---------------- INITIAL LOAD ---------------- */
@@ -88,10 +102,9 @@ export default function BranchWiseReports() {
     fetchZones();
   }, []);
 
-  
-
   /* ---------------- RADIO CHANGE ---------------- */
   const handleCountryChange = (e) => {
+    if(isDownloading)return;
     const value = e.target.value;
     setCountryType(value);
     setZone(null);
@@ -141,7 +154,7 @@ export default function BranchWiseReports() {
     try {
       setCircleLoading(true);
       const bankType =
-        countryType === "Foreign" ? "Foreign Office" : "Indian";
+        countryType === "FOREIGN" ? "Foreign" : "Indian";
       const res = await callApi(
         `/CM/common-master/indian-foreign-circles?bankType=${encodeURIComponent(
           bankType
@@ -184,7 +197,7 @@ const fetchBranches = async (circle, size = 20) => {
       "GET"
     );
 
-    const branches=res?.data?.data?.data || res?.data?.data || [];
+    const branches=res?.data?.data || res?.data || [];
         setBranchList(branches);
         setBranchHasMore(branches.length === size);
         setBranchSize(size);
@@ -250,10 +263,11 @@ const fetchReports = async (branch) => {
     const payload = {
       moduleType:moduleType,
       fileName: selectedReport.fileName,
+      branchCode:branch.branchCode,
       date: selectedDate.format("YYYY-MM-DD"),
       roleId: user.role,
     };
-
+ 
     try {
       const response = await callApi(
         "/RS/reports/download",
@@ -331,7 +345,7 @@ const fetchReports = async (branch) => {
     } finally {
       setIsLoading(false);
       setIsDownloading(false);
-      setDownloadedBytes(0);
+      setDownloadedBytes(0);     
     }
   };
 
@@ -355,6 +369,11 @@ const getErrorMessage = (error) => {
     }
 };
 
+useEffect (() => {
+  if(branchListRef.current && branchScrollTopRef.current>0){
+    branchListRef.current.scrollTop=branchScrollTopRef.current;
+  }
+},[branchList]);
 
 const branchListBox=React.forwardRef(function
     branchListBox(
@@ -363,7 +382,14 @@ const branchListBox=React.forwardRef(function
     {
       const {children,...other}=props;
       return(
-      <ul ref={ref} {...other}>
+      <ul 
+      ref={(node)=>{
+        branchListRef.current=node;
+        if(typeof ref==="function")ref(node);
+        else if(ref) ref.current=node;
+      }}
+      {...other}
+      >
         {children}
             
             {branchHasMore && !branchLoading && (
@@ -375,10 +401,19 @@ const branchListBox=React.forwardRef(function
                   fontWeight: 500,
                   color: "#1976d2",
                 }}
-                onMouseDown={(e) => e.preventDefault()} 
-                onClick={() =>
-                  fetchBranches(circle, branchSize + 20)
-                }
+                onMouseDown={(e) =>
+                  {
+                    e.preventDefault();
+                    if(branchListRef.current){
+                      branchScrollTopRef.current=branchListRef.current.scrollTop;
+                    }
+                     e.stopPropagation();
+                     skipNextCloseRef.current=true;
+                }} 
+                onClick={(e) =>{
+                  fetchBranches(circle, branchSize + 20);
+                  setBranchOpen(true);
+                }}
               >
                 Show more branches...
               </li>
@@ -386,6 +421,7 @@ const branchListBox=React.forwardRef(function
       </ul>
   );
 });
+const isForeign=countryType==="FOREIGN";
 
   /* ---------------- UI ---------------- */
   return (
@@ -398,7 +434,7 @@ const branchListBox=React.forwardRef(function
                 alignItems="center"
                 justifyContent="center"
               >
-              <Card sx={{...styles.card,display:"flex", flexDirection:"column" }}>
+              <Card sx={{...styles.card,display:"flex", flexDirection:"column" , width:1550, maxWidth:1550, mx:"auto"}}>
           <Box sx={{...styles.headerContainer}} >
                           <Box sx={styles.headerIconWrapper}>
                             <Summarize sx={styles.summaryIcon} />
@@ -409,62 +445,98 @@ const branchListBox=React.forwardRef(function
                               fontWeight="bold"
                               sx={styles.headerTitle}
                             >
-                              Reports Generation
+                              Branch Wise Reports Generation
                             </Typography>
                             <Typography variant="body2" sx={styles.headerSubtitle}>
-                              Choose a specific required report type and date using the
+                              Choose a specific required Zone, Circle, Branch, Report type and Date using the
                               criteria below to download reports
                             </Typography>
                           </Box>
                         </Box>
                         <Box sx={styles.noteContainer}>
-                <Typography variant="body2" sx={styles.noteText}>
+                <Typography variant="body2" sx={{...styles.noteText, mt:-1}}>
                   Note: The generated reports cannot be viewed on-screen it can
                   only be downloaded.
                 </Typography>
-                <Stack direction="row" spacing={2} sx={{...styles.stepsStack,mb:-2}} >
+                <Stack direction="row" spacing={2} sx={{...styles.stepsStack,mb:0}} >
                   <CustomChip
-                    label="Select Zone , Circle & Branch"
+                    label="Select the Zone Category"
                     variant="outlined"
                     icon={<LooksOne />}
                     color="info"
                     sx={{ px: 1}}
                   />
                   <CustomChip
-                    label="Select a report"
+                    label="Select Zone, Circle & Branch"
                     variant="outlined"
                     icon={<LooksTwo />}
                     color="info"
                     sx={{ px: 1}}
                   />
                   <CustomChip
-                    label="Select the report date"
+                    label="Select a report"
                     variant="outlined"
                     icon={<Looks3 />}
+                    color="info"
+                    sx={{ px: 1}}
+                  />
+                  <CustomChip
+                    label="Select the report date"
+                    variant="outlined"
+                    icon={<Looks4 />}
                     color="info"
                     sx={{ px: 1 }}
                   />
                   <CustomChip
                     label="Click Fetch & Download button"
                     variant="outlined"
-                    icon={<Looks4 />}
+                    icon={<Looks5 />}
                     color="info"
                     sx={{ px: 1 }}
                   />
                 </Stack>
               </Box>
-          <RadioGroup row value={countryType} onChange={handleCountryChange} sx={{ justifyContent:"center" , gap:10}}>
-            <FormControlLabel value="INDIAN" control={<Radio />} label="Indian" />
-            <FormControlLabel value="FOREIGN" control={<Radio />} label="Foreign" />
-          </RadioGroup>
+          <Box
+            sx={{
+              px:3,
+              py:2,
+              width:"fit-content",
+              alignSelf:"center",
+              }}
+              >
+              <Typography variant="body2" sx={{mb:1,textAlign:"center"}}>
+              Select the required Zone category
+            </Typography>
+              <Box
+              justifyContent="center"
+              display="flex"
+              gap={6}
+              >
+              <Button 
+              variant={countryType==="INDIAN"?"contained":"outlined"}
+              disabled={isDownloading}
+              onClick={()=>handleCountryChange({target:{value:"INDIAN"}})}>
+                <AccountBalanceIcon sx={{mr:1}}/>Indian
+              </Button>
+              <Button 
+              variant={countryType==="FOREIGN"?"contained":"outlined"}
+              disabled={isDownloading}
+              onClick={()=>handleCountryChange({target:{value:"FOREIGN"}})}>
+                <PublicIcon sx={{mr:1}}/>Foreign
+              </Button>
+              </Box>
+          </Box>
         
-              <Box sx={styles.inputOuterBox}>
-                <Box sx={styles.inputInnerBox}>
-          {countryType === "INDIAN" && (
+          <Box sx={styles.inputOuterBox}>
+            <Box sx={styles.inputInnerBox}>
             <Autocomplete
-             sx={{width:"40vh"}}
+             sx={{width:380,
+              "& .MuiAutocomplete-endAdronment":{right:12},
+              "& .MuiAutocomplete-clearIndicator":{marginRight:"6px"},
+             }}
               value={zone}
               options={zoneList}
+              disabled={isForeign}
               getOptionLabel={(o) => o?.zoneDesc || ""}
               isOptionEqualToValue={(o, v) => o.zoneCode === v.zoneCode}
               onChange={(e, v) => {
@@ -474,14 +546,16 @@ const branchListBox=React.forwardRef(function
                 <TextField {...params} label="Select a Zone" />
               )}
             />
-          )}
 
           <Autocomplete
-            sx={{width:"40vh"}}
+            sx={{width:380,
+              "& .MuiAutocomplete-endAdronment":{right:12},
+              "& .MuiAutocomplete-clearIndicator":{marginRight:"6px"},
+            }}
             value={circle}
             options={circleList}
             loading={circleLoading}
-            disabled={!zone}
+            disabled={!zone || circleLoading}
             getOptionLabel={(o) => `${o.circleCode}-${o.circleName}`}
             isOptionEqualToValue={(o, v) => o.circleCode === v.circleCode}
             onChange={(e, v) => {
@@ -502,19 +576,38 @@ const branchListBox=React.forwardRef(function
           />
 
         <Autocomplete
-          sx={{width:"40vh"}}
+          sx={{width:380,
+              "& .MuiAutocomplete-endAdronment":{right:12},
+              "& .MuiAutocomplete-clearIndicator":{marginRight:"6px"},
+             }}
           value={branch}
-          options={Array.isArray(branchList) ? branchList : []}
+          options={Array.isArray(branchList)? branchList:[]}
           loading={branchLoading}
-          disabled={!circle}
+          disabled={!circle || branchLoading}
           ListboxComponent={branchListBox}
+          open={branchOpen}
+          onOpen={()=> setBranchOpen(true)}
+          onClose={(e,reason)=>{
+            //if(reason==="blur")return;
+            if(skipNextCloseRef.current && reason==="blur"){
+              skipNextCloseRef.current=false;
+              return;
+            }
+            skipNextCloseRef.current=false;
+            setBranchOpen(false);
+          }}
+          //disableCloseOnSelect
+          disableListWrap
           getOptionLabel={(o) =>
             o?.branchCode ? `${o.branchCode} - ${o.branchName}` : ""
           }
           isOptionEqualToValue={(o, v) =>
             o?.branchCode === v?.branchCode
           }
-          onChange={(e, v) => setBranch(v)}
+          onChange={(e, v) => {
+            setBranch(v);
+            setBranchOpen(false);
+          }}
           renderInput={(params) => (
             <TextField
               {...params}
@@ -532,18 +625,22 @@ const branchListBox=React.forwardRef(function
           )}
         />
          </Box>
-              </Box>
+          </Box>
 
- <Box sx={styles.inputOuterBox}>
-                <Box sx={styles.inputInnerBox}>
+        <Box sx={styles.inputOuterBox}>
+          <Box sx={styles.inputInnerBox}>
 
           {branch && (
             <>
               <Autocomplete
-             sx={{width:"40vh"}}
+                sx={{width:480,
+              "& .MuiAutocomplete-endAdronment":{right:12},
+              "& .MuiAutocomplete-clearIndicator":{marginRight:"6px"},
+             }}
                 value={selectedReport}
                 options={reportList}
                 loading={reportLoading}
+                disabled={reportLoading}
                 getOptionLabel={(o) => o?.reportName || ""}
                 isOptionEqualToValue={(o, v) => o.id === v.id}
                 onChange={(e, v) => setReport(v)}
@@ -563,7 +660,7 @@ const branchListBox=React.forwardRef(function
 
               <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <DatePicker
-             sx={{width:"40vh"}}
+                  sx={{width:480}}
                   label="Select report date"
                   format="DD/MM/YYYY"
                   minDate={minDate}
@@ -587,7 +684,7 @@ const branchListBox=React.forwardRef(function
               </Box>
 
 
-          <Box sx={styles.buttonContainer}>
+          <Box sx={{...styles.buttonContainer,mt:-2}}>
                 <Button
                   sx={styles.downloadButton}
                   endIcon={<CloudDownloadTwoTone />}
@@ -611,7 +708,7 @@ const branchListBox=React.forwardRef(function
                       </Box>
                       <Box sx={styles.progressHeaderTextBox}>
                         <Typography variant="body2" fontWeight={600}>
-                          Downloading{" "}
+                          Searching{" "}
                           {selectedReport?.reportName ?? "the selected report"}{" "}
                           for the period{" "}
                           {selectedDate?.isValid()
