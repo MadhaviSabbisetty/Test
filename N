@@ -343,3 +343,85 @@ export const useDownload = () => {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ <Box sx={styles.buttonContainer}>
+                <Button
+                  sx={styles.downloadButton}
+                  endIcon={<CloudDownloadTwoTone />}
+                  variant="contained"
+                  onClick={handleFetchReportData}
+                  disabled={
+                    disableInputs ||
+                    !selectedReport ||
+                    !selectedDate ||
+                    !!dateError
+                  }
+                >
+                  {isDownloading ? "Downloading..." : "Fetch & Download"}
+                </Button>
+
+                <Fade in={isDownloading} unmountOnExit>
+                  <Box sx={styles.progressContainer}>
+                    <Box sx={styles.progressHeader}>
+                      <Box sx={styles.progressIconWrapper}>
+                        <CloudDownloadTwoTone sx={styles.innerDownloadIcon} />
+                      </Box>
+                      <Box sx={styles.progressHeaderTextBox}>
+                        <Typography variant="body2" fontWeight={600}>
+                          Searching{" "}
+                          {selectedReport?.reportName ?? "the selected report"}{" "}
+                          for the period{" "}
+                          {selectedDate?.isValid()
+                            ? selectedDate.format("YYYY-MM-DD")
+                            : "an unknown period"}{" "}
+                          is in progress.
+                        </Typography>
+
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={styles.progressCaption}
+                        >
+                          {downloadedMB
+                            ? `Streaming report data… ${downloadedMB} MB received`
+                            : "Preparing your report stream…"}
+                        </Typography>
+                      </Box>
+
+                      {downloadedMB && (
+                        <CustomChip
+                          color="error"
+                          label={`${downloadedMB} MB downloaded`}
+                          variant="filled"
+                        />
+                      )}
+                    </Box>
+                    <LinearProgress
+                      variant="indeterminate"
+                      sx={styles.progressBar}
+                    />
+                  </Box>
+                </Fade>
+              </Box>
