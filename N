@@ -116,3 +116,122 @@ const handleFetchReportData = () => {
     },
   });
 };
+
+
+hereéeéeeeeeeere--------------------------------
+
+import React, { createContext, useContext, useRef, useState } from "react";
+import axios from "axios";
+
+const DownloadContext = createContext(null);
+
+export const DownloadProvider = ({ children }) => {
+  const controllerRef = useRef(null);
+
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadedBytes, setDownloadedBytes] = useState(0);
+
+  const startDownload = async ({
+    url,
+    payload,
+    token,
+    onSuccess,
+    onError,
+  }) => {
+    if (isDownloading) return;
+
+    const controller = new AbortController();
+    controllerRef.current = controller;
+
+    try {
+      setIsDownloading(true);
+      setDownloadedBytes(0);
+
+      const response = await axios.post(url, payload, {
+        responseType: "blob",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        onDownloadProgress: (e) => {
+          if (e?.loaded) {
+            setDownloadedBytes(e.loaded);
+          }
+        },
+      });
+
+      // ⬇️ IMPORTANT: only NOW trigger browser save
+      const disposition =
+        response.headers["content-disposition"] ||
+        response.headers["Content-Disposition"];
+
+      let filename = "report.zip";
+      if (disposition) {
+        const match = disposition.match(/filename="(.+?)"/);
+        if (match) filename = match[1];
+      }
+
+      const blobUrl = window.URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+
+      onSuccess?.(filename);
+    } catch (err) {
+      if (!axios.isCancel(err)) {
+        onError?.(err);
+      }
+    } finally {
+      setIsDownloading(false);
+      setDownloadedBytes(0);
+      controllerRef.current = null;
+    }
+  };
+
+  return (
+    <DownloadContext.Provider
+      value={{
+        startDownload,
+        isDownloading,
+        downloadedBytes,
+      }}
+    >
+      {children}
+    </DownloadContext.Provider>
+  );
+};
+
+export const useDownload = () => useContext(DownloadContext);
+
+
+const { startDownload, isDownloading, downloadedBytes } = useDownload();
+
+
+const handleFetchReportData = () => {
+  if (!selectedReport || !selectedDate || dateError) return;
+
+  startDownload({
+    url: "/RS/reports/download",
+    payload: {
+      moduleType,
+      fileName: selectedReport.fileName,
+      branchCode: branch.branchCode,
+      date: selectedDate.format("YYYY-MM-DD"),
+      roleId: user.role,
+    },
+    token: user.token,
+    onSuccess: (filename) => {
+      showSnackBar(`"${filename}" downloaded successfully`, "success");
+    },
+    onError: () => {
+      showSnackBar("Download failed", "error");
+    },
+  });
+};
+
+
