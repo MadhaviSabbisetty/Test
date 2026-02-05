@@ -140,3 +140,49 @@ const handleFetchReportData = () => {
 
 
 
+
+const handleFetchReportData = () => {
+  console.log("🟢 BUTTON CLICKED");
+
+  startDownload({
+    url: "/RS/reports/download",
+    payload: { test: "ping" },
+    token: user?.token,
+  });
+};
+
+
+
+
+
+
+
+
+
+
+const handleFetchReportData = () => {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = "/RS/reports/download";
+
+  const payload = {
+    moduleType,
+    fileName: selectedReport.fileName,
+    date: selectedDate.format("YYYY-MM-DD"),
+    roleId: user.role,
+  };
+
+  Object.entries(payload).forEach(([key, value]) => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = key;
+    input.value = value;
+    form.appendChild(input);
+  });
+
+  document.body.appendChild(form);
+  form.submit();
+  document.body.removeChild(form);
+};
+
+
