@@ -1,38 +1,118 @@
-const handleFetchReportData = () => {
-  if (!selectedReport?.fileName || !selectedDate) return;
+import axios from "axios";
 
-  if (dateError) {
-    showSnackBar(getErrorMessage(dateError), "error");
-    return;
+/**
+ * Singleton download handler
+ * Keeps Axios request alive even if React component unmounts
+ */
+
+let activeController = null;
+
+export const startDownload = async ({
+  url,
+  payload,
+  token,
+  onProgress,
+  onSuccess,
+  onError,
+}) => {
+  // Prevent multiple parallel downloads
+  if (activeController) return;
+
+  const controller = new AbortController();
+  activeController = controller;
+
+  try {
+    const response = await axios.post(url, payload, {
+      responseType: "blob",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      onDownloadProgress: (event) => {
+        if (event?.loaded && onProgress) {
+          onProgress(event.loaded);
+        }
+      },
+    });
+
+    // Extract filename
+    const disposition =
+      response.headers["content-disposition"] ||
+      response.headers["Content-Disposition"];
+
+    let filename = "report.zip";
+    if (disposition) {
+      const match = disposition.match(/filename="(.+?)"/);
+      if (match) filename = match[1];
+    }
+
+    // Trigger browser download
+    const blob = new Blob([response.data]);
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.URL.revokeObjectURL(blobUrl);
+
+    onSuccess?.(filename);
+  } catch (error) {
+    if (!axios.isCancel(error)) {
+      onError?.(error);
+    }
+  } finally {
+    activeController = null;
   }
+};
 
-  // Create a hidden form
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = "/RS/reports/download";
-  form.style.display = "none";
 
-  // IMPORTANT: keep same tab so cookies/session are preserved
-  form.target = "_self";
 
-  const fields = {
-    moduleType: moduleType,
+
+import { startDownload } from "../../utils/downloadManager";
+
+
+
+
+
+
+const handleFetchReportData = () => {
+  if (!selectedReport || !selectedDate || dateError) return;
+
+  setIsDownloading(true);
+  setDownloadedBytes(0);
+
+  const payload = {
+    moduleType,
     fileName: selectedReport.fileName,
+    branchCode: branch.branchCode,
     date: selectedDate.format("YYYY-MM-DD"),
     roleId: user.role,
   };
 
-  Object.entries(fields).forEach(([key, value]) => {
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = key;
-    input.value = value;
-    form.appendChild(input);
+  startDownload({
+    url: "/RS/reports/download",
+    payload,
+    token: user?.token, // 🔥 AUTH HEADER FIX
+    onProgress: (bytes) => {
+      setDownloadedBytes(bytes);
+    },
+    onSuccess: (filename) => {
+      showSnackBar(
+        `Reports "${filename}" downloaded successfully`,
+        "success"
+      );
+      setIsDownloading(false);
+      setDownloadedBytes(0);
+    },
+    onError: () => {
+      showSnackBar("Download failed. Please try again.", "error");
+      setIsDownloading(false);
+      setDownloadedBytes(0);
+    },
   });
-
-  document.body.appendChild(form);
-  form.submit();
-  form.remove();
-
-  showSnackBar("Download started. It will continue in background.", "info");
 };
