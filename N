@@ -235,3 +235,111 @@ const handleFetchReportData = () => {
 };
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+import React, { createContext, useContext, useRef, useState } from "react";
+import axios from "axios";
+
+/* 1️⃣ Create the context */
+const DownloadContext = createContext(null);
+
+/* 2️⃣ Provider */
+export const DownloadProvider = ({ children }) => {
+  const controllerRef = useRef(null);
+
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadedBytes, setDownloadedBytes] = useState(0);
+
+  const startDownload = async ({
+    url,
+    payload,
+    token,
+    onSuccess,
+    onError,
+  }) => {
+    if (isDownloading) return;
+
+    const controller = new AbortController();
+    controllerRef.current = controller;
+
+    try {
+      setIsDownloading(true);
+      setDownloadedBytes(0);
+
+      const response = await axios.post(url, payload, {
+        responseType: "blob",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        onDownloadProgress: (e) => {
+          if (e?.loaded) {
+            setDownloadedBytes(e.loaded);
+          }
+        },
+      });
+
+      const disposition =
+        response.headers["content-disposition"] ||
+        response.headers["Content-Disposition"];
+
+      let filename = "report.zip";
+      if (disposition) {
+        const match = disposition.match(/filename="(.+?)"/);
+        if (match) filename = match[1];
+      }
+
+      const blobUrl = window.URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+
+      onSuccess?.(filename);
+    } catch (err) {
+      if (!axios.isCancel(err)) {
+        onError?.(err);
+      }
+    } finally {
+      setIsDownloading(false);
+      setDownloadedBytes(0);
+      controllerRef.current = null;
+    }
+  };
+
+  return (
+    <DownloadContext.Provider
+      value={{ startDownload, isDownloading, downloadedBytes }}
+    >
+      {children}
+    </DownloadContext.Provider>
+  );
+};
+
+/* 3️⃣ Hook (THIS is what you import) */
+export const useDownload = () => {
+  const context = useContext(DownloadContext);
+  if (!context) {
+    throw new Error(
+      "useDownload must be used inside a DownloadProvider"
+    );
+  }
+  return context;
+};
+
+
+
