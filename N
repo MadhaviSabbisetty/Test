@@ -1,5 +1,82 @@
 
+const handleFetchReportData = () => {
+  if (!selectedReport?.fileName || !selectedDate) return;
 
+  if (dateError) {
+    showSnackBar(getErrorMessage(dateError), "error");
+    return;
+  }
+
+  setIsLoading(true);
+  setIsDownloading(true);
+  setDownloadedBytes(0);
+
+  const payload = {
+    moduleType: moduleType,
+    fileName: selectedReport.fileName,
+    date: selectedDate.format("YYYY-MM-DD"),
+    roleId: user.role,
+  };
+
+  // 🔑 DO NOT await
+  // 🔑 use callApi (auth-safe)
+  // 🔑 last argument = false → no cancellation
+  callApi(
+    "/RS/reports/download",
+    payload,
+    "POST",
+    "blob",
+    "application/json",
+    {
+      onDownloadProgress: (event) => {
+        if (event?.loaded) {
+          setDownloadedBytes(event.loaded);
+        }
+      },
+    },
+    false
+  )
+    .then((response) => {
+      if (response?.data && response.data.size > 22) {
+        const contentDisposition =
+          response.headers["content-disposition"] ||
+          response.headers["Content-Disposition"];
+
+        let filename = "report.zip";
+        if (contentDisposition?.includes("filename")) {
+          const match = contentDisposition.match(/filename="(.+?)"/);
+          if (match?.[1]) filename = match[1];
+        }
+
+        const downloadUrl = window.URL.createObjectURL(response.data);
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+
+        showSnackBar(
+          `Reports "${filename}" downloaded successfully`,
+          "success"
+        );
+      } else {
+        showSnackBar(
+          "No reports found matching your current filter criteria",
+          "warning"
+        );
+      }
+    })
+    .catch(() => {
+      showSnackBar("Download failed", "error");
+    })
+    .finally(() => {
+      setIsLoading(false);
+      setIsDownloading(false);
+      setDownloadedBytes(0);
+    });
+};
 
 
 
