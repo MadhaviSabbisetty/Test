@@ -1,326 +1,41 @@
-import axios from "axios";
-
-/**
- * This download will CONTINUE even if React component unmounts
- */
-export const downloadReport = async ({
+const downloadReportOutsideReact = ({
   payload,
   onProgress,
   onSuccess,
   onError,
 }) => {
-  try {
-    const response = await axios.post(
-      "/RS/reports/download",
-      payload,
-      {
-        responseType: "blob",
-        onDownloadProgress: onProgress,
-      }
-    );
+  axios
+    .post("/RS/reports/download", payload, {
+      responseType: "blob",
+      onDownloadProgress: onProgress,
+    })
+    .then((response) => {
+      if (response.data && response.data.size > 22) {
+        const contentDisposition =
+          response.headers["content-disposition"] ||
+          response.headers["Content-Disposition"];
 
-    if (response.data && response.data.size > 22) {
-      const contentDisposition =
-        response.headers["content-disposition"] ||
-        response.headers["Content-Disposition"];
-
-      let filename = "report.zip";
-      if (contentDisposition?.includes("filename")) {
-        const match = contentDisposition.match(/filename="(.+?)"/);
-        if (match?.[1]) filename = match[1];
-      }
-
-      const url = window.URL.createObjectURL(response.data);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-
-      onSuccess?.(filename);
-    } else {
-      onError?.("No reports found");
-    }
-  } catch (e) {
-    onError?.("Download failed");
-  }
-};
-
-
-
-
-
-
-import React, { useEffect, useState } from "react";
-import {
-  Box,
-  Card,
-  Stack,
-  Typography,
-  TextField,
-  Button,
-  CircularProgress,
-  LinearProgress,
-  Fade,
-  Grow,
-} from "@mui/material";
-
-import PublicIcon from "@mui/icons-material/Public";
-import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
-import Autocomplete from "@mui/material/Autocomplete";
-import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import dayjs from "dayjs";
-
-import { useSelector } from "react-redux";
-import { useTheme } from "@mui/material/styles";
-
-import useApi from "../../hooks/useApi";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import GlifReportsStyles from "./GlifReportsStyles";
-import CustomChip from "../../utils/CustomChip";
-
-import {
-  Summarize,
-  CloudDownloadTwoTone,
-  LooksOne,
-  LooksTwo,
-  Looks3,
-  Looks4,
-  Looks5,
-} from "@mui/icons-material";
-
-import { downloadReport } from "../../utils/reportDownloader";
-
-const moduleType = "BRANCH_WISE";
-
-export default function BranchWiseReports() {
-  const user = useSelector((state) => state.auth.user);
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
-
-  const theme = useTheme();
-  const styles = GlifReportsStyles(theme);
-
-  const [countryType, setCountryType] = useState("INDIAN");
-
-  const [zoneList, setZoneList] = useState([]);
-  const [circleList, setCircleList] = useState([]);
-  const [branchList, setBranchList] = useState([]);
-  const [reportList, setReportList] = useState([]);
-
-  const [zone, setZone] = useState(null);
-  const [circle, setCircle] = useState(null);
-  const [branch, setBranch] = useState(null);
-  const [selectedReport, setReport] = useState(null);
-  const [selectedDate, setReportDate] = useState(null);
-
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadedBytes, setDownloadedBytes] = useState(0);
-
-  const downloadedMB =
-    downloadedBytes > 0 ? (downloadedBytes / (1024 * 1024)).toFixed(2) : null;
-
-  /* ---------------- INITIAL LOAD ---------------- */
-
-  useEffect(() => {
-    fetchZones();
-  }, []);
-
-  const fetchZones = async () => {
-    try {
-      const res = await callApi("/CM/common-master/indian-zones", {}, "GET");
-      setZoneList(res?.data || []);
-    } catch {
-      setZoneList([]);
-    }
-  };
-
-  useEffect(() => {
-    if (!zone?.zoneCode) return;
-    fetchCircles(zone);
-  }, [zone, countryType]);
-
-  const fetchCircles = async (zone) => {
-    try {
-      const bankType = countryType === "FOREIGN" ? "Foreign" : "Indian";
-      const res = await callApi(
-        `/CM/common-master/indian-foreign-circles?bankType=${bankType}&zoneCode=${zone.zoneCode}`,
-        null,
-        "GET"
-      );
-      setCircleList(res?.data || []);
-    } catch {
-      setCircleList([]);
-    }
-  };
-
-  useEffect(() => {
-    if (!branch?.branchCode) return;
-    fetchReports(branch);
-  }, [branch]);
-
-  const fetchReports = async (branch) => {
-    try {
-      const res = await callApi(
-        "/RS/reports/types",
-        {
-          moduleType,
-          countryType,
-          zoneId: zone?.zoneCode,
-          circleCode: circle?.circleCode,
-          branchCode: branch?.branchCode,
-          roleId: user.role,
-        },
-        "POST"
-      );
-      setReportList(res?.data || []);
-    } catch {
-      setReportList([]);
-    }
-  };
-
-  /* ---------------- DOWNLOAD (FIXED) ---------------- */
-
-  const handleFetchReportData = () => {
-    if (!selectedReport || !selectedDate) return;
-
-    setIsDownloading(true);
-    setDownloadedBytes(0);
-
-    const payload = {
-      moduleType,
-      fileName: selectedReport.fileName,
-      branchCode: branch.branchCode,
-      date: selectedDate.format("YYYY-MM-DD"),
-      roleId: user.role,
-    };
-
-    // 🔥 NOT awaited → survives navigation
-    downloadReport({
-      payload,
-      onProgress: (event) => {
-        if (event?.loaded) {
-          setDownloadedBytes(event.loaded);
+        let filename = "report.zip";
+        if (contentDisposition?.includes("filename")) {
+          const match = contentDisposition.match(/filename="(.+?)"/);
+          if (match?.[1]) filename = match[1];
         }
-      },
-      onSuccess: (filename) => {
-        showSnackBar(`"${filename}" downloaded successfully`, "success");
-        setIsDownloading(false);
-        setDownloadedBytes(0);
-      },
-      onError: (msg) => {
-        showSnackBar(msg, "error");
-        setIsDownloading(false);
-        setDownloadedBytes(0);
-      },
+
+        const url = window.URL.createObjectURL(response.data);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+
+        onSuccess?.(filename);
+      } else {
+        onError?.("No reports found matching your criteria");
+      }
+    })
+    .catch(() => {
+      onError?.("Download failed");
     });
-  };
-
-  /* ---------------- UI ---------------- */
-
-  return (
-    <Grow in timeout={400}>
-      <Card sx={styles.card}>
-        <Stack spacing={3}>
-          <Typography variant="h5" fontWeight="bold">
-            Branch Wise Reports Generation
-          </Typography>
-
-          <Stack direction="row" spacing={2}>
-            <Button
-              variant={countryType === "INDIAN" ? "contained" : "outlined"}
-              onClick={() => setCountryType("INDIAN")}
-            >
-              <AccountBalanceIcon sx={{ mr: 1 }} />
-              Indian
-            </Button>
-            <Button
-              variant={countryType === "FOREIGN" ? "contained" : "outlined"}
-              onClick={() => setCountryType("FOREIGN")}
-            >
-              <PublicIcon sx={{ mr: 1 }} />
-              Foreign
-            </Button>
-          </Stack>
-
-          <Autocomplete
-            options={zoneList}
-            value={zone}
-            onChange={(e, v) => setZone(v)}
-            getOptionLabel={(o) => o?.zoneDesc || ""}
-            renderInput={(params) => (
-              <TextField {...params} label="Select Zone" />
-            )}
-          />
-
-          <Autocomplete
-            options={circleList}
-            value={circle}
-            onChange={(e, v) => setCircle(v)}
-            getOptionLabel={(o) => o?.circleName || ""}
-            renderInput={(params) => (
-              <TextField {...params} label="Select Circle" />
-            )}
-          />
-
-          <Autocomplete
-            options={branchList}
-            value={branch}
-            onChange={(e, v) => setBranch(v)}
-            getOptionLabel={(o) =>
-              o ? `${o.branchCode} - ${o.branchName}` : ""
-            }
-            renderInput={(params) => (
-              <TextField {...params} label="Select Branch" />
-            )}
-          />
-
-          {branch && (
-            <>
-              <Autocomplete
-                options={reportList}
-                value={selectedReport}
-                onChange={(e, v) => setReport(v)}
-                getOptionLabel={(o) => o?.reportName || ""}
-                renderInput={(params) => (
-                  <TextField {...params} label="Select Report" />
-                )}
-              />
-
-              <LocalizationProvider dateAdapter={AdapterDayjs}>
-                <DatePicker
-                  label="Select Date"
-                  value={selectedDate}
-                  onChange={(v) => setReportDate(v)}
-                />
-              </LocalizationProvider>
-            </>
-          )}
-
-          <Button
-            variant="contained"
-            endIcon={<CloudDownloadTwoTone />}
-            disabled={!selectedReport || !selectedDate || isDownloading}
-            onClick={handleFetchReportData}
-          >
-            {isDownloading ? "Downloading..." : "Fetch & Download"}
-          </Button>
-
-          <Fade in={isDownloading}>
-            <Box>
-              <Typography variant="caption">
-                {downloadedMB
-                  ? `${downloadedMB} MB downloaded`
-                  : "Preparing download..."}
-              </Typography>
-              <LinearProgress />
-            </Box>
-          </Fade>
-        </Stack>
-      </Card>
-    </Grow>
-  );
-}
+};
