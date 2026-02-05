@@ -39,3 +39,30 @@ const downloadReportOutsideReact = ({
       onError?.("Download failed");
     });
 };
+
+
+
+downloadReportOutsideReact({
+  payload,
+  onProgress: (event) => {
+    if (event?.loaded) {
+      setIsDownloading(true);
+      setDownloadedBytes(event.loaded);
+    }
+  },
+  onSuccess: (filename) => {
+    showSnackBar(
+      `Reports "${filename}" downloaded successfully`,
+      "success"
+    );
+    setIsLoading(false);
+    setIsDownloading(false);
+    setDownloadedBytes(0);
+  },
+  onError: (msg) => {
+    showSnackBar(msg, "error");
+    setIsLoading(false);
+    setIsDownloading(false);
+    setDownloadedBytes(0);
+  },
+});
