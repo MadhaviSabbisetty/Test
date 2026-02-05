@@ -121,4 +121,74 @@ const handleFetchReportData = () => {
 
 
 
+const validateReport = async () => {
+  try {
+    const res = await callApi(
+      "/RS/api/reports/validate",
+      {
+        moduleType,
+        fileName: selectedReport.fileName,
+        date: selectedDate.format("YYYY-MM-DD"),
+        roleId: user.role,
+      },
+      "POST"
+    );
 
+    return res?.data?.valid === true;
+  } catch (e) {
+    showSnackBar(
+      "Something went wrong. Please try again.",
+      "error"
+    );
+    return false;
+  }
+};
+
+
+
+const handleFetchReportData = async () => {
+  if (!selectedReport || !selectedDate || dateError) return;
+
+  const isValid = await validateReport();
+
+  if (!isValid) {
+    showSnackBar(
+      "No reports found matching your criteria",
+      "warning"
+    );
+    return;
+  }
+
+  showSnackBar(
+    "Download started. You may continue working.",
+    "info"
+  );
+
+  triggerBrowserDownload();
+};
+
+
+const triggerBrowserDownload = () => {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = "/RS/api/reports/download";
+
+  const payload = {
+    moduleType,
+    fileName: selectedReport.fileName,
+    date: selectedDate.format("YYYY-MM-DD"),
+    roleId: user.role,
+  };
+
+  Object.entries(payload).forEach(([key, value]) => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = key;
+    input.value = value;
+    form.appendChild(input);
+  });
+
+  document.body.appendChild(form);
+  form.submit();
+  document.body.removeChild(form);
+};
