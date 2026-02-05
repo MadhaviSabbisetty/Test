@@ -1,83 +1,78 @@
-import React, { createContext, useContext, useRef, useState } from "react";
-import axios from "axios";
+const startDownload = async ({
+  callApi,
+  url,
+  payload,
+  onSuccess,
+  onNoData,
+  onError,
+}) => {
+  try {
+    setIsDownloading(true);
+    setDownloadedBytes(0);
 
-const DownloadContext = createContext(null);
-
-export const DownloadProvider = ({ children }) => {
-  const controllerRef = useRef(null);
-
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadedBytes, setDownloadedBytes] = useState(0);
-
-  const startDownload = async ({ url, payload, token }) => {
-    if (isDownloading) return;
-
-    console.log("✅ startDownload called");
-
-    const controller = new AbortController();
-    controllerRef.current = controller;
-
-    try {
-      setIsDownloading(true);
-      setDownloadedBytes(0);
-
-      const response = await axios.post(url, payload, {
-        responseType: "blob",
-        signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+    const response = await callApi(
+      url,
+      payload,
+      "POST",
+      "blob",
+      "application/json",
+      {
         onDownloadProgress: (e) => {
-          if (e?.loaded) {
-            setDownloadedBytes(e.loaded);
-          }
+          if (e?.loaded) setDownloadedBytes(e.loaded);
         },
-      });
+      },
+      false
+    );
 
-      const disposition =
-        response.headers["content-disposition"] ||
-        response.headers["Content-Disposition"];
-
-      let filename = "report.zip";
-      if (disposition) {
-        const match = disposition.match(/filename="(.+?)"/);
-        if (match) filename = match[1];
-      }
-
-      const blobUrl = window.URL.createObjectURL(response.data);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(blobUrl);
-    } catch (err) {
-      console.error("❌ Download failed", err);
-    } finally {
-      setIsDownloading(false);
-      setDownloadedBytes(0);
-      controllerRef.current = null;
+    // 🚫 NO DATA CASE
+    if (!response.data || response.data.size <= 22) {
+      onNoData?.();
+      return;
     }
-  };
 
-  return (
-    <DownloadContext.Provider
-      value={{ startDownload, isDownloading, downloadedBytes }}
-    >
-      {children}
-    </DownloadContext.Provider>
-  );
-};
+    const disposition =
+      response.headers["content-disposition"] ||
+      response.headers["Content-Disposition"];
 
-export const useDownload = () => {
-  const ctx = useContext(DownloadContext);
-  if (!ctx) {
-    throw new Error("useDownload must be used inside DownloadProvider");
+    let filename = "report.zip";
+    if (disposition) {
+      const match = disposition.match(/filename="(.+?)"/);
+      if (match) filename = match[1];
+    }
+
+    const blobUrl = window.URL.createObjectURL(response.data);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(blobUrl);
+
+    // ✅ SUCCESS
+    onSuccess?.(filename);
+
+  } catch (error) {
+    if (error instanceof Blob) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const errorJson = JSON.parse(reader.result);
+          onError?.(errorJson.message);
+        } catch {
+          onError?.("Something went wrong, kindly try again.");
+        }
+      };
+      reader.readAsText(error);
+    } else {
+      onError?.("Network Error: Could not connect to server");
+    }
+  } finally {
+    setIsDownloading(false);
+    setDownloadedBytes(0);
   }
-  return ctx;
 };
+
 
 
 
@@ -85,69 +80,35 @@ export const useDownload = () => {
 
 
 const handleFetchReportData = () => {
-  console.log("🟢 Download button clicked");
-
-  if (!selectedReport) {
-    console.log("❌ No report selected");
-    return;
-  }
-
-  if (!selectedDate) {
-    console.log("❌ No date selected");
-    return;
-  }
-
-  if (dateError) {
-    console.log("❌ Date error:", dateError);
-    return;
-  }
+  if (!selectedReport || !selectedDate || dateError) return;
 
   startDownload({
+    callApi,
     url: "/RS/reports/download",
     payload: {
       moduleType,
       fileName: selectedReport.fileName,
-      branchCode: branch?.branchCode,
       date: selectedDate.format("YYYY-MM-DD"),
       roleId: user.role,
     },
-    token: user.token,
-  });
-};
-
-
-
-
-
-
-<Button
-  sx={styles.downloadButton}
-  endIcon={<CloudDownloadTwoTone />}
-  variant="contained"
-  onClick={handleFetchReportData}
-  disabled={
-    isLoading ||
-    !selectedReport ||
-    !selectedDate ||
-    Boolean(dateError)
-  }
->
-  {isDownloading ? "Downloading..." : "Fetch & Download"}
-</Button>
-
-
-
-
-
-
-
-const handleFetchReportData = () => {
-  console.log("🟢 BUTTON CLICKED");
-
-  startDownload({
-    url: "/RS/reports/download",
-    payload: { test: "ping" },
-    token: user?.token,
+    onSuccess: (filename) => {
+      showSnackBar(
+        `Report "${filename}" downloaded successfully`,
+        "success"
+      );
+    },
+    onNoData: () => {
+      showSnackBar(
+        "No reports found matching your current filter criteria",
+        "warning"
+      );
+    },
+    onError: (message) => {
+      showSnackBar(
+        message || "Something went wrong, kindly try again.",
+        "error"
+      );
+    },
   });
 };
 
@@ -159,30 +120,5 @@ const handleFetchReportData = () => {
 
 
 
-
-const handleFetchReportData = () => {
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = "/RS/reports/download";
-
-  const payload = {
-    moduleType,
-    fileName: selectedReport.fileName,
-    date: selectedDate.format("YYYY-MM-DD"),
-    roleId: user.role,
-  };
-
-  Object.entries(payload).forEach(([key, value]) => {
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = key;
-    input.value = value;
-    form.appendChild(input);
-  });
-
-  document.body.appendChild(form);
-  form.submit();
-  document.body.removeChild(form);
-};
 
 
