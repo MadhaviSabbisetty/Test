@@ -1,3 +1,33 @@
+const handleFetchReportData = () => {
+  if (!selectedReport?.fileName || !selectedDate) return;
+
+  if (dateError) {
+    showSnackBar(getErrorMessage(dateError), "error");
+    return;
+  }
+
+  const payload = {
+    moduleType: moduleType,
+    fileName: selectedReport.fileName,
+    date: selectedDate.format("YYYY-MM-DD"),
+    roleId: user.role,
+  };
+
+  // Convert payload to query params
+  const query = new URLSearchParams(payload).toString();
+
+  // 🔥 Browser-native download (NOT cancellable on navigation)
+  const downloadUrl = `/RS/reports/download?${query}`;
+
+  // Optional UI feedback
+  showSnackBar("Download started", "info");
+
+  // Trigger native download
+  window.location.href = downloadUrl;
+};
+
+
+
 
 const handleFetchReportData = () => {
   if (!selectedReport?.fileName || !selectedDate) return;
