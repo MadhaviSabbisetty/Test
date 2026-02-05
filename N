@@ -1,128 +1,4 @@
- const handleFetchReportData = async () => {
-    if (!selectedReport?.fileName || !selectedDate) return;
 
-    if (dateError) {
-      showSnackBar(getErrorMessage(dateError), "error");
-      return;
-    }
-
-    setIsLoading(true);
-    setIsDownloading(true);
-    setDownloadedBytes(0);
-
-    const payload = {
-      moduleType:moduleType,
-      fileName: selectedReport.fileName,
-      branchCode:branch.branchCode,
-      date: selectedDate.format("YYYY-MM-DD"),
-      roleId: user.role,
-    };
- 
-    try {
-      // const response = await callApi(
-      //   "/RS/reports/download",
-      //   payload,
-      //   "POST",
-      //   "blob",
-      //   "application/json",
-      //   {
-      //     onDownloadProgress: (event) => {
-      //       setIsDownloading(true);
-      //       if (event && typeof event.loaded === "number") {
-      //         setDownloadedBytes(event.loaded);
-      //       }
-      //     },
-      //   },
-      //   false
-      // );
-
-      downloadReport({
-        payload,
-        onProgress:(event)=>{
-          if(event?.loaded){
-            setIsDownloading(true);
-            setDownloadedBytes(event.loaded);
-          }
-        },
-        onSuccess:(filename)=>{
-          showSnackBar(
-            `Reports "${filename}" downloaded successfully`,
-          "success"
-          );
-          setIsLoading(false);
-          setIsDownloading(false);
-          setDownloadedBytes(0);
-        },
-        onError:(msg)=>{
-          showSnackBar(msg,"error");
-           setIsLoading(false);
-          setIsDownloading(false);
-          setDownloadedBytes(0);
-        },
-      });
-
-      if (response.data && response.data.size > 22) {
-        const contentDisposition =
-          response.headers["content-disposition"] ||
-          response.headers["Content-Disposition"];
-          
-        let filename = "report.zip";
-        if (
-          contentDisposition &&
-          contentDisposition.indexOf("attachment") !== -1
-        ) {
-          const filenameMatch = contentDisposition.match(/filename="(.+?)"/);
-          if (filenameMatch && filenameMatch.length > 1) {
-            filename = filenameMatch[1];
-          }
-        }
-
-        const downloadUrl = window.URL.createObjectURL(response.data);
-        const a = document.createElement("a");
-        a.href = downloadUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(downloadUrl);
-        showSnackBar(
-          `Reports "${filename}" downloaded successfully`,
-          "success"
-        );
-      } else {
-        showSnackBar(
-          "No reports found matching your current filter criteria",
-          "warning"
-        );
-      }
-    } catch (error) {
-      console.log("error", error);
-
-      if (error && error instanceof Blob) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          try {
-            const errorJson = JSON.parse(reader.result);
-            console.error(errorJson.message);
-            showSnackBar(
-              errorJson.message || "No reports found matching your criteria",
-              "error"
-            );
-          } catch (e) {
-            console.error(e);
-            showSnackBar("Something went wrong, kindly try again.", "error");
-          }
-        };
-        reader.readAsText(error);
-      } else {
-        showSnackBar("Network Error: Could not connect to server", "error");
-      }
-    } finally {
-      setIsLoading(false);
-      setIsDownloading(false);
-      setDownloadedBytes(0);     
-    }
-  };
 
 
 
@@ -535,6 +411,104 @@ export default function GlifReports() {
     </Grow>
   );
 }
+
+
+
+
+const downloadReportOutsideReact = ({
+  payload,
+  token,
+  onProgress,
+  onSuccess,
+  onError,
+}) => {
+  axios
+    .post("/RS/reports/download", payload, {
+      responseType: "blob",
+      headers: {
+        Authorization: `Bearer ${token}`, // 🔑 required
+        "Content-Type": "application/json",
+      },
+      onDownloadProgress: onProgress,
+    })
+    .then((response) => {
+      if (response.data && response.data.size > 22) {
+        const contentDisposition =
+          response.headers["content-disposition"] ||
+          response.headers["Content-Disposition"];
+
+        let filename = "report.zip";
+        if (contentDisposition?.includes("filename")) {
+          const match = contentDisposition.match(/filename="(.+?)"/);
+          if (match?.[1]) filename = match[1];
+        }
+
+        const url = window.URL.createObjectURL(response.data);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+
+        onSuccess?.(filename);
+      } else {
+        onError?.("No reports found");
+      }
+    })
+    .catch((err) => {
+      console.error("Download error:", err);
+      onError?.("Download failed");
+    });
+};
+
+const handleFetchReportData = () => {
+  if (!selectedReport?.fileName || !selectedDate) return;
+
+  if (dateError) {
+    showSnackBar(getErrorMessage(dateError), "error");
+    return;
+  }
+
+  setIsLoading(true);
+  setIsDownloading(true);
+  setDownloadedBytes(0);
+
+  const payload = {
+    moduleType: moduleType,
+    fileName: selectedReport.fileName,
+    date: selectedDate.format("YYYY-MM-DD"),
+    roleId: user.role,
+  };
+
+  downloadReportOutsideReact({
+    payload,
+    token: user.token, // 🔴 if your token key differs, change ONLY this
+    onProgress: (event) => {
+      if (event?.loaded) {
+        setDownloadedBytes(event.loaded);
+      }
+    },
+    onSuccess: (filename) => {
+      showSnackBar(
+        `Reports "${filename}" downloaded successfully`,
+        "success"
+      );
+      setIsLoading(false);
+      setIsDownloading(false);
+      setDownloadedBytes(0);
+    },
+    onError: (msg) => {
+      showSnackBar(msg, "error");
+      setIsLoading(false);
+      setIsDownloading(false);
+      setDownloadedBytes(0);
+    },
+  });
+};
+
+
 
 
 
