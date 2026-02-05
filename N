@@ -1,0 +1,49 @@
+import axios from "axios";
+
+/**
+ * This download will CONTINUE even if React component unmounts
+ */
+export const downloadReport = async ({
+  payload,
+  onProgress,
+  onSuccess,
+  onError,
+}) => {
+  try {
+    const response = await axios.post(
+      "/RS/reports/download",
+      payload,
+      {
+        responseType: "blob",
+        onDownloadProgress: onProgress,
+      }
+    );
+
+    if (response.data && response.data.size > 22) {
+      const contentDisposition =
+        response.headers["content-disposition"] ||
+        response.headers["Content-Disposition"];
+
+      let filename = "report.zip";
+      if (contentDisposition?.includes("filename")) {
+        const match = contentDisposition.match(/filename="(.+?)"/);
+        if (match?.[1]) filename = match[1];
+      }
+
+      const url = window.URL.createObjectURL(response.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      onSuccess?.(filename);
+    } else {
+      onError?.("No reports found");
+    }
+  } catch (e) {
+    onError?.("Download failed");
+  }
+};
