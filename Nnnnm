@@ -192,3 +192,44 @@ const triggerBrowserDownload = () => {
   form.submit();
   document.body.removeChild(form);
 };
+
+
+
+
+
+
+
+
+const handleFetchReportData = () => {
+  if (!selectedReport || !selectedDate || dateError) return;
+
+  // User feedback
+  showSnackBar(
+    "Download started. You may continue working.",
+    "info"
+  );
+
+  // Browser-native download (survives navigation)
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = "/RS/api/reports/download";
+
+  const payload = {
+    moduleType,
+    fileName: selectedReport.fileName,
+    date: selectedDate.format("YYYY-MM-DD"),
+    roleId: user.role,
+  };
+
+  Object.entries(payload).forEach(([key, value]) => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = key;
+    input.value = value;
+    form.appendChild(input);
+  });
+
+  document.body.appendChild(form);
+  form.submit();
+  document.body.removeChild(form);
+};
