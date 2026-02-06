@@ -1,87 +1,216 @@
-const startDownload = async ({
-  callApi,
-  url,
-  payload,
-  onSuccess,
-  onNoData,
-  onError,
-}) => {
-  try {
-    setIsDownloading(true);
-    setDownloadedBytes(0);
+reportbranchwise code
 
-    const response = await callApi(
-      url,
-      payload,
-      "POST",
-      "blob",
-      "application/json",
-      {
-        onDownloadProgress: (e) => {
-          if (e?.loaded) setDownloadedBytes(e.loaded);
-        },
-      },
-      false
-    );
+// import { startDownload } from "../../utils/reportDownloader";
 
-    // 🚫 NO DATA CASE
-    if (!response.data || response.data.size <= 22) {
-      onNoData?.();
-      return;
-    }
+import {useDownload} from "../../context/DownloadContext";
+import { useEffect, useState } from "react";
+import {
+  Box,
+  Typography,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Stack,
+  Button,
+  Card,
+  LinearProgress,
+  Grow,
+  Fade,
+} from "@mui/material";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import {
+  Summarize,
+  CloudDownloadTwoTone,
+  LooksOne,
+  LooksTwo,
+  Looks3,
+} from "@mui/icons-material";
+import useApi from "../../hooks/useApi";
+import dayjs from "dayjs";
+import { useSelector } from "react-redux";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import { useTheme } from "@mui/material/styles";
+import CustomChip from "../../utils/CustomChip";
+import GlifReportsStyles from "./GlifReportsStyles";
 
-    const disposition =
-      response.headers["content-disposition"] ||
-      response.headers["Content-Disposition"];
+// 1. Ensure strictly 'en-gb' locale logic if specific DD/MM formats are fighting with browser locale
+import "dayjs/locale/en-gb";
+const moduleType="WHOLE_BANK";
 
-    let filename = "report.zip";
-    if (disposition) {
-      const match = disposition.match(/filename="(.+?)"/);
-      if (match) filename = match[1];
-    }
 
-    const blobUrl = window.URL.createObjectURL(response.data);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(blobUrl);
+export default function GlifReports() {
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  const user = useSelector((state) => state.auth.user);
 
-    // ✅ SUCCESS
-    onSuccess?.(filename);
+  const [dateError, setDateError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [repTypes, setRepTypes] = useState([]);
+  const [selectedReport, setReport] = useState(null);
+  const [selectedDate, setDate] = useState(null);
 
-  } catch (error) {
-    if (error instanceof Blob) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const errorJson = JSON.parse(reader.result);
-          onError?.(errorJson.message);
-        } catch {
-          onError?.("Something went wrong, kindly try again.");
+  // Defaulting to a safe past date initially
+  const [minDate, setMinDate] = useState(dayjs("2020-01-01"));
+
+  // const [isDownloading, setIsDownloading] = useState(false);
+  // const [downloadedBytes, setDownloadedBytes] = useState(0);
+
+
+const { startDownload, isDownloading, downloadedBytes } = useDownload();
+  const theme = useTheme();
+  const styles = GlifReportsStyles(theme);
+
+  const disableInputs = isLoading ;
+
+  const downloadedMB =
+    downloadedBytes > 0 ? (downloadedBytes / (1024 * 1024)).toFixed(2) : null;
+
+    
+
+  // --- API Fetch ---
+  useEffect(() => {
+    async function fetchData() {
+      setIsLoading(true);
+      try {
+        const data = await callApi(
+          "/RS/reports/types",
+          { roleId: user.role ,
+            moduleType:moduleType,
+          },
+          "POST"
+        );
+        const types = data.data || [];
+        setRepTypes(types);
+
+        if (types.length > 0 && types[0].selectedDate) {
+          // IMPORTANT: Use .startOf('day') to ensure time is 00:00:00
+          // This fixes the "sometimes enabled/disabled arrow" issue by ensuring strict day comparison
+          setMinDate(dayjs(types[0].selectedDate).startOf("day"));
+        } else {
+          // Fallback
+          setMinDate(dayjs("2025-10-01").startOf("day"));
         }
-      };
-      reader.readAsText(error);
-    } else {
-      onError?.("Network Error: Could not connect to server");
+      } catch (error) {
+        console.error("Failed to fetch report types:", error);
+        showSnackBar("Failed to load report types", "error");
+      }
+      setIsLoading(false);
     }
-  } finally {
-    setIsDownloading(false);
-    setDownloadedBytes(0);
-  }
-};
+    fetchData();
+  }, [callApi, user.role, showSnackBar]);
 
+  const handleSelect = (report) => {
+    setReport(report);
+  };
 
+  // --- Download Logic ---
+  // const handleFetchReportData = async () => {
+  //   if (!selectedReport?.fileName || !selectedDate) return;
 
+  //   if (dateError) {
+  //     showSnackBar(getErrorMessage(dateError), "error");
+  //     return;
+  //   }
 
+  //   setIsLoading(true);
+  //   setIsDownloading(true);
+  //   setDownloadedBytes(0);
 
+  //   const payload = {
+  //     moduleType:moduleType,
+  //     fileName: selectedReport.fileName,
+  //     date: selectedDate.format("YYYY-MM-DD"),
+  //     roleId: user.role,
+  //   };
+
+  //   try {
+  //     const response = await callApi(
+  //       "/RS/reports/download",
+  //       payload,
+  //       "POST",
+  //       "blob",
+  //       "application/json",
+  //       {
+  //         onDownloadProgress: (event) => {
+  //           setIsDownloading(true);
+  //           if (event && typeof event.loaded === "number") {
+  //             setDownloadedBytes(event.loaded);
+  //           }
+  //         },
+  //       },
+  //       false
+  //     );
+
+  //     if (response.data && response.data.size > 22) {
+  //       const contentDisposition =
+  //         response.headers["content-disposition"] ||
+  //         response.headers["Content-Disposition"];
+          
+  //       let filename = "report.zip";
+  //       if (
+  //         contentDisposition &&
+  //         contentDisposition.indexOf("attachment") !== -1
+  //       ) {
+  //         const filenameMatch = contentDisposition.match(/filename="(.+?)"/);
+  //         if (filenameMatch && filenameMatch.length > 1) {
+  //           filename = filenameMatch[1];
+  //         }
+  //       }
+
+  //       const downloadUrl = window.URL.createObjectURL(response.data);
+  //       const a = document.createElement("a");
+  //       a.href = downloadUrl;
+  //       a.download = filename;
+  //       document.body.appendChild(a);
+  //       a.click();
+  //       a.remove();
+  //       window.URL.revokeObjectURL(downloadUrl);
+  //       showSnackBar(
+  //         `Reports "${filename}" downloaded successfully`,
+  //         "success"
+  //       );
+  //     } else {
+  //       showSnackBar(
+  //         "No reports found matching your current filter criteria",
+  //         "warning"
+  //       );
+  //     }
+  //   } catch (error) {
+  //     console.log("error", error);
+
+  //     if (error && error instanceof Blob) {
+  //       const reader = new FileReader();
+  //       reader.onload = () => {
+  //         try {
+  //           const errorJson = JSON.parse(reader.result);
+  //           console.error(errorJson.message);
+  //           showSnackBar(
+  //             errorJson.message || "No reports found matching your criteria",
+  //             "error"
+  //           );
+  //         } catch (e) {
+  //           console.error(e);
+  //           showSnackBar("Something went wrong, kindly try again.", "error");
+  //         }
+  //       };
+  //       reader.readAsText(error);
+  //     } else {
+  //       showSnackBar("Network Error: Could not connect to server", "error");
+  //     }
+  //   } finally {
+  //     setIsLoading(false);
+  //     setIsDownloading(false);
+  //     setDownloadedBytes(0);
+  //   }
+  // };
 
 
 const handleFetchReportData = () => {
   if (!selectedReport || !selectedDate || dateError) return;
-
+ 
   startDownload({
     callApi,
     url: "/RS/reports/download",
@@ -110,126 +239,345 @@ const handleFetchReportData = () => {
       );
     },
   });
-};
+}; 
+
+
+
+  // --- Validation Message Logic --- 
+  const getErrorMessage = (error) => {
+    const minDateStr = minDate?.isValid()
+      ? minDate.format("DD/MM/YYYY")
+      : "Allowed Min Date";
+
+    switch (error) {
+      case "maxDate":
+        return "Date cannot be in the future (Today is max)";
+      case "minDate":
+        return `Date cannot be prior to ${minDateStr}`;
+      case "invalidDate":
+        // This covers cases like 31st Feb or 31st April
+        return "Invalid date (Check day for this month)";
+      default:
+        // When no error, return instructions
+        return `Allowed Range: ${minDateStr} - Today`;
+    }
+  };
+
+  return (
+    <Grow in timeout={500}>
+      <Stack spacing={4}>
+        <Box sx={styles.rootBox} elevation={10}>
+          <Stack
+            spacing={3}
+            direction={"column"}
+            alignItems="center"
+            justifyContent="center"
+          >
+            <Card sx={styles.card}>
+              <Box sx={styles.headerContainer}>
+                <Box sx={styles.headerIconWrapper}>
+                  <Summarize sx={styles.summaryIcon} />
+                </Box>
+                <Box sx={styles.headerTextBox}>
+                  <Typography
+                    variant="h5"
+                    fontWeight="bold"
+                    sx={styles.headerTitle}
+                  >
+                    Reports Generation
+                  </Typography>
+                  <Typography variant="body2" sx={styles.headerSubtitle}>
+                    Choose a specific required Report type and Date using the
+                    criteria below to download reports
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box sx={styles.noteContainer}>
+                <Typography variant="body2" sx={styles.noteText}>
+                  Note: The generated reports cannot be viewed on-screen it can
+                  only be downloaded.
+                </Typography>
+                <Stack direction="row" spacing={2} sx={styles.stepsStack}>
+                  <CustomChip
+                    label="Select a report"
+                    variant="outlined"
+                    icon={<LooksOne />}
+                    color="info"
+                    sx={{ px: 1 }}
+                  />  
+                  <CustomChip
+                    label="Select the report date"
+                    variant="outlined"
+                    icon={<LooksTwo />}
+                    color="info"
+                    sx={{ px: 1 }}
+                  />
+                  <CustomChip
+                    label="Click Fetch & Download button"
+                    variant="outlined"
+                    icon={<Looks3 />}
+                    color="info"
+                    sx={{ px: 1 }}
+                  />
+                </Stack>
+              </Box>
+
+              <Box sx={styles.inputOuterBox}>
+                <Box sx={styles.inputInnerBox}>
+                  {/* Dropdown Menu */}
+                  <FormControl sx={styles.formControl}>
+                    <InputLabel id="menu-select-label">
+                      Select a report
+                    </InputLabel>
+                    <Select
+                      labelId="menu-select-label"
+                      id="menu-select"
+                      value={selectedReport || ""}
+                      label="Select a report"
+                      onChange={(e) => handleSelect(e.target.value)}
+                      disabled={repTypes.length === 0 || disableInputs}
+                    >
+                      {repTypes.map((item) => (
+                        <MenuItem key={item.fileName} value={item}>
+                          {item.reportName}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  {/* Date Picker */}
+                  <FormControl sx={styles.formControl}>
+                    {/* Ensure adapterLocale is set to handle DD/MM logic naturally */}
+                    <LocalizationProvider
+                      dateAdapter={AdapterDayjs}
+                      adapterLocale="en-gb"
+                    >
+                      <DatePicker
+                        label="Select report date"
+                        format="DD/MM/YYYY"
+                        views={["year", "month", "day"]}
+                        value={selectedDate}
+                        onChange={(newDate) => setDate(newDate)}
+                        // Explicitly set maxDate to Today
+                        maxDate={dayjs().endOf("day")}
+                        // Explicitly set minDate
+                        minDate={minDate}
+                        onError={(newError) => setDateError(newError)}
+                        disabled={repTypes.length === 0 || disableInputs}
+                        slotProps={{
+                          textField: {
+                            // Logic: If there is an error, show specific error msg.
+                            // If no error, show the range helper text to guide user.
+                            helperText: dateError
+                              ? getErrorMessage(dateError)
+                              : "",
+                            error: !!dateError,
+                            placeholder: "DD/MM/YYYY",
+                          },
+                          // Enhancement: Show days outside current month but verify they are disabled correctly
+                          day: {
+                            showDaysOutsideCurrentMonth: true,
+                          },
+                        }}
+                      />
+                    </LocalizationProvider>
+                  </FormControl>
+                </Box>
+              </Box>
+
+              <Box sx={styles.buttonContainer}>
+                <Button
+                  sx={styles.downloadButton}
+                  endIcon={<CloudDownloadTwoTone />}
+                  variant="contained"
+                  onClick={handleFetchReportData}
+                  disabled={
+                    disableInputs ||
+                    !selectedReport ||
+                    !selectedDate ||
+                    !!dateError
+                  }
+                >
+                  {isDownloading ? "Downloading..." : "Fetch & Download"}
+                </Button>
+                
+                {/* <Button
+                  sx={styles.downloadButton}
+                  endIcon={<CloudDownloadTwoTone />}
+                  variant="contained"
+                  onClick={handleFetchReportData}
+                  disabled={
+                    isLoading ||
+                    !selectedReport ||
+                    !selectedDate ||
+                    Boolean(dateError)
+                  }
+                >
+                  {isDownloading ? "Downloading..." : "Fetch & Download"}
+                </Button> */}
+
+                <Fade in={isDownloading} unmountOnExit>
+                  <Box sx={styles.progressContainer}>
+                    <Box sx={styles.progressHeader}>
+                      <Box sx={styles.progressIconWrapper}>
+                        <CloudDownloadTwoTone sx={styles.innerDownloadIcon} />
+                      </Box>
+                      <Box sx={styles.progressHeaderTextBox}>
+                        <Typography variant="body2" fontWeight={600}>
+                          Searching{" "}
+                          {selectedReport?.reportName ?? "the selected report"}{" "}
+                          for the period{" "}
+                          {selectedDate?.isValid()
+                            ? selectedDate.format("YYYY-MM-DD")
+                            : "an unknown period"}{" "}
+                          is in progress.
+                        </Typography>
+
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={styles.progressCaption}
+                        >
+                          {downloadedMB
+                            ? `Streaming report data… ${downloadedMB} MB received`
+                            : "Preparing your report stream…"}
+                        </Typography>
+                      </Box>
+
+                      {downloadedMB && (
+                        <CustomChip
+                          color="error"
+                          label={`${downloadedMB} MB downloaded`}
+                          variant="filled"
+                        />
+                      )}
+                    </Box>
+                    <LinearProgress
+                      variant="indeterminate"
+                      sx={styles.progressBar}
+                    />
+                  </Box>
+                </Fade>
+              </Box>
+            </Card>
+          </Stack>
+        </Box>
+      </Stack>
+    </Grow>
+  );
+}
 
 
 
 
+downloadcontext file
 
 
+import React, { createContext, useContext, useRef, useState } from "react";
+// import axios from "axios";
+//import api from "../utils/axiosInstance";
 
 
+const DownloadContext = createContext(null);
 
+export const DownloadProvider = ({ children }) => {
+  const controllerRef = useRef(null);
 
-const validateReport = async () => {
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadedBytes, setDownloadedBytes] = useState(0);
+
+const startDownload = async ({
+  callApi,
+  url,
+  payload,
+  onSuccess,
+  onNoData,
+  onError,
+}) => {
   try {
-    const res = await callApi(
-      "/RS/api/reports/validate",
+    setIsDownloading(true);
+    setDownloadedBytes(0);
+
+    const response = await callApi(
+      url,
+      payload,
+      "POST",
+      "blob",
+      "application/json",
       {
-        moduleType,
-        fileName: selectedReport.fileName,
-        date: selectedDate.format("YYYY-MM-DD"),
-        roleId: user.role,
+        onDownloadProgress: (e) => {
+          if (e?.loaded) setDownloadedBytes(e.loaded);
+        },
       },
-      "POST"
+      false
     );
 
-    return res?.data?.valid === true;
-  } catch (e) {
-    showSnackBar(
-      "Something went wrong. Please try again.",
-      "error"
-    );
-    return false;
+    //  NO DATA CASE
+    if (!response.data || response.data.size <= 22) {
+      onNoData?.();
+      return;
+    }
+
+    const disposition =
+      response.headers["content-disposition"] ||
+      response.headers["Content-Disposition"];
+
+    let filename = "report.zip";
+    if (disposition) {
+      const match = disposition.match(/filename="(.+?)"/);
+      if (match) filename = match[1];
+    }
+
+    const blobUrl = window.URL.createObjectURL(response.data);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(blobUrl);
+
+    //  SUCCESS
+    onSuccess?.(filename);
+
+  } catch (error) {
+    if (error instanceof Blob) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const errorJson = JSON.parse(reader.result);
+          onError?.(errorJson.message);
+        } catch {
+          onError?.("Something went wrong, kindly try again.");
+        }
+      };
+      reader.readAsText(error);
+    } else {
+      onError?.("Network Error: Could not connect to server");
+    }
+  } finally {
+    setIsDownloading(false);
+    setDownloadedBytes(0);
   }
 };
+return (
+    <DownloadContext.Provider
+      value={{ startDownload, isDownloading, downloadedBytes }}
+    >
+      {children}
+    </DownloadContext.Provider>
+  );
+};
 
-
-
-const handleFetchReportData = async () => {
-  if (!selectedReport || !selectedDate || dateError) return;
-
-  const isValid = await validateReport();
-
-  if (!isValid) {
-    showSnackBar(
-      "No reports found matching your criteria",
-      "warning"
-    );
-    return;
+export const useDownload = () => {
+  const ctx = useContext(DownloadContext);
+  if (!ctx) {
+    throw new Error("useDownload must be used inside DownloadProvider");
   }
-
-  showSnackBar(
-    "Download started. You may continue working.",
-    "info"
-  );
-
-  triggerBrowserDownload();
-};
-
-
-const triggerBrowserDownload = () => {
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = "/RS/api/reports/download";
-
-  const payload = {
-    moduleType,
-    fileName: selectedReport.fileName,
-    date: selectedDate.format("YYYY-MM-DD"),
-    roleId: user.role,
-  };
-
-  Object.entries(payload).forEach(([key, value]) => {
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = key;
-    input.value = value;
-    form.appendChild(input);
-  });
-
-  document.body.appendChild(form);
-  form.submit();
-  document.body.removeChild(form);
+  return ctx;
 };
 
 
 
 
-
-
-
-
-const handleFetchReportData = () => {
-  if (!selectedReport || !selectedDate || dateError) return;
-
-  // User feedback
-  showSnackBar(
-    "Download started. You may continue working.",
-    "info"
-  );
-
-  // Browser-native download (survives navigation)
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = "/RS/api/reports/download";
-
-  const payload = {
-    moduleType,
-    fileName: selectedReport.fileName,
-    date: selectedDate.format("YYYY-MM-DD"),
-    roleId: user.role,
-  };
-
-  Object.entries(payload).forEach(([key, value]) => {
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = key;
-    input.value = value;
-    form.appendChild(input);
-  });
-
-  document.body.appendChild(form);
-  form.submit();
-  document.body.removeChild(form);
-};
