@@ -1,4 +1,115 @@
 
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import api from "../config/axiosConfig";
+
+/* =====================================================
+   ASYNC THUNK
+   ===================================================== */
+export const downloadReport = createAsyncThunk(
+  "report/download",
+  async (arg, { dispatch }) => {
+    // ✅ ALWAYS destructure INSIDE
+    const { moduleType, fileName, date, roleId } = arg;
+
+    const payload = {
+      moduleType,
+      fileName,
+      date,
+      roleId,
+    };
+
+    console.log("FINAL PAYLOAD IN SLICE →", payload);
+
+    const response = await api.post(
+      "/RS/reports/download",
+      payload,
+      {
+        responseType: "blob",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        onDownloadProgress: (event) => {
+          if (event?.loaded) {
+            dispatch(setDownloadedBytes(event.loaded));
+          }
+        },
+      }
+    );
+
+    /* ---------- FILE DOWNLOAD ---------- */
+    const blob = response.data;
+    if (blob && blob.size > 22) {
+      const contentDisposition =
+        response.headers["content-disposition"] ||
+        response.headers["Content-Disposition"];
+
+      let filename = "report.zip";
+      if (contentDisposition?.includes("filename")) {
+        const match = contentDisposition.match(/filename="(.+?)"/);
+        if (match?.[1]) filename = match[1];
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    }
+
+    return true;
+  }
+);
+
+/* =====================================================
+   SLICE
+   ===================================================== */
+const reportDownloadSlice = createSlice({
+  name: "reportDownload",
+  initialState: {
+    downloading: false,
+    downloadedBytes: 0,
+  },
+  reducers: {
+    setDownloadedBytes: (state, action) => {
+      state.downloadedBytes = action.payload;
+    },
+    resetDownload: (state) => {
+      state.downloading = false;
+      state.downloadedBytes = 0;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(downloadReport.pending, (state) => {
+        state.downloading = true;
+        state.downloadedBytes = 0;
+      })
+      .addCase(downloadReport.fulfilled, (state) => {
+        state.downloading = false;
+      })
+      .addCase(downloadReport.rejected, (state) => {
+        state.downloading = false;
+      });
+  },
+});
+
+export const { setDownloadedBytes, resetDownload } =
+  reportDownloadSlice.actions;
+
+export default reportDownloadSlice.reducer;
+
+
+
+
+
+
+
+
+
+
 
 if (response.data && response.data.size > 22) {
         const contentDisposition =
