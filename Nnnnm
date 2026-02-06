@@ -1,6 +1,32 @@
 
 
+if (response.data && response.data.size > 22) {
+        const contentDisposition =
+          response.headers["content-disposition"] ||
+          response.headers["Content-Disposition"];
 
+        let filename = "report.zip";
+        if (contentDisposition?.includes("attachment")) {
+          const match = contentDisposition.match(/filename="(.+?)"/);
+          if (match?.[1]) {
+            filename = match[1];
+          }
+        }
+
+        const blobUrl = window.URL.createObjectURL(response.data);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(blobUrl);
+      }
+
+      return true;
+    } catch (error) {
+      return rejectWithValue(error);
+    }
 
 
 
