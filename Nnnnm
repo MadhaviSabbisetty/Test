@@ -421,5 +421,112 @@ export default function GlifReports() {
 }
  
  
- 
+
+
+
+
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import axios from "axios";
+
+/* 1️⃣ Background download task */
+export const downloadReport = createAsyncThunk(
+  "report/download",
+  async ({ payload }, { dispatch }) => {
+    const response = await axios.post(
+      "/RS/reports/download",
+      payload,
+      {
+        responseType: "blob",
+        onDownloadProgress: (e) => {
+          dispatch(setProgress(e.loaded));
+        },
+      }
+    );
+
+    return response;
+  }
+);
+
+/* 2️⃣ Redux state */
+const reportDownloadSlice = createSlice({
+  name: "reportDownload",
+  initialState: {
+    downloading: false,
+    downloadedBytes: 0,
+  },
+  reducers: {
+    setProgress: (state, action) => {
+      state.downloadedBytes = action.payload;
+    },
+    resetDownload: (state) => {
+      state.downloading = false;
+      state.downloadedBytes = 0;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(downloadReport.pending, (state) => {
+        state.downloading = true;
+        state.downloadedBytes = 0;
+      })
+      .addCase(downloadReport.fulfilled, (state) => {
+        state.downloading = false;
+      })
+      .addCase(downloadReport.rejected, (state) => {
+        state.downloading = false;
+      });
+  },
+});
+
+export const { setProgress, resetDownload } = reportDownloadSlice.actions;
+export default reportDownloadSlice.reducer;
+
+
+
+
+
+
+store.js
+
+
+import reportDownloadReducer from "./reportDownloadSlice";
+
+const store = configureStore({
+  reducer: {
+    reportDownload: reportDownloadReducer,
+  },
+});
+
+
+
+
+
+
+
+
+
+
+
+
+import { useDispatch, useSelector } from "react-redux";
+import { downloadReport } from "../../redux/reportDownloadSlice";
+
+const dispatch = useDispatch();
+
+const { downloading, downloadedBytes } = useSelector(
+  (state) => state.reportDownload
+);
+
+onClick={() => {
+  dispatch(
+    downloadReport({
+      payload: {
+        moduleType,
+        fileName: selectedReport.fileName,
+        date: selectedDate.format("YYYY-MM-DD"),
+        roleId: user.role,
+      },
+    })
+  );
+}}
 
