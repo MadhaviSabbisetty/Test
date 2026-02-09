@@ -1,0 +1,198 @@
+import { useEffect, useState } from "react";
+import {
+  Box,
+  Typography,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Stack,
+  Button,
+  Card,
+  Grow,
+} from "@mui/material";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import {
+  Summarize,
+  CloudDownloadTwoTone,
+  LooksOne,
+  LooksTwo,
+  Looks3,
+} from "@mui/icons-material";
+import useApi from "../../hooks/useApi";
+import dayjs from "dayjs";
+import { useSelector } from "react-redux";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import { useTheme } from "@mui/material/styles";
+import CustomChip from "../../utils/CustomChip";
+import GlifReportsStyles from "./GlifReportsStyles";
+
+import "dayjs/locale/en-gb";
+
+const moduleType = "WHOLE_BANK";
+
+export default function GlifReports() {
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  const user = useSelector((state) => state.auth.user);
+
+  const [dateError, setDateError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [repTypes, setRepTypes] = useState([]);
+  const [selectedReport, setReport] = useState(null);
+  const [selectedDate, setDate] = useState(null);
+  const [minDate, setMinDate] = useState(dayjs("2020-01-01"));
+
+  const theme = useTheme();
+  const styles = GlifReportsStyles(theme);
+
+  const disableInputs = isLoading;
+
+  // ---------- FETCH REPORT TYPES ----------
+  useEffect(() => {
+    async function fetchData() {
+      setIsLoading(true);
+      try {
+        const data = await callApi(
+          "/RS/reports/types",
+          { roleId: user.role, moduleType },
+          "POST"
+        );
+
+        const types = data.data || [];
+        setRepTypes(types);
+
+        if (types[0]?.selectedDate) {
+          setMinDate(dayjs(types[0].selectedDate).startOf("day"));
+        }
+      } catch (err) {
+        showSnackBar("Failed to load report types", "error");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchData();
+  }, [callApi, user.role, showSnackBar]);
+
+  // ---------- DOWNLOAD ----------
+  const handleFetchReportData = async () => {
+    if (!selectedReport || !selectedDate) return;
+
+    if (dateError) {
+      showSnackBar("Invalid date selected", "error");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await callApi(
+        "/RS/reports/download",
+        {
+          moduleType,
+          fileName: selectedReport.fileName,
+          date: selectedDate.format("YYYY-MM-DD"),
+          roleId: user.role,
+        },
+        "POST",
+        "blob",
+        "application/json"
+      );
+
+      if (!response.data || response.data.size <= 22) {
+        showSnackBar("No report found", "warning");
+        return;
+      }
+
+      let filename = "report.zip";
+      const cd = response.headers["content-disposition"];
+      if (cd?.includes("filename")) {
+        filename = cd.match(/filename="(.+?)"/)?.[1] || filename;
+      }
+
+      const url = window.URL.createObjectURL(response.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      window.URL.revokeObjectURL(url);
+
+      showSnackBar(`"${filename}" downloaded successfully`, "success");
+    } catch (err) {
+      showSnackBar("Download failed", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Grow in timeout={500}>
+      <Stack spacing={4}>
+        <Box sx={styles.rootBox}>
+          <Card sx={styles.card}>
+            <Box sx={styles.headerContainer}>
+              <Summarize sx={styles.summaryIcon} />
+              <Typography variant="h5" fontWeight="bold">
+                Reports Generation
+              </Typography>
+            </Box>
+
+            <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+              <CustomChip label="Select report" icon={<LooksOne />} />
+              <CustomChip label="Select date" icon={<LooksTwo />} />
+              <CustomChip label="Download" icon={<Looks3 />} />
+            </Stack>
+
+            <FormControl fullWidth sx={{ mb: 3 }}>
+              <InputLabel>Select a report</InputLabel>
+              <Select
+                value={selectedReport || ""}
+                onChange={(e) => setReport(e.target.value)}
+                disabled={disableInputs}
+              >
+                {repTypes.map((r) => (
+                  <MenuItem key={r.fileName} value={r}>
+                    {r.reportName}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <LocalizationProvider
+              dateAdapter={AdapterDayjs}
+              adapterLocale="en-gb"
+            >
+              <DatePicker
+                label="Select report date"
+                value={selectedDate}
+                onChange={setDate}
+                minDate={minDate}
+                maxDate={dayjs()}
+                onError={setDateError}
+              />
+            </LocalizationProvider>
+
+            <Box sx={{ mt: 4 }}>
+              <Button
+                fullWidth
+                variant="contained"
+                endIcon={<CloudDownloadTwoTone />}
+                onClick={handleFetchReportData}
+                disabled={
+                  disableInputs ||
+                  !selectedReport ||
+                  !selectedDate ||
+                  !!dateError
+                }
+              >
+                Fetch & Download
+              </Button>
+            </Box>
+          </Card>
+        </Box>
+      </Stack>
+    </Grow>
+  );
+}
