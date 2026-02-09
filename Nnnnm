@@ -1,153 +1,3 @@
-
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import api from "../config/axiosConfig";
-
-/* =====================================================
-   ASYNC THUNK
-   ===================================================== */
-export const downloadReport = createAsyncThunk(
-  "report/download",
-  async (arg, { dispatch }) => {
-    // ✅ ALWAYS destructure INSIDE
-    const { moduleType, fileName, date, roleId } = arg;
-
-    const payload = {
-      moduleType,
-      fileName,
-      date,
-      roleId,
-    };
-
-    console.log("FINAL PAYLOAD IN SLICE →", payload);
-
-    const response = await api.post(
-      "/RS/reports/download",
-      payload,
-      {
-        responseType: "blob",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        onDownloadProgress: (event) => {
-          if (event?.loaded) {
-            dispatch(setDownloadedBytes(event.loaded));
-          }
-        },
-      }
-    );
-
-    /* ---------- FILE DOWNLOAD ---------- */
-    const blob = response.data;
-    if (blob && blob.size > 22) {
-      const contentDisposition =
-        response.headers["content-disposition"] ||
-        response.headers["Content-Disposition"];
-
-      let filename = "report.zip";
-      if (contentDisposition?.includes("filename")) {
-        const match = contentDisposition.match(/filename="(.+?)"/);
-        if (match?.[1]) filename = match[1];
-      }
-
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    }
-
-    return true;
-  }
-);
-
-/* =====================================================
-   SLICE
-   ===================================================== */
-const reportDownloadSlice = createSlice({
-  name: "reportDownload",
-  initialState: {
-    downloading: false,
-    downloadedBytes: 0,
-  },
-  reducers: {
-    setDownloadedBytes: (state, action) => {
-      state.downloadedBytes = action.payload;
-    },
-    resetDownload: (state) => {
-      state.downloading = false;
-      state.downloadedBytes = 0;
-    },
-  },
-  extraReducers: (builder) => {
-    builder
-      .addCase(downloadReport.pending, (state) => {
-        state.downloading = true;
-        state.downloadedBytes = 0;
-      })
-      .addCase(downloadReport.fulfilled, (state) => {
-        state.downloading = false;
-      })
-      .addCase(downloadReport.rejected, (state) => {
-        state.downloading = false;
-      });
-  },
-});
-
-export const { setDownloadedBytes, resetDownload } =
-  reportDownloadSlice.actions;
-
-export default reportDownloadSlice.reducer;
-
-
-
-
-
-
-
-
-
-
-
-if (response.data && response.data.size > 22) {
-        const contentDisposition =
-          response.headers["content-disposition"] ||
-          response.headers["Content-Disposition"];
-
-        let filename = "report.zip";
-        if (contentDisposition?.includes("attachment")) {
-          const match = contentDisposition.match(/filename="(.+?)"/);
-          if (match?.[1]) {
-            filename = match[1];
-          }
-        }
-
-        const blobUrl = window.URL.createObjectURL(response.data);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(blobUrl);
-      }
-
-      return true;
-    } catch (error) {
-      return rejectWithValue(error);
-    }
-
-
-
-
-
-
-
-
-
-
 import { useEffect, useState } from "react";
 import {
   Box,
@@ -180,36 +30,36 @@ import useCustomSnackbar from "../../utils/useCustomSnackbar";
 import { useTheme } from "@mui/material/styles";
 import CustomChip from "../../utils/CustomChip";
 import GlifReportsStyles from "./GlifReportsStyles";
- 
+
 // 1. Ensure strictly 'en-gb' locale logic if specific DD/MM formats are fighting with browser locale
 import "dayjs/locale/en-gb";
 const moduleType="WHOLE_BANK";
- 
+
 export default function GlifReports() {
   const { callApi } = useApi();
   const showSnackBar = useCustomSnackbar();
   const user = useSelector((state) => state.auth.user);
- 
+
   const [dateError, setDateError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [repTypes, setRepTypes] = useState([]);
   const [selectedReport, setReport] = useState(null);
   const [selectedDate, setDate] = useState(null);
- 
+
   // Defaulting to a safe past date initially
   const [minDate, setMinDate] = useState(dayjs("2020-01-01"));
- 
+
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadedBytes, setDownloadedBytes] = useState(0);
- 
+
   const theme = useTheme();
   const styles = GlifReportsStyles(theme);
- 
+
   const disableInputs = isLoading || isDownloading;
- 
+
   const downloadedMB =
     downloadedBytes > 0 ? (downloadedBytes / (1024 * 1024)).toFixed(2) : null;
- 
+
   // --- API Fetch ---
   useEffect(() => {
     async function fetchData() {
@@ -224,7 +74,7 @@ export default function GlifReports() {
         );
         const types = data.data || [];
         setRepTypes(types);
- 
+
         if (types.length > 0 && types[0].selectedDate) {
           // IMPORTANT: Use .startOf('day') to ensure time is 00:00:00
           // This fixes the "sometimes enabled/disabled arrow" issue by ensuring strict day comparison
@@ -241,31 +91,31 @@ export default function GlifReports() {
     }
     fetchData();
   }, [callApi, user.role, showSnackBar]);
- 
+
   const handleSelect = (report) => {
     setReport(report);
   };
- 
+
   // --- Download Logic ---
   const handleFetchReportData = async () => {
     if (!selectedReport?.fileName || !selectedDate) return;
- 
+
     if (dateError) {
       showSnackBar(getErrorMessage(dateError), "error");
       return;
     }
- 
+
     setIsLoading(true);
     setIsDownloading(true);
     setDownloadedBytes(0);
- 
+
     const payload = {
       moduleType:moduleType,
       fileName: selectedReport.fileName,
       date: selectedDate.format("YYYY-MM-DD"),
       roleId: user.role,
     };
- 
+
     try {
       const response = await callApi(
         "/RS/reports/download",
@@ -283,12 +133,12 @@ export default function GlifReports() {
         },
         false
       );
- 
+
       if (response.data && response.data.size > 22) {
         const contentDisposition =
           response.headers["content-disposition"] ||
           response.headers["Content-Disposition"];
-         
+          
         let filename = "report.zip";
         if (
           contentDisposition &&
@@ -299,7 +149,7 @@ export default function GlifReports() {
             filename = filenameMatch[1];
           }
         }
- 
+
         const downloadUrl = window.URL.createObjectURL(response.data);
         const a = document.createElement("a");
         a.href = downloadUrl;
@@ -320,7 +170,7 @@ export default function GlifReports() {
       }
     } catch (error) {
       console.log("error", error);
- 
+
       if (error && error instanceof Blob) {
         const reader = new FileReader();
         reader.onload = () => {
@@ -346,13 +196,13 @@ export default function GlifReports() {
       setDownloadedBytes(0);
     }
   };
- 
-  // --- Validation Message Logic ---
+
+  // --- Validation Message Logic --- 
   const getErrorMessage = (error) => {
     const minDateStr = minDate?.isValid()
       ? minDate.format("DD/MM/YYYY")
       : "Allowed Min Date";
- 
+
     switch (error) {
       case "maxDate":
         return "Date cannot be in the future (Today is max)";
@@ -366,7 +216,7 @@ export default function GlifReports() {
         return `Allowed Range: ${minDateStr} - Today`;
     }
   };
- 
+
   return (
     <Grow in timeout={500}>
       <Stack spacing={4}>
@@ -396,7 +246,7 @@ export default function GlifReports() {
                   </Typography>
                 </Box>
               </Box>
- 
+
               <Box sx={styles.noteContainer}>
                 <Typography variant="body2" sx={styles.noteText}>
                   Note: The generated reports cannot be viewed on-screen it can
@@ -426,7 +276,7 @@ export default function GlifReports() {
                   />
                 </Stack>
               </Box>
- 
+
               <Box sx={styles.inputOuterBox}>
                 <Box sx={styles.inputInnerBox}>
                   {/* Dropdown Menu */}
@@ -449,7 +299,7 @@ export default function GlifReports() {
                       ))}
                     </Select>
                   </FormControl>
- 
+
                   {/* Date Picker */}
                   <FormControl sx={styles.formControl}>
                     {/* Ensure adapterLocale is set to handle DD/MM logic naturally */}
@@ -489,7 +339,7 @@ export default function GlifReports() {
                   </FormControl>
                 </Box>
               </Box>
- 
+
               <Box sx={styles.buttonContainer}>
                 <Button
                   sx={styles.downloadButton}
@@ -505,7 +355,7 @@ export default function GlifReports() {
                 >
                   {isDownloading ? "Downloading..." : "Fetch & Download"}
                 </Button>
- 
+
                 <Fade in={isDownloading} unmountOnExit>
                   <Box sx={styles.progressContainer}>
                     <Box sx={styles.progressHeader}>
@@ -522,7 +372,7 @@ export default function GlifReports() {
                             : "an unknown period"}{" "}
                           is in progress.
                         </Typography>
- 
+
                         <Typography
                           variant="caption"
                           color="text.secondary"
@@ -533,7 +383,7 @@ export default function GlifReports() {
                             : "Preparing your report stream…"}
                         </Typography>
                       </Box>
- 
+
                       {downloadedMB && (
                         <CustomChip
                           color="error"
@@ -556,114 +406,7 @@ export default function GlifReports() {
     </Grow>
   );
 }
- 
- 
 
 
 
-
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import axios from "axios";
-
-/* 1️⃣ Background download task */
-export const downloadReport = createAsyncThunk(
-  "report/download",
-  async ({ payload }, { dispatch }) => {
-    const response = await axios.post(
-      "/RS/reports/download",
-      payload,
-      {
-        responseType: "blob",
-        onDownloadProgress: (e) => {
-          dispatch(setProgress(e.loaded));
-        },
-      }
-    );
-
-    return response;
-  }
-);
-
-/* 2️⃣ Redux state */
-const reportDownloadSlice = createSlice({
-  name: "reportDownload",
-  initialState: {
-    downloading: false,
-    downloadedBytes: 0,
-  },
-  reducers: {
-    setProgress: (state, action) => {
-      state.downloadedBytes = action.payload;
-    },
-    resetDownload: (state) => {
-      state.downloading = false;
-      state.downloadedBytes = 0;
-    },
-  },
-  extraReducers: (builder) => {
-    builder
-      .addCase(downloadReport.pending, (state) => {
-        state.downloading = true;
-        state.downloadedBytes = 0;
-      })
-      .addCase(downloadReport.fulfilled, (state) => {
-        state.downloading = false;
-      })
-      .addCase(downloadReport.rejected, (state) => {
-        state.downloading = false;
-      });
-  },
-});
-
-export const { setProgress, resetDownload } = reportDownloadSlice.actions;
-export default reportDownloadSlice.reducer;
-
-
-
-
-
-
-store.js
-
-
-import reportDownloadReducer from "./reportDownloadSlice";
-
-const store = configureStore({
-  reducer: {
-    reportDownload: reportDownloadReducer,
-  },
-});
-
-
-
-
-
-
-
-
-
-
-
-
-import { useDispatch, useSelector } from "react-redux";
-import { downloadReport } from "../../redux/reportDownloadSlice";
-
-const dispatch = useDispatch();
-
-const { downloading, downloadedBytes } = useSelector(
-  (state) => state.reportDownload
-);
-
-onClick={() => {
-  dispatch(
-    downloadReport({
-      payload: {
-        moduleType,
-        fileName: selectedReport.fileName,
-        date: selectedDate.format("YYYY-MM-DD"),
-        roleId: user.role,
-      },
-    })
-  );
-}}
 
