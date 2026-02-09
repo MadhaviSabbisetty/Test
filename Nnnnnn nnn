@@ -1,198 +1,110 @@
-import { useEffect, useState } from "react";
-import {
-  Box,
-  Typography,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Stack,
-  Button,
-  Card,
-  Grow,
-} from "@mui/material";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import {
-  Summarize,
-  CloudDownloadTwoTone,
-  LooksOne,
-  LooksTwo,
-  Looks3,
-} from "@mui/icons-material";
-import useApi from "../../hooks/useApi";
-import dayjs from "dayjs";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useSelector } from "react-redux";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import { useTheme } from "@mui/material/styles";
-import CustomChip from "../../utils/CustomChip";
-import GlifReportsStyles from "./GlifReportsStyles";
+import { useLocation } from "react-router-dom";
+import api from "../config/axiosConfig";
+import { resolveConfig } from "../config/EnvironmentConfig";
+import { convertToKebabCase } from "../utils/CommonUtilities";
 
-import "dayjs/locale/en-gb";
+const useApi = () => {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-const moduleType = "WHOLE_BANK";
+  const activeRequests = useRef(new Set());
+  const location = useLocation();
 
-export default function GlifReports() {
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
-  const user = useSelector((state) => state.auth.user);
+  const menus = useSelector((state) => state.menus.menus);
+  const selectedMenuItem = useSelector((state) => state.menus.selectedMenuItem);
 
-  const [dateError, setDateError] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [repTypes, setRepTypes] = useState([]);
-  const [selectedReport, setReport] = useState(null);
-  const [selectedDate, setDate] = useState(null);
-  const [minDate, setMinDate] = useState(dayjs("2020-01-01"));
-
-  const theme = useTheme();
-  const styles = GlifReportsStyles(theme);
-
-  const disableInputs = isLoading;
-
-  // ---------- FETCH REPORT TYPES ----------
-  useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
-      try {
-        const data = await callApi(
-          "/RS/reports/types",
-          { roleId: user.role, moduleType },
-          "POST"
-        );
-
-        const types = data.data || [];
-        setRepTypes(types);
-
-        if (types[0]?.selectedDate) {
-          setMinDate(dayjs(types[0].selectedDate).startOf("day"));
+  const findMenuItem = useCallback((items, route) => {
+    if (!items?.length) return null;
+    for (const item of items) {
+      if (item.route === route) return item;
+      if (item.children?.length) {
+        if (route.includes("/choose-option/")) {
+          const param = route.split("/choose-option/")[1];
+          if (param === convertToKebabCase(item.title)) return item;
         }
+        const found = findMenuItem(item.children, route);
+        if (found) return found;
+      }
+    }
+    return null;
+  }, []);
+
+  const xRequestType = (() => {
+    const currentMenu = findMenuItem(menus, location.pathname);
+    return currentMenu?.requestType || selectedMenuItem?.requestType || "*";
+  })();
+
+  const cancelAllRequests = useCallback(() => {
+    activeRequests.current.forEach((controller) => controller.abort());
+    activeRequests.current.clear();
+  }, []);
+
+  useEffect(() => () => cancelAllRequests(), [cancelAllRequests]);
+
+  const callApi = useCallback(
+    async (
+      url,
+      payload = null,
+      method = "GET",
+      responseType = "json",
+      contentType = "application/json",
+      extraConfig = {},
+      returnDataOnly = true
+    ) => {
+      setLoading(true);
+      setError(null);
+
+      // Build final URL using service resolution
+      const parts = url.split("/");
+      const service = parts[1];
+      const resolved = resolveConfig(`/${service}`);
+      parts[1] = resolved;
+      const finalUrl = parts.slice(1).join("/");
+
+      const controller = new AbortController();
+      activeRequests.current.add(controller);
+
+      try {
+        const config = {
+          method,
+          url: finalUrl,
+          data: method !== "GET" ? payload : undefined,
+          params: method === "GET" ? payload : undefined,
+          responseType,
+          signal: controller.signal,
+          headers: {
+            "Content-Type": contentType,
+            "X-Request-Type": xRequestType,
+            ...(extraConfig.headers || {}),
+          },
+          ...extraConfig,
+        };
+
+        const response = await api(config);
+        setData(response.data);
+        return returnDataOnly ? response.data : response;
       } catch (err) {
-        showSnackBar("Failed to load report types", "error");
+        setError(err);
+        if (err.response?.status !== 401) {
+          console.error(
+            err.response?.data?.message ||
+              err.response?.data?.error ||
+              "An error occurred"
+          );
+        }
+        throw err?.response?.data;
       } finally {
-        setIsLoading(false);
+        activeRequests.current.delete(controller);
+        setLoading(false);
       }
-    }
-    fetchData();
-  }, [callApi, user.role, showSnackBar]);
-
-  // ---------- DOWNLOAD ----------
-  const handleFetchReportData = async () => {
-    if (!selectedReport || !selectedDate) return;
-
-    if (dateError) {
-      showSnackBar("Invalid date selected", "error");
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const response = await callApi(
-        "/RS/reports/download",
-        {
-          moduleType,
-          fileName: selectedReport.fileName,
-          date: selectedDate.format("YYYY-MM-DD"),
-          roleId: user.role,
-        },
-        "POST",
-        "blob",
-        "application/json"
-      );
-
-      if (!response.data || response.data.size <= 22) {
-        showSnackBar("No report found", "warning");
-        return;
-      }
-
-      let filename = "report.zip";
-      const cd = response.headers["content-disposition"];
-      if (cd?.includes("filename")) {
-        filename = cd.match(/filename="(.+?)"/)?.[1] || filename;
-      }
-
-      const url = window.URL.createObjectURL(response.data);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      window.URL.revokeObjectURL(url);
-
-      showSnackBar(`"${filename}" downloaded successfully`, "success");
-    } catch (err) {
-      showSnackBar("Download failed", "error");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <Grow in timeout={500}>
-      <Stack spacing={4}>
-        <Box sx={styles.rootBox}>
-          <Card sx={styles.card}>
-            <Box sx={styles.headerContainer}>
-              <Summarize sx={styles.summaryIcon} />
-              <Typography variant="h5" fontWeight="bold">
-                Reports Generation
-              </Typography>
-            </Box>
-
-            <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
-              <CustomChip label="Select report" icon={<LooksOne />} />
-              <CustomChip label="Select date" icon={<LooksTwo />} />
-              <CustomChip label="Download" icon={<Looks3 />} />
-            </Stack>
-
-            <FormControl fullWidth sx={{ mb: 3 }}>
-              <InputLabel>Select a report</InputLabel>
-              <Select
-                value={selectedReport || ""}
-                onChange={(e) => setReport(e.target.value)}
-                disabled={disableInputs}
-              >
-                {repTypes.map((r) => (
-                  <MenuItem key={r.fileName} value={r}>
-                    {r.reportName}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            <LocalizationProvider
-              dateAdapter={AdapterDayjs}
-              adapterLocale="en-gb"
-            >
-              <DatePicker
-                label="Select report date"
-                value={selectedDate}
-                onChange={setDate}
-                minDate={minDate}
-                maxDate={dayjs()}
-                onError={setDateError}
-              />
-            </LocalizationProvider>
-
-            <Box sx={{ mt: 4 }}>
-              <Button
-                fullWidth
-                variant="contained"
-                endIcon={<CloudDownloadTwoTone />}
-                onClick={handleFetchReportData}
-                disabled={
-                  disableInputs ||
-                  !selectedReport ||
-                  !selectedDate ||
-                  !!dateError
-                }
-              >
-                Fetch & Download
-              </Button>
-            </Box>
-          </Card>
-        </Box>
-      </Stack>
-    </Grow>
+    },
+    [xRequestType]
   );
-}
+
+  return { data, error, loading, callApi, cancelAllRequests };
+};
+
+export default useApi;
