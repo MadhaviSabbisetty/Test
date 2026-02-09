@@ -504,3 +504,109 @@ export default AppRouter;
 
 
 
+
+
+
+import React, { useMemo, useState, useCallback } from "react";
+import { Box, Paper, Typography } from "@mui/material";
+import { Outlet } from "react-router-dom";
+import { useSelector } from "react-redux";
+
+import LayoutHeader from "../components/LayoutHeader";
+import SideBar from "../components/SideBar/SideBar";
+import { getParentMenu } from "../utils/CommonUtilities";
+import { getIconComponent } from "../utils/IconUtils";
+import useNavigateToPage from "../hooks/useNavigateToPage";
+import AppBreadcrumbs from "./AppBreadcrumbs";
+
+const drawerWidth = 270;
+
+const CommonLayout = () => {
+  const selectedMenuItem = useSelector((state) => state.menus.selectedMenuItem);
+  const menus = useSelector((state) => state.menus.menus);
+
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [showComponentTitle, setShowComponentTitle] = useState(true);
+  const { navigateToPage } = useNavigateToPage();
+
+  const handleDrawerToggle = useCallback(() => {
+    setMobileOpen((prev) => !prev);
+  }, []);
+
+  const title = useMemo(() => {
+    if (!selectedMenuItem) return "";
+
+    if (Object.hasOwn(selectedMenuItem, "hasChildren")) {
+      // Top-level menu
+      return selectedMenuItem.title;
+    }
+
+    const parentMenu = getParentMenu(selectedMenuItem, menus);
+
+    if (!parentMenu) return selectedMenuItem.title;
+
+    return `${parentMenu.title} > ${selectedMenuItem.title}`;
+  }, [menus, selectedMenuItem]);
+
+  const outletContextValue = useMemo(() => ({ setShowComponentTitle }), []);
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        minHeight: "100vh",
+      }}
+    >
+      {/* Header */}
+      <LayoutHeader
+        drawerWidth={drawerWidth}
+        title={title}
+        navigateToPage={navigateToPage}
+        handleDrawerToggle={handleDrawerToggle}
+      />
+
+      {/* Sidebar */}
+      <SideBar
+        drawerWidth={drawerWidth}
+        getIconComponent={getIconComponent}
+        mobileOpen={mobileOpen}
+        handleDrawerToggle={handleDrawerToggle}
+      />
+
+      {/* Main Content */}
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          width: { xs: "100%", md: `calc(100% - ${drawerWidth}px)` },
+          p: 3,
+          pt: 11,
+          minHeight: "calc(100vh - 88px)",
+        }}
+      >
+        <Box>
+          {showComponentTitle && (
+            <Paper
+              elevation={2}
+              sx={{
+                p: 2,
+                mb: 4,
+                borderRadius: 1,
+              }}
+            >
+              {/* Breadcrumbs */}
+              <AppBreadcrumbs />
+            </Paper>
+          )}
+
+          <Box>
+            <Outlet context={outletContextValue} />
+          </Box>
+        </Box>
+      </Box>
+    </Box>
+  );
+};
+
+export default CommonLayout;
+
