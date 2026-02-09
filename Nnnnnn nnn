@@ -1,3 +1,4 @@
+import useNotifications from "../../hooks/useNotifications";
 import { useEffect, useState } from "react";
 import {
   Box,
@@ -9,9 +10,9 @@ import {
   Stack,
   Button,
   Card,
- // LinearProgress,
+  LinearProgress,
   Grow,
- // Fade,
+ Fade,
 } from "@mui/material";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -49,19 +50,22 @@ export default function GlifReports() {
   // Defaulting to a safe past date initially
   const [minDate, setMinDate] = useState(dayjs("2020-01-01"));
 
-  // const [isDownloading, setIsDownloading] = useState(false);
-  // const [downloadedBytes, setDownloadedBytes] = useState(0);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadedBytes, setDownloadedBytes] = useState(0);
 
   const theme = useTheme();
   const styles = GlifReportsStyles(theme);
 
   const disableInputs = isLoading ;
 
-  // const downloadedMB =
-  //   downloadedBytes > 0 ? (downloadedBytes / (1024 * 1024)).toFixed(2) : null;
+  const [localProgress,setLocalProgress]=useState(0);
+  //const [isDownloading,setIsDownloading]=useState(false);
+
+  const downloadedMB =
+    downloadedBytes > 0 ? (downloadedBytes / (1024 * 1024)).toFixed(2) : null;
 
     //const {setDownloadState}=useOutletContext();
-    const {addTask,updateTask,completeTask,failTask}=useNotifications();
+    const {upsertTask,removeTask}=useNotifications();
 
   // --- API Fetch ---
   useEffect(() => {
@@ -101,18 +105,23 @@ export default function GlifReports() {
 
   // --- Download Logic ---
   const handleFetchReportData = async () => {
-    if (!selectedReport?.fileName || !selectedDate) return;
+    if (!selectedReport?.fileName || !selectedDate) {
+      console.log("Missing report");
+      return;
+    }
+    console.log("calling api");
 
     if (dateError) {
       showSnackBar(getErrorMessage(dateError), "error");
       return;
     }
 const taskId=`report-download-${Date.now()}`;
-addTask({
+upsertTask({
   id:taskId,
+  percentage:0,
   title:`Downloading ${selectedReport.reportName}`,
-  status:"running",
-  progress:0,
+  status:"Running",
+  //progress:0,
 });
     setIsLoading(true);
     // setIsDownloading(true);
@@ -147,8 +156,11 @@ addTask({
           onDownloadProgress: (event) => {
             if(event?.loaded && event?.total){
               const percent=Math.round((event.loaded/event.total)*100);
-              updateTask(taskId,{
-                progress:percent,
+              setIsDownloading(true);
+              setLocalProgress(percent);
+              upsertTask(taskId,{
+                percentage:percent,
+                status:"Running",
               });
             }
            // setIsDownloading(true);
@@ -187,7 +199,14 @@ addTask({
         a.click();
         a.remove();
         window.URL.revokeObjectURL(downloadUrl);
-        completeTask(taskId);
+        setIsDownloading(false);
+        setLocalProgress(100);
+        upsertTask({taskId,
+          percentage:0,
+          status:"COMPLETED",
+          message:"Download completed",
+        });
+        setTimeout(()=>removeTask(taskId),5000);
         showSnackBar(
           `Reports "${filename}" downloaded successfully`,
           "success"
@@ -199,7 +218,13 @@ addTask({
         );
       }
     } catch (error) {
-      failTask(taskId,"Download failed");
+      upsertTask({taskId,
+        percentage:0,
+        status:"FAILED",
+        message:"Download failed"
+    });
+        setTimeout(()=>removeTask(taskId),5000);
+
       console.log("error", error);
 
       if (error && error instanceof Blob) {
@@ -392,62 +417,7 @@ addTask({
                   {"Fetch & Download"}
                 </Button>
 
-                {/* <Fade in={isDownloading} unmountOnExit>
-                  <Box sx={styles.progressContainer}>
-                    <Box sx={styles.progressHeader}>
-                      <Box sx={styles.progressIconWrapper}>
-                        <CloudDownloadTwoTone sx={styles.innerDownloadIcon} />
-                      </Box>
-                      <Box sx={styles.progressHeaderTextBox}>
-                        <Typography variant="body2" fontWeight={600}>
-                          Searching{" "}
-                          {selectedReport?.reportName ?? "the selected report"}{" "}
-                          for the period{" "}
-                          {selectedDate?.isValid()
-                            ? selectedDate.format("YYYY-MM-DD")
-                            : "an unknown period"}{" "}
-                          is in progress.
-                        </Typography>
-
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={styles.progressCaption}
-                        >
-                          {downloadedMB
-                            ? `Streaming report data… ${downloadedMB} MB received`
-                            : "Preparing your report stream…"}
-                        </Typography>
-                      </Box>
-
-                      {downloadedMB && (
-                        <CustomChip
-                          color="error"
-                          label={`${downloadedMB} MB downloaded`}
-                          variant="filled"
-                        />
-                      )}
-                    </Box>
-                    <LinearProgress
-                      variant="indeterminate"
-                      sx={styles.progressBar}
-                    />
-                  </Box>
-                </Fade> */}
-              </Box>
-            </Card>
-          </Stack>
-        </Box>
-      </Stack>
-    </Grow>
-  );
-}
-
-
-
-
-
-<Fade in={isDownloading} unmountOnExit>
+                <Fade in={isDownloading} unmountOnExit>
                   <Box sx={styles.progressContainer}>
                     <Box sx={styles.progressHeader}>
                       <Box sx={styles.progressIconWrapper}>
@@ -489,6 +459,15 @@ addTask({
                     />
                   </Box>
                 </Fade>
+              </Box>
+            </Card>
+          </Stack>
+        </Box>
+      </Stack>
+    </Grow>
+  );
+}
+
 
 
 
