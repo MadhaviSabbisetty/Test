@@ -410,3 +410,97 @@ export default function GlifReports() {
 
 
 
+
+
+import React, { useMemo, Suspense } from "react";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { useSelector } from "react-redux";
+import PrivateRouter from "./PrivateRouter";
+
+// Page Components
+import Login from "../features/auth/pages/Login";
+import Home from "../pages/Home";
+import NotFound from "../pages/NotFound";
+import ServerError from "../pages/ServerError";
+import CommonLayout from "../layout/CommonLayout";
+import FullscreenLayout from "../layout/FullscreenLayout";
+import SubmenuSelectionPage from "../pages/SubmenuSelectionPage";
+
+import { generateRouteObjects } from "./RouteGenerator";
+import Help from "../features/help/Help";
+
+const PageLoader = () => (
+  <div
+    style={{
+      display: "flex",
+      height: "100vh",
+      justifyContent: "center",
+      alignItems: "center",
+    }}
+  >
+    Loading...
+  </div>
+);
+
+const DynamicLayout = () => {
+  const isComponentFullscreen = useSelector(
+    (state) => state.ui.isComponentFullscreen
+  );
+  return !isComponentFullscreen ? <CommonLayout /> : <FullscreenLayout />;
+};
+
+const AppRouter = () => {
+  const menus = useSelector((state) => state.menus.menus);
+
+  const router = useMemo(() => {
+    const dynamicRoutes = generateRouteObjects(menus || []);
+
+    const routeConfig = [
+      {
+        path: "/",
+        element: <Login />,
+        errorElement: <ServerError />,
+      },
+      {
+        path: "/server-error",
+        element: <ServerError />,
+      },
+      // Protected Routes
+      {
+        element: <PrivateRouter />,
+        children: [
+          {
+            element: <DynamicLayout />,
+            children: [
+              { path: "/home", element: <Home /> },
+              { path: "/help", element: <Help /> },
+              {
+                path: "/choose-option/:mainMenuTitle",
+                element: <SubmenuSelectionPage />,
+              },
+              ...dynamicRoutes,
+            ],
+          },
+        ].filter(Boolean),
+      },
+      {
+        path: "*",
+        element: <NotFound />,
+      },
+    ];
+
+    return createBrowserRouter(routeConfig);
+  }, [menus]);
+
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <RouterProvider router={router} />
+    </Suspense>
+  );
+};
+
+export default AppRouter;
+
+
+
+
