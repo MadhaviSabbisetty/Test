@@ -429,3 +429,190 @@ export default function GlifReports() {
 
 
 
+
+
+
+// useNotifications.js
+import { useState, useEffect, useCallback } from "react";
+import useApi from "./useApi";
+import useStreamApi from "./useStreamApi";
+import useCustomSnackbar from "../utils/useCustomSnackbar";
+
+const BASE_URL = "/NS/notifications";
+
+const useNotifications = () => {
+  const { callApi } = useApi();
+  const { showSnackbar } = useCustomSnackbar();
+  const { startStream, stopStream, lastMessage, connected } = useStreamApi();
+
+  const [pageNumber, setPageNumber] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [popNotification, setPopNotification] = useState(null);
+  const size = 10;
+
+  /* Handles Task Progess in FinCore */
+  const [tasks, setTasks] = useState({});
+
+  const upsertTask = useCallback((task) => {
+    setTasks((prev) => ({
+      ...prev,
+      [task.taskId]: task,
+    }));
+  }, []);
+
+  const removeTask = useCallback((taskId) => {
+    setTasks((prev) => {
+      const copy = { ...prev };
+      delete copy[taskId];
+      return copy;
+    });
+  }, []);
+
+  const activeCount = Object.values(tasks).filter(
+    (t) => t.percentage < 100
+  ).length;
+
+  /** --- Fetch unread count --- **/
+  const fetchUnreadCount = useCallback(async () => {
+    try {
+      const data = await callApi(`${BASE_URL}/unread-count`);
+      if (data?.count !== undefined) setUnreadCount(data.count);
+    } catch (err) {
+      console.error("Failed to fetch unread count:", err);
+    }
+  }, [callApi]);
+
+  /** --- Fetch notification history (paged) --- **/
+  const fetchHistory = useCallback(
+    async (page = 0) => {
+      try {
+        const data = await callApi(`${BASE_URL}?page=${page}&size=${size}`);
+        const newItems = data?.content || [];
+
+        setNotifications((prev) =>
+          page === 0 ? newItems : [...prev, ...newItems]
+        );
+        setHasMore(!data?.last);
+        setPageNumber(page);
+      } catch (err) {
+        console.error("Failed to fetch notifications:", err);
+      }
+    },
+    [callApi, size]
+  );
+
+  /** --- Mark as read --- **/
+  const markAsRead = useCallback(
+    async (id) => {
+      try {
+        const response = await callApi(`${BASE_URL}/${id}/read`, {}, "POST");
+        if (response) {
+          setNotifications((prev) =>
+            prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+          );
+          setUnreadCount((prev) => Math.max(prev - 1, 0));
+        } else {
+          showSnackbar("Failed to mark as read", "error");
+        }
+      } catch (err) {
+        console.error("Mark as read failed:", err);
+      }
+    },
+    [callApi, showSnackbar]
+  );
+
+  /** --- Mark all as read --- **/
+  const markAllAsRead = useCallback(async () => {
+    try {
+      const response = await callApi(`${BASE_URL}/read-all`, {}, "POST");
+      if (response) {
+        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+        setUnreadCount(0);
+      } else {
+        showSnackbar("Failed to mark all notifications as read", "error");
+      }
+    } catch (err) {
+      console.error("Mark all as read failed:", err);
+    }
+  }, [callApi, showSnackbar]);
+
+  /** --- SSE stream + initial load (run once, not on each menu change) --- **/
+  useEffect(() => {
+    // Initial load
+    fetchUnreadCount();
+    fetchHistory(0); // first page
+
+    // Start live stream
+    startStream(`${BASE_URL}/stream`, {
+      onMessage: (newNotification) => {
+        console.log("New Notification Found", newNotification);
+      },
+
+      onTaskProgress: (data) => {
+        upsertTask({
+          taskId: data.taskId,
+          percentage: data.percentage,
+          status: data.status,
+          message: data.message,
+        });
+
+        if (data.percentage === 100) {
+          setTimeout(() => removeTask(data.taskId), 5000);
+        }
+      },
+    });
+
+    // Cleanup on unmount
+    return () => {
+      stopStream();
+    };
+    // We intentionally do NOT add fetchUnreadCount / fetchHistory to deps,
+    // to avoid re-running this effect on every callApi/xRequestType/menu change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startStream, stopStream]);
+
+  /** --- Show popup for 5 seconds --- **/
+  const triggerPopup = useCallback((notif) => {
+    setPopNotification(notif);
+    if (triggerPopup.timer) clearTimeout(triggerPopup.timer);
+    triggerPopup.timer = setTimeout(() => setPopNotification(null), 5000);
+  }, []);
+
+  /** --- When new message arrives via SSE --- **/
+  useEffect(() => {
+    if (lastMessage) {
+      setNotifications((prev) => [lastMessage, ...prev]);
+      setUnreadCount((prev) => prev + 1);
+      triggerPopup(lastMessage);
+    }
+  }, [lastMessage, triggerPopup]);
+
+  /** --- Pagination helper --- **/
+  const loadMore = useCallback(() => {
+    if (hasMore) fetchHistory(pageNumber + 1);
+  }, [hasMore, fetchHistory, pageNumber]);
+
+  return {
+    connected,
+    notifications,
+    unreadCount,
+    fetchUnreadCount,
+    fetchHistory,
+    markAsRead,
+    markAllAsRead,
+    stopStream,
+    loadMore,
+    hasMore,
+    popNotification,
+    setPopNotification,
+    tasks,
+    upsertTask,
+    removeTask,
+    activeCount,
+  };
+};
+
+export default useNotifications;
+
