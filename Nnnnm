@@ -1,177 +1,431 @@
-import React, { useState } from "react";
+import useNotifications from "../../hooks/useNotifications";
+import { useEffect, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 import {
-  Avatar,
-  Badge,
   Box,
-  IconButton,
-  Toolbar,
   Typography,
-  useTheme,
-  useMediaQuery,
-  CircularProgress,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Stack,
+  Button,
+  Card,
+  LinearProgress,
+  Grow,
+  Fade,
 } from "@mui/material";
-import { Notifications, Menu as MenuIcon } from "@mui/icons-material";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import {
+  Summarize,
+  CloudDownloadTwoTone,
+  LooksOne,
+  LooksTwo,
+  Looks3,
+} from "@mui/icons-material";
+import useApi from "../../hooks/useApi";
+import dayjs from "dayjs";
 import { useSelector } from "react-redux";
-import { userAvatarCreator } from "../utils/userUtilities";
-import NotificationDrawer from "./NotificationDrawer";
-import ProfileDrawer from "./ProfileDrawer";
-import SearchBar from "./search/SearchBar";
-import fLogo from "../assets/Logos/Fincore_transperent.svg";
-import useNotifications from "../hooks/useNotifications";
-import NotificationPopup from "./NotificationPopup";
-import AutorenewIcon from "@mui/icons-material/Autorenew";
-import TaskProgressDrawer from "./TaskProgressDrawer";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import { useTheme } from "@mui/material/styles";
+import CustomChip from "../../utils/CustomChip";
+import GlifReportsStyles from "./GlifReportsStyles";
 
-const LayoutHeader = ({ drawerWidth, navigateToPage, handleDrawerToggle }) => {
-  const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
-  const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
-  const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
+// 1. Ensure strictly 'en-gb' locale logic if specific DD/MM formats are fighting with browser locale
+import "dayjs/locale/en-gb";
+const moduleType="WHOLE_BANK";
 
-  const {
-    notifications,
-    markAsRead,
-    markAllAsRead,
-    loadMore,
-    hasMore,
-    unreadCount,
-    popNotification,
-    setPopNotification,
-    tasks,
-    activeCount,
-  } = useNotifications();
-
+export default function GlifReports() {
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
   const user = useSelector((state) => state.auth.user);
+
+  const [dateError, setDateError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [repTypes, setRepTypes] = useState([]);
+  const [selectedReport, setReport] = useState(null);
+  const [selectedDate, setDate] = useState(null);
+
+  // Defaulting to a safe past date initially
+  const [minDate, setMinDate] = useState(dayjs("2020-01-01"));
+
+  // const [isDownloading, setIsDownloading] = useState(false);
+  // const [downloadedBytes, setDownloadedBytes] = useState(0);
+
   const theme = useTheme();
-  const isSmallScreen = useMediaQuery(theme.breakpoints.down("lg"));
+  const styles = GlifReportsStyles(theme);
+
+  const disableInputs = isLoading ;
+
+  // const downloadedMB =
+  //   downloadedBytes > 0 ? (downloadedBytes / (1024 * 1024)).toFixed(2) : null;
+
+    const {setDownloadState}=useOutletContext();
+    const {addtask,updateTask,completeTask,failtask}=useNotifications();
+
+  // --- API Fetch ---
+  useEffect(() => {
+    async function fetchData() {
+      setIsLoading(true);
+      try {
+        const data = await callApi(
+          "/RS/reports/types",
+          { roleId: user.role ,
+            moduleType:moduleType,
+          },
+          "POST"
+        );
+        const types = data.data || [];
+        setRepTypes(types);
+
+        if (types.length > 0 && types[0].selectedDate) {
+          // IMPORTANT: Use .startOf('day') to ensure time is 00:00:00
+          // This fixes the "sometimes enabled/disabled arrow" issue by ensuring strict day comparison
+          setMinDate(dayjs(types[0].selectedDate).startOf("day"));
+        } else {
+          // Fallback
+          setMinDate(dayjs("2025-10-01").startOf("day"));
+        }
+      } catch (error) {
+        console.error("Failed to fetch report types:", error);
+        showSnackBar("Failed to load report types", "error");
+      }
+      setIsLoading(false);
+    }
+    fetchData();
+  }, [callApi, user.role, showSnackBar]);
+
+  const handleSelect = (report) => {
+    setReport(report);
+  };
+
+  // --- Download Logic ---
+  const handleFetchReportData = async () => {
+    if (!selectedReport?.fileName || !selectedDate) return;
+
+    if (dateError) {
+      showSnackBar(getErrorMessage(dateError), "error");
+      return;
+    }
+
+    setIsLoading(true);
+    // setIsDownloading(true);
+    // setDownloadedBytes(0);
+    setDownloadState({
+      isDownloading:true,
+      fileName:selectedReport.fileName,
+      downloadedMB:null,
+    });
+
+    const payload = {
+      moduleType:moduleType,
+      fileName: selectedReport.fileName,
+      date: selectedDate.format("YYYY-MM-DD"),
+      roleId: user.role,
+    };
+
+    try {
+      const response = await callApi(
+        "/RS/reports/download",
+        payload,
+        "POST",
+        "blob",
+        "application/json",
+        {
+          onDownloadProgress: (event) => {
+           // setIsDownloading(true);
+            if (event && typeof event.loaded === "number") {
+              //setDownloadedBytes(event.loaded);
+              setDownloadState((prev)=>({
+                ...prev,
+                downloadedMB:(event.loaded/(1024*1024)).toFixed(2),
+              }));
+            }
+          },
+        },
+        false
+      );
+
+      if (response.data && response.data.size > 22) {
+        const contentDisposition =
+          response.headers["content-disposition"] ||
+          response.headers["Content-Disposition"];
+          
+        let filename = "report.zip";
+        if (
+          contentDisposition &&
+          contentDisposition.indexOf("attachment") !== -1
+        ) {
+          const filenameMatch = contentDisposition.match(/filename="(.+?)"/);
+          if (filenameMatch && filenameMatch.length > 1) {
+            filename = filenameMatch[1];
+          }
+        }
+
+        const downloadUrl = window.URL.createObjectURL(response.data);
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+        showSnackBar(
+          `Reports "${filename}" downloaded successfully`,
+          "success"
+        );
+      } else {
+        showSnackBar(
+          "No reports found matching your current filter criteria",
+          "warning"
+        );
+      }
+    } catch (error) {
+      console.log("error", error);
+
+      if (error && error instanceof Blob) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const errorJson = JSON.parse(reader.result);
+            console.error(errorJson.message);
+            showSnackBar(
+              errorJson.message || "No reports found matching your criteria",
+              "error"
+            );
+          } catch (e) {
+            console.error(e);
+            showSnackBar("Something went wrong, kindly try again.", "error");
+          }
+        };
+        reader.readAsText(error);
+      } else {
+        showSnackBar("Network Error: Could not connect to server", "error");
+      }
+    } finally {
+      setIsLoading(false);
+      // setIsDownloading(false);
+      // setDownloadedBytes(0);
+      setDownloadState((prev)=>({
+        ...prev,
+        isDownloading:false,
+      }));
+    }
+  };
+
+  // --- Validation Message Logic --- 
+  const getErrorMessage = (error) => {
+    const minDateStr = minDate?.isValid()
+      ? minDate.format("DD/MM/YYYY")
+      : "Allowed Min Date";
+
+    switch (error) {
+      case "maxDate":
+        return "Date cannot be in the future (Today is max)";
+      case "minDate":
+        return `Date cannot be prior to ${minDateStr}`;
+      case "invalidDate":
+        // This covers cases like 31st Feb or 31st April
+        return "Invalid date (Check day for this month)";
+      default:
+        // When no error, return instructions
+        return `Allowed Range: ${minDateStr} - Today`;
+    }
+  };
 
   return (
-    <Box
-      position="fixed"
-      sx={{
-        width: { xs: "100%", lg: `calc(100% - ${drawerWidth}px)` },
-        right: 0,
-        top: 0,
-        zIndex: 1200,
-        background:
-          "linear-gradient(90deg, rgba(162,141,240,0.3), rgba(93,63,211,0.8))",
-      }}
-    >
-      <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
-        {/* Left side section */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          {isSmallScreen && (
-            <IconButton
-              onClick={handleDrawerToggle}
-              sx={{ color: "text.primary" }}
-            >
-              <MenuIcon />
-            </IconButton>
-          )}
-
-          {isSmallScreen && (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <img src={fLogo} alt="Logo" style={{ width: 40, height: 40 }} />
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                FinCore
-              </Typography>
-            </Box>
-          )}
-        </Box>
-
-        {/* Right side section */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <SearchBar navigateToPage={navigateToPage} />
-
-          {activeCount > 0 && (
-            <IconButton onClick={() => setTaskDrawerOpen(true)}>
-              <Badge badgeContent={activeCount} color="warning">
-                <Box sx={{ position: "relative" }}>
-                  <AutorenewIcon
-                    sx={{ animation: "spin 1.2s linear infinite" }}
-                  />
-                  <CircularProgress
-                    size={36}
-                    sx={{
-                      position: "absolute",
-                      top: -6,
-                      left: -6,
-                      zIndex: -1,
-                    }}
-                  />
+    <Grow in timeout={500}>
+      <Stack spacing={4}>
+        <Box sx={styles.rootBox} elevation={10}>
+          <Stack
+            spacing={3}
+            direction={"column"}
+            alignItems="center"
+            justifyContent="center"
+          >
+            <Card sx={styles.card}>
+              <Box sx={styles.headerContainer}>
+                <Box sx={styles.headerIconWrapper}>
+                  <Summarize sx={styles.summaryIcon} />
                 </Box>
-              </Badge>
+                <Box sx={styles.headerTextBox}>
+                  <Typography
+                    variant="h5"
+                    fontWeight="bold"
+                    sx={styles.headerTitle}
+                  >
+                    Reports Generation
+                  </Typography>
+                  <Typography variant="body2" sx={styles.headerSubtitle}>
+                    Choose a specific required Report type and Date using the
+                    criteria below to download reports
+                  </Typography>
+                </Box>
+              </Box>
 
-              <style>
-                {`@keyframes spin { 100% { transform: rotate(360deg); } }`}
-              </style>
-            </IconButton>
-          )}
-          <IconButton
-            color="inherit"
-            onClick={() => setNotificationDrawerOpen(true)}
-          >
-            {unreadCount > 0 ? (
-              <Badge badgeContent={unreadCount || ""} color="error">
-                <Notifications />
-              </Badge>
-            ) : (
-              <Notifications />
-            )}
-          </IconButton>
+              <Box sx={styles.noteContainer}>
+                <Typography variant="body2" sx={styles.noteText}>
+                  Note: The generated reports cannot be viewed on-screen it can
+                  only be downloaded.
+                </Typography>
+                <Stack direction="row" spacing={2} sx={styles.stepsStack}>
+                  <CustomChip
+                    label="Select a report"
+                    variant="outlined"
+                    icon={<LooksOne />}
+                    color="info"
+                    sx={{ px: 1 }}
+                  />  
+                  <CustomChip
+                    label="Select the report date"
+                    variant="outlined"
+                    icon={<LooksTwo />}
+                    color="info"
+                    sx={{ px: 1 }}
+                  />
+                  <CustomChip
+                    label="Click Fetch & Download button"
+                    variant="outlined"
+                    icon={<Looks3 />}
+                    color="info"
+                    sx={{ px: 1 }}
+                  />
+                </Stack>
+              </Box>
 
-          <Avatar
-            onClick={() => setProfileDrawerOpen(true)}
-            sx={{
-              width: 32,
-              height: 32,
-              color: "primary.contrastText",
-              backgroundColor: "primary.main",
-              cursor: "pointer",
-              ml: 1,
-            }}
-          >
-            {userAvatarCreator(user)}
-          </Avatar>
+              <Box sx={styles.inputOuterBox}>
+                <Box sx={styles.inputInnerBox}>
+                  {/* Dropdown Menu */}
+                  <FormControl sx={styles.formControl}>
+                    <InputLabel id="menu-select-label">
+                      Select a report
+                    </InputLabel>
+                    <Select
+                      labelId="menu-select-label"
+                      id="menu-select"
+                      value={selectedReport || ""}
+                      label="Select a report"
+                      onChange={(e) => handleSelect(e.target.value)}
+                      disabled={repTypes.length === 0 || disableInputs}
+                    >
+                      {repTypes.map((item) => (
+                        <MenuItem key={item.fileName} value={item}>
+                          {item.reportName}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  {/* Date Picker */}
+                  <FormControl sx={styles.formControl}>
+                    {/* Ensure adapterLocale is set to handle DD/MM logic naturally */}
+                    <LocalizationProvider
+                      dateAdapter={AdapterDayjs}
+                      adapterLocale="en-gb"
+                    >
+                      <DatePicker
+                        label="Select report date"
+                        format="DD/MM/YYYY"
+                        views={["year", "month", "day"]}
+                        value={selectedDate}
+                        onChange={(newDate) => setDate(newDate)}
+                        // Explicitly set maxDate to Today
+                        maxDate={dayjs().endOf("day")}
+                        // Explicitly set minDate
+                        minDate={minDate}
+                        onError={(newError) => setDateError(newError)}
+                        disabled={repTypes.length === 0 || disableInputs}
+                        slotProps={{
+                          textField: {
+                            // Logic: If there is an error, show specific error msg.
+                            // If no error, show the range helper text to guide user.
+                            helperText: dateError
+                              ? getErrorMessage(dateError)
+                              : "",
+                            error: !!dateError,
+                            placeholder: "DD/MM/YYYY",
+                          },
+                          // Enhancement: Show days outside current month but verify they are disabled correctly
+                          day: {
+                            showDaysOutsideCurrentMonth: true,
+                          },
+                        }}
+                      />
+                    </LocalizationProvider>
+                  </FormControl>
+                </Box>
+              </Box>
+
+              <Box sx={styles.buttonContainer}>
+                <Button
+                  sx={styles.downloadButton}
+                  endIcon={<CloudDownloadTwoTone />}
+                  variant="contained"
+                  onClick={handleFetchReportData}
+                  disabled={
+                    disableInputs ||
+                    !selectedReport ||
+                    !selectedDate ||
+                    !!dateError
+                  }
+                >
+                  {/* {isDownloading ? "Downloading..." : "Fetch & Download"} */}
+                  {"Fetch & Download"}
+                </Button>
+
+                {/* <Fade in={isDownloading} unmountOnExit>
+                  <Box sx={styles.progressContainer}>
+                    <Box sx={styles.progressHeader}>
+                      <Box sx={styles.progressIconWrapper}>
+                        <CloudDownloadTwoTone sx={styles.innerDownloadIcon} />
+                      </Box>
+                      <Box sx={styles.progressHeaderTextBox}>
+                        <Typography variant="body2" fontWeight={600}>
+                          Searching{" "}
+                          {selectedReport?.reportName ?? "the selected report"}{" "}
+                          for the period{" "}
+                          {selectedDate?.isValid()
+                            ? selectedDate.format("YYYY-MM-DD")
+                            : "an unknown period"}{" "}
+                          is in progress.
+                        </Typography>
+
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={styles.progressCaption}
+                        >
+                          {downloadedMB
+                            ? `Streaming report data… ${downloadedMB} MB received`
+                            : "Preparing your report stream…"}
+                        </Typography>
+                      </Box>
+
+                      {downloadedMB && (
+                        <CustomChip
+                          color="error"
+                          label={`${downloadedMB} MB downloaded`}
+                          variant="filled"
+                        />
+                      )}
+                    </Box>
+                    <LinearProgress
+                      variant="indeterminate"
+                      sx={styles.progressBar}
+                    />
+                  </Box>
+                </Fade> */}
+              </Box>
+            </Card>
+          </Stack>
         </Box>
-      </Toolbar>
-
-      {taskDrawerOpen && (
-        <TaskProgressDrawer
-          open={taskDrawerOpen}
-          onClose={() => setTaskDrawerOpen(false)}
-          tasks={tasks}
-        />
-      )}
-
-      <NotificationDrawer
-        notificationDrawerOpen={notificationDrawerOpen}
-        setNotificationDrawerOpen={setNotificationDrawerOpen}
-        notifications={notifications}
-        markAsRead={markAsRead}
-        markAllAsRead={markAllAsRead}
-        loadMore={loadMore}
-        hasMore={hasMore}
-      />
-
-      <ProfileDrawer
-        profileDrawerOpen={profileDrawerOpen}
-        setProfileDrawerOpen={setProfileDrawerOpen}
-      />
-
-      {popNotification && (
-        <NotificationPopup
-          popup={popNotification}
-          handleNotificationClick={() => {
-            setNotificationDrawerOpen(true);
-            setPopNotification(null);
-          }}
-          onClose={() => {
-            setPopNotification(null);
-          }}
-        />
-      )}
-    </Box>
+      </Stack>
+    </Grow>
   );
-};
+}
 
-export default React.memo(LayoutHeader);
+
+
+
