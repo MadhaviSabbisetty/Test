@@ -610,3 +610,45 @@ const CommonLayout = () => {
 
 export default CommonLayout;
 
+
+
+
+
+
+
+import React from "react";
+import { Box, LinearProgress, Typography } from "@mui/material";
+
+const DownloadBar = ({ downloadState }) => {
+  const { isDownloading, fileName, downloadedMB } = downloadState;
+
+  // If nothing is downloading, don't render anything
+  if (!isDownloading) return null;
+
+  return (
+    <Box
+      sx={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        width: "100%",
+        bgcolor: "#1e293b",
+        color: "#fff",
+        px: 2,
+        py: 1.5,
+        zIndex: 2000,
+        boxShadow: "0 -2px 10px rgba(0,0,0,0.3)",
+      }}
+    >
+      <Typography variant="body2" sx={{ mb: 0.5 }}>
+        Downloading <strong>{fileName}</strong>
+        {downloadedMB ? ` • ${downloadedMB} MB downloaded` : ""}
+      </Typography>
+
+      <LinearProgress />
+    </Box>
+  );
+};
+
+export default DownloadBar;
+
