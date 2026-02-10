@@ -1,618 +1,465 @@
-import useNotifications from "../../hooks/useNotifications";
-import { useEffect, useState } from "react";
-import { useOutletContext } from "react-router-dom";
-import {
-  Box,
-  Typography,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Stack,
-  Button,
-  Card,
-  LinearProgress,
-  Grow,
-  Fade,
-} from "@mui/material";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import {
-  Summarize,
-  CloudDownloadTwoTone,
-  LooksOne,
-  LooksTwo,
-  Looks3,
-} from "@mui/icons-material";
-import useApi from "../../hooks/useApi";
-import dayjs from "dayjs";
+useApi.jsx
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useSelector } from "react-redux";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import { useTheme } from "@mui/material/styles";
-import CustomChip from "../../utils/CustomChip";
-import GlifReportsStyles from "./GlifReportsStyles";
+import { useLocation } from "react-router-dom";
+import api from "../config/axiosConfig";
+import { resolveConfig } from "../config/EnvironmentConfig";
+import { convertToKebabCase } from "../utils/CommonUtilities";
 
-// 1. Ensure strictly 'en-gb' locale logic if specific DD/MM formats are fighting with browser locale
-import "dayjs/locale/en-gb";
-const moduleType="WHOLE_BANK";
+const useApi = () => {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-export default function GlifReports() {
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
-  const user = useSelector((state) => state.auth.user);
+  const activeRequests = useRef(new Set());
+  const location = useLocation();
 
-  const [dateError, setDateError] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [repTypes, setRepTypes] = useState([]);
-  const [selectedReport, setReport] = useState(null);
-  const [selectedDate, setDate] = useState(null);
+  const menus = useSelector((state) => state.menus.menus);
+  const selectedMenuItem = useSelector((state) => state.menus.selectedMenuItem);
 
-  // Defaulting to a safe past date initially
-  const [minDate, setMinDate] = useState(dayjs("2020-01-01"));
-
-  // const [isDownloading, setIsDownloading] = useState(false);
-  // const [downloadedBytes, setDownloadedBytes] = useState(0);
-
-  const theme = useTheme();
-  const styles = GlifReportsStyles(theme);
-
-  const disableInputs = isLoading ;
-
-  // const downloadedMB =
-  //   downloadedBytes > 0 ? (downloadedBytes / (1024 * 1024)).toFixed(2) : null;
-
-    const {setDownloadState}=useOutletContext();
-    const {addtask,updateTask,completeTask,failtask}=useNotifications();
-
-  // --- API Fetch ---
-  useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
-      try {
-        const data = await callApi(
-          "/RS/reports/types",
-          { roleId: user.role ,
-            moduleType:moduleType,
-          },
-          "POST"
-        );
-        const types = data.data || [];
-        setRepTypes(types);
-
-        if (types.length > 0 && types[0].selectedDate) {
-          // IMPORTANT: Use .startOf('day') to ensure time is 00:00:00
-          // This fixes the "sometimes enabled/disabled arrow" issue by ensuring strict day comparison
-          setMinDate(dayjs(types[0].selectedDate).startOf("day"));
-        } else {
-          // Fallback
-          setMinDate(dayjs("2025-10-01").startOf("day"));
+  const findMenuItem = useCallback((items, route) => {
+    if (!items?.length) return null;
+    for (const item of items) {
+      if (item.route === route) return item;
+      if (item.children?.length) {
+        if (route.includes("/choose-option/")) {
+          const param = route.split("/choose-option/")[1];
+          if (param === convertToKebabCase(item.title)) return item;
         }
-      } catch (error) {
-        console.error("Failed to fetch report types:", error);
-        showSnackBar("Failed to load report types", "error");
+        const found = findMenuItem(item.children, route);
+        if (found) return found;
       }
-      setIsLoading(false);
     }
-    fetchData();
-  }, [callApi, user.role, showSnackBar]);
+    return null;
+  }, []);
 
-  const handleSelect = (report) => {
-    setReport(report);
-  };
+  const xRequestType = (() => {
+    const currentMenu = findMenuItem(menus, location.pathname);
+    return currentMenu?.requestType || selectedMenuItem?.requestType || "*";
+  })();
 
-  // --- Download Logic ---
-  const handleFetchReportData = async () => {
-    if (!selectedReport?.fileName || !selectedDate) return;
-
-    if (dateError) {
-      showSnackBar(getErrorMessage(dateError), "error");
-      return;
-    }
-
-    setIsLoading(true);
-    // setIsDownloading(true);
-    // setDownloadedBytes(0);
-    setDownloadState({
-      isDownloading:true,
-      fileName:selectedReport.fileName,
-      downloadedMB:null,
+  const cancelAllRequests = useCallback(() => {
+    // activeRequests.current.forEach((controller) => controller.abort());
+    // activeRequests.current.clear();
+    activeRequests.current.forEach((item)=>{
+      if(!item.isDownload && !item.isDownload){
+        item.controller.abort();
+      }
     });
+    activeRequests.current=new Set(
+      [...activeRequests.current].filter((item)=>item.isDownload));
+  }, []);
 
-    const payload = {
-      moduleType:moduleType,
-      fileName: selectedReport.fileName,
-      date: selectedDate.format("YYYY-MM-DD"),
-      roleId: user.role,
-    };
+  useEffect(() => () => cancelAllRequests(), [cancelAllRequests]);
 
-    try {
-      const response = await callApi(
-        "/RS/reports/download",
-        payload,
-        "POST",
-        "blob",
-        "application/json",
-        {
-          onDownloadProgress: (event) => {
-           // setIsDownloading(true);
-            if (event && typeof event.loaded === "number") {
-              //setDownloadedBytes(event.loaded);
-              setDownloadState((prev)=>({
-                ...prev,
-                downloadedMB:(event.loaded/(1024*1024)).toFixed(2),
-              }));
-            }
+  const callApi = useCallback(
+    async (
+      url,
+      payload = null,
+      method = "GET",
+      responseType = "json",
+      contentType = "application/json",
+      extraConfig = {},
+      returnDataOnly = true
+    ) => {
+      setLoading(true);
+      setError(null);
+
+      // Build final URL using service resolution
+      const parts = url.split("/");
+      const service = parts[1];
+      const resolved = resolveConfig(`/${service}`);
+      parts[1] = resolved;
+      const finalUrl = parts.slice(1).join("/");
+
+      const isDownload=responseType==="blob";
+      const controller = new AbortController();
+      activeRequests.current.add({controller,isDownload});
+
+      try {
+        const config = {
+          method,
+          url: finalUrl,
+          data: method !== "GET" ? payload : undefined,
+          params: method === "GET" ? payload : undefined,
+          responseType,
+          signal: controller.signal,
+          headers: {
+            "Content-Type": contentType,
+            "X-Request-Type": xRequestType,
+            ...(extraConfig.headers || {}),
           },
-        },
-        false
-      );
-
-      if (response.data && response.data.size > 22) {
-        const contentDisposition =
-          response.headers["content-disposition"] ||
-          response.headers["Content-Disposition"];
-          
-        let filename = "report.zip";
-        if (
-          contentDisposition &&
-          contentDisposition.indexOf("attachment") !== -1
-        ) {
-          const filenameMatch = contentDisposition.match(/filename="(.+?)"/);
-          if (filenameMatch && filenameMatch.length > 1) {
-            filename = filenameMatch[1];
-          }
-        }
-
-        const downloadUrl = window.URL.createObjectURL(response.data);
-        const a = document.createElement("a");
-        a.href = downloadUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(downloadUrl);
-        showSnackBar(
-          `Reports "${filename}" downloaded successfully`,
-          "success"
-        );
-      } else {
-        showSnackBar(
-          "No reports found matching your current filter criteria",
-          "warning"
-        );
-      }
-    } catch (error) {
-      console.log("error", error);
-
-      if (error && error instanceof Blob) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          try {
-            const errorJson = JSON.parse(reader.result);
-            console.error(errorJson.message);
-            showSnackBar(
-              errorJson.message || "No reports found matching your criteria",
-              "error"
-            );
-          } catch (e) {
-            console.error(e);
-            showSnackBar("Something went wrong, kindly try again.", "error");
-          }
+          ...extraConfig,
         };
-        reader.readAsText(error);
-      } else {
-        showSnackBar("Network Error: Could not connect to server", "error");
-      }
-    } finally {
-      setIsLoading(false);
-      // setIsDownloading(false);
-      // setDownloadedBytes(0);
-      setDownloadState((prev)=>({
-        ...prev,
-        isDownloading:false,
-      }));
-    }
-  };
 
-  // --- Validation Message Logic --- 
-  const getErrorMessage = (error) => {
-    const minDateStr = minDate?.isValid()
-      ? minDate.format("DD/MM/YYYY")
-      : "Allowed Min Date";
-
-    switch (error) {
-      case "maxDate":
-        return "Date cannot be in the future (Today is max)";
-      case "minDate":
-        return `Date cannot be prior to ${minDateStr}`;
-      case "invalidDate":
-        // This covers cases like 31st Feb or 31st April
-        return "Invalid date (Check day for this month)";
-      default:
-        // When no error, return instructions
-        return `Allowed Range: ${minDateStr} - Today`;
-    }
-  };
-
-  return (
-    <Grow in timeout={500}>
-      <Stack spacing={4}>
-        <Box sx={styles.rootBox} elevation={10}>
-          <Stack
-            spacing={3}
-            direction={"column"}
-            alignItems="center"
-            justifyContent="center"
-          >
-            <Card sx={styles.card}>
-              <Box sx={styles.headerContainer}>
-                <Box sx={styles.headerIconWrapper}>
-                  <Summarize sx={styles.summaryIcon} />
-                </Box>
-                <Box sx={styles.headerTextBox}>
-                  <Typography
-                    variant="h5"
-                    fontWeight="bold"
-                    sx={styles.headerTitle}
-                  >
-                    Reports Generation
-                  </Typography>
-                  <Typography variant="body2" sx={styles.headerSubtitle}>
-                    Choose a specific required Report type and Date using the
-                    criteria below to download reports
-                  </Typography>
-                </Box>
-              </Box>
-
-              <Box sx={styles.noteContainer}>
-                <Typography variant="body2" sx={styles.noteText}>
-                  Note: The generated reports cannot be viewed on-screen it can
-                  only be downloaded.
-                </Typography>
-                <Stack direction="row" spacing={2} sx={styles.stepsStack}>
-                  <CustomChip
-                    label="Select a report"
-                    variant="outlined"
-                    icon={<LooksOne />}
-                    color="info"
-                    sx={{ px: 1 }}
-                  />  
-                  <CustomChip
-                    label="Select the report date"
-                    variant="outlined"
-                    icon={<LooksTwo />}
-                    color="info"
-                    sx={{ px: 1 }}
-                  />
-                  <CustomChip
-                    label="Click Fetch & Download button"
-                    variant="outlined"
-                    icon={<Looks3 />}
-                    color="info"
-                    sx={{ px: 1 }}
-                  />
-                </Stack>
-              </Box>
-
-              <Box sx={styles.inputOuterBox}>
-                <Box sx={styles.inputInnerBox}>
-                  {/* Dropdown Menu */}
-                  <FormControl sx={styles.formControl}>
-                    <InputLabel id="menu-select-label">
-                      Select a report
-                    </InputLabel>
-                    <Select
-                      labelId="menu-select-label"
-                      id="menu-select"
-                      value={selectedReport || ""}
-                      label="Select a report"
-                      onChange={(e) => handleSelect(e.target.value)}
-                      disabled={repTypes.length === 0 || disableInputs}
-                    >
-                      {repTypes.map((item) => (
-                        <MenuItem key={item.fileName} value={item}>
-                          {item.reportName}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-
-                  {/* Date Picker */}
-                  <FormControl sx={styles.formControl}>
-                    {/* Ensure adapterLocale is set to handle DD/MM logic naturally */}
-                    <LocalizationProvider
-                      dateAdapter={AdapterDayjs}
-                      adapterLocale="en-gb"
-                    >
-                      <DatePicker
-                        label="Select report date"
-                        format="DD/MM/YYYY"
-                        views={["year", "month", "day"]}
-                        value={selectedDate}
-                        onChange={(newDate) => setDate(newDate)}
-                        // Explicitly set maxDate to Today
-                        maxDate={dayjs().endOf("day")}
-                        // Explicitly set minDate
-                        minDate={minDate}
-                        onError={(newError) => setDateError(newError)}
-                        disabled={repTypes.length === 0 || disableInputs}
-                        slotProps={{
-                          textField: {
-                            // Logic: If there is an error, show specific error msg.
-                            // If no error, show the range helper text to guide user.
-                            helperText: dateError
-                              ? getErrorMessage(dateError)
-                              : "",
-                            error: !!dateError,
-                            placeholder: "DD/MM/YYYY",
-                          },
-                          // Enhancement: Show days outside current month but verify they are disabled correctly
-                          day: {
-                            showDaysOutsideCurrentMonth: true,
-                          },
-                        }}
-                      />
-                    </LocalizationProvider>
-                  </FormControl>
-                </Box>
-              </Box>
-
-              <Box sx={styles.buttonContainer}>
-                <Button
-                  sx={styles.downloadButton}
-                  endIcon={<CloudDownloadTwoTone />}
-                  variant="contained"
-                  onClick={handleFetchReportData}
-                  disabled={
-                    disableInputs ||
-                    !selectedReport ||
-                    !selectedDate ||
-                    !!dateError
-                  }
-                >
-                  {/* {isDownloading ? "Downloading..." : "Fetch & Download"} */}
-                  {"Fetch & Download"}
-                </Button>
-
-                {/* <Fade in={isDownloading} unmountOnExit>
-                  <Box sx={styles.progressContainer}>
-                    <Box sx={styles.progressHeader}>
-                      <Box sx={styles.progressIconWrapper}>
-                        <CloudDownloadTwoTone sx={styles.innerDownloadIcon} />
-                      </Box>
-                      <Box sx={styles.progressHeaderTextBox}>
-                        <Typography variant="body2" fontWeight={600}>
-                          Searching{" "}
-                          {selectedReport?.reportName ?? "the selected report"}{" "}
-                          for the period{" "}
-                          {selectedDate?.isValid()
-                            ? selectedDate.format("YYYY-MM-DD")
-                            : "an unknown period"}{" "}
-                          is in progress.
-                        </Typography>
-
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={styles.progressCaption}
-                        >
-                          {downloadedMB
-                            ? `Streaming report data… ${downloadedMB} MB received`
-                            : "Preparing your report stream…"}
-                        </Typography>
-                      </Box>
-
-                      {downloadedMB && (
-                        <CustomChip
-                          color="error"
-                          label={`${downloadedMB} MB downloaded`}
-                          variant="filled"
-                        />
-                      )}
-                    </Box>
-                    <LinearProgress
-                      variant="indeterminate"
-                      sx={styles.progressBar}
-                    />
-                  </Box>
-                </Fade> */}
-              </Box>
-            </Card>
-          </Stack>
-        </Box>
-      </Stack>
-    </Grow>
-  );
-}
-
-
-
-
-
-
-
-// useNotifications.js
-import { useState, useEffect, useCallback } from "react";
-import useApi from "./useApi";
-import useStreamApi from "./useStreamApi";
-import useCustomSnackbar from "../utils/useCustomSnackbar";
-
-const BASE_URL = "/NS/notifications";
-
-const useNotifications = () => {
-  const { callApi } = useApi();
-  const { showSnackbar } = useCustomSnackbar();
-  const { startStream, stopStream, lastMessage, connected } = useStreamApi();
-
-  const [pageNumber, setPageNumber] = useState(0);
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [popNotification, setPopNotification] = useState(null);
-  const size = 10;
-
-  /* Handles Task Progess in FinCore */
-  const [tasks, setTasks] = useState({});
-
-  const upsertTask = useCallback((task) => {
-    setTasks((prev) => ({
-      ...prev,
-      [task.taskId]: task,
-    }));
-  }, []);
-
-  const removeTask = useCallback((taskId) => {
-    setTasks((prev) => {
-      const copy = { ...prev };
-      delete copy[taskId];
-      return copy;
-    });
-  }, []);
-
-  const activeCount = Object.values(tasks).filter(
-    (t) => t.percentage < 100
-  ).length;
-
-  /** --- Fetch unread count --- **/
-  const fetchUnreadCount = useCallback(async () => {
-    try {
-      const data = await callApi(`${BASE_URL}/unread-count`);
-      if (data?.count !== undefined) setUnreadCount(data.count);
-    } catch (err) {
-      console.error("Failed to fetch unread count:", err);
-    }
-  }, [callApi]);
-
-  /** --- Fetch notification history (paged) --- **/
-  const fetchHistory = useCallback(
-    async (page = 0) => {
-      try {
-        const data = await callApi(`${BASE_URL}?page=${page}&size=${size}`);
-        const newItems = data?.content || [];
-
-        setNotifications((prev) =>
-          page === 0 ? newItems : [...prev, ...newItems]
-        );
-        setHasMore(!data?.last);
-        setPageNumber(page);
+        const response = await api(config);
+        setData(response.data);
+        return returnDataOnly ? response.data : response;
       } catch (err) {
-        console.error("Failed to fetch notifications:", err);
-      }
-    },
-    [callApi, size]
-  );
-
-  /** --- Mark as read --- **/
-  const markAsRead = useCallback(
-    async (id) => {
-      try {
-        const response = await callApi(`${BASE_URL}/${id}/read`, {}, "POST");
-        if (response) {
-          setNotifications((prev) =>
-            prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+        setError(err);
+        if (err.response?.status !== 401) {
+          console.error(
+            err.response?.data?.message ||
+              err.response?.data?.error ||
+              "An error occurred"
           );
-          setUnreadCount((prev) => Math.max(prev - 1, 0));
-        } else {
-          showSnackbar("Failed to mark as read", "error");
         }
-      } catch (err) {
-        console.error("Mark as read failed:", err);
+        throw err?.response?.data;
+      } finally {
+        activeRequests.current.forEach((item)=>{
+          if(item.controller===controller){
+            activeRequests.current.delete(item          );
+          }
+        });
+        
+        setLoading(false);
       }
     },
-    [callApi, showSnackbar]
+    [xRequestType]
   );
 
-  /** --- Mark all as read --- **/
-  const markAllAsRead = useCallback(async () => {
-    try {
-      const response = await callApi(`${BASE_URL}/read-all`, {}, "POST");
-      if (response) {
-        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-        setUnreadCount(0);
-      } else {
-        showSnackbar("Failed to mark all notifications as read", "error");
-      }
-    } catch (err) {
-      console.error("Mark all as read failed:", err);
-    }
-  }, [callApi, showSnackbar]);
-
-  /** --- SSE stream + initial load (run once, not on each menu change) --- **/
-  useEffect(() => {
-    // Initial load
-    fetchUnreadCount();
-    fetchHistory(0); // first page
-
-    // Start live stream
-    startStream(`${BASE_URL}/stream`, {
-      onMessage: (newNotification) => {
-        console.log("New Notification Found", newNotification);
-      },
-
-      onTaskProgress: (data) => {
-        upsertTask({
-          taskId: data.taskId,
-          percentage: data.percentage,
-          status: data.status,
-          message: data.message,
-        });
-
-        if (data.percentage === 100) {
-          setTimeout(() => removeTask(data.taskId), 5000);
-        }
-      },
-    });
-
-    // Cleanup on unmount
-    return () => {
-      stopStream();
-    };
-    // We intentionally do NOT add fetchUnreadCount / fetchHistory to deps,
-    // to avoid re-running this effect on every callApi/xRequestType/menu change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startStream, stopStream]);
-
-  /** --- Show popup for 5 seconds --- **/
-  const triggerPopup = useCallback((notif) => {
-    setPopNotification(notif);
-    if (triggerPopup.timer) clearTimeout(triggerPopup.timer);
-    triggerPopup.timer = setTimeout(() => setPopNotification(null), 5000);
-  }, []);
-
-  /** --- When new message arrives via SSE --- **/
-  useEffect(() => {
-    if (lastMessage) {
-      setNotifications((prev) => [lastMessage, ...prev]);
-      setUnreadCount((prev) => prev + 1);
-      triggerPopup(lastMessage);
-    }
-  }, [lastMessage, triggerPopup]);
-
-  /** --- Pagination helper --- **/
-  const loadMore = useCallback(() => {
-    if (hasMore) fetchHistory(pageNumber + 1);
-  }, [hasMore, fetchHistory, pageNumber]);
-
-  return {
-    connected,
-    notifications,
-    unreadCount,
-    fetchUnreadCount,
-    fetchHistory,
-    markAsRead,
-    markAllAsRead,
-    stopStream,
-    loadMore,
-    hasMore,
-    popNotification,
-    setPopNotification,
-    tasks,
-    upsertTask,
-    removeTask,
-    activeCount,
-  };
+  return { data, error, loading, callApi, cancelAllRequests };
 };
 
-export default useNotifications;
+export default useApi;
+
+axiosconfig.jsx
+   import axios from "axios";
+import { resolveConfig } from "../config/EnvironmentConfig"; // Ensure this path is correct
+import { tokenRefreshed, logoutSuccess } from "../store/slices/authSlice";
+import { parseJwt } from "../utils/EncryptionUtilities";
+
+let store; // Will hold the Redux store reference
+
+// Inject store from App.js or index.js to avoid circular dependency
+export const injectStore = (_store) => {
+  store = _store;
+};
+
+// Create a Singleton Axios Instance
+const api = axios.create({
+  baseURL: "", // Base URL
+  withCredentials: true, // IMPORTANT: Allows sending/receiving HttpOnly Cookies
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// --- Request Interceptor ---
+api.interceptors.request.use(
+  (config) => {
+    // 1. Get Token from Redux Store
+    const state = store?.getState();
+    const token = state?.auth?.token;
+
+    // 2. Attach Authorization Header
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    // 3. Attach Context Header (X-Request-Type) if passed in config
+    // The hook will pass this in, or defaults to '*'
+    if (!config.headers["X-Request-Type"]) {
+      config.headers["X-Request-Type"] = "*";
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// --- Response Interceptor ---
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  async (error) => {
+    const originalRequest = error.config;
+
+    // Safety check to prevent infinite loops
+    if (!originalRequest || originalRequest._retryCount > 2) {
+      return Promise.reject(error);
+    }
+
+    // Extract Error Details
+    const status = error.response?.status;
+    const errorCode = error.response?.data?.error || error.response?.data?.code;
+
+    // ---------------------------------------------------------
+    // SCENARIO 1: Concurrent Login / Session Invalidated
+    // ---------------------------------------------------------
+    if (
+      status === 401 &&
+      (errorCode === "CONCURRENT_LOGIN" ||
+        errorCode === "SESSION_EXPIRED" ||
+        errorCode === "INVALID_TOKEN")
+    ) {
+      // Do NOT attempt refresh. The session is dead.
+      // We dispatch a custom event that AuthContext listens to for the Dialog
+      window.dispatchEvent(
+        new CustomEvent("auth:session-expired", {
+          detail: { reason: errorCode },
+        })
+      );
+
+      // Clear local state immediately
+      store.dispatch(logoutSuccess());
+      return Promise.reject(error);
+    }
+
+    // ---------------------------------------------------------
+    // SCENARIO 2: Access Token Expired (Try Refresh)
+    // ---------------------------------------------------------
+    if (
+      status === 401 &&
+      errorCode === "TOKEN_EXPIRED" &&
+      !originalRequest._retry
+    ) {
+      if (isRefreshing) {
+        // If already refreshing, queue this request
+        return new Promise(function (resolve, reject) {
+          failedQueue.push({
+            resolve: (token) => {
+              originalRequest.headers["Authorization"] = "Bearer " + token;
+              resolve(api(originalRequest));
+            },
+            reject: (err) => {
+              reject(err);
+            },
+          });
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        // Call Backend Refresh Endpoint
+        // Note: We don't send the refresh token in body; backend reads the Cookie
+        const response = await api.post(
+          `${resolveConfig("/LS") || ""}/auth/refresh-token`
+        );
+
+        const { accessToken } = response?.data?.data || "";
+
+        if (accessToken) {
+          // 1. Update Redux
+          const user = parseJwt(accessToken);
+          store.dispatch(tokenRefreshed({ token: accessToken, user }));
+
+          // 2. Process Queue
+          processQueue(null, accessToken);
+
+          // 3. Retry Original Request
+          originalRequest.headers["Authorization"] = "Bearer " + accessToken;
+          return api(originalRequest);
+        } else {
+          throw new Error("No access token returned");
+        }
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        store.dispatch(logoutSuccess());
+        window.dispatchEvent(
+          new CustomEvent("auth:session-expired", {
+            detail: { reason: "SESSION_EXPIRED" },
+          })
+        );
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+export default api;
+
+authslice.jsx
+import { createSlice } from "@reduxjs/toolkit";
+const initialState = {
+  user: null, // The decoded user object
+  token: null, // The Access Token string
+  isAuthenticated: false,
+  loading: false,
+  error: null,
+};
+const authSlice = createSlice({
+  name: "auth",
+  initialState,
+  reducers: {
+    //Existing
+    setToken: (state, action) => {
+      state.token = action.payload;
+    },
+    setUser: (state, action) => {
+      state.user = action.payload;
+    },
+    logout: (state) => {
+      state.token = null;
+      state.user = null;
+    },
+    // Called immediately after Login API success
+    loginSuccess: (state, action) => {
+      state.user = action.payload.user;
+      state.token = action.payload.token;
+      state.isAuthenticated = true;
+      state.error = null;
+      state.loading = false;
+      // Persist to local storage for page reloads
+      localStorage.setItem("token", action.payload.token);
+      localStorage.setItem("user", JSON.stringify(action.payload.user));
+    },
+    // Called when the Refresh Token API returns a new Access Token
+    tokenRefreshed: (state, action) => {
+      state.token = action.payload.token;
+      if (action.payload.user) {
+        state.user = action.payload.user;
+        localStorage.setItem("user", JSON.stringify(action.payload.user));
+      }
+      localStorage.setItem("token", action.payload.token);
+    },
+    // Called on Logout or Session Expiry
+    logoutSuccess: (state) => {
+      state.user = null;
+      state.token = null;
+      state.isAuthenticated = false;
+      state.error = null;
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+    },
+    // Optional: Load state from LocalStorage on app startup
+    initializeAuth: (state) => {
+      const token = localStorage.getItem("token");
+      const userStr = localStorage.getItem("user");
+      if (token && userStr) {
+        state.token = token;
+        state.user = JSON.parse(userStr);
+        state.isAuthenticated = true;
+      }
+    },
+  },
+});
+export const {
+  setToken,
+  setUser,
+  logout,
+  loginSuccess,
+  tokenRefreshed,
+  logoutSuccess,
+  initializeAuth,
+} = authSlice.actions;
+export default authSlice.reducer;
+
+useStreamapi.jsx
+import { useEffect, useRef, useState, useCallback } from "react";
+import { fetchEventSource } from "@microsoft/fetch-event-source";
+import { useSelector } from "react-redux";
+import { resolveConfig } from "../config/EnvironmentConfig";
+
+const useStreamApi = () => {
+  const token = useSelector((state) => state.auth.token);
+
+  const controllerRef = useRef(null);
+  const [connected, setConnected] = useState(false);
+  const [lastMessage, setLastMessage] = useState(null);
+
+  const startStream = useCallback(
+    (url, { onMessage, onOpen, onError, onTaskProgress } = {}) => {
+      if (!token) return console.warn("No token, cannot start SSE stream");
+      const parts = url.split("/");
+      const service = parts[1];
+      const resolved = resolveConfig(`/${service}`);
+      parts[1] = resolved;
+      const Final_Url = parts.slice(1).join("/");
+
+      // Cancel any existing connection
+      if (controllerRef.current) controllerRef.current.abort();
+
+      const controller = new AbortController();
+      controllerRef.current = controller;
+
+      fetchEventSource(Final_Url, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+
+        onopen(response) {
+          if (response.ok && response.status === 200) {
+            console.log("SSE Connection established");
+            setConnected(true);
+            onOpen?.(response);
+          } else {
+            console.error("SSE Connection failed:", response.status);
+          }
+        },
+
+        onmessage(event) {
+          if (event.event === "connected") {
+            // console.log("Server connected:", event.data);
+            return;
+          }
+
+          // NOTIFICATIONS
+          if (event.event === "new_notification") {
+            try {
+              const data = JSON.parse(event.data);
+              setLastMessage(data);
+              onMessage?.(data);
+            } catch (err) {
+              console.error("SSE notification parse error:", err);
+            }
+          }
+
+          // TASK PROGRESS
+          if (event.event === "task_progress") {
+            try {
+              const data = JSON.parse(event.data);
+              onTaskProgress?.(data);
+            } catch (err) {
+              console.error("SSE task progress parse error:", err);
+            }
+          }
+        },
+
+        onerror(err) {
+          console.error("SSE Error:", err);
+          setConnected(false);
+          onError?.(err);
+        },
+      });
+    },
+    [token]
+  );
+
+  const stopStream = useCallback(() => {
+    if (controllerRef.current) {
+      controllerRef.current.abort();
+      controllerRef.current = null;
+      setConnected(false);
+      console.log("SSE connection stopped.");
+    }
+  }, []);
+
+  useEffect(() => stopStream, [stopStream]);
+
+  return { connected, lastMessage, startStream, stopStream };
+};
+
+export default useStreamApi;
 
