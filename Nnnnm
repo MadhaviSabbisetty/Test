@@ -463,3 +463,167 @@ const useStreamApi = () => {
 
 export default useStreamApi;
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import { useEffect, useRef, useState, useCallback } from "react";
+import { fetchEventSource } from "@microsoft/fetch-event-source";
+import { useDispatch, useSelector } from "react-redux";
+import { resolveConfig } from "../config/EnvironmentConfig";
+import api from "../config/axiosConfig";
+import { tokenRefreshed, logoutSuccess } from "../store/slices/authSlice";
+import { parseJwt } from "../utils/EncryptionUtilities";
+
+const useStreamApi = () => {
+  const dispatch = useDispatch();
+  const token = useSelector((state) => state.auth.token);
+
+  const controllerRef = useRef(null);
+  const retryOnceRef = useRef(false); // 🔐 prevents infinite refresh loop
+
+  const [connected, setConnected] = useState(false);
+  const [lastMessage, setLastMessage] = useState(null);
+
+  // -----------------------------------
+  // 🔁 REFRESH TOKEN (same as Axios)
+  // -----------------------------------
+  const refreshToken = async () => {
+    const response = await api.post(
+      `${resolveConfig("/LS") || ""}/auth/refresh-token`
+    );
+
+    const accessToken = response?.data?.data?.accessToken;
+    if (!accessToken) throw new Error("Refresh failed");
+
+    const user = parseJwt(accessToken);
+    dispatch(tokenRefreshed({ token: accessToken, user }));
+    return accessToken;
+  };
+
+  // -----------------------------------
+  // 🚀 START SSE STREAM
+  // -----------------------------------
+  const startStream = useCallback(
+    async (url, handlers = {}) => {
+      if (!token) return;
+
+      const { onMessage, onOpen, onError, onTaskProgress } = handlers;
+
+      const parts = url.split("/");
+      const service = parts[1];
+      parts[1] = resolveConfig(`/${service}`);
+      const Final_Url = parts.slice(1).join("/");
+
+      if (controllerRef.current) controllerRef.current.abort();
+
+      const controller = new AbortController();
+      controllerRef.current = controller;
+
+      fetchEventSource(Final_Url, {
+        method: "GET",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+
+        // -------------------------------
+        // 🔐 AUTH HANDLING (CRITICAL)
+        // -------------------------------
+        async onopen(response) {
+          if (response.status === 401) {
+            const errorCode =
+              response.headers.get("x-error-code") || "SESSION_EXPIRED";
+
+            // 🚫 SESSION DEAD → LOGOUT
+            if (
+              errorCode === "SESSION_EXPIRED" ||
+              errorCode === "INVALID_TOKEN" ||
+              errorCode === "CONCURRENT_LOGIN"
+            ) {
+              dispatch(logoutSuccess());
+              window.dispatchEvent(
+                new CustomEvent("auth:session-expired", {
+                  detail: { reason: errorCode },
+                })
+              );
+              controller.abort();
+              return;
+            }
+
+            // 🔁 TOKEN EXPIRED → REFRESH ONCE
+            if (!retryOnceRef.current) {
+              retryOnceRef.current = true;
+              controller.abort();
+
+              try {
+                await refreshToken();
+                startStream(url, handlers); // restart SSE
+              } catch (err) {
+                dispatch(logoutSuccess());
+              }
+              return;
+            }
+          }
+
+          // ✅ SUCCESS
+          retryOnceRef.current = false;
+          setConnected(true);
+          onOpen?.(response);
+        },
+
+        onmessage(event) {
+          if (event.event === "connected") return;
+
+          if (event.event === "new_notification") {
+            const data = JSON.parse(event.data);
+            setLastMessage(data);
+            onMessage?.(data);
+          }
+
+          if (event.event === "task_progress") {
+            const data = JSON.parse(event.data);
+            onTaskProgress?.(data);
+          }
+        },
+
+        onerror(err) {
+          setConnected(false);
+          onError?.(err);
+        },
+      });
+    },
+    [token]
+  );
+
+  // -----------------------------------
+  // 🛑 STOP STREAM
+  // -----------------------------------
+  const stopStream = useCallback(() => {
+    if (controllerRef.current) {
+      controllerRef.current.abort();
+      controllerRef.current = null;
+      retryOnceRef.current = false;
+      setConnected(false);
+    }
+  }, []);
+
+  useEffect(() => stopStream, [stopStream]);
+
+  return { connected, lastMessage, startStream, stopStream };
+};
+
+export default useStreamApi;
