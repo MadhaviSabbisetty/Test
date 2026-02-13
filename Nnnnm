@@ -1,3 +1,5 @@
+
+
 const startInactivityTimer = useCallback(() => {
   clearAllTimers();
   if (!isAuthenticated) return;
@@ -5,7 +7,7 @@ const startInactivityTimer = useCallback(() => {
   const now = Date.now();
   logoutTimeRef.current = now + INACTIVITY_TIMEOUT;
 
-  const warningTime = logoutTimeRef.current - WARNING_SECONDS * 1000;
+  const warningDelay = INACTIVITY_TIMEOUT - WARNING_SECONDS * 1000;
 
   warningTimerRef.current = setTimeout(() => {
     setWarningOpen(true);
@@ -22,14 +24,12 @@ const startInactivityTimer = useCallback(() => {
         setSecondsLeft(remaining);
       }
     }, 1000);
-  }, warningTime - now);
+  }, warningDelay);
 
   inactivityTimerRef.current = setTimeout(() => {
     performLogout("SESSION_TIMEOUT");
   }, INACTIVITY_TIMEOUT);
 }, [isAuthenticated, clearAllTimers, performLogout]);
-
-
 
 
 
