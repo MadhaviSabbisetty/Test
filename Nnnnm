@@ -1,3 +1,164 @@
+import React, {
+  createContext,
+  useEffect,
+  useRef,
+  useCallback,
+  useState,
+} from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { throttle } from "lodash";
+import SessionDialog from "../components/SessionDialog";
+import SessionWarningDialog from "../components/SessionWarningDialog";
+import { logoutSuccess } from "../store/slices/authSlice";
+import api from "../config/axiosConfig";
+import { resolveConfig } from "../config/EnvironmentConfig";
+
+export const AuthContext = createContext();
+
+const INACTIVITY_TIMEOUT = 1 * 60 * 1000; // 5 min
+const WARNING_SECONDS = 30;
+
+export const AuthProvider = ({ children }) => {
+  const dispatch = useDispatch();
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+
+  const [warningOpen, setWarningOpen] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(WARNING_SECONDS);
+
+  const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
+  const [sessionReason, setSessionReason] = useState("");
+
+  const inactivityTimerRef = useRef(null);
+  const warningTimerRef = useRef(null);
+  const countdownRef = useRef(null);
+
+  // --- Clear all timers ---
+  const clearAllTimers = useCallback(() => {
+    if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+  }, []);
+
+  // --- Perform Logout ---
+  const performLogout = useCallback(
+    async (reason = "USER_INITIATED") => {
+      clearAllTimers();
+
+      if (reason !== "USER_INITIATED") {
+        setSessionReason(reason);
+        setSessionDialogOpen(true);
+      }
+
+      try {
+        await api.post(`${resolveConfig("/LS")}/auth/logout`);
+      } catch (e) {
+        console.error(e);
+        // ignore
+      } finally {
+        localStorage.clear();
+        dispatch(logoutSuccess());
+        setWarningOpen(false);
+      }
+    },
+    [dispatch, clearAllTimers]
+  );
+
+  // --- Start inactivity timers ---
+  const startInactivityTimer = useCallback(() => {
+    clearAllTimers();
+    if (!isAuthenticated) return;
+
+    warningTimerRef.current = setTimeout(() => {
+      setSecondsLeft(WARNING_SECONDS);
+      setWarningOpen(true);
+      countdownRef.current = setInterval(() => {
+        setSecondsLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(countdownRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }, INACTIVITY_TIMEOUT - WARNING_SECONDS * 1000);
+
+    inactivityTimerRef.current = setTimeout(() => {
+      performLogout("SESSION_TIMEOUT");
+    }, INACTIVITY_TIMEOUT);
+  }, [isAuthenticated, clearAllTimers, performLogout]);
+
+  // --- User Activity Listener ---
+  const onActivity = useCallback(
+    throttle(() => {
+      if (!isAuthenticated || sessionDialogOpen) return;
+      if (warningOpen) setWarningOpen(false);
+      startInactivityTimer();
+    }, 2000),
+    [isAuthenticated, sessionDialogOpen, warningOpen, startInactivityTimer]
+  );
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      startInactivityTimer();
+      const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
+      events.forEach((e) => window.addEventListener(e, onActivity));
+
+      return () => {
+        events.forEach((e) => window.removeEventListener(e, onActivity));
+        onActivity.cancel();
+        clearAllTimers();
+      };
+    } else {
+      clearAllTimers();
+      setWarningOpen(false);
+    }
+  }, [isAuthenticated, onActivity, startInactivityTimer, clearAllTimers]);
+
+  // --- Cross-tab / forced logout ---
+  useEffect(() => {
+    const handleSessionEvent = (e) => {
+      performLogout(e.detail?.reason || "SESSION_EXPIRED");
+    };
+
+    window.addEventListener("auth:session-expired", handleSessionEvent);
+    return () =>
+      window.removeEventListener("auth:session-expired", handleSessionEvent);
+  }, [performLogout]);
+
+  return (
+    <AuthContext.Provider
+      value={{
+        logout: () => performLogout("USER_INITIATED"),
+        triggerSessionDialog: (reason) => performLogout(reason),
+      }}
+    >
+      {children}
+
+      <SessionWarningDialog
+        open={warningOpen}
+        secondsLeft={secondsLeft}
+        onContinue={() => {
+          setWarningOpen(false);
+          startInactivityTimer();
+        }}
+      />
+
+      <SessionDialog
+        open={sessionDialogOpen}
+        reason={sessionReason}
+        onConfirm={() => setSessionDialogOpen(false)}
+      />
+    </AuthContext.Provider>
+  );
+};
+
+
+
+
+
+
+
+
 import api from "../config/axiosConfig";
 import { resolveConfig } from "../config/EnvironmentConfig";
 import { tokenRefreshed, logoutSuccess } from "../store/slices/authSlice";
