@@ -3,9 +3,10 @@ import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { useDispatch, useSelector } from "react-redux";
 import { resolveConfig } from "../config/EnvironmentConfig";
 
-import { tokenRefreshed, logoutSuccess } from "../store/slices/authSlice";
+import { logoutSuccess } from "../store/slices/authSlice";
 import { parseJwt } from "../utils/EncryptionUtilities";
 import api from "../config/axiosConfig";
+import { refreshAccessToken } from "../utils/AuthHelpers";
 
 const useStreamApi = () => {
   const dispatch=useDispatch();
@@ -17,19 +18,19 @@ const useStreamApi = () => {
   const retryRef=useRef(false);
 
 
-  const refreshAccessToken=async()=>
-    {
-      const response=await api.post(
-        `${resolveConfig("/LS") || ""}/auth/refresh-token`
-      );
-      const accessToken=
-      response?.data?.data?.accessToken;
-      if(!accessToken)throw new Error("No access token returned");
+  // const refreshAccessToken=async()=>
+  //   {
+  //     const response=await api.post(
+  //       `${resolveConfig("/LS") || ""}/auth/refresh-token`
+  //     );
+  //     const accessToken=
+  //     response?.data?.data?.accessToken;
+  //     if(!accessToken)throw new Error("No access token returned");
 
-      const user=parseJwt(accessToken);
-      dispatch(tokenRefreshed({token:accessToken,user}));
-      return aceessToken;
-    }
+  //     const user=parseJwt(accessToken);
+  //     dispatch(tokenRefreshed({token:accessToken,user}));
+  //     return accessToken;
+  //   }
 
   const startStream = useCallback(
     (url, { onMessage, onOpen, onError, onTaskProgress } = {}) => {
@@ -64,9 +65,9 @@ const useStreamApi = () => {
             response.headers.get("x-error-code")|| "SESSION_EXPIRED";
 
         if (
-          (errorCode === "CONCURRENT_LOGIN" ||
-        errorCode === "SESSION_EXPIRED" ||
-        errorCode === "INVALID_TOKEN")
+          errorCode === "CONCURRENT_LOGIN" ||
+          errorCode === "SESSION_EXPIRED" ||
+          errorCode === "INVALID_TOKEN"
         ) {
       // Do NOT attempt refresh. The session is dead.
       // We dispatch a custom event that AuthContext listens to for the Dialog
@@ -74,17 +75,18 @@ const useStreamApi = () => {
       window.dispatchEvent(
         new CustomEvent("auth:session-expired", {
           detail: { reason: errorCode },
-        }));
+        })
+      );
         controller.abort();
         return;
           }
-
+if(errorCode==="TOKEN_EXPIRED"){
           if(!retryRef.current){
-            retryRef.current=false;
+            retryRef.current=true;
             controller.abort();
 
             try{
-              await refreshAccessToken();
+              await refreshAccessToken(dispatch);
               startStream(url,{
                 onMessage,
                 onOpen,
@@ -93,9 +95,11 @@ const useStreamApi = () => {
               });
             }
             catch(err){
-              dispatch(logoutSuccess());
+              //dispatch(logoutSuccess());
             }
+            return;
           }
+        }}
           retryRef.current=false;
           setConnected(true);
           onOpen?.(response);
@@ -155,3 +159,6 @@ const useStreamApi = () => {
 };
 
 export default useStreamApi;
+
+
+
