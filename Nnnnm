@@ -1,38 +1,41 @@
 
 
+
 const startInactivityTimer = useCallback(() => {
   clearAllTimers();
   if (!isAuthenticated) return;
 
   const now = Date.now();
-  logoutTimeRef.current = now + INACTIVITY_TIMEOUT;
-
   const warningDelay = INACTIVITY_TIMEOUT - WARNING_SECONDS * 1000;
 
+  // store exact logout timestamp
+  logoutTimeRef.current = now + INACTIVITY_TIMEOUT;
+
+  // 🔹 Warning popup timer
   warningTimerRef.current = setTimeout(() => {
     setWarningOpen(true);
 
+    // 🔹 Start countdown immediately when popup shows
     countdownRef.current = setInterval(() => {
-      const remaining = Math.ceil(
-        (logoutTimeRef.current - Date.now()) / 1000
+      const remainingSeconds = Math.max(
+        Math.ceil((logoutTimeRef.current - Date.now()) / 1000),
+        0
       );
 
-      if (remaining <= 0) {
+      setSecondsLeft(remainingSeconds);
+
+      if (remainingSeconds <= 0) {
         clearInterval(countdownRef.current);
-        setSecondsLeft(0);
-      } else {
-        setSecondsLeft(remaining);
       }
     }, 1000);
   }, warningDelay);
 
+  // 🔹 Final logout timer
   inactivityTimerRef.current = setTimeout(() => {
     performLogout("SESSION_TIMEOUT");
   }, INACTIVITY_TIMEOUT);
+
 }, [isAuthenticated, clearAllTimers, performLogout]);
-
-
-
 
 
 
