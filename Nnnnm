@@ -1,135 +1,188 @@
+import api from "../config/axiosConfig";
+import { resolveConfig } from "../config/EnvironmentConfig";
+import { tokenRefreshed, logoutSuccess } from "../store/slices/authSlice";
+import { parseJwt } from "../utils/EncryptionUtilities";
+
+/**
+ * Refresh Access Token
+ * @param {Function} dispatch - Redux dispatch
+ * @returns {Promise<string>} new access token
+ */
+export const refreshAccessToken = async (dispatch) => {
+  try {
+    const response = await api.post(
+      `${resolveConfig("/LS") || ""}/auth/refresh-token`
+    );
+
+    const accessToken = response?.data?.data?.accessToken;
+
+    if (!accessToken) {
+      throw new Error("No access token returned");
+    }
+
+    const user = parseJwt(accessToken);
+
+    dispatch(tokenRefreshed({ token: accessToken, user }));
+
+    return accessToken;
+
+  } catch (error) {
+    dispatch(logoutSuccess());
+
+    window.dispatchEvent(
+      new CustomEvent("auth:session-expired", {
+        detail: { reason: "SESSION_EXPIRED" },
+      })
+    );
+
+    throw error;
+  }
+};
+
+
+
+
+
+
 import { useEffect, useRef, useState, useCallback } from "react";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { useDispatch, useSelector } from "react-redux";
 import { resolveConfig } from "../config/EnvironmentConfig";
-
 import { logoutSuccess } from "../store/slices/authSlice";
-import { parseJwt } from "../utils/EncryptionUtilities";
-import api from "../config/axiosConfig";
 import { refreshAccessToken } from "../utils/AuthHelpers";
 
 const useStreamApi = () => {
-  const dispatch=useDispatch();
+  const dispatch = useDispatch();
   const token = useSelector((state) => state.auth.token);
 
   const controllerRef = useRef(null);
+  const retryRef = useRef(false);
+
   const [connected, setConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState(null);
-  const retryRef=useRef(false);
-
-
-  // const refreshAccessToken=async()=>
-  //   {
-  //     const response=await api.post(
-  //       `${resolveConfig("/LS") || ""}/auth/refresh-token`
-  //     );
-  //     const accessToken=
-  //     response?.data?.data?.accessToken;
-  //     if(!accessToken)throw new Error("No access token returned");
-
-  //     const user=parseJwt(accessToken);
-  //     dispatch(tokenRefreshed({token:accessToken,user}));
-  //     return accessToken;
-  //   }
 
   const startStream = useCallback(
     (url, { onMessage, onOpen, onError, onTaskProgress } = {}) => {
-      if (!token) return console.warn("No token, cannot start SSE stream");
+
+      if (!token) {
+        console.warn("No token, cannot start SSE stream");
+        return;
+      }
+
+      // Resolve service
       const parts = url.split("/");
       const service = parts[1];
-      const resolved = resolveConfig(`/${service}`);
-      parts[1] = resolved;
-      const Final_Url = parts.slice(1).join("/");
+      parts[1] = resolveConfig(`/${service}`);
+      const finalUrl = parts.slice(1).join("/");
 
-      // Cancel any existing connection
-      if (controllerRef.current) controllerRef.current.abort();
+      // Stop previous connection
+      if (controllerRef.current) {
+        controllerRef.current.abort();
+      }
 
       const controller = new AbortController();
       controllerRef.current = controller;
 
-      fetchEventSource(Final_Url, {
+      fetchEventSource(finalUrl, {
         method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
         signal: controller.signal,
 
         async onopen(response) {
-          // if (response.ok && response.status === 200) {
-          //   console.log("SSE Connection established");
-          //   setConnected(true);
-          //   onOpen?.(response);
-          // } else {
-          //   console.error("SSE Connection failed:", response.status);
-          // }
-          if(response.status===401){
-            const errorCode=
-            response.headers.get("x-error-code")|| "SESSION_EXPIRED";
 
-        if (
-          errorCode === "CONCURRENT_LOGIN" ||
-          errorCode === "SESSION_EXPIRED" ||
-          errorCode === "INVALID_TOKEN"
-        ) {
-      // Do NOT attempt refresh. The session is dead.
-      // We dispatch a custom event that AuthContext listens to for the Dialog
-      dispatch(logoutSuccess());
-      window.dispatchEvent(
-        new CustomEvent("auth:session-expired", {
-          detail: { reason: errorCode },
-        })
-      );
-        controller.abort();
-        return;
-          }
-if(errorCode==="TOKEN_EXPIRED"){
-          if(!retryRef.current){
-            retryRef.current=true;
+          if (response.status === 401) {
+
+            let errorCode = null;
+
+            try {
+              const data = await response.clone().json();
+              errorCode = data?.error;
+            } catch (e) {
+              console.error("Unable to parse SSE error body");
+            }
+
+            // ================================
+            // TOKEN_EXPIRED → REFRESH
+            // ================================
+            if (errorCode === "TOKEN_EXPIRED") {
+
+              if (!retryRef.current) {
+                retryRef.current = true;
+                controller.abort();
+
+                try {
+                  await refreshAccessToken(dispatch);
+
+                  startStream(url, {
+                    onMessage,
+                    onOpen,
+                    onError,
+                    onTaskProgress,
+                  });
+
+                } catch (err) {
+                  dispatch(logoutSuccess());
+                }
+              }
+
+              return;
+            }
+
+            // ================================
+            // LOGOUT CASES
+            // ================================
+            if (
+              errorCode === "SESSION_EXPIRED" ||
+              errorCode === "INVALID_TOKEN" ||
+              errorCode === "CONCURRENT_LOGIN"
+            ) {
+              dispatch(logoutSuccess());
+
+              window.dispatchEvent(
+                new CustomEvent("auth:session-expired", {
+                  detail: { reason: errorCode },
+                })
+              );
+
+              controller.abort();
+              return;
+            }
+
+            // Unknown 401 → Safe Logout
+            dispatch(logoutSuccess());
             controller.abort();
-
-            try{
-              await refreshAccessToken(dispatch);
-              startStream(url,{
-                onMessage,
-                onOpen,
-                onError,
-                onTaskProgress,
-              });
-            }
-            catch(err){
-              //dispatch(logoutSuccess());
-            }
             return;
           }
-        }}
-          retryRef.current=false;
+
+          // ================================
+          // SUCCESS CONNECTION
+          // ================================
+          retryRef.current = false;
           setConnected(true);
           onOpen?.(response);
-
         },
 
         onmessage(event) {
-          if (event.event === "connected") {
-            // console.log("Server connected:", event.data);
-            return;
-          }
+          if (event.event === "connected") return;
 
-          // NOTIFICATIONS
           if (event.event === "new_notification") {
             try {
               const data = JSON.parse(event.data);
               setLastMessage(data);
               onMessage?.(data);
             } catch (err) {
-              console.error("SSE notification parse error:", err);
+              console.error("Notification parse error:", err);
             }
           }
 
-          // TASK PROGRESS
           if (event.event === "task_progress") {
             try {
               const data = JSON.parse(event.data);
               onTaskProgress?.(data);
             } catch (err) {
-              console.error("SSE task progress parse error:", err);
+              console.error("Task progress parse error:", err);
             }
           }
         },
@@ -148,8 +201,8 @@ if(errorCode==="TOKEN_EXPIRED"){
     if (controllerRef.current) {
       controllerRef.current.abort();
       controllerRef.current = null;
+      retryRef.current = false;
       setConnected(false);
-      console.log("SSE connection stopped.");
     }
   }, []);
 
@@ -159,6 +212,3 @@ if(errorCode==="TOKEN_EXPIRED"){
 };
 
 export default useStreamApi;
-
-
-
