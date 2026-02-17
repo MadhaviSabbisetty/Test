@@ -406,3 +406,26 @@ const useStreamApi = () => {
 export default useStreamApi;
 
 
+
+
+
+
+  onChange={(newDate) => {
+    if (!newDate) {
+      setDate(newDate);
+      return;
+    }
+
+    const year = newDate.year().toString();
+
+    // ✅ Restrict to 4 digits only
+    if (year.length > 4) {
+      // revert to last valid date
+      setDate(lastValidDate);
+      return;
+    }
+
+    // save valid date
+    setLastValidDate(newDate);
+    setDate(newDate);
+  }}
