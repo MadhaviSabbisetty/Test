@@ -1,220 +1,228 @@
-import React, {
-  createContext,
-  useEffect,
-  useRef,
-  useCallback,
-  useState,
-} from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { useDispatch, useSelector } from "react-redux";
-import { throttle } from "lodash";
-import SessionDialog from "../components/SessionDialog";
-import SessionWarningDialog from "../components/SessionWarningDialog";
-import { logoutSuccess } from "../store/slices/authSlice";
-import api from "../config/axiosConfig";
 import { resolveConfig } from "../config/EnvironmentConfig";
+import { logoutSuccess } from "../store/slices/authSlice";
+import { refreshAccessToken } from "../utils/AuthHelpers";
 
-export const AuthContext = createContext();
-
-const INACTIVITY_TIMEOUT = 10 * 60 * 1000; // 5 min
-const WARNING_SECONDS = 30;
-
-export const AuthProvider = ({ children }) => {
+const useStreamApi = () => {
   const dispatch = useDispatch();
-  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const token = useSelector((state) => state.auth.token);
 
-  const [warningOpen, setWarningOpen] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(WARNING_SECONDS);
+  const controllerRef = useRef(null);
+  const retryRef = useRef(false);
 
-  const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
-  const [sessionReason, setSessionReason] = useState("");
+  const [connected, setConnected] = useState(false);
+  const [lastMessage, setLastMessage] = useState(null);
 
-  const inactivityTimerRef = useRef(null);
-  const warningTimerRef = useRef(null);
-  const countdownRef = useRef(null);
-  const warningDelay=Math.max(INACTIVITY_TIMEOUT - WARNING_SECONDS * 1000,0);
+  const startStream = useCallback(
+    (url, { onMessage, onOpen, onError, onTaskProgress } = {}) => {
 
+      if (!token) {
+        console.log("sse no token found");
+        console.warn("No token, cannot start SSE stream");
+        return;
+      }
+console.log("stream started");
+      // Resolve service
+      const parts = url.split("/");
+      const service = parts[1];
+      parts[1] = resolveConfig(`/${service}`);
+      const finalUrl = parts.slice(1).join("/");
 
-  // --- Clear all timers ---
-  const clearAllTimers = useCallback(() => {
-    if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
-    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
-    if (countdownRef.current) clearInterval(countdownRef.current);
+      // Stop previous connection
+      if (controllerRef.current) {
+        controllerRef.current.abort();
+      }
+
+      const controller = new AbortController();
+      controllerRef.current = controller;
+
+      fetchEventSource(finalUrl, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        signal: controller.signal,
+
+        async onopen(response) {
+          console.log("response value",response);
+
+          if (response.status === 401) {
+          console.log("401 received");
+
+            let errorCode = "TOKEN_EXPIRED";
+
+            try {
+              const data = await response.clone().json();
+              errorCode = data?.error;
+            } catch (e) {
+              console.error("Unable to parse SSE error body");
+            }
+
+            // ================================
+            // TOKEN_EXPIRED → REFRESH
+            // ================================
+            if (errorCode === "TOKEN_EXPIRED") {
+              
+          console.log("token expired");
+
+              if (!retryRef.current) {
+                retryRef.current = true;
+                controller.abort();
+
+                try {
+                  await refreshAccessToken(dispatch);
+                  
+          console.log("refresh started");
+
+                  startStream(url, {
+                    onMessage,
+                    onOpen,
+                    onError,
+                    onTaskProgress,
+                  });
+
+                } catch (err) {
+                  
+          console.log("refresh failed");
+                  dispatch(logoutSuccess());
+                }
+              }
+
+              return;
+            }
+
+            // ================================
+            // LOGOUT CASES
+            // ================================
+            if (
+              errorCode === "SESSION_EXPIRED" ||
+              errorCode === "INVALID_TOKEN" ||
+              errorCode === "CONCURRENT_LOGIN"
+            ) {
+              
+          console.log("401 logged out");
+              dispatch(logoutSuccess());
+
+              window.dispatchEvent(
+                new CustomEvent("auth:session-expired", {
+                  detail: { reason: errorCode },
+                })
+              );
+
+              controller.abort();
+              return;
+            }
+ 
+            // Unknown 401 → Safe Logout
+            // console.log("401 logged out");
+            // dispatch(logoutSuccess());
+            // controller.abort();
+            // return;
+          }
+
+          // ================================
+          // SUCCESS CONNECTION
+          // ================================
+          retryRef.current = false;
+          setConnected(true);
+          onOpen?.(response);
+        },
+
+        onmessage(event) {
+          if (event.event === "connected") return;
+
+          if (event.event === "new_notification") {
+            try {
+              const data = JSON.parse(event.data);
+              setLastMessage(data);
+              onMessage?.(data);
+            } catch (err) {
+              console.error("Notification parse error:", err);
+            }
+          }
+
+          if (event.event === "task_progress") {
+            try {
+              const data = JSON.parse(event.data);
+              onTaskProgress?.(data);
+            } catch (err) {
+              console.error("Task progress parse error:", err);
+            }
+          }
+        },
+
+        onerror(err) {
+          console.error("SSE Error:", err);
+          setConnected(false);
+          onError?.(err);
+        },
+      });
+    },
+    [token]
+  );
+
+  const stopStream = useCallback(() => {
+    if (controllerRef.current) {
+      controllerRef.current.abort();
+      controllerRef.current = null;
+      retryRef.current = false;
+      setConnected(false);
+    }
   }, []);
 
-  // --- Perform Logout ---
-  const performLogout = useCallback(
-    async (reason = "USER_INITIATED") => {
-      clearAllTimers();
+  useEffect(() => stopStream, [stopStream]);
 
-      if (reason !== "USER_INITIATED") {
-        setSessionReason(reason);
-        setSessionDialogOpen(true);
-      }
-
-      try {
-        await api.post(`${resolveConfig("/LS")}/auth/logout`);
-      } catch (e) {
-        console.error(e);
-        // ignore
-      } finally {
-        localStorage.clear();
-        dispatch(logoutSuccess());
-        setWarningOpen(false);
-      }
-    },
-    [dispatch, clearAllTimers]
-  );
-
-  // --- Start inactivity timers ---
-  const startInactivityTimer = useCallback(() => {
-    clearAllTimers();
-    if (!isAuthenticated) return;
-
-    warningTimerRef.current = setTimeout(() => {
-      setSecondsLeft(WARNING_SECONDS);
-      setWarningOpen(true);
-      // countdownRef.current = setInterval(() => {
-      //   setSecondsLeft((prev) => {
-      //     if (prev <= 1) {
-      //       clearInterval(countdownRef.current);
-      //       return 0;
-      //     }
-      //     return prev - 1;
-      //   });
-      // }, 1000);
-      const countdownStart = Date.now();
-
-      countdownRef.current = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - countdownStart) / 1000);
-        const remaining = WARNING_SECONDS - elapsed;
-      
-        if (remaining <= 0) {
-          clearInterval(countdownRef.current);
-          setSecondsLeft(0);
-        } else {
-          setSecondsLeft(remaining);
-        }
-      }, 1000);
-
-
-
-    }, warningDelay);
-    //INACTIVITY_TIMEOUT - WARNING_SECONDS * 1000);
-
-    inactivityTimerRef.current = setTimeout(() => {
-      performLogout("SESSION_TIMEOUT");
-    }, INACTIVITY_TIMEOUT);
-  }, [isAuthenticated, clearAllTimers, performLogout]);
-
-  // --- User Activity Listener ---
-  const onActivity = useCallback(
-    throttle(() => {
-      if (!isAuthenticated || sessionDialogOpen) return;
-      // if (warningOpen) 
-      setWarningOpen(false);
-      startInactivityTimer();
-    }, 2000),
-    [isAuthenticated, sessionDialogOpen, warningOpen, startInactivityTimer]
-  );
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      startInactivityTimer();
-      const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
-      events.forEach((e) => window.addEventListener(e, onActivity));
-
-      return () => {
-        events.forEach((e) => window.removeEventListener(e, onActivity));
-        onActivity.cancel();
-        clearAllTimers();
-      };
-    } else {
-      clearAllTimers();
-      setWarningOpen(false);
-    }
-  }, [isAuthenticated, onActivity, startInactivityTimer, clearAllTimers]);
-
-  // --- Cross-tab / forced logout ---
-  useEffect(() => {
-    const handleSessionEvent = (e) => {
-      performLogout(e.detail?.reason || "SESSION_EXPIRED");
-    };
-
-    window.addEventListener("auth:session-expired", handleSessionEvent);
-    return () =>
-      window.removeEventListener("auth:session-expired", handleSessionEvent);
-  }, [performLogout]);
-
-  return (
-    <AuthContext.Provider
-      value={{
-        logout: () => performLogout("USER_INITIATED"),
-        triggerSessionDialog: (reason) => performLogout(reason),
-      }}
-    >
-      {children}
-
-      <SessionWarningDialog
-        open={warningOpen}
-        secondsLeft={secondsLeft}
-        onContinue={() => {
-          setWarningOpen(false);
-          startInactivityTimer();
-        }}
-      />
-
-      <SessionDialog
-        open={sessionDialogOpen}
-        reason={sessionReason}
-        onConfirm={() => setSessionDialogOpen(false)}
-      />
-    </AuthContext.Provider>
-  );
+  return { connected, lastMessage, startStream, stopStream };
 };
 
-
-
-const onActivity = useCallback(() => {
-  if (!isAuthenticated || sessionDialogOpen) return;
-
-  setWarningOpen(false);
-  startInactivityTimer();
-}, [isAuthenticated, sessionDialogOpen, startInactivityTimer]);
+export default useStreamApi;
 
 
 
 
-const startInactivityTimer = useCallback(() => {
-  clearAllTimers();
-  if (!isAuthenticated) return;
+authhelper.jsx
+import api from "../config/axiosConfig";
+import { resolveConfig } from "../config/EnvironmentConfig";
+import { tokenRefreshed, logoutSuccess } from "../store/slices/authSlice";
+import { parseJwt } from "../utils/EncryptionUtilities";
 
-  const now = Date.now();
-  logoutTimeRef.current = now + INACTIVITY_TIMEOUT;
+/**
+ * Refresh Access Token
+ * @param {Function} dispatch - Redux dispatch
+ * @returns {Promise<string>} new access token
+ */
+export const refreshAccessToken = async (dispatch) => {
+    console.log("Refresh token called");
+  try {
+    const response = await api.post(
+      `${resolveConfig("/LS") || ""}/auth/refresh-token`
+    );
 
-  const warningDelay = INACTIVITY_TIMEOUT - WARNING_SECONDS * 1000;
+    const accessToken = response?.data?.data?.accessToken;
 
-  // Warning popup
-  warningTimerRef.current = setTimeout(() => {
-    setWarningOpen(true);
+    if (!accessToken) {
+        console.log("refresh token failed");
+      throw new Error("No access token returned");
+    }
 
-    // Countdown starts immediately
-    countdownRef.current = setInterval(() => {
-      const remaining = Math.ceil(
-        (logoutTimeRef.current - Date.now()) / 1000
-      );
+    const user = parseJwt(accessToken);
 
-      setSecondsLeft(remaining > 0 ? remaining : 0);
+    dispatch(tokenRefreshed({ token: accessToken, user }));
 
-      if (remaining <= 0) {
-        clearInterval(countdownRef.current);
-      }
-    }, 1000);
+    return accessToken;
 
-  }, warningDelay);
+  } catch (error) {
+    console.log("refresh token failed-logout");
+    dispatch(logoutSuccess());
 
-  // Final logout
-  inactivityTimerRef.current = setTimeout(() => {
-    performLogout("SESSION_TIMEOUT");
-  }, INACTIVITY_TIMEOUT);
+    window.dispatchEvent(
+      new CustomEvent("auth:session-expired", {
+        detail: { reason: "SESSION_EXPIRED" },
+      })
+    );
 
-}, [isAuthenticated, clearAllTimers, performLogout]);
+    throw error;
+  }
+};
