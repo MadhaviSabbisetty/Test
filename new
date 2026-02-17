@@ -226,3 +226,183 @@ export const refreshAccessToken = async (dispatch) => {
     throw error;
   }
 };
+
+
+
+
+
+
+
+
+
+
+
+import { useEffect, useRef, useState, useCallback } from "react";
+import { fetchEventSource } from "@microsoft/fetch-event-source";
+import { useDispatch, useSelector } from "react-redux";
+import { resolveConfig } from "../config/EnvironmentConfig";
+import { logoutSuccess } from "../store/slices/authSlice";
+import { refreshAccessToken } from "../utils/AuthHelpers";
+
+const useStreamApi = () => {
+  const dispatch = useDispatch();
+  const token = useSelector((state) => state.auth.token);
+
+  const controllerRef = useRef(null);
+  const retryingRef = useRef(false);
+
+  const [connected, setConnected] = useState(false);
+  const [lastEvent, setLastEvent] = useState(null);
+
+  const startStream = useCallback(
+    async (url, handlers = {}) => {
+      const {
+        onOpen,
+        onMessage,
+        onTaskProgress,
+        onError,
+        onConnected,
+      } = handlers;
+
+      if (!token) {
+        console.warn("No token available for SSE");
+        return;
+      }
+
+      // Resolve microservice URL
+      const parts = url.split("/");
+      const service = parts[1];
+      parts[1] = resolveConfig(`/${service}`);
+      const finalUrl = parts.slice(1).join("/");
+
+      // Close old stream
+      if (controllerRef.current) {
+        controllerRef.current.abort();
+      }
+
+      const controller = new AbortController();
+      controllerRef.current = controller;
+
+      fetchEventSource(finalUrl, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        signal: controller.signal,
+
+        async onopen(response) {
+          // ======================
+          // HANDLE 401
+          // ======================
+          if (response.status === 401) {
+            let errorCode = "TOKEN_EXPIRED";
+
+            try {
+              const data = await response.clone().json();
+              errorCode = data?.error;
+            } catch (e) {}
+
+            // 🔁 TOKEN EXPIRED → REFRESH
+            if (errorCode === "TOKEN_EXPIRED" && !retryingRef.current) {
+              retryingRef.current = true;
+              controller.abort();
+
+              try {
+                await refreshAccessToken(dispatch);
+                retryingRef.current = false;
+
+                // Restart stream with new token
+                startStream(url, handlers);
+              } catch (err) {
+                dispatch(logoutSuccess());
+              }
+
+              return;
+            }
+
+            // 🚨 Hard logout cases
+            if (
+              errorCode === "SESSION_EXPIRED" ||
+              errorCode === "INVALID_TOKEN" ||
+              errorCode === "CONCURRENT_LOGIN"
+            ) {
+              dispatch(logoutSuccess());
+
+              window.dispatchEvent(
+                new CustomEvent("auth:session-expired", {
+                  detail: { reason: errorCode },
+                })
+              );
+
+              controller.abort();
+              return;
+            }
+          }
+
+          // ======================
+          // SUCCESS
+          // ======================
+          retryingRef.current = false;
+          setConnected(true);
+          onOpen?.(response);
+          onConnected?.();
+        },
+
+        onmessage(event) {
+          if (event.event === "connected") return;
+
+          try {
+            const data = JSON.parse(event.data);
+            setLastEvent(data);
+
+            // 👇 Global event router
+            switch (event.event) {
+              case "new_notification":
+                onMessage?.(data);
+                break;
+
+              case "task_progress":
+                onTaskProgress?.(data);
+                break;
+
+              default:
+                onMessage?.(data);
+            }
+          } catch (err) {
+            console.error("SSE parse error:", err);
+          }
+        },
+
+        onerror(err) {
+          setConnected(false);
+          onError?.(err);
+        },
+      });
+    },
+    [token, dispatch]
+  );
+
+  const stopStream = useCallback(() => {
+    if (controllerRef.current) {
+      controllerRef.current.abort();
+      controllerRef.current = null;
+      retryingRef.current = false;
+      setConnected(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => stopStream();
+  }, [stopStream]);
+
+  return {
+    connected,
+    lastEvent,
+    startStream,
+    stopStream,
+  };
+};
+
+export default useStreamApi;
+
+
