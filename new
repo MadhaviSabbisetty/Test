@@ -1,1345 +1,173 @@
-glifreports.jsx
+import React, {
+  createContext,
+  useEffect,
+  useRef,
+  useCallback,
+  useState,
+} from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { throttle } from "lodash";
+import SessionDialog from "../components/SessionDialog";
+import SessionWarningDialog from "../components/SessionWarningDialog";
+import { logoutSuccess } from "../store/slices/authSlice";
+import api from "../config/axiosConfig";
+import { resolveConfig } from "../config/EnvironmentConfig";
 
-import { useEffect, useState } from "react";
-import {
-  Box,
-  Typography,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Stack,
-  Button,
-  Card,
-  LinearProgress,
-  Grow,
-  Fade,
-} from "@mui/material";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import {
-  Summarize,
-  CloudDownloadTwoTone,
-  LooksOne,
-  LooksTwo,
-  Looks3,
-} from "@mui/icons-material";
-import useApi from "../../hooks/useApi";
-import dayjs from "dayjs";
-import { useSelector } from "react-redux";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import { useTheme } from "@mui/material/styles";
-import CustomChip from "../../utils/CustomChip";
-import GlifReportsStyles from "./GlifReportsStyles";
+export const AuthContext = createContext();
 
-// 1. Ensure strictly 'en-gb' locale logic if specific DD/MM formats are fighting with browser locale
-import "dayjs/locale/en-gb";
-const moduleType = "WHOLE_BANK";
+const INACTIVITY_TIMEOUT = 10 * 60 * 1000; // 5 min
+const WARNING_SECONDS = 30;
 
-export default function GlifReports() {
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
-  const user = useSelector((state) => state.auth.user);
+export const AuthProvider = ({ children }) => {
+  const dispatch = useDispatch();
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
 
-  const [dateError, setDateError] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [repTypes, setRepTypes] = useState([]);
-  const [selectedReport, setReport] = useState(null);
-  const [selectedDate, setDate] = useState(null);
+  const [warningOpen, setWarningOpen] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(WARNING_SECONDS);
 
-  // Defaulting to a safe past date initially
-  const [minDate, setMinDate] = useState(dayjs("2020-01-01"));
+  const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
+  const [sessionReason, setSessionReason] = useState("");
 
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadedBytes, setDownloadedBytes] = useState(0);
-
-  const theme = useTheme();
-  const styles = GlifReportsStyles(theme);
-
-  const disableInputs = isLoading || isDownloading;
-
-  const downloadedMB =
-    downloadedBytes > 0 ? (downloadedBytes / (1024 * 1024)).toFixed(2) : null;
-
-  // --- API Fetch ---
-  useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
-      try {
-        const data = await callApi(
-          "/RS/reports/types",
-          { roleId: user.role, moduleType: moduleType },
-          "POST",
-        );
-        const types = data.data || [];
-        setRepTypes(types);
-
-        if (types.length > 0 && types[0].selectedDate) {
-          // IMPORTANT: Use .startOf('day') to ensure time is 00:00:00
-          // This fixes the "sometimes enabled/disabled arrow" issue by ensuring strict day comparison
-          setMinDate(dayjs(types[0].selectedDate).startOf("day"));
-        } else {
-          // Fallback
-          setMinDate(dayjs("2025-10-01").startOf("day"));
-        }
-      } catch (error) {
-        console.error("Failed to fetch report types:", error);
-        showSnackBar("Failed to load report types", "error");
-      }
-      setIsLoading(false);
-    }
-    fetchData();
-  }, [callApi, user.role, showSnackBar]);
-
-  const handleSelect = (report) => {
-    setReport(report);
-  };
-
-  // --- Download Logic ---
-  const handleFetchReportData = async () => {
-    if (!selectedReport?.fileName || !selectedDate) return;
-
-    if (dateError) {
-      showSnackBar(getErrorMessage(dateError), "error");
-      return;
-    }
-
-    setIsLoading(true);
-    setIsDownloading(true);
-    setDownloadedBytes(0);
-
-    const payload = {
-      moduleType: moduleType,
-      fileName: selectedReport.fileName,
-      date: selectedDate.format("YYYY-MM-DD"),
-      roleId: user.role,
-    };
-
-    try {
-      const response = await callApi(
-        "/RS/reports/download",
-        payload,
-        "POST",
-        "blob",
-        "application/json",
-        {
-          onDownloadProgress: (event) => {
-            setIsDownloading(true);
-            if (event && typeof event.loaded === "number") {
-              setDownloadedBytes(event.loaded);
-            }
-          },
-        },
-        false,
-      );
-
-      if (response.data && response.data.size > 22) {
-        const contentDisposition =
-          response.headers["content-disposition"] ||
-          response.headers["Content-Disposition"];
-
-        let filename = "report.zip";
-        if (
-          contentDisposition &&
-          contentDisposition.indexOf("attachment") !== -1
-        ) {
-          const filenameMatch = contentDisposition.match(/filename="(.+?)"/);
-          if (filenameMatch && filenameMatch.length > 1) {
-            filename = filenameMatch[1];
-          }
-        }
-
-        const downloadUrl = window.URL.createObjectURL(response.data);
-        const a = document.createElement("a");
-        a.href = downloadUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(downloadUrl);
-        showSnackBar(
-          `Reports "${filename}" downloaded successfully`,
-          "success",
-        );
-      } else {
-        showSnackBar("No reports found", "warning");
-      }
-    } catch (error) {
-      console.log("error", error);
-
-      if (error && error instanceof Blob) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          try {
-            const errorJson = JSON.parse(reader.result);
-            console.error(errorJson.message);
-            showSnackBar(errorJson.message || "No reports found", "error");
-          } catch (e) {
-            console.error(e);
-            showSnackBar("Something went wrong, kindly try again.", "error");
-          }
-        };
-        reader.readAsText(error);
-      } else {
-        showSnackBar("Network Error: Could not connect to server", "error");
-      }
-    } finally {
-      setIsLoading(false);
-      setIsDownloading(false);
-      setDownloadedBytes(0);
-    }
-  };
-
-  // --- Validation Message Logic ---
-  const getErrorMessage = (error) => {
-    const minDateStr = minDate?.isValid()
-      ? minDate.format("DD/MM/YYYY")
-      : "Allowed Min Date";
-
-    switch (error) {
-      case "maxDate":
-        return "Date cannot be in the future (Today is max)";
-      case "minDate":
-        return `Date cannot be prior to ${minDateStr}`;
-      case "invalidDate":
-        // This covers cases like 31st Feb or 31st April
-        return "Invalid date (Check day for this month)";
-      default:
-        // When no error, return instructions
-        return `Allowed Range: ${minDateStr} - Today`;
-    }
-  };
-
-  return (
-    <Grow in timeout={500}>
-      <Stack spacing={4}>
-        <Box sx={styles.rootBox} elevation={10}>
-          <Stack
-            spacing={3}
-            direction={"column"}
-            alignItems="center"
-            justifyContent="center"
-          >
-            <Card sx={styles.card}>
-              <Box sx={styles.headerContainer}>
-                <Box sx={styles.headerIconWrapper}>
-                  <Summarize sx={styles.summaryIcon} />
-                </Box>
-                <Box sx={styles.headerTextBox}>
-                  <Typography
-                    variant="h5"
-                    fontWeight="bold"
-                    sx={styles.headerTitle}
-                  >
-                    Reports Generation
-                  </Typography>
-                  <Typography variant="body2" sx={styles.headerSubtitle}>
-                    Choose a specific required Report type and Date using the
-                    criteria below to download reports
-                  </Typography>
-                </Box>
-              </Box>
-
-              <Box sx={styles.noteContainer}>
-                <Typography variant="body2" sx={styles.noteText}>
-                  Note: The generated reports cannot be viewed on-screen it can
-                  only be downloaded.
-                </Typography>
-                <Stack direction="row" spacing={2} sx={styles.stepsStack}>
-                  <CustomChip
-                    label="Select a report"
-                    variant="outlined"
-                    icon={<LooksOne />}
-                    color="info"
-                    sx={{ px: 1 }}
-                  />
-                  <CustomChip
-                    label="Select the report date"
-                    variant="outlined"
-                    icon={<LooksTwo />}
-                    color="info"
-                    sx={{ px: 1 }}
-                  />
-                  <CustomChip
-                    label="Click Fetch & Download button"
-                    variant="outlined"
-                    icon={<Looks3 />}
-                    color="info"
-                    sx={{ px: 1 }}
-                  />
-                </Stack>
-              </Box>
-
-              <Box sx={styles.inputOuterBox}>
-                <Box sx={styles.inputInnerBox}>
-                  {/* Dropdown Menu */}
-                  <FormControl sx={styles.formControl}>
-                    <InputLabel id="menu-select-label">
-                      Select a report
-                    </InputLabel>
-                    <Select
-                      labelId="menu-select-label"
-                      id="menu-select"
-                      value={selectedReport || ""}
-                      label="Select a report"
-                      onChange={(e) => handleSelect(e.target.value)}
-                      disabled={repTypes.length === 0 || disableInputs}
-                    >
-                      {repTypes.map((item) => (
-                        <MenuItem key={item.fileName} value={item}>
-                          {item.reportName}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-
-                  {/* Date Picker */}
-                  <FormControl sx={styles.formControl}>
-                    {/* Ensure adapterLocale is set to handle DD/MM logic naturally */}
-                    <LocalizationProvider
-                      dateAdapter={AdapterDayjs}
-                      adapterLocale="en-gb"
-                    >
-                      <DatePicker
-                        label="Select report date"
-                        format="DD/MM/YYYY"
-                        views={["year", "month", "day"]}
-                        value={selectedDate}
-                        onChange={(newDate) => setDate(newDate)}
-                        // Explicitly set maxDate to Today
-                        maxDate={dayjs().endOf("day")}
-                        // Explicitly set minDate
-                        minDate={minDate}
-                        onError={(newError) => setDateError(newError)}
-                        disabled={repTypes.length === 0 || disableInputs}
-                        slotProps={{
-                          textField: {
-                            // Logic: If there is an error, show specific error msg.
-                            // If no error, show the range helper text to guide user.
-                            helperText: dateError
-                              ? getErrorMessage(dateError)
-                              : "",
-                            error: !!dateError,
-                            placeholder: "DD/MM/YYYY",
-                          },
-                          // Enhancement: Show days outside current month but verify they are disabled correctly
-                          day: {
-                            showDaysOutsideCurrentMonth: true,
-                          },
-                        }}
-                      />
-                    </LocalizationProvider>
-                  </FormControl>
-                </Box>
-              </Box>
-
-              <Box sx={styles.buttonContainer}>
-                <Button
-                  sx={styles.downloadButton}
-                  endIcon={<CloudDownloadTwoTone />}
-                  variant="contained"
-                  onClick={handleFetchReportData}
-                  disabled={
-                    disableInputs ||
-                    !selectedReport ||
-                    !selectedDate ||
-                    !!dateError
-                  }
-                >
-                  {isDownloading ? "Downloading..." : "Fetch & Download"}
-                </Button>
-
-                <Fade in={isDownloading} unmountOnExit>
-                  <Box sx={styles.progressContainer}>
-                    <Box sx={styles.progressHeader}>
-                      <Box sx={styles.progressIconWrapper}>
-                        <CloudDownloadTwoTone sx={styles.innerDownloadIcon} />
-                      </Box>
-                      <Box sx={styles.progressHeaderTextBox}>
-                        <Typography variant="body2" fontWeight={600}>
-                          Searching{" "}
-                          {selectedReport?.reportName ?? "the selected report"}{" "}
-                          for the period{" "}
-                          {selectedDate?.isValid()
-                            ? selectedDate.format("YYYY-MM-DD")
-                            : "an unknown period"}{" "}
-                          is in progress.
-                        </Typography>
-
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={styles.progressCaption}
-                        >
-                          {downloadedMB
-                            ? `Streaming report data… ${downloadedMB} MB received`
-                            : "Preparing your report stream…"}
-                        </Typography>
-                      </Box>
-
-                      {downloadedMB && (
-                        <CustomChip
-                          color="error"
-                          label={`${downloadedMB} MB downloaded`}
-                          variant="filled"
-                        />
-                      )}
-                    </Box>
-                    <LinearProgress
-                      variant="indeterminate"
-                      sx={styles.progressBar}
-                    />
-                  </Box>
-                </Fade>
-              </Box>
-            </Card>
-          </Stack>
-        </Box>
-      </Stack>
-    </Grow>
-  );
-}
-
-reportsbranchwise.jsx
-
-import React,{ useEffect, useState, useContext } from "react";
-import {
-  Box,
-  Card,
-  Stack,
-  RadioGroup,
-  Typography,
-  FormControlLabel,
-  Radio,
-  TextField,
-  Button,
-   Grow,
-  CircularProgress,
-  LinearProgress,
-  Fade,
-} from "@mui/material";
-
-import PublicIcon from '@mui/icons-material/Public';
-import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
-import Autocomplete from "@mui/material/Autocomplete";
-import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import dayjs from "dayjs";
-import useApi from "../../hooks/useApi";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import { useSelector} from "react-redux";
-import { useTheme } from "@mui/material/styles";
-
-import GlifReportsStyles from "./GlifReportsStyles";
-import {
-  Summarize,
-  CloudDownloadTwoTone,
-  LooksOne,
-  LooksTwo,
-  Looks3,
-  Looks4,
-  BorderColor,
-  Looks5,
-} from "@mui/icons-material";
-import CustomChip from "../../utils/CustomChip";
-
-const moduleType="BRANCH_WISE";
-
-export default function BranchWiseReports() {
-  const user=useSelector((state)=> state.auth.user);
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
-  
-  const theme = useTheme();
-  const styles = GlifReportsStyles(theme);
-
-  const [minDate, setMinDate] = useState(dayjs("2020-01-01"));
+  const inactivityTimerRef = useRef(null);
+  const warningTimerRef = useRef(null);
+  const countdownRef = useRef(null);
+  const warningDelay=Math.max(INACTIVITY_TIMEOUT - WARNING_SECONDS * 1000,0);
 
 
-  /* ---------------- RADIO ---------------- */
-  const [countryType, setCountryType] = useState("INDIAN");
-
-  /* ---------------- MASTER DATA ---------------- */
-  const [zoneList, setZoneList] = useState([]);
-  const [circleList, setCircleList] = useState([]);
-  const [branchList, setBranchList] = useState([]);
-  const [reportList, setReportList] = useState([]);
-
-  /* ---------------- SELECTED VALUES ---------------- */
-  const [zone, setZone] = useState(null);
-  const [circle, setCircle] = useState(null);
-  const [branch, setBranch] = useState(null);
-  const [selectedReport, setReport] = useState(null);
-  const [selectedDate, setReportDate] = useState(null);
-
-  const [isDownloading, setIsDownloading] = useState(false);
-
-  const [circleLoading,setCircleLoading]=useState(false);
-  const [branchLoading,setBranchLoading]=useState(false);
-  const [reportLoading,setReportLoading]=useState(false);
-
-  const [branchHasMore, setBranchHasMore]=useState(true);
-
-  const [branchOpen,setBranchOpen]=useState(false);
-  
-
-  const [dateError,setDateError]=useState(null);
-
-  const branchListRef = React.useRef(null);
-  const branchScrollTopRef = React.useRef(0);
-  const skipNextCloseRef=React.useRef(false);
-
-  const [branchSize,setBranchSize]=useState(20);
-  const [isLoading, setIsLoading] = useState(false);
-  const [downloadedBytes, setDownloadedBytes] = useState(0);
-
-  const downloadedMB =
-    downloadedBytes > 0 ? (downloadedBytes / (1024 * 1024)).toFixed(2) : null;
-  
-  const disableInputs = isLoading || isDownloading;
-  //const DowloadProvider=createContext(null);
-
-  
-
-  /* ---------------- INITIAL LOAD ---------------- */
-  useEffect(() => {
-    fetchZones();
+  // --- Clear all timers ---
+  const clearAllTimers = useCallback(() => {
+    if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
   }, []);
 
-  /* ---------------- RADIO CHANGE ---------------- */
-  const handleCountryChange = (e) => {
-    if(isDownloading)return;
-    const value = e.target.value;
-    setCountryType(value);
-    setZone(null);
-    setCircle(null);
-    setBranch(null);
-    setCircleList([]);
-    setBranchList([]);
-    setReport(null);
-    setReportList([]);
-    setReportDate(null);
+  // --- Perform Logout ---
+  const performLogout = useCallback(
+    async (reason = "USER_INITIATED") => {
+      clearAllTimers();
 
-    if (value === "FOREIGN") {
-      setZone({ zoneCode: 4, zoneDesc: "Foreign Office" });
-    }
-  };
-
-  /* ---------------- API CALLS ---------------- */
-
-  const fetchZones = async () => {
-      try{
-        const res = await callApi("/CM/common-master/indian-zones", {}, "GET");
-      setZoneList(res?.data || []);
+      if (reason !== "USER_INITIATED") {
+        setSessionReason(reason);
+        setSessionDialogOpen(true);
       }
-      catch{
-        setZoneList([]);
-      }
-  };
 
-  useEffect(() => {
-    if(!zone?.zoneCode) return;
-
-    setCircle(null);
-    setBranch(null);
-    setCircleList([]);
-    setBranchList([]);
-    setReport(null);
-    setReportList([]);
-    setReportDate(null);
-
-    fetchCircles(zone);
-    
-  }, [zone, countryType]);
-
-
-
-  const fetchCircles = async (zone) => {
-    try {
-      setCircleLoading(true);
-      const bankType =
-        countryType === "FOREIGN" ? "Foreign" : "Indian";
-      const res = await callApi(
-        `/CM/common-master/indian-foreign-circles?bankType=${encodeURIComponent(
-          bankType
-        )}&zoneCode=${zone.zoneCode}`,
-        null,
-        "GET"
-      );
-      setCircleList(res?.data || []);
-    }
-    catch 
-    {
-      setCircleList([]);
-    }
-    finally
-    {
-      setCircleLoading(false);
-    }
-  };
-
-
-  useEffect(()=>{
-    if(!circle?.circleCode)return;
-    setBranch(null);
-    setBranchList([]);
-    setBranchSize(20);
-    setBranchHasMore(true);
-    fetchBranches(circle,20);
-  },[circle]);
-
-
-const fetchBranches = async (circle, size = 20) => {
-  if (!circle?.circleCode || branchLoading) return;
-
-  try {
-    setBranchLoading(true);
-
-    const res = await callApi(
-      `/CM/common-master/indian-foreign-branches?circleCode=${circle.circleCode}&size=${size}`,
-      null,
-      "GET"
-    );
-
-    const branches=res?.data?.data || res?.data || [];
-        setBranchList(branches);
-        setBranchHasMore(branches.length === size);
-        setBranchSize(size);
+      try {
+        await api.post(`${resolveConfig("/LS")}/auth/logout`);
       } catch (e) {
         console.error(e);
-        setBranchList([]);
+        // ignore
       } finally {
-        setBranchLoading(false);
+        localStorage.clear();
+        dispatch(logoutSuccess());
+        setWarningOpen(false);
       }
-};
-
- useEffect(()=>{
-    if(!branch?.branchCode) return;
-     
-      setReportList([]);
-      setReport(null);
-      setReportDate(null);
-      fetchReports(branch);
-  },[branch]);
-
-const fetchReports = async (branch) => {
-     try {
-      setReportLoading(true);
-    const res = await callApi(
-      "/RS/reports/types", {
-      moduleType:moduleType,
-      countryType,
-      zoneId: zone?.zoneCode,
-      circleCode: circle?.circleCode,
-      branchCode: branch?.branchCode,
-      roleId:user.role,
     },
-   "POST");
-   const reports=res?.data || [];
-      setReportList(reports);
-      if(reports.length>0 && reports[0].selectedDate){
-        setMinDate(dayjs(reports[0].selectedDate).startOf("day"));
-      }
+    [dispatch, clearAllTimers]
+  );
 
-    } catch {
-      setReportList([]);
-    }
-    finally
-    {
-      setReportLoading(false);
-    }
-};
+  // --- Start inactivity timers ---
+  const startInactivityTimer = useCallback(() => {
+    clearAllTimers();
+    if (!isAuthenticated) return;
 
+    warningTimerRef.current = setTimeout(() => {
+      setSecondsLeft(WARNING_SECONDS);
+      setWarningOpen(true);
+      // countdownRef.current = setInterval(() => {
+      //   setSecondsLeft((prev) => {
+      //     if (prev <= 1) {
+      //       clearInterval(countdownRef.current);
+      //       return 0;
+      //     }
+      //     return prev - 1;
+      //   });
+      // }, 1000);
+      const countdownStart = Date.now();
 
-  // --- Download Logic ---
-  const handleFetchReportData = async () => {
-    if (!selectedReport?.fileName || !selectedDate) return;
-
-    if (dateError) {
-      showSnackBar(getErrorMessage(dateError), "error");
-      return;
-    }
-
-    setIsLoading(true);
-    setIsDownloading(true);
-    setDownloadedBytes(0);
-
-    const payload = {
-      moduleType:moduleType,
-      fileName: selectedReport.fileName,
-      branchCode:branch.branchCode,
-      date: selectedDate.format("YYYY-MM-DD"),
-      roleId: user.role,
-    };
- 
-    try {
-      const response = await callApi(
-        "/RS/reports/download",
-        payload,
-        "POST",
-        "blob",
-        "application/json",
-        {
-          onDownloadProgress: (event) => {
-            setIsDownloading(true);
-            if (event && typeof event.loaded === "number") {
-              setDownloadedBytes(event.loaded);
-            }
-          },
-        },
-        false
-      );
-
-      if (response.data && response.data.size > 22) {
-        const contentDisposition =
-          response.headers["content-disposition"] ||
-          response.headers["Content-Disposition"];
-          
-        let filename = "report.zip";
-        if (
-          contentDisposition &&
-          contentDisposition.indexOf("attachment") !== -1
-        ) {
-          const filenameMatch = contentDisposition.match(/filename="(.+?)"/);
-          if (filenameMatch && filenameMatch.length > 1) {
-            filename = filenameMatch[1];
-          }
+      countdownRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - countdownStart) / 1000);
+        const remaining = WARNING_SECONDS - elapsed;
+      
+        if (remaining <= 0) {
+          clearInterval(countdownRef.current);
+          setSecondsLeft(0);
+        } else {
+          setSecondsLeft(remaining);
         }
+      }, 1000);
 
-        const downloadUrl = window.URL.createObjectURL(response.data);
-        const a = document.createElement("a");
-        a.href = downloadUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(downloadUrl);
-        showSnackBar(
-          `Reports "${filename}" downloaded successfully`,
-          "success"
-        );
-      } else {
-        showSnackBar(
-          "No reports found",
-          "warning"
-        );
-      }
-    } catch (error) {
-      console.log("error", error);
 
-      if (error && error instanceof Blob) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          try {
-            const errorJson = JSON.parse(reader.result);
-            console.error(errorJson.message);
-            showSnackBar(
-              errorJson.message || "No reports found",
-              "error"
-            );
-          } catch (e) {
-            console.error(e);
-            showSnackBar("Something went wrong, kindly try again.", "error");
-          }
-        };
-        reader.readAsText(error);
-      } else {
-        showSnackBar("Network Error: Could not connect to server", "error");
-      }
-    } finally {
-      setIsLoading(false);
-      setIsDownloading(false);
-      setDownloadedBytes(0);     
+
+    }, warningDelay);
+    //INACTIVITY_TIMEOUT - WARNING_SECONDS * 1000);
+
+    inactivityTimerRef.current = setTimeout(() => {
+      performLogout("SESSION_TIMEOUT");
+    }, INACTIVITY_TIMEOUT);
+  }, [isAuthenticated, clearAllTimers, performLogout]);
+
+  // --- User Activity Listener ---
+  const onActivity = useCallback(
+    throttle(() => {
+      if (!isAuthenticated || sessionDialogOpen) return;
+      // if (warningOpen) 
+      setWarningOpen(false);
+      startInactivityTimer();
+    }, 2000),
+    [isAuthenticated, sessionDialogOpen, warningOpen, startInactivityTimer]
+  );
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      startInactivityTimer();
+      const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
+      events.forEach((e) => window.addEventListener(e, onActivity));
+
+      return () => {
+        events.forEach((e) => window.removeEventListener(e, onActivity));
+        onActivity.cancel();
+        clearAllTimers();
+      };
+    } else {
+      clearAllTimers();
+      setWarningOpen(false);
     }
-  };
+  }, [isAuthenticated, onActivity, startInactivityTimer, clearAllTimers]);
 
+  // --- Cross-tab / forced logout ---
+  useEffect(() => {
+    const handleSessionEvent = (e) => {
+      performLogout(e.detail?.reason || "SESSION_EXPIRED");
+    };
 
-const getErrorMessage = (error) => {
-    const minDateStr = minDate?.isValid()
-      ? minDate.format("DD/MM/YYYY")
-      : "Allowed Min Date";
+    window.addEventListener("auth:session-expired", handleSessionEvent);
+    return () =>
+      window.removeEventListener("auth:session-expired", handleSessionEvent);
+  }, [performLogout]);
 
-    switch (error) {
-      case "maxDate":
-        return "Date cannot be in the future (Today is max)";
-      case "minDate":
-        return `Date cannot be prior to ${minDateStr}`;
-      case "invalidDate":
-        // This covers cases like 31st Feb or 31st April
-        return "Invalid date (Check day for this month)";
-      default:
-        // When no error, return instructions 
-        return `Allowed Range: ${minDateStr} - Today`;
-    }
-};
-
-useEffect (() => {
-  if(branchListRef.current && branchScrollTopRef.current>0){
-    branchListRef.current.scrollTop=branchScrollTopRef.current;
-  }
-},[branchList]);
-
-const branchListBox=React.forwardRef(function
-    branchListBox(
-      props,ref
-    )
-    {
-      const {children,...other}=props;
-      return(
-      <ul 
-      ref={(node)=>{
-        branchListRef.current=node;
-        if(typeof ref==="function")ref(node);
-        else if(ref) ref.current=node;
+  return (
+    <AuthContext.Provider
+      value={{
+        logout: () => performLogout("USER_INITIATED"),
+        triggerSessionDialog: (reason) => performLogout(reason),
       }}
-      {...other}
-      >
-        {children}
-            
-            {branchHasMore && !branchLoading && (
-              <li
-                style={{
-                  textAlign: "center",
-                  padding: "8px",
-                  cursor: "pointer",
-                  fontWeight: 500,
-                  color: "#1976d2",
-                }}
-                onMouseDown={(e) =>
-                  {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    skipNextCloseRef.current=true;
-                    if(branchListRef.current){
-                      branchScrollTopRef.current=branchListRef.current.scrollTop;
-                    }
-                    
-                }} 
-                onClick={(e) =>{
-                  fetchBranches(circle, branchSize + 20);
-                  setTimeout(()=>{
-                     skipNextCloseRef.current=false;
-                  },0);
-                  //setBranchOpen(true);
-                }}
-              >
-                Show more branches...
-              </li>
-        )}
-      </ul>
-  );
-});
-const isForeign=countryType==="FOREIGN";
+    >
+      {children}
 
-  /* ---------------- UI ---------------- */
-  return (
-     <Grow in timeout={500}>
-          <Stack spacing={4} flexGrow={1} sx={{pb:2}}>
-            <Box sx={styles.rootBox} elevation={10}  display="flex" justifyContent="center" alignItems="center">
-              <Stack
-                spacing={3}
-                direction={"column"}
-                alignItems="center"
-                justifyContent="center"
-              >
-              <Card sx={{...styles.card,display:"flex", flexDirection:"column" , width:1550, maxWidth:1550, mx:"auto"}}>
-          <Box sx={{...styles.headerContainer}} >
-                          <Box sx={styles.headerIconWrapper}>
-                            <Summarize sx={styles.summaryIcon} />
-                          </Box>
-                          <Box sx={styles.headerTextBox}>
-                            <Typography
-                              variant="h5"
-                              fontWeight="bold"
-                              sx={styles.headerTitle}
-                            >
-                              Branch Wise Reports Generation
-                            </Typography>
-                            <Typography variant="body2" sx={styles.headerSubtitle}>
-                              Choose a specific required Zone, Circle, Branch, Report type and Date using the
-                              criteria below to download reports
-                            </Typography>
-                          </Box>
-                        </Box>
-                        <Box sx={styles.noteContainer}>
-                <Typography variant="body2" sx={{...styles.noteText, mt:-1}}>
-                  Note: The generated reports cannot be viewed on-screen it can
-                  only be downloaded.
-                </Typography>
-                <Stack direction="row" spacing={2} sx={{...styles.stepsStack,mb:0}} >
-                  <CustomChip
-                    label="Select the Zone Category"
-                    variant="outlined"
-                    icon={<LooksOne />}
-                    color="info"
-                    sx={{ px: 1}}
-                  />
-                  <CustomChip
-                    label="Select Zone, Circle & Branch"
-                    variant="outlined"
-                    icon={<LooksTwo />}
-                    color="info"
-                    sx={{ px: 1}}
-                  />
-                  <CustomChip
-                    label="Select a report"
-                    variant="outlined"
-                    icon={<Looks3 />}
-                    color="info"
-                    sx={{ px: 1}}
-                  />
-                  <CustomChip
-                    label="Select the report date"
-                    variant="outlined"
-                    icon={<Looks4 />}
-                    color="info"
-                    sx={{ px: 1 }}
-                  />
-                  <CustomChip
-                    label="Click Fetch & Download button"
-                    variant="outlined"
-                    icon={<Looks5 />}
-                    color="info"
-                    sx={{ px: 1 }}
-                  />
-                </Stack>
-              </Box>
-          <Box
-            sx={{
-              px:3,
-              py:2,
-              width:"fit-content",
-              alignSelf:"center",
-              }}
-              >
-              <Typography variant="body2" sx={{mb:1,textAlign:"center"}}>
-              Select the required Zone category
-            </Typography>
-              <Box
-              justifyContent="center"
-              display="flex"
-              gap={6}
-              >
-              <Button 
-              variant={countryType==="INDIAN"?"contained":"outlined"}
-              disabled={isDownloading}
-              onClick={()=>handleCountryChange({target:{value:"INDIAN"}})}>
-                <AccountBalanceIcon sx={{mr:1}}/>Indian
-              </Button>
-              <Button 
-              variant={countryType==="FOREIGN"?"contained":"outlined"}
-              disabled={isDownloading}
-              onClick={()=>handleCountryChange({target:{value:"FOREIGN"}})}>
-                <PublicIcon sx={{mr:1}}/>Foreign
-              </Button>
-              </Box>
-          </Box>
-        
-          <Box sx={styles.inputOuterBox}>
-            <Box sx={styles.inputInnerBox}>
-            <Autocomplete
-             sx={{width:380,
-              "& .MuiAutocomplete-endAdronment":{right:12},
-              "& .MuiAutocomplete-clearIndicator":{marginRight:"6px"},
-             }}
-              value={zone}
-              options={zoneList}
-              disabled={isForeign}
-              getOptionLabel={(o) => o?.zoneDesc || ""}
-              isOptionEqualToValue={(o, v) => o.zoneCode === v.zoneCode}
-              onChange={(e, v) => {
-                setZone(v);
-              }}
-              renderInput={(params) => (
-                <TextField {...params} label="Select a Zone" />
-              )}
-            />
-
-          <Autocomplete
-            sx={{width:380,
-              "& .MuiAutocomplete-endAdronment":{right:12},
-              "& .MuiAutocomplete-clearIndicator":{marginRight:"6px"},
-            }}
-            value={circle}
-            options={circleList}
-            loading={circleLoading}
-            disabled={!zone || circleLoading}
-            getOptionLabel={(o) => `${o.circleCode}-${o.circleName}`}
-            isOptionEqualToValue={(o, v) => o.circleCode === v.circleCode}
-            onChange={(e, v) => {
-              setCircle(v);
-            }}
-            renderInput={(params) => (
-              <TextField {...params} 
-              label="Select a Circle" 
-              InputProps={{
-                ...params.InputProps,
-                endAdornment:(
-                  <>
-                  {circleLoading && <CircularProgress  size={20}/>}
-                  {params.InputProps.endAdornment}
-                  </>
-                ),
-              }}/>
-            )}
-          />
-
-        <Autocomplete
-          sx={{width:380,
-              "& .MuiAutocomplete-endAdronment":{right:12},
-              "& .MuiAutocomplete-clearIndicator":{marginRight:"6px"},
-             }}
-          value={branch}
-          options={Array.isArray(branchList)? branchList:[]}
-          loading={branchLoading}
-          disabled={!circle || branchLoading}
-          ListboxComponent={branchListBox}
-          open={branchOpen}
-          onOpen={()=> setBranchOpen(true)}
-          onClose={(e,reason)=>{
-            if(skipNextCloseRef.current && reason==="blur"){
-              //skipNextCloseRef.current=false;
-              return;
-            }
-            //skipNextCloseRef.current=false;
-            setBranchOpen(false);
-          }}
-          onChange={(e, v) => {
-            setBranch(v);
-            setBranchOpen(false);
-          }}
-          getOptionLabel={(o) =>
-            o?.branchCode ? `${o.branchCode} - ${o.branchName}` : ""
-          }
-          isOptionEqualToValue={(o, v) =>
-            o?.branchCode === v?.branchCode
-          }
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label="Select Branch"
-              InputProps={{
-                ...params.InputProps,
-                endAdornment: (
-                  <>
-                    {branchLoading && <CircularProgress size={18} />}
-                    {params.InputProps.endAdornment}
-                  </>
-                ),
-              }}
-            />
-          )}
-        />
-         </Box>
-          </Box>
-
-        <Box sx={styles.inputOuterBox}>
-          <Box sx={styles.inputInnerBox}>
-
-          {branch && (
-            <>
-              <Autocomplete
-                sx={{width:480,
-              "& .MuiAutocomplete-endAdronment":{right:12},
-              "& .MuiAutocomplete-clearIndicator":{marginRight:"6px"},
-             }}
-                value={selectedReport}
-                options={reportList}
-                loading={reportLoading}
-                disabled={reportLoading}
-                getOptionLabel={(o) => o?.reportName || ""}
-                isOptionEqualToValue={(o, v) => o.id === v.id}
-                onChange={(e, v) => setReport(v)}
-                renderInput={(params) => (
-                  <TextField {...params} label="Select a report" 
-                  InputProps={{
-                ...params.InputProps,
-                endAdornment:(
-                  <>
-                  {reportLoading && <CircularProgress  size={20}/>}
-                  {params.InputProps.endAdornment}
-                  </>
-                ),
-              }}/>
-                )}
-              />
-
-              <LocalizationProvider dateAdapter={AdapterDayjs}>
-                <DatePicker
-                  sx={{width:480}}
-                  label="Select report date"
-                  format="DD/MM/YYYY"
-                  minDate={minDate}
-                  maxDate={dayjs().endOf("day")}
-                  value={selectedDate}
-                  onChange={(v)=>setReportDate(v)}
-                  onError={(err)=>setDateError(err)}
-                  slotProps={{
-                    textField:{
-                      error:!!dateError,
-                      helperText:dateError
-                      ?getErrorMessage(dateError)
-                      :"",
-                    },
-                  }}
-                />
-              </LocalizationProvider>
-            </>
-          )}
-           </Box>
-              </Box>
-
-
-          <Box sx={{...styles.buttonContainer,mt:-2}}>
-                <Button
-                  sx={styles.downloadButton}
-                  endIcon={<CloudDownloadTwoTone />}
-                  variant="contained"
-                  onClick={handleFetchReportData}
-                  disabled={
-                    disableInputs ||
-                    !selectedReport ||
-                    !selectedDate ||
-                    !!dateError
-                  }
-                >
-                  {isDownloading ? "Downloading..." : "Fetch & Download"}
-                </Button>
-
-                <Fade in={isDownloading} unmountOnExit>
-                  <Box sx={styles.progressContainer}>
-                    <Box sx={styles.progressHeader}>
-                      <Box sx={styles.progressIconWrapper}>
-                        <CloudDownloadTwoTone sx={styles.innerDownloadIcon} />
-                      </Box>
-                      <Box sx={styles.progressHeaderTextBox}>
-                        <Typography variant="body2" fontWeight={600}>
-                          Searching{" "}
-                          {selectedReport?.reportName ?? "the selected report"}{" "}
-                          for the period{" "}
-                          {selectedDate?.isValid()
-                            ? selectedDate.format("YYYY-MM-DD")
-                            : "an unknown period"}{" "}
-                          is in progress.
-                        </Typography>
-
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={styles.progressCaption}
-                        >
-                          {downloadedMB
-                            ? `Streaming report data… ${downloadedMB} MB received`
-                            : "Preparing your report stream…"}
-                        </Typography>
-                      </Box>
-
-                      {downloadedMB && (
-                        <CustomChip
-                          color="error"
-                          label={`${downloadedMB} MB downloaded`}
-                          variant="filled"
-                        />
-                      )}
-                    </Box>
-                    <LinearProgress
-                      variant="indeterminate"
-                      sx={styles.progressBar}
-                    />
-                  </Box>
-                </Fade>
-              </Box>
-            </Card>
-          </Stack>
-        </Box>
-      </Stack>
-    </Grow>
-  );
-}
-
-taskprogressdrawer.jsx
-import {
-  Box,
-  Drawer,
-  LinearProgress,
-  Stack,
-  Typography,
-  IconButton,
-  Collapse,
-} from "@mui/material";
-import {
-  Close,
-  AccessTime,
-  CheckCircleOutline,
-  ErrorOutline,
-  Help,
-} from "@mui/icons-material";
-import { useState } from "react";
-import CustomChip from "../utils/CustomChip";
-import { toPascalKebabCase } from "../utils/CommonUtilities";
-
-const statusColor = {
-  PROCESSING: "warning",
-  COMPLETED: "success",
-  FAILED: "error",
-};
-
-const statusIcon = {
-  PROCESSING: <AccessTime fontSize="small" />,
-  COMPLETED: <CheckCircleOutline fontSize="small" />,
-  FAILED: <ErrorOutline fontSize="small" />,
-  default: <Help fontSize="small" />,
-};
-
-const TaskProgressDrawer = ({ open, onClose, tasks }) => {
-  const [expanded, setExpanded] = useState(null);
-
-  return (
-    <Drawer anchor="right" open={open} onClose={onClose}>
-      {/* HEADER */}
-      <Box
-        sx={{
-          p: 3,
-          borderBottom: "1px solid #E2E8F0",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
+      <SessionWarningDialog
+        open={warningOpen}
+        secondsLeft={secondsLeft}
+        onContinue={() => {
+          setWarningOpen(false);
+          startInactivityTimer();
         }}
-      >
-        <Typography variant="h6" fontWeight={700}>
-          Running Tasks
-        </Typography>
-        <IconButton size="small" onClick={onClose}>
-          <Close />
-        </IconButton>
-      </Box>
+      />
 
-      {/* CONTENT */}
-      <Box sx={{ width: 380, p: 2 }}>
-        <Stack spacing={2}>
-          {Object.values(tasks).map((task) => {
-            const isDone = task.percentage === 100;
-            const elapsed = task.startedAt
-              ? Math.floor((Date.now() - task.startedAt) / 1000)
-              : null;
-
-            const speed =
-              task.lastUpdated && task.startedAt
-                ? task.percentage / elapsed
-                : null;
-
-            const eta =
-              speed && task.percentage < 100
-                ? Math.ceil((100 - task.percentage) / speed)
-                : null;
-
-            return (
-              <Box
-                key={task.taskId}
-                sx={{
-                  p: 2,
-                  borderRadius: 2,
-                  bgcolor: "background.paper",
-                  boxShadow: 1,
-                  cursor: "pointer",
-                }}
-                onClick={() =>
-                  setExpanded(expanded === task.taskId ? null : task.taskId)
-                }
-              >
-                {/* HEADER ROW */}
-                <Stack direction="row" justifyContent="space-between">
-                  <Typography variant="body2" fontWeight={600}>
-                    {task.taskId.replace(/_/g, " ")}
-                  </Typography>
-
-                  <CustomChip
-                    size="sm"
-                    variant="outlined"
-                    sx={{ height: "100%" }}
-                    color={statusColor[task.status] || "default"}
-                    label={toPascalKebabCase(task.status)}
-                    icon={statusIcon[task.status] || "default"}
-                  />
-                </Stack>
-
-                {/* META */}
-                <Stack direction="row" justifyContent="space-between" mt={1.5}>
-                  {/* PROGRESS */}
-                  <LinearProgress
-                    variant="determinate"
-                    value={task.percentage}
-                    sx={{
-                      width: "87%",
-                      mt: 0.8,
-                      height: 8.5,
-                      borderRadius: 5,
-                      transition: "all 0.4s ease",
-                    }}
-                    color={isDone ? "success" : "primary"}
-                  />
-
-                  {/* PROGRESS PERCENTAGE */}
-                  <Typography variant="caption">{task.percentage}%</Typography>
-                </Stack>
-
-                <Box>
-                  {eta && (
-                    <Typography variant="caption">ETA: ~{eta}s</Typography>
-                  )}
-                </Box>
-
-                {/* DETAILS */}
-                <Collapse in={expanded === task.taskId}>
-                  <Box mt={1}>
-                    <Typography variant="caption" color="text.secondary">
-                      {task.message}
-                    </Typography>
-                    {elapsed && (
-                      <Typography variant="caption" display="block">
-                        Elapsed: {elapsed}s
-                      </Typography>
-                    )}
-                  </Box>
-                </Collapse>
-              </Box>
-            );
-          })}
-        </Stack>
-      </Box>
-    </Drawer>
+      <SessionDialog
+        open={sessionDialogOpen}
+        reason={sessionReason}
+        onConfirm={() => setSessionDialogOpen(false)}
+      />
+    </AuthContext.Provider>
   );
 };
-
-export default TaskProgressDrawer;
-
-
-
-
-const formatTaskId = (taskId) => {
-  if (!taskId) return "";
-
-  const parts = taskId.split("_");
-
-  if (parts.length < 3) {
-    return taskId.replace(/_/g, " ");
-  }
-
-  // Last two parts
-  const timestamp = parts.pop();
-  const datePart = parts.pop();
-
-  const reportName = parts.join(" ");
-
-  let formattedDate = "";
-  if (datePart && datePart.length === 8) {
-    const year = datePart.substring(0, 4);
-    const month = datePart.substring(4, 6);
-    const day = datePart.substring(6, 8);
-    formattedDate = `${day}/${month}/${year}`;
-  }
-
-  return `${reportName.replace(/_/g, " ")} (${formattedDate})`;
-};
-
