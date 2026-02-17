@@ -1313,3 +1313,33 @@ const TaskProgressDrawer = ({ open, onClose, tasks }) => {
 };
 
 export default TaskProgressDrawer;
+
+
+
+
+const formatTaskId = (taskId) => {
+  if (!taskId) return "";
+
+  const parts = taskId.split("_");
+
+  if (parts.length < 3) {
+    return taskId.replace(/_/g, " ");
+  }
+
+  // Last two parts
+  const timestamp = parts.pop();
+  const datePart = parts.pop();
+
+  const reportName = parts.join(" ");
+
+  let formattedDate = "";
+  if (datePart && datePart.length === 8) {
+    const year = datePart.substring(0, 4);
+    const month = datePart.substring(4, 6);
+    const day = datePart.substring(6, 8);
+    formattedDate = `${day}/${month}/${year}`;
+  }
+
+  return `${reportName.replace(/_/g, " ")} (${formattedDate})`;
+};
+
