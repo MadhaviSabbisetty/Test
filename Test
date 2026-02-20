@@ -16,7 +16,6 @@ import {
 } from "@mui/icons-material";
 import { useState } from "react";
 import CustomChip from "../utils/CustomChip";
-import { toPascalKebabCase } from "../utils/CommonUtilities";
 
 const statusColor = {
   PROCESSING: "warning",
@@ -59,12 +58,13 @@ const TaskProgressDrawer = ({ open, onClose, tasks }) => {
         <Stack spacing={2}>
           {Object.values(tasks).map((task) => {
             const isDone = task.percentage === 100;
+
             const elapsed = task.startedAt
               ? Math.floor((Date.now() - task.startedAt) / 1000)
               : null;
 
             const speed =
-              task.lastUpdated && task.startedAt
+              task.lastUpdated && task.startedAt && elapsed > 0
                 ? task.percentage / elapsed
                 : null;
 
@@ -82,75 +82,107 @@ const TaskProgressDrawer = ({ open, onClose, tasks }) => {
                   bgcolor: "background.paper",
                   boxShadow: 1,
                   cursor: "pointer",
-                  wordBreak:"break-word",
                 }}
                 onClick={() =>
-                  setExpanded(expanded === task.taskId ? null : task.taskId)
+                  setExpanded(
+                    expanded === task.taskId ? null : task.taskId
+                  )
                 }
               >
                 {/* HEADER ROW */}
-                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{minWidth:0}}>
-                  <Typography variant="body2" fontWeight={600} sx={{
-                    flex:1,
-                    minWidth:0,
-                    wordBreak:"break-word",
-                    whiteSpace:"normal",
-                    overflowWrap:"anywhere",
-                  }}>
-                    {/* {task.taskId?.replace(/_/g," ").toLowerCase().replace(/\b\w/g,(c)=>c.toUpperCase())} */}
-                    {task.taskId?.split("_").slice(0,-4).join(" ")}
+                <Stack
+                  direction="row"
+                  alignItems="flex-start"
+                  spacing={1}
+                  sx={{ minWidth: 0 }}
+                >
+                  {/* FILE NAME (FULLY VISIBLE) */}
+                  <Typography
+                    variant="body2"
+                    fontWeight={600}
+                    sx={{
+                      flex: 1,
+                      minWidth: 0,
+                      wordBreak: "break-word",
+                      whiteSpace: "normal",
+                      overflowWrap: "anywhere",
+                    }}
+                  >
+                    {task.taskId}
                   </Typography>
 
-                   <CustomChip
-                    size="sm"
-                    variant="outlined"
-                    sx={{ height: "100%" , whiteSapce:"nowrap"}}
-                    //color={statusColor[task.status] || "default"}
-                    color={statusColor[task.status?.toUpperCase()] || "default"}
-                    label={
-                      task.status
-                      ?task.status.charAt(0).toUpperCase()+ task.status.slice(1).toLowerCase()
-                      :"Unknown"
-                     // toPascalKebabCase(task.status)
-                     }
-                    icon={statusIcon[task.status?.toUpperCase()] || "default"}
-                  />
+                  {/* STATUS CHIP (FULLY VISIBLE) */}
+                  <Box sx={{ flexShrink: 0 }}>
+                    <CustomChip
+                      size="sm"
+                      variant="outlined"
+                      sx={{ height: "100%", whiteSpace: "nowrap" }}
+                      color={
+                        statusColor[task.status?.toUpperCase()] ||
+                        "default"
+                      }
+                      label={
+                        task.status
+                          ? task.status.charAt(0).toUpperCase() +
+                            task.status.slice(1).toLowerCase()
+                          : "Unknown"
+                      }
+                      icon={
+                        statusIcon[task.status?.toUpperCase()] ||
+                        statusIcon.default
+                      }
+                    />
+                  </Box>
                 </Stack>
 
-                {/* META */}
-                <Stack direction="row" justifyContent="space-between" mt={1.5}>
-                  {/* PROGRESS */}
+                {/* PROGRESS SECTION */}
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  mt={1.5}
+                >
                   <LinearProgress
                     variant="determinate"
                     value={task.percentage}
                     sx={{
-                      width: "87%",
-                      mt: 0.8,
-                      height: 8.5,
+                      flex: 1,
+                      mr: 1,
+                      height: 8,
                       borderRadius: 5,
                       transition: "all 0.4s ease",
                     }}
                     color={isDone ? "success" : "primary"}
                   />
 
-                  {/* PROGRESS PERCENTAGE */}
-                  <Typography variant="caption">{task.percentage}%</Typography>
+                  <Typography variant="caption">
+                    {task.percentage}%
+                  </Typography>
                 </Stack>
 
-                <Box>
-                  {eta && (
-                    <Typography variant="caption">ETA: ~{eta}s</Typography>
-                  )}
-                </Box>
+                {/* ETA */}
+                {eta && (
+                  <Typography variant="caption" mt={0.5}>
+                    ETA: ~{eta}s
+                  </Typography>
+                )}
 
                 {/* DETAILS */}
                 <Collapse in={expanded === task.taskId}>
                   <Box mt={1}>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      display="block"
+                    >
                       {task.message}
                     </Typography>
+
                     {elapsed && (
-                      <Typography variant="caption" display="block">
+                      <Typography
+                        variant="caption"
+                        display="block"
+                      >
                         Elapsed: {elapsed}s
                       </Typography>
                     )}
