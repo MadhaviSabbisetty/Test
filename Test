@@ -82,24 +82,38 @@ const TaskProgressDrawer = ({ open, onClose, tasks }) => {
                   bgcolor: "background.paper",
                   boxShadow: 1,
                   cursor: "pointer",
+                  wordBreak:"break-word",
                 }}
                 onClick={() =>
                   setExpanded(expanded === task.taskId ? null : task.taskId)
                 }
               >
                 {/* HEADER ROW */}
-                <Stack direction="row" justifyContent="space-between">
-                  <Typography variant="body2" fontWeight={600}>
-                    {task.taskId}
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{minWidth:0}}>
+                  <Typography variant="body2" fontWeight={600} sx={{
+                    flex:1,
+                    minWidth:0,
+                    wordBreak:"break-word",
+                    whiteSpace:"normal",
+                    overflowWrap:"anywhere",
+                  }}>
+                    {/* {task.taskId?.replace(/_/g," ").toLowerCase().replace(/\b\w/g,(c)=>c.toUpperCase())} */}
+                    {task.taskId?.split("_").slice(0,-4).join(" ")}
                   </Typography>
 
-                  <CustomChip
+                   <CustomChip
                     size="sm"
                     variant="outlined"
-                    sx={{ height: "100%" }}
-                    color={statusColor[task.status] || "default"}
-                    label={toPascalKebabCase(task.status)}
-                    icon={statusIcon[task.status] || "default"}
+                    sx={{ height: "100%" , whiteSapce:"nowrap"}}
+                    //color={statusColor[task.status] || "default"}
+                    color={statusColor[task.status?.toUpperCase()] || "default"}
+                    label={
+                      task.status
+                      ?task.status.charAt(0).toUpperCase()+ task.status.slice(1).toLowerCase()
+                      :"Unknown"
+                     // toPascalKebabCase(task.status)
+                     }
+                    icon={statusIcon[task.status?.toUpperCase()] || "default"}
                   />
                 </Stack>
 
