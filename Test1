@@ -761,3 +761,59 @@ public class SecurityConfig {
 }
 
 
+
+
+
+
+
+
+
+
+package com.fincore.commonutilities.security;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+public class ServiceAuthFilter extends OncePerRequestFilter {
+
+    private final String expectedServiceKey;
+
+    public ServiceAuthFilter(String expectedServiceKey) {
+        this.expectedServiceKey = expectedServiceKey;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain)
+            throws ServletException, IOException {
+
+        String serviceName = request.getHeader("X-Service-Name");
+        String serviceKey = request.getHeader("X-Service-Key");
+
+        // Not backend call → continue
+        if (serviceName == null && serviceKey == null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // Validate key
+        if (!expectedServiceKey.equals(serviceKey)) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.getWriter().write("Invalid Service Key");
+            return;
+        }
+
+        System.out.println("ServiceAuthFilter executed");
+
+        // Mark as internal call
+        request.setAttribute("INTERNAL_CALL", true);
+
+        filterChain.doFilter(request, response);
+    }
+}
