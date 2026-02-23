@@ -643,3 +643,121 @@ public class SecurityConfig {
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+package com.fincore.ReportService.config;
+
+import com.fincore.commonutilities.config.CommonSecurityConfig;
+import com.fincore.commonutilities.config.RedisConfig;
+import com.fincore.commonutilities.config.ResilienceConfig;
+import com.fincore.commonutilities.jwt.JwtUtil;
+import com.fincore.commonutilities.logging.MdcLoggingFilter;
+import com.fincore.commonutilities.security.ContextRbacFilter;
+import com.fincore.commonutilities.security.ServiceAuthFilter;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+@Configuration
+@EnableWebSecurity
+@Import({
+        RedisConfig.class,
+        JwtUtil.class,
+        CommonSecurityConfig.class,
+        ResilienceConfig.class
+})
+public class SecurityConfig {
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @Autowired
+    private CommonSecurityConfig commonSecurityConfig;
+
+    @Value("${internal.service.key}")
+    private String internalServiceKey;
+
+    @Bean
+    public MdcLoggingFilter mdcLoggingFilter() {
+        return new MdcLoggingFilter(jwtUtil);
+    }
+
+    @Bean
+    public ContextRbacFilter contextRbacFilter() {
+        return new ContextRbacFilter(redisTemplate, jwtUtil);
+    }
+
+    @Bean
+    public ServiceAuthFilter serviceAuthFilter() {
+        return new ServiceAuthFilter(internalServiceKey);
+    }
+
+    // Disable automatic registration
+    @Bean
+    public FilterRegistrationBean<ServiceAuthFilter> disableServiceAuthAutoRegistration(ServiceAuthFilter filter) {
+        FilterRegistrationBean<ServiceAuthFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<ContextRbacFilter> disableRbacAutoRegistration(ContextRbacFilter filter) {
+        FilterRegistrationBean<ContextRbacFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.configurationSource(commonSecurityConfig.corsConfigurationSource()))
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authz -> authz
+                        .requestMatchers("/actuator/**", "/api/auth/**", "/error").permitAll()
+                        .anyRequest().authenticated()
+                )
+                // VERY IMPORTANT ORDER
+                .addFilterBefore(serviceAuthFilter(), UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(contextRbacFilter(), ServiceAuthFilter.class);
+
+        return http.build();
+    }
+
+    @Bean
+    public UserDetailsService userDetailsService() {
+        return username -> {
+            throw new UsernameNotFoundException("UserDetailsService is disabled. Use JWT authentication.");
+        };
+    }
+}
+
+
