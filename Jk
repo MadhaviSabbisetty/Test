@@ -168,3 +168,66 @@ public Object getReportTypesFromReportService(Map<String, Object> body) {
     }
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+public Object getReportTypesFromReportService(Map<String, Object> body) {
+    // 1. Define the URL of your Report Service
+    String reportServiceUrl = "http://10.0.19.37:9005/api/reports/types";
+
+    try {
+        log.info("Common Master calling Report Service internally at: {}", reportServiceUrl);
+
+        // 2. Set up the Headers
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Internal-Service-Key", "FincoreSecret123");
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        // 3. Create the Request Entity
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+
+        // 4. Use Object.class to avoid extraction errors
+        ResponseEntity<Object> response = restTemplate.postForEntity(
+            reportServiceUrl, 
+            entity, 
+            Object.class
+        );
+
+        log.info("Report Service responded successfully");
+        return response.getBody();
+
+    } catch (Exception e) {
+        log.error("ServiceImpl: Error calling Report Service: {}", e.getMessage());
+        // Return an empty map or null so the controller can handle the failure gracefully
+        return null;
+    }
+}
+
+
+
