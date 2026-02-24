@@ -1,0 +1,122 @@
+@Override
+protected void doFilterInternal(
+        @NonNull HttpServletRequest request,
+        @NonNull HttpServletResponse response,
+        @NonNull FilterChain filterChain
+) throws ServletException, IOException {
+
+    String uri = request.getRequestURI();
+
+    // 1. SKIP WHITELIST
+    for (String pattern : WHITELIST) {
+        if (pathMatcher.match(pattern, uri)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+    }
+
+    // 2. INTERNAL SERVICE BYPASS (The New Part)
+    String internalKey = request.getHeader("X-Internal-Service-Key");
+    if ("FincoreSecret123".equals(internalKey)) {
+        UsernamePasswordAuthenticationToken internalAuth = new UsernamePasswordAuthenticationToken(
+                "INTERNAL_SYSTEM", null, List.of(new SimpleGrantedAuthority("ROLE_99"))
+        );
+        SecurityContextHolder.getContext().setAuthentication(internalAuth);
+        filterChain.doFilter(request, response);
+        return; 
+    }
+
+    // 3. VALIDATE TOKEN (Standard Frontend Flow)
+    String token = request.getHeader("Authorization");
+
+    if (token != null) {
+        try {
+            if (!jwtUtil.isTokenValid(token)) {
+                throw new JwtException("Invalid Token Signature");
+            }
+
+            String userId = jwtUtil.getUserIdFromToken(token);
+            String incomingJti = jwtUtil.extractClaim(removeBearer(token), Claims::getId);
+            int roleIdInt = jwtUtil.getUserRoleFromToken(token);
+
+            if (!checkRedisSession(response, userId, incomingJti)) {
+                return;
+            }
+
+            setSecurityContext(userId, roleIdInt);
+
+            if (!checkRbac(request, response, String.valueOf(roleIdInt), userId)) {
+                return;
+            }
+
+        } catch (ExpiredJwtException e) {
+            sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "TOKEN_EXPIRED", "JWT has expired.");
+            return;
+        } catch (Exception e) {
+            log.error("Auth Error: {}", e.getMessage());
+            sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_ERROR", "Authentication failed.");
+            return;
+        }
+    } else {
+        sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "MISSING_TOKEN", "Authorization header missing.");
+        return;
+    }
+
+    filterChain.doFilter(request, response);
+}
+
+
+
+
+@PostMapping("/fetch-report-types")
+public ResponseEntity<?> fetchReportTypes(@RequestBody Map<String, Object> requestBody) {
+    log.info("Common Master calling Report Service internally");
+    return ResponseEntity.ok(service.getReportTypesFromReportService(requestBody));
+}
+
+
+
+List<Object> getReportTypesFromReportService(Map<String, Object> requestBody);
+
+
+// Add this at the top of the class
+private final org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+
+@Override
+public List<Object> getReportTypesFromReportService(Map<String, Object> requestBody) {
+    String url = "http://localhost:8082/api/reports/types"; // Verify Report Service Port
+
+    org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+    headers.set("X-Internal-Service-Key", "FincoreSecret123"); // Match the key in Filter
+    headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+
+    org.springframework.http.HttpEntity<Map<String, Object>> entity = new org.springframework.http.HttpEntity<>(requestBody, headers);
+
+    try {
+        return restTemplate.postForObject(url, entity, List.class);
+    } catch (Exception e) {
+        log.error("Error calling Report Service: {}", e.getMessage());
+        return java.util.Collections.emptyList();
+    }
+}
+
+
+
+@PostMapping("/types")
+public List<ReportTypeDto> getReportTypes(
+        @RequestHeader(value = "Authorization", required = false) String token, // REQUIRED = FALSE
+        @RequestBody ReportTypesRequest request) {
+    
+    // Use role 99 (Admin/System) if token is null
+    int roleId = (token != null) ? jwtUtil.getUserRoleFromToken(token) : 99; 
+    
+    log.info("Processing request for module: {} with role: {}", request.getModuleType(), roleId);
+    return reportService.getReportTypes(roleId, request.getModuleType());
+}
+
+
+
+
+report.service.url=http://localhost:8082/api/reports/types
+internal.security.key=FincoreSecret123
+
