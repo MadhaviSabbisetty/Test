@@ -1,431 +1,117 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { fetchEventSource } from "@microsoft/fetch-event-source";
-import { useDispatch, useSelector } from "react-redux";
-import { resolveConfig } from "../config/EnvironmentConfig";
-import { logoutSuccess } from "../store/slices/authSlice";
-import { refreshAccessToken } from "../utils/AuthHelpers";
+reportservice
 
-const useStreamApi = () => {
-  const dispatch = useDispatch();
-  const token = useSelector((state) => state.auth.token);
+securityconfig.java
+package com.fincore.ReportService.config;
 
-  const controllerRef = useRef(null);
-  const retryRef = useRef(false);
-
-  const [connected, setConnected] = useState(false);
-  const [lastMessage, setLastMessage] = useState(null);
-
-  const startStream = useCallback(
-    (url, { onMessage, onOpen, onError, onTaskProgress } = {}) => {
-
-      if (!token) {
-        console.log("sse no token found");
-        console.warn("No token, cannot start SSE stream");
-        return;
-      }
-console.log("stream started");
-      // Resolve service
-      const parts = url.split("/");
-      const service = parts[1];
-      parts[1] = resolveConfig(`/${service}`);
-      const finalUrl = parts.slice(1).join("/");
-
-      // Stop previous connection
-      if (controllerRef.current) {
-        controllerRef.current.abort();
-      }
-
-      const controller = new AbortController();
-      controllerRef.current = controller;
-
-      fetchEventSource(finalUrl, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        signal: controller.signal,
-
-        async onopen(response) {
-          console.log("response value",response);
-
-          if (response.status === 401) {
-          console.log("401 received");
-
-            let errorCode = "TOKEN_EXPIRED";
-
-            try {
-              const data = await response.clone().json();
-              errorCode = data?.error;
-            } catch (e) {
-              console.error("Unable to parse SSE error body");
-            }
-
-            // ================================
-            // TOKEN_EXPIRED → REFRESH
-            // ================================
-            if (errorCode === "TOKEN_EXPIRED") {
-              
-          console.log("token expired");
-
-              if (!retryRef.current) {
-                retryRef.current = true;
-                controller.abort();
-
-                try {
-                  await refreshAccessToken(dispatch);
-                  
-          console.log("refresh started");
-
-                  startStream(url, {
-                    onMessage,
-                    onOpen,
-                    onError,
-                    onTaskProgress,
-                  });
-
-                } catch (err) {
-                  
-          console.log("refresh failed");
-                  dispatch(logoutSuccess());
-                }
-              }
-
-              return;
-            }
-
-            // ================================
-            // LOGOUT CASES
-            // ================================
-            if (
-              errorCode === "SESSION_EXPIRED" ||
-              errorCode === "INVALID_TOKEN" ||
-              errorCode === "CONCURRENT_LOGIN"
-            ) {
-              
-          console.log("401 logged out");
-              dispatch(logoutSuccess());
-
-              window.dispatchEvent(
-                new CustomEvent("auth:session-expired", {
-                  detail: { reason: errorCode },
-                })
-              );
-
-              controller.abort();
-              return;
-            }
- 
-            // Unknown 401 → Safe Logout
-            // console.log("401 logged out");
-            // dispatch(logoutSuccess());
-            // controller.abort();
-            // return;
-          }
-
-          // ================================
-          // SUCCESS CONNECTION
-          // ================================
-          retryRef.current = false;
-          setConnected(true);
-          onOpen?.(response);
-        },
-
-        onmessage(event) {
-          if (event.event === "connected") return;
-
-          if (event.event === "new_notification") {
-            try {
-              const data = JSON.parse(event.data);
-              setLastMessage(data);
-              onMessage?.(data);
-            } catch (err) {
-              console.error("Notification parse error:", err);
-            }
-          }
-
-          if (event.event === "task_progress") {
-            try {
-              const data = JSON.parse(event.data);
-              onTaskProgress?.(data);
-            } catch (err) {
-              console.error("Task progress parse error:", err);
-            }
-          }
-        },
-
-        onerror(err) {
-          console.error("SSE Error:", err);
-          setConnected(false);
-          onError?.(err);
-        },
-      });
-    },
-    [token]
-  );
-
-  const stopStream = useCallback(() => {
-    if (controllerRef.current) {
-      controllerRef.current.abort();
-      controllerRef.current = null;
-      retryRef.current = false;
-      setConnected(false);
-    }
-  }, []);
-
-  useEffect(() => stopStream, [stopStream]);
-
-  return { connected, lastMessage, startStream, stopStream };
-};
-
-export default useStreamApi;
-
-
-
-
-authhelper.jsx
-import api from "../config/axiosConfig";
-import { resolveConfig } from "../config/EnvironmentConfig";
-import { tokenRefreshed, logoutSuccess } from "../store/slices/authSlice";
-import { parseJwt } from "../utils/EncryptionUtilities";
+import com.fincore.commonutilities.config.CommonSecurityConfig;
+import com.fincore.commonutilities.config.RedisConfig;
+import com.fincore.commonutilities.config.ResilienceConfig;
+import com.fincore.commonutilities.jwt.JwtUtil;
+import com.fincore.commonutilities.logging.MdcLoggingFilter;
+import com.fincore.commonutilities.security.ContextRbacFilter;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import jakarta.servlet.DispatcherType; // Import this is CRITICAL
 
 /**
- * Refresh Access Token
- * @param {Function} dispatch - Redux dispatch
- * @returns {Promise<string>} new access token
+ * Common Security Configuration.
+ * * Aligned with the "Distributed Gateway" architecture.
+ * It uses the ContextRbacFilter from Common Utilities to enforce:
+ * 1. Token Validity
+ * 2. Single Session (Redis check)
+ * 3. RBAC Permissions
+ * Enforces Centralised Mdc Logging Filter, RESILIENCE4J Retry and Circuit Breaker
  */
-export const refreshAccessToken = async (dispatch) => {
-    console.log("Refresh token called");
-  try {
-    const response = await api.post(
-      `${resolveConfig("/LS") || ""}/auth/refresh-token`
-    );
+@Configuration
+@EnableWebSecurity
+@Import({
+        RedisConfig.class,
+        JwtUtil.class,
+        CommonSecurityConfig.class,
+        ResilienceConfig.class
+})
+public class SecurityConfig {
 
-    const accessToken = response?.data?.data?.accessToken;
+    @Autowired
+    private StringRedisTemplate redisTemplate;
 
-    if (!accessToken) {
-        console.log("refresh token failed");
-      throw new Error("No access token returned");
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @Autowired
+    private CommonSecurityConfig commonSecurityConfig;
+
+    // --- 1. Define Filters as Beans (Explicitly) ---
+    @Bean
+    public MdcLoggingFilter mdcLoggingFilter() {
+        return new MdcLoggingFilter(jwtUtil);
     }
 
-    const user = parseJwt(accessToken);
-
-    dispatch(tokenRefreshed({ token: accessToken, user }));
-
-    return accessToken;
-
-  } catch (error) {
-    console.log("refresh token failed-logout");
-    dispatch(logoutSuccess());
-
-    window.dispatchEvent(
-      new CustomEvent("auth:session-expired", {
-        detail: { reason: "SESSION_EXPIRED" },
-      })
-    );
-
-    throw error;
-  }
-};
-
-
-
-
-
-
-
-
-
-
-
-import { useEffect, useRef, useState, useCallback } from "react";
-import { fetchEventSource } from "@microsoft/fetch-event-source";
-import { useDispatch, useSelector } from "react-redux";
-import { resolveConfig } from "../config/EnvironmentConfig";
-import { logoutSuccess } from "../store/slices/authSlice";
-import { refreshAccessToken } from "../utils/AuthHelpers";
-
-const useStreamApi = () => {
-  const dispatch = useDispatch();
-  const token = useSelector((state) => state.auth.token);
-
-  const controllerRef = useRef(null);
-  const retryingRef = useRef(false);
-
-  const [connected, setConnected] = useState(false);
-  const [lastEvent, setLastEvent] = useState(null);
-
-  const startStream = useCallback(
-    async (url, handlers = {}) => {
-      const {
-        onOpen,
-        onMessage,
-        onTaskProgress,
-        onError,
-        onConnected,
-      } = handlers;
-
-      if (!token) {
-        console.warn("No token available for SSE");
-        return;
-      }
-
-      // Resolve microservice URL
-      const parts = url.split("/");
-      const service = parts[1];
-      parts[1] = resolveConfig(`/${service}`);
-      const finalUrl = parts.slice(1).join("/");
-
-      // Close old stream
-      if (controllerRef.current) {
-        controllerRef.current.abort();
-      }
-
-      const controller = new AbortController();
-      controllerRef.current = controller;
-
-      fetchEventSource(finalUrl, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        signal: controller.signal,
-
-        async onopen(response) {
-          // ======================
-          // HANDLE 401
-          // ======================
-          if (response.status === 401) {
-            let errorCode = "TOKEN_EXPIRED";
-
-            try {
-              const data = await response.clone().json();
-              errorCode = data?.error;
-            } catch (e) {}
-
-            // 🔁 TOKEN EXPIRED → REFRESH
-            if (errorCode === "TOKEN_EXPIRED" && !retryingRef.current) {
-              retryingRef.current = true;
-              controller.abort();
-
-              try {
-                await refreshAccessToken(dispatch);
-                retryingRef.current = false;
-
-                // Restart stream with new token
-                startStream(url, handlers);
-              } catch (err) {
-                dispatch(logoutSuccess());
-              }
-
-              return;
-            }
-
-            // 🚨 Hard logout cases
-            if (
-              errorCode === "SESSION_EXPIRED" ||
-              errorCode === "INVALID_TOKEN" ||
-              errorCode === "CONCURRENT_LOGIN"
-            ) {
-              dispatch(logoutSuccess());
-
-              window.dispatchEvent(
-                new CustomEvent("auth:session-expired", {
-                  detail: { reason: errorCode },
-                })
-              );
-
-              controller.abort();
-              return;
-            }
-          }
-
-          // ======================
-          // SUCCESS
-          // ======================
-          retryingRef.current = false;
-          setConnected(true);
-          onOpen?.(response);
-          onConnected?.();
-        },
-
-        onmessage(event) {
-          if (event.event === "connected") return;
-
-          try {
-            const data = JSON.parse(event.data);
-            setLastEvent(data);
-
-            // 👇 Global event router
-            switch (event.event) {
-              case "new_notification":
-                onMessage?.(data);
-                break;
-
-              case "task_progress":
-                onTaskProgress?.(data);
-                break;
-
-              default:
-                onMessage?.(data);
-            }
-          } catch (err) {
-            console.error("SSE parse error:", err);
-          }
-        },
-
-        onerror(err) {
-          setConnected(false);
-          onError?.(err);
-        },
-      });
-    },
-    [token, dispatch]
-  );
-
-  const stopStream = useCallback(() => {
-    if (controllerRef.current) {
-      controllerRef.current.abort();
-      controllerRef.current = null;
-      retryingRef.current = false;
-      setConnected(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => stopStream();
-  }, [stopStream]);
-
-  return {
-    connected,
-    lastEvent,
-    startStream,
-    stopStream,
-  };
-};
-
-export default useStreamApi;
-
-
-
-
-
-
-  onChange={(newDate) => {
-    if (!newDate) {
-      setDate(newDate);
-      return;
+    @Bean
+    public ContextRbacFilter contextRbacFilter() {
+        return new ContextRbacFilter(redisTemplate, jwtUtil);
     }
 
-    const year = newDate.year().toString();
+    // --- 2. Prevent Global Registration ---
+    // This stops "The Filter class ... does not have a registered order" error
 
-    // ✅ Restrict to 4 digits only
-    if (year.length > 4) {
-      // revert to last valid date
-      setDate(lastValidDate);
-      return;
+    @Bean
+    public FilterRegistrationBean<MdcLoggingFilter> mdcFilterRegistration(MdcLoggingFilter filter) {
+        FilterRegistrationBean<MdcLoggingFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false); // Disable global chain
+        return registration;
     }
 
-    // save valid date
-    setLastValidDate(newDate);
-    setDate(newDate);
-  }}
+    @Bean
+    public FilterRegistrationBean<ContextRbacFilter> rbacFilterRegistration(ContextRbacFilter filter) {
+        FilterRegistrationBean<ContextRbacFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false); // Disable global chain
+        return registration;
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.configurationSource(commonSecurityConfig.corsConfigurationSource()))
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authz -> authz
+                        // Allow Async Dispatches (StreamingResponseBody) to proceed without re-auth checks
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
+                        .requestMatchers("/actuator/**", "/api/auth/**", "/error").permitAll()
+                        .anyRequest().authenticated()
+                )
+                // Add Filters using the BEAN references (methods above)
+                .addFilterBefore(mdcLoggingFilter(), UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(contextRbacFilter(), MdcLoggingFilter.class);
+
+        return http.build();
+    }
+
+    /**
+     * Explicitly indicate that local user lookup is not supported
+     * Authentication is handled via JWT in ContextRbacFilter
+     */
+    @Bean
+    public UserDetailsService userDetailsService() {
+        return username ->
+        { throw new UsernameNotFoundException("UserDetailsService is disabled. Use JWT authentication."); };
+    }
+}
+
+
+
+
+
+
