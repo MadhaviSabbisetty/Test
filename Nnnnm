@@ -1,440 +1,166 @@
+import {
+  Box,
+  Drawer,
+  LinearProgress,    
+  Stack,
+  Typography,
+  IconButton,
+  Collapse,
+} from "@mui/material";
+import {
+  Close,
+  AccessTime,
+  CheckCircleOutline,
+  ErrorOutline,
+  Help,
+} from "@mui/icons-material";
+import { useState } from "react";
+import CustomChip from "../utils/CustomChip";
+import { toPascalKebabCase } from "../utils/CommonUtilities";
 
+const statusColor = {
+  PROCESSING: "warning",
+  COMPLETED: "success",
+  FAILED: "error",
+};
 
+const statusIcon = {
+  PROCESSING: <AccessTime fontSize="small" />,
+  COMPLETED: <CheckCircleOutline fontSize="small" />,
+  FAILED: <ErrorOutline fontSize="small" />,
+  default: <Help fontSize="small" />,
+};
 
-const startInactivityTimer = useCallback(() => {
-  clearAllTimers();
-  if (!isAuthenticated) return;
-
-  const now = Date.now();
-  const warningDelay = INACTIVITY_TIMEOUT - WARNING_SECONDS * 1000;
-
-  // store exact logout timestamp
-  logoutTimeRef.current = now + INACTIVITY_TIMEOUT;
-
-  // 🔹 Warning popup timer
-  warningTimerRef.current = setTimeout(() => {
-    setWarningOpen(true);
-
-    // 🔹 Start countdown immediately when popup shows
-    countdownRef.current = setInterval(() => {
-      const remainingSeconds = Math.max(
-        Math.ceil((logoutTimeRef.current - Date.now()) / 1000),
-        0
-      );
-
-      setSecondsLeft(remainingSeconds);
-
-      if (remainingSeconds <= 0) {
-        clearInterval(countdownRef.current);
-      }
-    }, 1000);
-  }, warningDelay);
-
-  // 🔹 Final logout timer
-  inactivityTimerRef.current = setTimeout(() => {
-    performLogout("SESSION_TIMEOUT");
-  }, INACTIVITY_TIMEOUT);
-
-}, [isAuthenticated, clearAllTimers, performLogout]);
-
-
-
-
-const countdownStart = Date.now();
-
-countdownRef.current = setInterval(() => {
-  const elapsed = Math.floor((Date.now() - countdownStart) / 1000);
-  const remaining = WARNING_SECONDS - elapsed;
-
-  if (remaining <= 0) {
-    clearInterval(countdownRef.current);
-    setSecondsLeft(0);
-  } else {
-    setSecondsLeft(remaining);
-  }
-}, 1000);
-
-
-
-
-
-
-
-
-
-
-import React, {
-  createContext,
-  useEffect,
-  useRef,
-  useCallback,
-  useState,
-} from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { throttle } from "lodash";
-import SessionDialog from "../components/SessionDialog";
-import SessionWarningDialog from "../components/SessionWarningDialog";
-import { logoutSuccess } from "../store/slices/authSlice";
-import api from "../config/axiosConfig";
-import { resolveConfig } from "../config/EnvironmentConfig";
-
-export const AuthContext = createContext();
-
-const INACTIVITY_TIMEOUT = 1 * 60 * 1000; // 5 min
-const WARNING_SECONDS = 30;
-
-export const AuthProvider = ({ children }) => {
-  const dispatch = useDispatch();
-  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
-
-  const [warningOpen, setWarningOpen] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(WARNING_SECONDS);
-
-  const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
-  const [sessionReason, setSessionReason] = useState("");
-
-  const inactivityTimerRef = useRef(null);
-  const warningTimerRef = useRef(null);
-  const countdownRef = useRef(null);
-
-  // --- Clear all timers ---
-  const clearAllTimers = useCallback(() => {
-    if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
-    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
-    if (countdownRef.current) clearInterval(countdownRef.current);
-  }, []);
-
-  // --- Perform Logout ---
-  const performLogout = useCallback(
-    async (reason = "USER_INITIATED") => {
-      clearAllTimers();
-
-      if (reason !== "USER_INITIATED") {
-        setSessionReason(reason);
-        setSessionDialogOpen(true);
-      }
-
-      try {
-        await api.post(`${resolveConfig("/LS")}/auth/logout`);
-      } catch (e) {
-        console.error(e);
-        // ignore
-      } finally {
-        localStorage.clear();
-        dispatch(logoutSuccess());
-        setWarningOpen(false);
-      }
-    },
-    [dispatch, clearAllTimers]
-  );
-
-  // --- Start inactivity timers ---
-  const startInactivityTimer = useCallback(() => {
-    clearAllTimers();
-    if (!isAuthenticated) return;
-
-    warningTimerRef.current = setTimeout(() => {
-      setSecondsLeft(WARNING_SECONDS);
-      setWarningOpen(true);
-      countdownRef.current = setInterval(() => {
-        setSecondsLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(countdownRef.current);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }, INACTIVITY_TIMEOUT - WARNING_SECONDS * 1000);
-
-    inactivityTimerRef.current = setTimeout(() => {
-      performLogout("SESSION_TIMEOUT");
-    }, INACTIVITY_TIMEOUT);
-  }, [isAuthenticated, clearAllTimers, performLogout]);
-
-  // --- User Activity Listener ---
-  const onActivity = useCallback(
-    throttle(() => {
-      if (!isAuthenticated || sessionDialogOpen) return;
-      if (warningOpen) setWarningOpen(false);
-      startInactivityTimer();
-    }, 2000),
-    [isAuthenticated, sessionDialogOpen, warningOpen, startInactivityTimer]
-  );
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      startInactivityTimer();
-      const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
-      events.forEach((e) => window.addEventListener(e, onActivity));
-
-      return () => {
-        events.forEach((e) => window.removeEventListener(e, onActivity));
-        onActivity.cancel();
-        clearAllTimers();
-      };
-    } else {
-      clearAllTimers();
-      setWarningOpen(false);
-    }
-  }, [isAuthenticated, onActivity, startInactivityTimer, clearAllTimers]);
-
-  // --- Cross-tab / forced logout ---
-  useEffect(() => {
-    const handleSessionEvent = (e) => {
-      performLogout(e.detail?.reason || "SESSION_EXPIRED");
-    };
-
-    window.addEventListener("auth:session-expired", handleSessionEvent);
-    return () =>
-      window.removeEventListener("auth:session-expired", handleSessionEvent);
-  }, [performLogout]);
+const TaskProgressDrawer = ({ open, onClose, tasks }) => {
+  const [expanded, setExpanded] = useState(null);
 
   return (
-    <AuthContext.Provider
-      value={{
-        logout: () => performLogout("USER_INITIATED"),
-        triggerSessionDialog: (reason) => performLogout(reason),
-      }}
-    >
-      {children}
-
-      <SessionWarningDialog
-        open={warningOpen}
-        secondsLeft={secondsLeft}
-        onContinue={() => {
-          setWarningOpen(false);
-          startInactivityTimer();
+    <Drawer anchor="right" open={open} onClose={onClose}>
+      {/* HEADER */}
+      <Box
+        sx={{
+          p: 3,
+          borderBottom: "1px solid #E2E8F0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
         }}
-      />
+      >
+        <Typography variant="h6" fontWeight={700}>
+          Running Tasks
+        </Typography>
+        <IconButton size="small" onClick={onClose}>
+          <Close />
+        </IconButton>
+      </Box>
 
-      <SessionDialog
-        open={sessionDialogOpen}
-        reason={sessionReason}
-        onConfirm={() => setSessionDialogOpen(false)}
-      />
-    </AuthContext.Provider>
-  );
-};
+      {/* CONTENT */}
+      <Box sx={{ width: 380, p: 2 }}>
+        <Stack spacing={2}>
+          {Object.values(tasks).map((task) => {
+            const isDone = task.percentage === 100;
+            const elapsed = task.startedAt
+              ? Math.floor((Date.now() - task.startedAt) / 1000)
+              : null;
 
+            const speed =
+              task.lastUpdated && task.startedAt
+                ? task.percentage / elapsed
+                : null;
 
+            const eta =
+              speed && task.percentage < 100
+                ? Math.ceil((100 - task.percentage) / speed)
+                : null;
 
-
-
-
-
-
-import api from "../config/axiosConfig";
-import { resolveConfig } from "../config/EnvironmentConfig";
-import { tokenRefreshed, logoutSuccess } from "../store/slices/authSlice";
-import { parseJwt } from "../utils/EncryptionUtilities";
-
-/**
- * Refresh Access Token
- * @param {Function} dispatch - Redux dispatch
- * @returns {Promise<string>} new access token
- */
-export const refreshAccessToken = async (dispatch) => {
-  try {
-    const response = await api.post(
-      `${resolveConfig("/LS") || ""}/auth/refresh-token`
-    );
-
-    const accessToken = response?.data?.data?.accessToken;
-
-    if (!accessToken) {
-      throw new Error("No access token returned");
-    }
-
-    const user = parseJwt(accessToken);
-
-    dispatch(tokenRefreshed({ token: accessToken, user }));
-
-    return accessToken;
-
-  } catch (error) {
-    dispatch(logoutSuccess());
-
-    window.dispatchEvent(
-      new CustomEvent("auth:session-expired", {
-        detail: { reason: "SESSION_EXPIRED" },
-      })
-    );
-
-    throw error;
-  }
-};
-
-
-
-
-
-
-import { useEffect, useRef, useState, useCallback } from "react";
-import { fetchEventSource } from "@microsoft/fetch-event-source";
-import { useDispatch, useSelector } from "react-redux";
-import { resolveConfig } from "../config/EnvironmentConfig";
-import { logoutSuccess } from "../store/slices/authSlice";
-import { refreshAccessToken } from "../utils/AuthHelpers";
-
-const useStreamApi = () => {
-  const dispatch = useDispatch();
-  const token = useSelector((state) => state.auth.token);
-
-  const controllerRef = useRef(null);
-  const retryRef = useRef(false);
-
-  const [connected, setConnected] = useState(false);
-  const [lastMessage, setLastMessage] = useState(null);
-
-  const startStream = useCallback(
-    (url, { onMessage, onOpen, onError, onTaskProgress } = {}) => {
-
-      if (!token) {
-        console.warn("No token, cannot start SSE stream");
-        return;
-      }
-
-      // Resolve service
-      const parts = url.split("/");
-      const service = parts[1];
-      parts[1] = resolveConfig(`/${service}`);
-      const finalUrl = parts.slice(1).join("/");
-
-      // Stop previous connection
-      if (controllerRef.current) {
-        controllerRef.current.abort();
-      }
-
-      const controller = new AbortController();
-      controllerRef.current = controller;
-
-      fetchEventSource(finalUrl, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        signal: controller.signal,
-
-        async onopen(response) {
-
-          if (response.status === 401) {
-
-            let errorCode = null;
-
-            try {
-              const data = await response.clone().json();
-              errorCode = data?.error;
-            } catch (e) {
-              console.error("Unable to parse SSE error body");
-            }
-
-            // ================================
-            // TOKEN_EXPIRED → REFRESH
-            // ================================
-            if (errorCode === "TOKEN_EXPIRED") {
-
-              if (!retryRef.current) {
-                retryRef.current = true;
-                controller.abort();
-
-                try {
-                  await refreshAccessToken(dispatch);
-
-                  startStream(url, {
-                    onMessage,
-                    onOpen,
-                    onError,
-                    onTaskProgress,
-                  });
-
-                } catch (err) {
-                  dispatch(logoutSuccess());
+            return (
+              <Box
+                key={task.taskId}
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: "background.paper",
+                  boxShadow: 1,
+                  cursor: "pointer",
+                  wordBreak:"break-word",
+                }}
+                onClick={() =>
+                  setExpanded(expanded === task.taskId ? null : task.taskId)
                 }
-              }
+              >
+                {/* HEADER ROW */}
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{minWidth:0}}>
+                  <Typography variant="body2" fontWeight={600}
+                    sx={{
+                      flex:1,
+                      minWidth:0,
+                      wordBreak:"break-word",
+                      whiteSpace:"normal",
+                      overflowWrap:"anywhere",
+                    }}>
+                    {task.taskId?.replace(/_/g," ").toLowerCase().replace(/\b\w/g,(c)=>c.toUpperCase())}
+                  </Typography>
 
-              return;
-            }
+                   <CustomChip
+                    size="sm"
+                    variant="outlined"
+                    sx={{ height: "100%" , whiteSapce:"nowrap"}}
+                    color={statusColor[task.status?.toUpperCase()] || "default"}
+                    label={toPascalKebabCase(task.status)}
+                    icon={statusIcon[task.status?.toUpperCase()] || "default"}
+                  />
+                </Stack>
 
-            // ================================
-            // LOGOUT CASES
-            // ================================
-            if (
-              errorCode === "SESSION_EXPIRED" ||
-              errorCode === "INVALID_TOKEN" ||
-              errorCode === "CONCURRENT_LOGIN"
-            ) {
-              dispatch(logoutSuccess());
+                {/* META */}
+                <Stack direction="row" justifyContent="space-between" mt={1.5}>
+                  {/* PROGRESS */}
+                  <LinearProgress
+                    variant="determinate"
+                    value={task.percentage}
+                    sx={{
+                      width: "87%",
+                      mt: 0.8,
+                      height: 8.5,
+                      borderRadius: 5,
+                      transition: "all 0.4s ease",
+                    }}
+                    color={isDone ? "success" : "primary"}
+                  />
 
-              window.dispatchEvent(
-                new CustomEvent("auth:session-expired", {
-                  detail: { reason: errorCode },
-                })
-              );
+                  {/* PROGRESS PERCENTAGE */}
+                  <Typography variant="caption">{task.percentage}%</Typography>
+                </Stack>
 
-              controller.abort();
-              return;
-            }
+                <Box>
+                  {eta && (
+                    <Typography variant="caption">ETA: ~{eta}s</Typography>
+                  )}
+                </Box>
 
-            // Unknown 401 → Safe Logout
-            dispatch(logoutSuccess());
-            controller.abort();
-            return;
-          }
-
-          // ================================
-          // SUCCESS CONNECTION
-          // ================================
-          retryRef.current = false;
-          setConnected(true);
-          onOpen?.(response);
-        },
-
-        onmessage(event) {
-          if (event.event === "connected") return;
-
-          if (event.event === "new_notification") {
-            try {
-              const data = JSON.parse(event.data);
-              setLastMessage(data);
-              onMessage?.(data);
-            } catch (err) {
-              console.error("Notification parse error:", err);
-            }
-          }
-
-          if (event.event === "task_progress") {
-            try {
-              const data = JSON.parse(event.data);
-              onTaskProgress?.(data);
-            } catch (err) {
-              console.error("Task progress parse error:", err);
-            }
-          }
-        },
-
-        onerror(err) {
-          console.error("SSE Error:", err);
-          setConnected(false);
-          onError?.(err);
-        },
-      });
-    },
-    [token]
+                {/* DETAILS */}
+                <Collapse in={expanded === task.taskId}>
+                  <Box mt={1}>
+                    <Typography variant="caption" color="text.secondary">
+                      {task.message}
+                    </Typography>
+                    {elapsed && (
+                      <Typography variant="caption" display="block">
+                        Elapsed: {elapsed}s
+                      </Typography>
+                    )}
+                  </Box>
+                </Collapse>
+              </Box>
+            );
+          })}
+        </Stack>
+      </Box>
+    </Drawer>
   );
-
-  const stopStream = useCallback(() => {
-    if (controllerRef.current) {
-      controllerRef.current.abort();
-      controllerRef.current = null;
-      retryRef.current = false;
-      setConnected(false);
-    }
-  }, []);
-
-  useEffect(() => stopStream, [stopStream]);
-
-  return { connected, lastMessage, startStream, stopStream };
 };
 
-export default useStreamApi;
+export default TaskProgressDrawer;
+
+
+
+
