@@ -1,195 +1,97 @@
-import React from "react";
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Typography,
-  Grid,
-  Box,
-  Divider,
-} from "@mui/material";
-import {
-  timeStampFormatter,
-  toPascalKebabCase,
-  formatKeyForDisplay,
-} from "../../utils/CommonUtilities";
+{/* Payload Section */}
 
-const ViewMyRequestDialog = ({ open, handleClose, data }) => {
-  if (!data) return null;
+<Grid container spacing={2}>
+  {Object.entries(viewData).map(([key, value]) => {
 
-  const viewData = data?.showData || {};
+    // 🔹 Skip rows key for Data Parameters
+    if (
+      data.requestType === "MAIN_DATA_PARAMETERS" &&
+      key === "rows"
+    ) {
+      return null;
+    }
 
-  const mainDetails = [
-    { label: "Creator ID", value: data.creatorId, size: 2 },
-    {
-      label: "Change Type",
-      value: data.changeType === "ADD" ? "Added" : "Modified",
-      size: 2.5,
-    },
-    {
-      label: "Request Status",
-      value: toPascalKebabCase(data.reqStatus),
-      size: 2.5,
-    },
-    {
-      label: "Requested Date",
-      value: timeStampFormatter(data.reqDate),
-      size: 5,
-    },
-  ];
-
-  return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth="true">
-      {/* Header */}
-      <DialogTitle>
-        Request Details - <b>ID: {data.id}</b>
-      </DialogTitle>
-      <Divider />
-
-      {/* Content */}
-      <DialogContent>
-        {/* Main Details Section */}
-        <Grid container spacing={2}>
-          {mainDetails.map((item) => (
-            <Grid size={{ xs: 12, sm: item.size }} key={item.label}>
-              <Box sx={{ display: "flex", flexDirection: "column" }}>
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    fontWeight: 800,
-                    color: "text.secondary",
-                  }}
-                >
-                  {item.label}
-                </Typography>
-                <Typography variant="body1" sx={{ color: "text.primary" }}>
-                  {item.value ?? "N/A"}
-                </Typography>
-              </Box>
-            </Grid>
-          ))}
-        </Grid>
-        {data.reqStatus !== "PENDING" && (
-          <Grid container spacing={2} sx={{ mt: 1.5 }}>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <Box sx={{ display: "flex", flexDirection: "column" }}>
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    fontWeight: 800,
-                    color: "text.secondary",
-                  }}
-                >
-                  {`${toPascalKebabCase(data.reqStatus)} By`}
-                </Typography>
-                <Typography variant="body1" sx={{ color: "text.primary" }}>
-                  {data.executorId ?? "N/A"}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid size={{ xs: 12, md: 5 }}>
-              <Box sx={{ display: "flex", flexDirection: "column" }}>
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    fontWeight: 800,
-                    color: "text.secondary",
-                  }}
-                >
-                  {`${toPascalKebabCase(data.reqStatus)} Date`}
-                </Typography>
-                <Typography variant="body1" sx={{ color: "text.primary" }}>
-                  {timeStampFormatter(data.executionDate) || "N/A"}
-                </Typography>
-              </Box>
-            </Grid>
-            {data.reqStatus === "REJECTED" && (
-              <Grid size={{ xs: 12, md: 5 }} sx={{ minWidth: 0 }}>
-                <Box sx={{ display: "flex", flexDirection: "column" }}>
-                  <Typography
-                    variant="subtitle2"
-                    sx={{
-                      fontWeight: 800,
-                      color: "text.secondary",
-                    }}
-                  >
-                    Rejection Remarks
-                  </Typography>
-                  <Typography
-                    variant="body1"
-                    sx={{
-                      color: "text.primary",
-                      wordBreak: "break-word",
-                      overflowWrap: "anywhere",
-                      whiteSpace: "pre-wrap",
-                    }}
-                  >
-                    {data.executorRemarks || "N/A"}
-                  </Typography>
-                </Box>
-              </Grid>
-            )}
-          </Grid>
-        )}
-
-        <Divider sx={{ m: 2 }} />
-
-        {/* Payload Section */}
-
-        <Grid container spacing={2}>
-          {Object.entries(viewData).map(([key, value]) => (
-            <Grid size={{ xs: 12, sm: 4 }} key={key}>
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  //   width: "calc(50% - 1px)",
-                }}
-              >
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    fontWeight: 800,
-                    color: "text.secondary",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {formatKeyForDisplay(key)}
-                </Typography>
-                <Typography
-                  variant="body1"
-                  sx={{
-                    color: "text.primary",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {String(value || "N/A")}
-                </Typography>
-              </Box>
-            </Grid>
-          ))}
-        </Grid>
-      </DialogContent>
-
-      {/* Footer */}
-      <Divider />
-      <DialogActions sx={{ p: 2, justifyContent: "flex-end" }}>
-        <Button
-          onClick={handleClose}
-          variant="contained"
-          color="primary"
-          sx={{ textTransform: "none", borderRadius: 2, px: 3 }}
+    return (
+      <Grid size={{ xs: 12, sm: 4 }} key={key}>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+          }}
         >
-          Close
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-};
+          <Typography
+            variant="subtitle2"
+            sx={{
+              fontWeight: 800,
+              color: "text.secondary",
+            }}
+          >
+            {formatKeyForDisplay(key)}
+          </Typography>
+          <Typography
+            variant="body1"
+            sx={{
+              color: "text.primary",
+              wordBreak: "break-word",
+            }}
+          >
+            {String(value || "N/A")}
+          </Typography>
+        </Box>
+      </Grid>
+    );
+  })}
+</Grid>
 
-export default ViewMyRequestDialog;
+.
+
+
+
+
+
+
+
+
+{/* Data Parameters Table (ONLY for MAIN_DATA_PARAMETERS) */}
+
+{data.requestType === "MAIN_DATA_PARAMETERS" &&
+ Array.isArray(viewData.rows) && (
+  <Box mt={3}>
+    <Typography variant="h6" sx={{ mb: 2 }}>
+      Data Parameters
+    </Typography>
+
+    <Table size="small">
+      <TableHead>
+        <TableRow>
+          <TableCell>Column Name</TableCell>
+          <TableCell>Start</TableCell>
+          <TableCell>End</TableCell>
+          <TableCell>Included</TableCell>
+          <TableCell>Data Type</TableCell>
+          <TableCell>Decimal</TableCell>
+        </TableRow>
+      </TableHead>
+
+      <TableBody>
+        {viewData.rows.map((row, index) => (
+          <TableRow key={index}>
+            <TableCell>{row.columnName}</TableCell>
+            <TableCell>{row.startValue}</TableCell>
+            <TableCell>{row.endValue}</TableCell>
+            <TableCell>
+              {row.toBeIncluded ? "YES" : "NO"}
+            </TableCell>
+            <TableCell>{row.dataType}</TableCell>
+            <TableCell>{row.decimalCount || "-"}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  </Box>
+)}
+
+
+
+
 
