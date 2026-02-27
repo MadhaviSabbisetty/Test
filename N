@@ -1,237 +1,328 @@
-{/* Payload Section */}
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Stack,
+  Typography,
+  Tooltip,
+  IconButton,
+  Chip,
+} from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+import { useEffect, useMemo, useState } from "react";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
+import CancelIcon from "@mui/icons-material/Cancel";
+import DateRangeIcon from "@mui/icons-material/DateRange";
+import GppBadIcon from "@mui/icons-material/GppBad";
+import AddBoxIcon from "@mui/icons-material/AddBox";
+import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
+import EditDocumentIcon from "@mui/icons-material/EditDocument";
+import InfoIcon from "@mui/icons-material/Info";
 
-<Grid container spacing={2}>
-  {Object.entries(viewData).map(([key, value]) => {
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import CustomChip from "../../utils/CustomChip";
+import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
 
-    // 🔹 Skip rows key for Data Parameters
-    if (
-      data.requestType === "MAIN_DATA_PARAMETERS" &&
-      key === "rows"
-    ) {
-      return null;
+function CustomNoRowsOverlay() {
+  return (
+    <Stack height="100%" alignItems="center" justifyContent="center">
+      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+      <Typography variant="h6">No Requests Found</Typography>
+      <Typography>You have not created any requests.</Typography>
+    </Stack>
+  );
+}
+
+export default function DataParametersRequestsTab() {
+  const { callApi } = useApi();
+  const snackbar = useCustomSnackbar();
+
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState(false);
+  const [requestId, setRequestId] = useState(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewData, setViewData] = useState(null);
+
+  // ================= FETCH =================
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+
+      const payload = { requestType: "MAIN_DATA_PARAMETERS" };
+
+      const response = await callApi("/CR/my-requests", payload, "POST");
+
+      if (response?.data) {
+        const result = response.data.map((row) => {
+          const parsedPayload = {
+            ...row.payload,
+            id: row.id,
+            reqStatus: row.reqStatus,
+            reqDate: row.reqDate,
+            changeType: row.changeType,
+            requestType: row.requestType,
+          };
+          return parsedPayload;
+        });
+
+        // Pending first, then latest date
+        result.sort((a, b) => {
+          if (a.reqStatus === "PENDING" && b.reqStatus !== "PENDING") return -1;
+          if (a.reqStatus !== "PENDING" && b.reqStatus === "PENDING") return 1;
+          return new Date(b.reqDate) - new Date(a.reqDate);
+        });
+
+        setRows(result);
+      } else {
+        setRows([]);
+      }
+    } catch (error) {
+      snackbar("Failed to fetch requests", "error");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    return (
-      <Grid size={{ xs: 12, sm: 4 }} key={key}>
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <Typography
-            variant="subtitle2"
-            sx={{
-              fontWeight: 800,
-              color: "text.secondary",
-            }}
-          >
-            {formatKeyForDisplay(key)}
-          </Typography>
-          <Typography
-            variant="body1"
-            sx={{
-              color: "text.primary",
-              wordBreak: "break-word",
-            }}
-          >
-            {String(value || "N/A")}
-          </Typography>
-        </Box>
-      </Grid>
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // ================= CANCEL =================
+
+  const handleCancelRequest = async () => {
+    try {
+      const payload = {
+        requestId,
+        remarks: "User cancelled this request",
+      };
+
+      const response = await callApi("/CR/cancel-request", payload, "PATCH");
+
+      if (response?.success) {
+        snackbar(`Request ${requestId} cancelled successfully`, "success");
+      } else {
+        snackbar(response?.message || "Cancel failed", "error");
+      }
+    } catch (error) {
+      snackbar("Cancel failed", "error");
+    } finally {
+      setConfirmDialog(false);
+      fetchData();
+    }
+  };
+
+  // ================= VIEW =================
+
+  const handleViewClick = (row) => {
+    const formattedRows = (
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th>Column Id</th>
+            <th>Column Name</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Included</th>
+            <th>Data Type</th>
+            <th>Decimal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {row.rows?.map((r, index) => (
+            <tr key={index}>
+              <td>{r.columnId || "-"}</td>
+              <td>{r.columnName}</td>
+              <td>{r.startValue}</td>
+              <td>{r.endValue}</td>
+              <td>{r.toBeIncluded ? "YES" : "NO"}</td>
+              <td>{r.dataType}</td>
+              <td>{r.decimalCount || "-"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     );
-  })}
-</Grid>
+    const showData = {
+      fileType: row.fileType,
+      Rows: formattedRows || [],
+    };
+    console.log("Rows", formattedRows);
+    const finalData = { ...row, showData };
+    setViewData(finalData);
+    setViewOpen(true);
+  };
 
-.
+  // ================= COLUMNS =================
 
+  const columns = useMemo(
+    () => [
+      { field: "fileType", headerName: "File Type", flex: 1.5 },
+      { field: "id", headerName: "Request Id", flex: 0.7 },
 
+      {
+        field: "changeType",
+        headerName: "Request Type",
+        flex: 1,
+        align: "center",
+        renderCell: (params) => {
+          const val = params.value;
 
+          const icon =
+            val === "ADD" ? (
+              <AddBoxIcon />
+            ) : val === "DELETE" ? (
+              <AutoDeleteIcon />
+            ) : (
+              <EditDocumentIcon />
+            );
 
+          const label =
+            val === "ADD" ? "Added" : val === "DELETE" ? "Deleted" : "Modified";
 
-
-
-
-{/* Data Parameters Table (ONLY for MAIN_DATA_PARAMETERS) */}
-
-{data.requestType === "MAIN_DATA_PARAMETERS" &&
- Array.isArray(viewData.rows) && (
-  <Box mt={3}>
-    <Typography variant="h6" sx={{ mb: 2 }}>
-      Data Parameters
-    </Typography>
-
-    <Table size="small">
-      <TableHead>
-        <TableRow>
-          <TableCell>Column Name</TableCell>
-          <TableCell>Start</TableCell>
-          <TableCell>End</TableCell>
-          <TableCell>Included</TableCell>
-          <TableCell>Data Type</TableCell>
-          <TableCell>Decimal</TableCell>
-        </TableRow>
-      </TableHead>
-
-      <TableBody>
-        {viewData.rows.map((row, index) => (
-          <TableRow key={index}>
-            <TableCell>{row.columnName}</TableCell>
-            <TableCell>{row.startValue}</TableCell>
-            <TableCell>{row.endValue}</TableCell>
-            <TableCell>
-              {row.toBeIncluded ? "YES" : "NO"}
-            </TableCell>
-            <TableCell>{row.dataType}</TableCell>
-            <TableCell>{row.decimalCount || "-"}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  </Box>
-)}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<Controller
-  name={`rows.${index}.endValue`}
-  control={control}
-  rules={{
-    validate: (value) => {
-      const start = watch(`rows.${index}.startValue`);
-
-      if (!value) return " ";
-
-      if (Number(value) <= Number(start)) {
-        return "End must be greater than Start";
-      }
-
-      return true;
-    },
-  }}
-  render={({ field, fieldState }) => (
-    <Box sx={{ position: "relative" }}>
-      <TextField
-        type="number"
-        {...field}
-        error={!!fieldState.error}
-        sx={{
-          width: "100%",
-          "& .MuiInputBase-root": {
-            height: 40,   // 🔥 fixed height
-          },
-        }}
-      />
-
-      {fieldState.error && (
-        <Typography
-          variant="caption"
-          color="error"
-          sx={{
-            position: "absolute",
-            bottom: -18,
-            left: 4,
-            fontSize: "0.7rem",
-          }}
-        >
-          {fieldState.error.message}
-        </Typography>
-      )}
-    </Box>
-  )}
-/>
-
-
-
-
-
-
-
-
-
-
-
-
- <TextField
-      type="number"
-      {...field}
-      error={!!fieldState.error}
-      helperText={fieldState.error?.message || " "}
-      FormHelperTextProps={{
-        sx: {
-          minHeight: 20,
-          whiteSpace: "nowrap",   // 🔥 prevents wrapping
-          margin: 0,
+          return <CustomChip variant="outlined" icon={icon} label={label} />;
         },
-      }}
-      sx={{
-        width: "100%",
-      }}
-    />
+      },
 
+      // Date
+      {
+        field: "reqDate",
+        headerName: "Submitted On",
+        flex: 1,
+        renderCell: (params) => (
+          <Chip icon={<DateRangeIcon />} label={params.value?.split("T")[0]} />
+        ),
+      },
 
+      // Status
+      {
+        field: "reqStatus",
+        headerName: "Status",
+        flex: 1,
+        align: "center",
+        renderCell: (params) => {
+          const val = params.value;
 
+          const icon =
+            val === "REJECTED" ? (
+              <BlockFlippedIcon />
+            ) : val === "ACCEPTED" ? (
+              <CheckCircleIcon />
+            ) : val === "CANCELLED" ? (
+              <GppBadIcon />
+            ) : (
+              <PendingActionsIcon />
+            );
 
+          const label =
+            val === "REJECTED"
+              ? "Rejected"
+              : val === "ACCEPTED"
+                ? "Approved"
+                : val === "CANCELLED"
+                  ? "Cancelled"
+                  : "Pending";
 
+          return <CustomChip variant="outlined" icon={icon} label={label} />;
+        },
+      },
 
+      // Actions
+      {
+        field: "actions",
+        headerName: "Action",
+        flex: 1,
+        align: "center",
+        renderCell: (params) => (
+          <Stack direction="row" spacing={1}>
+            <Tooltip title="View">
+              <IconButton onClick={() => handleViewClick(params.row)}>
+                <VisibilityIcon />
+              </IconButton>
+            </Tooltip>
 
+            {params.row.reqStatus === "PENDING" && (
+              <Tooltip title="Cancel">
+                <IconButton
+                  onClick={() => {
+                    setRequestId(params.row.id);
+                    setConfirmDialog(true);
+                  }}
+                >
+                  <CancelIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Stack>
+        ),
+      },
+    ],
+    [],
+  );
 
-
-
-
-<Controller
-  name={`rows.${index}.endValue`}
-  control={control}
-  rules={{
-    validate: (value) => {
-      const start = watch(`rows.${index}.startValue`);
-
-      if (!value) return " ";
-
-      if (Number(value) <= Number(start)) {
-        return "End must be > Start";
-      }
-
-      return true;
-    },
-  }}
-  render={({ field, fieldState }) => (
-    <Box
-      sx={{
-        width: "100%",
-        height: 70,              // 🔥 FIXED TOTAL HEIGHT
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "flex-start",
-      }}
-    >
-      <TextField
-        type="number"
-        {...field}
-        error={!!fieldState.error}
-        helperText={fieldState.error?.message || " "}
-        FormHelperTextProps={{
-          sx: {
-            minHeight: 20,
-            margin: 0,
-          },
-        }}
-        sx={{
-          width: "100%",
-        }}
+  return (
+    <>
+      <Box>
+        <Box>
+          <DataGrid
+            rows={rows}
+            columns={columns}
+            loading={loading}
+            // getRowId={(row) => row.id}
+            pageSizeOptions={[5, 10, 25, 50]}
+            initialState={{
+              pagination: { paginationModel: { pageSize: 10, page: 0 } },
+              // sorting: { sortModel: [{ field: "circleCode", sort: "asc" }] },
+            }}
+            slots={{
+              noRowsOverlay: CustomNoRowsOverlay,
+            }}
+            getRowId={(row) => row.id}
+          />
+        </Box>
+      </Box>
+      {/* View Dialog */}
+      <ViewMyRequestDialog
+        open={viewOpen}
+        handleClose={() => setViewOpen(false)}
+        data={viewData}
       />
-    </Box>
-  )}
-/>
+
+      {/* Cancel Dialog */}
+      <Dialog open={confirmDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Cancel Request ID: {requestId}</DialogTitle>
+        <DialogContent>
+          <Typography>Are you sure you want to cancel this request?</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog(false)}>Close</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleCancelRequest}
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+}
+
+
+
+
+
+
+
+
+
+
