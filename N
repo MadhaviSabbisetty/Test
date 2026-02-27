@@ -326,3 +326,107 @@ export default function DataParametersRequestsTab() {
 
 
 
+
+
+
+
+{/* Payload Section */}
+
+<Divider sx={{ my: 2 }} />
+
+{data.requestType === "MAIN_DATA_PARAMETERS" ? (
+  <>
+    {/* File Type Section */}
+    <Grid container spacing={2} sx={{ mb: 2 }}>
+      <Grid size={{ xs: 12, sm: 4 }}>
+        <Box sx={{ display: "flex", flexDirection: "column" }}>
+          <Typography
+            variant="subtitle2"
+            sx={{ fontWeight: 800, color: "text.secondary" }}
+          >
+            File Type
+          </Typography>
+          <Typography variant="body1">
+            {data.fileType ?? "N/A"}
+          </Typography>
+        </Box>
+      </Grid>
+    </Grid>
+
+    {/* Rows Table */}
+    {Array.isArray(data.rows) && data.rows.length > 0 && (
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          Data Parameters
+        </Typography>
+
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Column Id</TableCell>
+              <TableCell>Column Name</TableCell>
+              <TableCell>Start</TableCell>
+              <TableCell>End</TableCell>
+              <TableCell>Included</TableCell>
+              <TableCell>Data Type</TableCell>
+              <TableCell>Decimal</TableCell>
+            </TableRow>
+          </TableHead>
+
+          <TableBody>
+            {data.rows.map((row, index) => (
+              <TableRow key={index}>
+                <TableCell>{row.columnId || "-"}</TableCell>
+                <TableCell>{row.columnName}</TableCell>
+                <TableCell>{row.startValue}</TableCell>
+                <TableCell>{row.endValue}</TableCell>
+                <TableCell>
+                  {row.toBeIncluded === true ||
+                  row.toBeIncluded === "true"
+                    ? "YES"
+                    : "NO"}
+                </TableCell>
+                <TableCell>{row.dataType}</TableCell>
+                <TableCell>{row.decimalCount ?? "-"}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Box>
+    )}
+  </>
+) : (
+  /* ===== DEFAULT GENERIC VIEW FOR OTHER SCREENS ===== */
+
+  <Grid container spacing={2}>
+    {Object.entries(viewData).map(([key, value]) => (
+      <Grid size={{ xs: 12, sm: 4 }} key={key}>
+        <Box sx={{ display: "flex", flexDirection: "column" }}>
+          <Typography
+            variant="subtitle2"
+            sx={{
+              fontWeight: 800,
+              color: "text.secondary",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {formatKeyForDisplay(key)}
+          </Typography>
+          <Typography
+            variant="body1"
+            sx={{ wordBreak: "break-word" }}
+          >
+            {String(value ?? "N/A")}
+          </Typography>
+        </Box>
+      </Grid>
+    ))}
+  </Grid>
+)}
+
+
+
+
+
