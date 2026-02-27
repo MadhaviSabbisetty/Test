@@ -95,3 +95,62 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+<Controller
+  name={`rows.${index}.endValue`}
+  control={control}
+  rules={{
+    validate: (value) => {
+      const start = watch(`rows.${index}.startValue`);
+
+      if (!value) return " ";
+
+      if (Number(value) <= Number(start)) {
+        return "End must be greater than Start";
+      }
+
+      return true;
+    },
+  }}
+  render={({ field, fieldState }) => (
+    <Box sx={{ position: "relative" }}>
+      <TextField
+        type="number"
+        {...field}
+        error={!!fieldState.error}
+        sx={{
+          width: "100%",
+          "& .MuiInputBase-root": {
+            height: 40,   // 🔥 fixed height
+          },
+        }}
+      />
+
+      {fieldState.error && (
+        <Typography
+          variant="caption"
+          color="error"
+          sx={{
+            position: "absolute",
+            bottom: -18,
+            left: 4,
+            fontSize: "0.7rem",
+          }}
+        >
+          {fieldState.error.message}
+        </Typography>
+      )}
+    </Box>
+  )}
+/>
+
+
