@@ -1,368 +1,256 @@
 import {
-  Box,
-  Button,
   Dialog,
-  DialogActions,
-  DialogContent,
   DialogTitle,
-  Stack,
-  Typography,
-  Tooltip,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
+  MenuItem,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
   IconButton,
-  Chip,
 } from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
-import { useEffect, useMemo, useState } from "react";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
-import CancelIcon from "@mui/icons-material/Cancel";
-import DateRangeIcon from "@mui/icons-material/DateRange";
-import GppBadIcon from "@mui/icons-material/GppBad";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import InfoIcon from "@mui/icons-material/Info";
+
+import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
+
+import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { useEffect, useState } from "react";
 
 import useApi from "../../hooks/useApi";
 import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import CustomChip from "../../utils/CustomChip";
-import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
 
-function CustomNoRowsOverlay() {
-  return (
-    <Stack height="100%" alignItems="center" justifyContent="center">
-      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-      <Typography variant="h6">No Requests Found</Typography>
-      <Typography>You have not created any requests.</Typography>
-    </Stack>
-  );
-}
+export default function DataParametersDialog({
+  open,
+  mode,
+  data,
+  allData,
+  onClose,
+  refresh,
+}) {
+  const isView = mode === "VIEW";
+  const isEdit = mode === "EDIT";
+  const isCreate = mode === "CREATE";
 
-export default function DataParametersRequestsTab() {
   const { callApi } = useApi();
   const snackbar = useCustomSnackbar();
-
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [confirmDialog, setConfirmDialog] = useState(false);
-  const [requestId, setRequestId] = useState(null);
-  const [viewOpen, setViewOpen] = useState(false);
-  const [viewData, setViewData] = useState(null);
-
-  // ================= FETCH =================
-
+  const [subTypeRows, setSubTypeRows] = useState([]);
   const fetchData = async () => {
     try {
-      setLoading(true);
-
-      const payload = { requestType: "MAIN_DATA_PARAMETERS" };
-
-      const response = await callApi("/CR/my-requests", payload, "POST");
-
-      if (response?.data) {
-        const result = response.data.map((row) => {
-          const parsedPayload = {
-            ...row.payload,
-            id: row.id,
-            reqStatus: row.reqStatus,
-            reqDate: row.reqDate,
-            changeType: row.changeType,
-            requestType: row.requestType,
-          };
-          return parsedPayload;
-        });
-
-        // Pending first, then latest date
-        result.sort((a, b) => {
-          if (a.reqStatus === "PENDING" && b.reqStatus !== "PENDING") return -1;
-          if (a.reqStatus !== "PENDING" && b.reqStatus === "PENDING") return 1;
-          return new Date(b.reqDate) - new Date(a.reqDate);
-        });
-
-        setRows(result);
-      } else {
-        setRows([]);
-      }
-    } catch (error) {
-      snackbar("Failed to fetch requests", "error");
-    } finally {
-      setLoading(false);
+      const res1 = await callApi(
+        "/CM/common-master/files-sub-types",
+        {},
+        "GET",
+      );
+      console.log("res1", res1?.data);
+      const subtypedata = res1?.data || [];
+      console.log("sunnnnn", subtypedata);
+      setSubTypeRows(subtypedata);
+    } catch {
+      snackbar("Failed to load data", "error");
     }
   };
-
   useEffect(() => {
     fetchData();
   }, []);
 
-  // ================= CANCEL =================
+  const { control, watch, setValue, getValues, reset } = useForm({
+    mode: "onChange",
+    reValidateMode: "onChange",
+    defaultValues: {
+      fileType: "",
+      rows: [],
+    },
+  });
 
-  const handleCancelRequest = async () => {
-    try {
-      const payload = {
-        requestId,
-        remarks: "User cancelled this request",
-      };
+  const { fields, append, remove, replace } = useFieldArray({
+    control,
+    name: "rows",
+  });
 
-      const response = await callApi("/CR/cancel-request", payload, "PATCH");
+  /* ---------------- MODE HANDLING ---------------- */
 
-      if (response?.success) {
-        snackbar(`Request ${requestId} cancelled successfully`, "success");
-      } else {
-        snackbar(response?.message || "Cancel failed", "error");
-      }
-    } catch (error) {
-      snackbar("Cancel failed", "error");
-    } finally {
-      setConfirmDialog(false);
-      fetchData();
+
+  useEffect(() => {
+    if (!open) return;
+
+    if (isCreate) {
+      reset({
+        fileType: "",
+        rows: [],
+      });
     }
-  };
 
-  // ================= VIEW =================
+    if ((isEdit || isView) && data) {
+      reset({
+        fileType: data.fileType,
+        rows: data.rows || [],
+      });
+    }
+  }, [open, mode, data]);
 
-  const handleViewClick = (row) => {
-    const formattedRows = (
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th>Column Id</th>
-            <th>Column Name</th>
-            <th>Start</th>
-            <th>End</th>
-            <th>Included</th>
-            <th>Data Type</th>
-            <th>Decimal</th>
-          </tr>
-        </thead>
-        <tbody>
-          {row.rows?.map((r, index) => (
-            <tr key={index}>
-              <td>{r.columnId || "-"}</td>
-              <td>{r.columnName}</td>
-              <td>{r.startValue}</td>
-              <td>{r.endValue}</td>
-              <td>{r.toBeIncluded ? "YES" : "NO"}</td>
-              <td>{r.dataType}</td>
-              <td>{r.decimalCount || "-"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
-    const showData = {
-      fileType: row.fileType,
-      Rows: formattedRows || [],
-    };
-    console.log("Rows", formattedRows);
-    const finalData = { ...row, showData };
-    setViewData(finalData);
-    setViewOpen(true);
-  };
-
-  // ================= COLUMNS =================
-
-  const columns = useMemo(
-    () => [
-      { field: "fileType", headerName: "File Type", flex: 1.5 },
-      { field: "id", headerName: "Request Id", flex: 0.7 },
-
-      {
-        field: "changeType",
-        headerName: "Request Type",
-        flex: 1,
-        align: "center",
-        renderCell: (params) => {
-          const val = params.value;
-
-          const icon =
-            val === "ADD" ? (
-              <AddBoxIcon />
-            ) : val === "DELETE" ? (
-              <AutoDeleteIcon />
-            ) : (
-              <EditDocumentIcon />
-            );
-
-          const label =
-            val === "ADD" ? "Added" : val === "DELETE" ? "Deleted" : "Modified";
-
-          return <CustomChip variant="outlined" icon={icon} label={label} />;
-        },
-      },
-
-      // Date
-      {
-        field: "reqDate",
-        headerName: "Submitted On",
-        flex: 1,
-        renderCell: (params) => (
-          <Chip icon={<DateRangeIcon />} label={params.value?.split("T")[0]} />
-        ),
-      },
-
-      // Status
-      {
-        field: "reqStatus",
-        headerName: "Status",
-        flex: 1,
-        align: "center",
-        renderCell: (params) => {
-          const val = params.value;
-
-          const icon =
-            val === "REJECTED" ? (
-              <BlockFlippedIcon />
-            ) : val === "ACCEPTED" ? (
-              <CheckCircleIcon />
-            ) : val === "CANCELLED" ? (
-              <GppBadIcon />
-            ) : (
-              <PendingActionsIcon />
-            );
-
-          const label =
-            val === "REJECTED"
-              ? "Rejected"
-              : val === "ACCEPTED"
-                ? "Approved"
-                : val === "CANCELLED"
-                  ? "Cancelled"
-                  : "Pending";
-
-          return <CustomChip variant="outlined" icon={icon} label={label} />;
-        },
-      },
-
-      // Actions
-      {
-        field: "actions",
-        headerName: "Action",
-        flex: 1,
-        align: "center",
-        renderCell: (params) => (
-          <Stack direction="row" spacing={1}>
-            <Tooltip title="View">
-              <IconButton onClick={() => handleViewClick(params.row)}>
-                <VisibilityIcon />
-              </IconButton>
-            </Tooltip>
-
-            {params.row.reqStatus === "PENDING" && (
-              <Tooltip title="Cancel">
-                <IconButton
-                  onClick={() => {
-                    setRequestId(params.row.id);
-                    setConfirmDialog(true);
-                  }}
-                >
-                  <CancelIcon />
-                </IconButton>
-              </Tooltip>
-            )}
-          </Stack>
-        ),
-      },
-    ],
-    [],
+  const selectedFileType = watch("fileType");
+  const fileTypeExists = allData?.some(
+    (item) => item.fileType === selectedFileType,
   );
+
+  useEffect(() => {
+    if (!selectedFileType) {
+      replace([]);
+      return;
+    }
+
+    const selected = allData?.find(
+      (item) => item.fileType === selectedFileType,
+    );
+
+    console.log("alldata", selected);
+    if (selected) {
+      replace(
+        selected.rows.map((r) => ({
+          ...r,
+          toBeIncluded:
+            r.toBeIncluded === true ||
+            r.toBeIncluded === "true" ||
+            r.toBeIncluded === "YES",
+          dataType: r.dataType?.toUpperCase(),
+        })),
+      );
+    } else {
+      replace([]);
+    }
+  }, [selectedFileType]);
+
+  // /* ---------------- ADD ROW WITH AUTO START ---------------- */
+
+
+  /* ---------------- VALIDATION ---------------- */
+
+  const validateForm = (formData) => {
+    if (!formData.fileType) {
+      snackbar("File Type is required", "error");
+      return false;
+    }
+
+    if (formData.rows.length === 0) {
+      snackbar("At least one row required", "error");
+      return false;
+    }
+
+    for (let i = 0; i < formData.rows.length; i++) {
+      const r = formData.rows[i];
+
+      if (!r.columnName) {
+        snackbar(`Column Name required (Row ${i + 1})`, "error");
+        return false;
+      }
+
+      if (Number(r.startValue) >= Number(r.endValue)) {
+        snackbar(`End must be greater than Start (Row ${i + 1})`, "error");
+        return false;
+      }
+
+      if (
+        r.dataType === "AMOUNT" &&
+        (r.decimalCount === null || r.decimalCount === "")
+      ) {
+        snackbar(`Decimal required for AMOUNT (Row ${i + 1})`, "error");
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  /* ---------------- SUBMIT ---------------- */
+
+  const onSubmit = async () => {
+    const formData = getValues();
+    if (!validateForm(formData)) return;
+
+    const payload = {
+      requestType: "MAIN_DATA_PARAMETERS",
+      changeType: isEdit ? "UPDATE" : "ADD",
+      payload: formData,
+    };
+
+    await callApi("/CR/create-request", payload, "POST");
+
+    snackbar("Request submitted successfully", "success");
+    refresh();
+    onClose();
+  };
 
   return (
-    <>
-      <Box>
-        <Box>
-          <DataGrid
-            rows={rows}
-            columns={columns}
-            loading={loading}
-            // getRowId={(row) => row.id}
-            pageSizeOptions={[5, 10, 25, 50]}
-            initialState={{
-              pagination: { paginationModel: { pageSize: 10, page: 0 } },
-              // sorting: { sortModel: [{ field: "circleCode", sort: "asc" }] },
-            }}
-            slots={{
-              noRowsOverlay: CustomNoRowsOverlay,
-            }}
-            getRowId={(row) => row.id}
-          />
-        </Box>
-      </Box>
-      {/* View Dialog */}
-      <ViewMyRequestDialog
-        open={viewOpen}
-        handleClose={() => setViewOpen(false)}
-        data={viewData}
-      />
+    <Dialog open={open} fullWidth maxWidth="lg">
+      <DialogTitle>{mode} Data Parameters</DialogTitle>
 
-      {/* Cancel Dialog */}
-      <Dialog open={confirmDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>Cancel Request ID: {requestId}</DialogTitle>
-        <DialogContent>
-          <Typography>Are you sure you want to cancel this request?</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDialog(false)}>Close</Button>
+      <DialogContent>
+        <Controller
+          name="fileType"
+          control={control}
+          render={({ field }) => (
+            <TextField
+              {...field}
+              select
+              label="File Type"
+              fullWidth
+              margin="normal"
+              disabled={isView}
+            >
+              {subTypeRows?.map((item) => (
+                <MenuItem key={item} value={item}>
+                  {item}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+        />
+        {/* )}  */}
+
+        {!isView && (
           <Button
-            variant="contained"
-            color="error"
-            onClick={handleCancelRequest}
+            startIcon={<AddIcon />}
+            onClick={() => {
+              const currentRows = getValues("rows");
+              let nextStart = 1;
+              if (currentRows.length > 0) {
+                const lastRow = currentRows[currentRows.length - 1];
+
+                const lastEnd = Number(lastRow.endValue || 0);
+                if (lastRow.dataType === "AMOUNT") {
+                  nextStart = lastEnd + 2;
+                } else {
+                  nextStart = lastEnd + 1;
+                }
+              }
+
+              append({
+                columnId: null,
+                columnName: "",
+                startValue: nextStart,
+                endValue: "",
+                toBeIncluded: true,
+                dataType: "STRING",
+                decimalCount: null,
+              });
+            }}
           >
-            Confirm
+            {/* onClick={handleAddRow}> */}
+            Add Row
           </Button>
-        </DialogActions>
-      </Dialog>
-    </>
-  );
-}
+        )}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-{/* Payload Section */}
-
-<Divider sx={{ my: 2 }} />
-
-{data.requestType === "MAIN_DATA_PARAMETERS" ? (
-  <>
-    {/* File Type Section */}
-    <Grid container spacing={2} sx={{ mb: 2 }}>
-      <Grid size={{ xs: 12, sm: 4 }}>
-        <Box sx={{ display: "flex", flexDirection: "column" }}>
-          <Typography
-            variant="subtitle2"
-            sx={{ fontWeight: 800, color: "text.secondary" }}
-          >
-            File Type
-          </Typography>
-          <Typography variant="body1">
-            {data.fileType ?? "N/A"}
-          </Typography>
-        </Box>
-      </Grid>
-    </Grid>
-
-    {/* Rows Table */}
-    {Array.isArray(data.rows) && data.rows.length > 0 && (
-      <Box sx={{ mt: 2 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          Data Parameters
-        </Typography>
-
+        {/* VIEW MODE TABLE */}
         <Table size="small">
           <TableHead>
-            <TableRow>
+            <TableRow sx={{ height: 80 }}>
               <TableCell>Column Id</TableCell>
               <TableCell>Column Name</TableCell>
               <TableCell>Start</TableCell>
@@ -370,63 +258,213 @@ export default function DataParametersRequestsTab() {
               <TableCell>Included</TableCell>
               <TableCell>Data Type</TableCell>
               <TableCell>Decimal</TableCell>
+              {!isView && <TableCell />}
             </TableRow>
           </TableHead>
 
           <TableBody>
-            {data.rows.map((row, index) => (
-              <TableRow key={index}>
-                <TableCell>{row.columnId || "-"}</TableCell>
-                <TableCell>{row.columnName}</TableCell>
-                <TableCell>{row.startValue}</TableCell>
-                <TableCell>{row.endValue}</TableCell>
-                <TableCell>
-                  {row.toBeIncluded === true ||
-                  row.toBeIncluded === "true"
-                    ? "YES"
-                    : "NO"}
-                </TableCell>
-                <TableCell>{row.dataType}</TableCell>
-                <TableCell>{row.decimalCount ?? "-"}</TableCell>
-              </TableRow>
-            ))}
+            {fields.map((row, index) => {
+              const dataType = watch(`rows.${index}.dataType`);
+
+              return (
+                <TableRow key={row.id}>
+                  <TableCell sx={{ verticalAlign: "top" }}>
+                    {row.columnId || "-"}
+                  </TableCell>
+
+                  <TableCell sx={{ verticalAlign: "top" }}>
+                    {isView ? (
+                      row.columnName
+                    ) : (
+                      <Controller
+                        name={`rows.${index}.columnName`}
+                        control={control}
+                        render={({ field }) => (
+                          <TextField
+                            {...field}
+                            disabled={
+                              isView ||
+                              (isCreate && fileTypeExists && row.columnId)
+                            }
+                          />
+                        )}
+                      />
+                    )}
+                  </TableCell>
+
+                  <TableCell sx={{ verticalAlign: "top" }}>
+                    {isView ? (
+                      row.startValue
+                    ) : (
+                      <Controller
+                        name={`rows.${index}.startValue`}
+                        control={control}
+                        render={({ field }) => (
+                          <TextField
+                            type="number"
+                            {...field}
+                            disabled={
+                              isView ||
+                              (isCreate && fileTypeExists && row.columnId)
+                            }
+                          />
+                        )}
+                      />
+                    )}
+                  </TableCell>
+
+                  <TableCell sx={{ verticalAlign: "top" }}>
+                    {isView ? (
+                      row.endValue
+                    ) : (
+                      <Controller
+                        name={`rows.${index}.endValue`}
+                        control={control}
+                        rules={{
+                          validate: (value) => {
+                            const start = watch(`rows.${index}.startValue`);
+                            if (!value) return "End value is required ";
+                            if (Number(value) <= Number(start)) {
+                              return "End value must be greater than start value";
+                            }
+                            return true;
+                          },
+                        }}
+                        render={({ field, fieldState }) => (
+                          <TextField
+                            //type="number"
+                            {...field}
+                            disabled={
+                              isView ||
+                              (isCreate && fileTypeExists && row.columnId)
+                            }
+                            error={!!fieldState.error}
+                            helperText={fieldState.error?.message || ""}
+                          />
+                        )}
+                      />
+                    )}
+                  </TableCell>
+
+                  <TableCell sx={{ verticalAlign: "top" }}>
+                    {isView ? (
+                      row.toBeIncluded ? (
+                        "YES"
+                      ) : (
+                        "NO"
+                      )
+                    ) : (
+                      <Controller
+                        name={`rows.${index}.toBeIncluded`}
+                        control={control}
+                        render={({ field }) => (
+                          <RadioGroup
+                            row
+                            value={field.value ? "YES" : "NO"}
+                            onChange={(e) =>
+                              field.onChange(e.target.value === "YES")
+                            }
+                          >
+                            <FormControlLabel
+                              value="YES"
+                              control={
+                                <Radio
+                                  disabled={
+                                    isView ||
+                                    (isCreate && fileTypeExists && row.columnId)
+                                  }
+                                />
+                              }
+                              label="Yes"
+                            />
+                            <FormControlLabel
+                              value="NO"
+                              control={
+                                <Radio
+                                  disabled={
+                                    isView ||
+                                    (isCreate && fileTypeExists && row.columnId)
+                                  }
+                                />
+                              }
+                              label="No"
+                            />
+                          </RadioGroup>
+                        )}
+                      />
+                    )}
+                  </TableCell>
+
+                  <TableCell sx={{ verticalAlign: "top" }}>
+                    {isView ? (
+                      row.dataType
+                    ) : (
+                      <Controller
+                        name={`rows.${index}.dataType`}
+                        control={control}
+                        render={({ field }) => (
+                          <TextField
+                            select
+                            {...field}
+                            disabled={
+                              isView ||
+                              (isCreate && fileTypeExists && row.columnId)
+                            }
+                          >
+                            <MenuItem value="STRING">STRING</MenuItem>
+                            <MenuItem value="AMOUNT">AMOUNT</MenuItem>
+                          </TextField>
+                        )}
+                      />
+                    )}
+                  </TableCell>
+
+                  <TableCell sx={{ verticalAlign: "top" }}>
+                    {isView ? (
+                      row.decimalCount
+                    ) : (
+                      <Controller
+                        name={`rows.${index}.decimalCount`}
+                        control={control}
+                        render={({ field }) => (
+                          <TextField
+                            type="number"
+                            {...field}
+                            disabled={
+                              isView ||
+                              (isCreate && fileTypeExists && row.columnId) ||
+                              dataType !== "AMOUNT"
+                            }
+                          />
+                        )}
+                      />
+                    )}
+                  </TableCell>
+
+                  {!isView && !(isCreate && fileTypeExists && row.columnId) && (
+                    <TableCell sx={{ verticalAlign: "top" }}>
+                      {!row.columnId && (
+                        <IconButton onClick={() => remove(index)}>
+                          <DeleteIcon />
+                        </IconButton>
+                      )}
+                    </TableCell>
+                  )}
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
-      </Box>
-    )}
-  </>
-) : (
-  /* ===== DEFAULT GENERIC VIEW FOR OTHER SCREENS ===== */
+      </DialogContent>
 
-  <Grid container spacing={2}>
-    {Object.entries(viewData).map(([key, value]) => (
-      <Grid size={{ xs: 12, sm: 4 }} key={key}>
-        <Box sx={{ display: "flex", flexDirection: "column" }}>
-          <Typography
-            variant="subtitle2"
-            sx={{
-              fontWeight: 800,
-              color: "text.secondary",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {formatKeyForDisplay(key)}
-          </Typography>
-          <Typography
-            variant="body1"
-            sx={{ wordBreak: "break-word" }}
-          >
-            {String(value ?? "N/A")}
-          </Typography>
-        </Box>
-      </Grid>
-    ))}
-  </Grid>
-)}
-
-
-
-
-
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        {!isView && (
+          <Button onClick={onSubmit} variant="contained">
+            Submit
+          </Button>
+        )}
+      </DialogActions>
+    </Dialog>
+  );
+}
