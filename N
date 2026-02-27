@@ -154,3 +154,30 @@
 />
 
 
+
+
+
+
+
+
+
+
+
+
+ <TextField
+      type="number"
+      {...field}
+      error={!!fieldState.error}
+      helperText={fieldState.error?.message || " "}
+      FormHelperTextProps={{
+        sx: {
+          minHeight: 20,
+          whiteSpace: "nowrap",   // 🔥 prevents wrapping
+          margin: 0,
+        },
+      }}
+      sx={{
+        width: "100%",
+      }}
+    />
+
