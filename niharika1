@@ -1,0 +1,189 @@
+@Service
+@Slf4j
+public class ReportServiceImpl implements ReportService {
+ 
+    private static final int BUFFER_SIZE = 32 * 1024;
+    private static final Set<String> ALREADY_COMPRESSED_EXTS = Set.of("pdf", "xlsx", "xls", "zip", "gz", "png", "jpg",
+            "jpeg");
+    private final ReportTypeRepository reportTypeRepository;
+    private final JasperReportTypeRepository jasperReportTypeRepository;
+    private final String reportsBasePath;
+    private final String branchReportBasePath;
+    private final AppConfigRepository appConfigRepository;
+    private final NotificationWriterService notificationWriterService;
+    private final FileSystem hdfsFileSystem;
+    private final String tempReportsBasepath;
+    private final ControlDateService controlDateService;
+ 
+    // ================= Redis Template for Progress ===================
+    private final RedisTemplate<String, TaskProgressDto> redisTemplate;
+    private final String REPORTS_START_DATE_KEY = "REPORTS_START_DATE";
+ 
+    @Autowired
+    private DataSource dataSource;
+ 
+    @Value("${directory.jasperFileDir:/jasper}")
+    private String jasperFileDir;
+ 
+    @Value("${classpath:/jasper}")
+    private String jasperFileResources;
+ 
+    @Value("${notification.progress.topic}")
+    private String progressTopic;
+ 
+    @Autowired
+    private ResourceLoader resourceLoader;
+ 
+    public ReportServiceImpl(ReportTypeRepository reportTypeRepository,
+            JasperReportTypeRepository jasperReportTypeRepository,
+            @Value("${glif.reports.base-path}") String basePath,
+            @Value("${glif.branch-reports.base-path}") String branchReportBasePath,
+            AppConfigRepository appConfigRepository,
+            NotificationWriterService notificationWriterService,
+            FileSystem hdfsFileSystem,
+            @Qualifier("progressRedisTemplate") RedisTemplate<String, TaskProgressDto> redisTemplate,
+            @Value("${glif.temp-reports.base-path}") String tempReportsBasepath,
+            ControlDateService controlDateService) {
+        this.reportTypeRepository = reportTypeRepository;
+        this.jasperReportTypeRepository = jasperReportTypeRepository;
+        this.reportsBasePath = basePath;
+        this.branchReportBasePath = branchReportBasePath;
+        this.appConfigRepository = appConfigRepository;
+        this.notificationWriterService = notificationWriterService;
+        this.hdfsFileSystem = hdfsFileSystem;
+        this.redisTemplate = redisTemplate;
+        this.tempReportsBasepath = tempReportsBasepath;
+        this.controlDateService = controlDateService;
+    }
+ 
+    /**
+     * Retrieves a list of report types that are explicitly mapped to the given
+     * roleId AND start date from app_config table.
+     *
+     * @param roleId The ID of the user's role.
+     * @return A list of DTOs representing the available reports and start date.
+     */
+    @Override
+    public List<ReportTypeDto> getReportTypes(int roleId, String moduleType) {
+        if (moduleType == null || moduleType.isBlank()) {
+            throw new IllegalArgumentException("Module Type can not be empty.");
+        }
+        //
+        // if(!moduleType.equalsIgnoreCase("BRANCH_WISE") ||
+        // !moduleType.equalsIgnoreCase("WHOLE_BANK")) {
+        // throw new IllegalArgumentException("Invalid Module Type.");
+        // }
+ 
+        // Fetch the date from appConfig to validate the start date of date-picker
+        LocalDate startDate = getStartDateFromAppConfig();
+ 
+        if ("BRANCH_WISE".equalsIgnoreCase(moduleType)) {
+            return reportTypeRepository.findBranchWiseReports(roleId).stream()
+                    .map(reportType -> new ReportTypeDto(reportType.getReportName(), reportType.getFileName(),
+                            startDate))
+                    .collect(Collectors.toList());
+        }
+ 
+        return reportTypeRepository.findByRoleId(roleId).stream()
+                .map(reportType -> new ReportTypeDto(reportType.getReportName(), reportType.getFileName(), startDate))
+                .collect(Collectors.toList());
+    }
+ 
+    // ----------------------------------------------------------------------------------
+    // 1. DOWNLOAD STREAM WITH PROGRESS
+    // ----------------------------------------------------------------------------------
+    @Transactional
+    @Override
+    public ReportStreamResponse downloadReportStream(String fileName, LocalDate date, int userRoleId, String userId,
+            String branchCode) throws IOException {
+        // 1. Authorization Check
+        ReportType reportType = reportTypeRepository.findByFileNameAndRoles_roleId(fileName, userRoleId)
+                .orElseThrow(() -> {
+                    log.warn("Access Denied: User {} -> Report {}", userId, fileName);
+                    sendNotification(userId, "Access Denied for report: " + fileName, "/glif-reports",
+                            fileName + "_" + date);
+                    return new AccessDeniedException("Access Denied for report: " + fileName);
+                });
+ 
+        log.info("Fetched report from db : {}", reportType.getReportName());
+        // This is the human-readable name (e.g., "Daily Balance Sheet")
+        String reportDisplayName = reportType.getReportName();
+ 
+        // Construct task id
+        String safeReportName = reportDisplayName.replaceAll("[^a-zA-Z0-9]", "_").toLowerCase().replaceAll("_", "_");
+        String safeDate = date.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        String taskId = String.format("%s_%s_%d", safeReportName, safeDate, System.currentTimeMillis());
+ 
+        // 2. Prepare Paths with the CORRECT format "dd-MM-yyyy"
+        String formattedDate = date.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String fileNamePrefix = fileName + "_" + date.format(DateTimeFormatter.ofPattern("ddMMyyyy"));
+ 
+        log.info("branch code :  {}", branchCode);
+        Path searchDirectory;
+        if (branchCode == null || branchCode.isBlank()) {
+            // For Whole Bank Reports
+            searchDirectory = new Path(reportsBasePath, formattedDate);
+            log.info("Searching HDFS directory {} for whole bank reports with prefix '{}'...", searchDirectory,
+                    fileNamePrefix);
+        } else {
+            // For Branch-Wise Reports, directory example: /branch_reports/00001/2026-01-07/
+ 
+            searchDirectory = new Path(branchReportBasePath, branchCode + "/" + formattedDate);
+            log.info("Searching HDFS directory {} for branch wise reports with prefix '{}'...", searchDirectory,
+                    fileNamePrefix);
+        }
+        // 3. Call the common stream Logic and return directly to the client
+        return streamReport(searchDirectory, taskId, userId, fileNamePrefix, reportDisplayName, date, fileName,
+                formattedDate);
+ 
+    }
+ 
+    // ----------------------------------------------------------------------------------
+    // 2. CREATE REPORT WITH PROGRESS
+    // ----------------------------------------------------------------------------------
+    @Override
+    public Map<String, String> createReports(ReportCreationDto parameters, String userId) throws IOException {
+        Map<String, String> reportStat = new HashMap<>();
+        String taskId = "gen_" + System.currentTimeMillis();
+ 
+        LocalDate reportDate = LocalDate.parse(parameters.getDate(), DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+        String formattedDate = reportDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String datePrefix = reportDate.format(DateTimeFormatter.ofPattern("ddMMyyyy"));
+        Path reportDir = new Path(reportsBasePath, formattedDate);
+ 
+        try {
+            if (!hdfsFileSystem.exists(reportDir)) {
+                hdfsFileSystem.mkdirs(reportDir);
+            }
+        } catch (IOException e) {
+            throw new IOException("Unable to create folder in hdfs");
+        }
+ 
+        List<JasperReports> reportsDetails = jasperReportTypeRepository.findAll();
+        int totalReports = reportsDetails.size();
+        int processedCount = 0;
+ 
+        sendProgress(taskId, userId, 0, "Starting report generation...", "PROCESSING");
+ 
+        String logoPath = null;
+        try {
+            logoPath = new ClassPathResource("images/logo.png").getFile().getAbsolutePath();
+        } catch (ResourceNotFoundException e) {
+            log.warn("Logo not found");
+        }
+ 
+        // Use a single connection for the batch, but handle failures gracefully
+        try (Connection connection = dataSource.getConnection()) {
+            for (JasperReports report : reportsDetails) {
+                processedCount++;
+                String reportName = report.getType();
+                String jasperFileName = report.getFileName();
+ 
+                // Calculate base percentage for this report
+                int basePercent = (int) (((double) (processedCount - 1) / totalReports) * 100);
+                sendProgress(taskId, userId, basePercent, "Generating " + reportName + "...", "PROCESSING");
+                log.info("Generating report: {}", reportName);
+ 
+                StringBuilder status = new StringBuilder();
+ 
+ 
