@@ -1,0 +1,60 @@
+try {
+                    java.nio.file.Path jasperPath = Paths.get(jasperFileDir, jasperFileName);
+                    if (!jasperPath.toFile().exists()) {
+                        throw new FileNotFoundException("Jasper file missing: " + jasperFileName);
+                    }
+ 
+                    try (InputStream jasperStream = new FileInputStream(jasperPath.toString())) {
+                        Map<String, Object> reportParams = new HashMap<>();
+                        reportParams.put("imagePath", logoPath);
+                        reportParams.put("date", parameters.getDate());
+ 
+                        JasperPrint jasperPrint = JasperFillManager.fillReport(jasperStream, reportParams, connection);
+ 
+                        // --- PDF ---
+                        Path pdfPath = new Path(reportDir, reportName + "_" + datePrefix + ".pdf");
+                        try (FSDataOutputStream pdfOut = hdfsFileSystem.create(pdfPath, true)) {
+                            JasperExportManager.exportReportToPdfStream(jasperPrint, pdfOut);
+                            status.append("PDF generated");
+                        }
+ 
+                        // --- EXCEL ---
+                        Path xlsxPath = new Path(reportDir, reportName + "_" + datePrefix + ".xlsx");
+                        try (FSDataOutputStream xlsxOut = hdfsFileSystem.create(xlsxPath, true)) {
+                            JRXlsxExporter xlsxExporter = new JRXlsxExporter();
+                            xlsxExporter.setExporterInput(new SimpleExporterInput(jasperPrint));
+                            xlsxExporter.setExporterOutput(new SimpleOutputStreamExporterOutput(xlsxOut));
+                            xlsxExporter.exportReport();
+                            status.append(", Excel generated");
+                        }
+ 
+                        // --- PSV ---
+                        Path psvPath = new Path(reportDir, reportName + "_" + datePrefix + ".psv");
+                        try (FSDataOutputStream psvOut = hdfsFileSystem.create(psvPath, true)) {
+                            JRCsvExporter csvExporter = new JRCsvExporter();
+                            csvExporter.setExporterInput(new SimpleExporterInput(jasperPrint));
+                            csvExporter.setExporterOutput(new SimpleWriterExporterOutput(psvOut));
+                            SimpleCsvExporterConfiguration csvConfig = new SimpleCsvExporterConfiguration();
+                            csvConfig.setFieldDelimiter("|");
+                            csvExporter.setConfiguration(csvConfig);
+                            csvExporter.exportReport();
+                            status.append(", PSV generated");
+                        }
+ 
+                        reportStat.put(reportName, status.toString());
+                    }
+                } catch (IOException | JRException e) {
+                    log.error("Error generating {}: {}", reportName, e.getMessage());
+                    reportStat.put(reportName, "Failed: " + e.getMessage());
+                    // Don't stop the loop; try to generate other reports
+                }
+            }
+        } catch (SQLException e) {
+            log.error("Unable to fetch records from db");
+        }
+ 
+        sendProgress(taskId, userId, 100, "All reports generated.", "COMPLETED");
+        log.info("All reports generated.");
+        return reportStat;
+    }
+ 
