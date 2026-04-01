@@ -1,990 +1,280 @@
-import * as React from "react";
-import PropTypes from "prop-types";
-import Tab from "@mui/material/Tab";
-import DataParametersTab1 from "./DataParametersTab";
-import DataParametersRequestTab2 from "./DataParametersRequestTab";
-import ConnectWithoutContactIcon from "@mui/icons-material/ConnectWithoutContact";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-
-import {
-  DataPMasterTabs,
-  DataPTabContainer,
-  DataPMastermainBox,
-} from "./DataParametersStyle";
-import { Box, Paper } from "@mui/material";
-
-function CustomTabPanel(props) {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`simple-tabpanel-${index}`}
-      aria-labelledby={`simple-tab-${index}`}
-      {...other}
-    >
-      {value === index && <DataPMastermainBox>{children}</DataPMastermainBox>}
-    </div>
-  );
-}
-
-CustomTabPanel.propTypes = {
-  children: PropTypes.node,
-  index: PropTypes.number.isRequired,
-  value: PropTypes.number.isRequired,
-};
-
-function a11yProps(index) {
-  return {
-    id: `simple-tab-${index}`,
-    "aria-controls": `simple-tabpanel-${index}`,
-  };
-}
-
-export default function DataParametersmain() {
-  const [value, setValue] = React.useState(0);
-
-  const handleChange = (event, newValue) => {
-    setValue(newValue);
-  };
-
-  return (
-    <>
-      <DataPTabContainer fullWidth={"true"}>
-        <DataPMasterTabs
-          value={value}
-          onChange={handleChange}
-          aria-label="basic tabs example"
-          variant="fullWidth"
-        >
-          <Tab
-            label="Manage data"
-            icon={<ConnectWithoutContactIcon />}
-            iconPosition="start"
-            {...a11yProps(0)}
-          />
-          <Tab
-            icon={<PendingActionsIcon />}
-            iconPosition="start"
-            label="My Requests"
-            {...a11yProps(1)}
-          />
-        </DataPMasterTabs>
-      </DataPTabContainer>
-      <CustomTabPanel value={value} index={0}>
-        <DataParametersTab1 />
-      </CustomTabPanel>
-      <CustomTabPanel value={value} index={1}>
-        <DataParametersRequestTab2 />
-      </CustomTabPanel>
-    </>
-  );
-}
-
-
-
-/// tab 1
-import { useEffect, useState } from "react";
-import {
-  Box,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  IconButton,
-  Button,
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import EditIcon from "@mui/icons-material/Edit";
-import useApi from "../../hooks/useApi";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import DataParametersDialog from "./DataParametersDialog";
-import { data } from "react-router-dom";
-
-export default function ManageDataTab() {
-  const { callApi } = useApi();
-  const snackbar = useCustomSnackbar();
-
-  const [rows, setRows] = useState([]);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [mode, setMode] = useState("CREATE");
-  const [selectedData, setSelectedData] = useState(null);
-
-  const normalizeRows = (rows) =>
-    rows.map((r) => ({
-      ...r,
-      toBeIncluded:
-        r.toBeIncluded === true ||
-        r.toBeIncluded === "true" ||
-        r.toBeIncluded === "YES",
-      dataType: r.dataType?.toUpperCase(),
-    }));
-
-  const fetchData = async () => {
-    try {
-      const res = await callApi("/CM/common-master/data-parameters", {}, "GET");
-      const res1 = await callApi(
-        "/CM/common-master/files-sub-types",
-        {},
-        "GET",
-      );
-      console.log("res1", res1);
-      const data = res?.data || [];
-      console.log("data", data);
-      if (!Array.isArray(data)) {
-        const formatted = Object.keys(data || {}).map((key) => ({
-          fileType: key,
-          rows: normalizeRows(data[key]),
-        }));
-        setRows(formatted);
-      } else {
-        setRows(data);
-      }
-    } catch {
-      snackbar("Failed to load data", "error");
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  return (
-    <Box mt={2}>
-      <Box display="flex" justifyContent="flex-end" mb={2}>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            setMode("CREATE");
-            setSelectedData(null);
-            setDialogOpen(true);
-          }}
-        >
-          Create
-        </Button>
-      </Box>
-
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell>File Type</TableCell>
-            <TableCell align="right">Actions</TableCell>
-          </TableRow>
-        </TableHead>
-
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.fileType}>
-              <TableCell>{row.fileType}</TableCell>
-              <TableCell align="right">
-                <IconButton
-                  onClick={() => {
-                    setMode("VIEW");
-                    setSelectedData(row);
-                    setDialogOpen(true);
-                  }}
-                >
-                  <VisibilityIcon />
-                </IconButton>
-
-                <IconButton
-                  onClick={() => {
-                    setMode("EDIT");
-                    setSelectedData(row);
-                    setDialogOpen(true);
-                  }}
-                >
-                  <EditIcon />
-                </IconButton>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-
-      <DataParametersDialog
-        open={dialogOpen}
-        mode={mode}
-        data={selectedData}
-        allData={rows}
-        refresh={fetchData}
-        onClose={() => setDialogOpen(false)}
-      />
-    </Box>
-  );
-}
-
-
-/// dialog
-
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  MenuItem,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
-  IconButton,
-} from "@mui/material";
-
-import AddIcon from "@mui/icons-material/Add";
-import DeleteIcon from "@mui/icons-material/Delete";
-
-import { useForm, useFieldArray, Controller } from "react-hook-form";
-import { useEffect, useState } from "react";
-
-import useApi from "../../hooks/useApi";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-
-export default function DataParametersDialog({
-  open,
-  mode,
-  data,
-  allData,
-  onClose,
-  refresh,
-}) {
-  const isView = mode === "VIEW";
-  const isEdit = mode === "EDIT";
-  const isCreate = mode === "CREATE";
-
-  const { callApi } = useApi();
-  const snackbar = useCustomSnackbar();
-  const [subTypeRows, setSubTypeRows] = useState([]);
-  const fetchData = async () => {
-    try {
-      const res1 = await callApi(
-        "/CM/common-master/files-sub-types",
-        {},
-        "GET",
-      );
-      console.log("res1", res1?.data);
-      const subtypedata = res1?.data || [];
-      console.log("sunnnnn", subtypedata);
-      setSubTypeRows(subtypedata);
-    } catch {
-      snackbar("Failed to load data", "error");
-    }
-  };
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const { control, watch, setValue, getValues } = useForm({
-    defaultValues: {
-      fileType: "",
-      rows: [],
-    },
-  });
-
-  const { fields, append, remove, replace } = useFieldArray({
-    control,
-    name: "rows",
-  });
-
-  /* ---------------- MODE HANDLING ---------------- */
-
-  useEffect(() => {
-    if (isCreate) {
-      setValue("fileType", "");
-      replace([]);
-    }
-
-    if ((isEdit || isView) && data) {
-      setValue("fileType", data.fileType);
-      replace(data.rows || []);
-    }
-  }, [mode, data]);
-
-  const selectedFileType = watch("fileType");
-
-  useEffect(() => {
-    if (!selectedFileType) {
-      replace([]);
-      return;
-    }
-
-    const selected = allData?.find(
-      (item) => item.fileType === selectedFileType,
-    );
-   const fileTypeExists = allData?.some(
-      (item) => item.fileType === selectedFileType
-    );
-
-    console.log("alldata", selected);
-    if (selected) {
-      replace(
-        selected.rows.map((r) => ({
-          ...r,
-          toBeIncluded:
-            r.toBeIncluded === true ||
-            r.toBeIncluded === "true" ||
-            r.toBeIncluded === "YES",
-          dataType: r.dataType?.toUpperCase(),
-        })),
-      );
-    } else {
-      replace([]);
-    }
-  }, [selectedFileType]);
-
-  // /* ---------------- ADD ROW WITH AUTO START ---------------- */
-
-  // const handleAddRow = () => {
-  //   const currentRows = getValues("rows");
-
-  //   let nextStart = 1;
-
-  //   if (currentRows.length > 0) {
-  //     const lastRow = currentRows[currentRows.length - 1];
-  //     nextStart = Number(lastRow.endValue || 0) + 1;
-  //   }
-
-  //   append({
-  //     columnId: null,
-  //     columnName: "",
-  //     startValue: nextStart,
-  //     endValue: "",
-  //     toBeIncluded: true,
-  //     dataType: "STRING",
-  //     decimalCount: null,
-  //   });
-  // };
-
-  /* ---------------- VALIDATION ---------------- */
-
-  const validateForm = (formData) => {
-    if (!formData.fileType) {
-      snackbar("File Type is required", "error");
-      return false;
-    }
-
-    if (formData.rows.length === 0) {
-      snackbar("At least one row required", "error");
-      return false;
-    }
-
-    for (let i = 0; i < formData.rows.length; i++) {
-      const r = formData.rows[i];
-
-      if (!r.columnName) {
-        snackbar(`Column Name required (Row ${i + 1})`, "error");
-        return false;
-      }
-
-      if (Number(r.startValue) >= Number(r.endValue)) {
-        snackbar(`End must be greater than Start (Row ${i + 1})`, "error");
-        return false;
-      }
-
-      if (
-        r.dataType === "AMOUNT" &&
-        (r.decimalCount === null || r.decimalCount === "")
-      ) {
-        snackbar(`Decimal required for AMOUNT (Row ${i + 1})`, "error");
-        return false;
-      }
-    }
-
-    return true;
-  };
-
-  /* ---------------- SUBMIT ---------------- */
-
-  const onSubmit = async () => {
-    const formData = getValues();
-    if (!validateForm(formData)) return;
-
-    const payload = {
-      requestType: "MAIN_DATA_PARAMETERS",
-      changeType: isEdit ? "UPDATE" : "ADD",
-      payload: formData,
-    };
-
-    await callApi("/CR/create-request", payload, "POST");
-
-    snackbar("Request submitted successfully", "success");
-    refresh();
-    onClose();
-  };
-
-  return (
-    <Dialog open={open} fullWidth maxWidth="xl">
-      <DialogTitle>{mode} Data Parameters</DialogTitle>
-
-      <DialogContent>
-        {/* FILE TYPE FIELD */}
-        {/* 
-        {isCreate ? (
-          <Controller
-            name="fileType"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                label="File Type"
-                fullWidth
-                margin="normal"
-              />
-            )}
-          />
-        ) : ( */}
-        <Controller
-          name="fileType"
-          control={control}
-          render={({ field }) => (
-            <TextField
-              {...field}
-              select
-              label="File Type"
-              fullWidth
-              margin="normal"
-              disabled={isView}
-            >
-              {subTypeRows?.map((item) => (
-                <MenuItem key={item} value={item}>
-                  {item}
-                </MenuItem>
-              ))}
-              {/* <MenuItem key={fetchData} value={fetchData}>
-                {fetchData}
-              </MenuItem> */}
-            </TextField>
-          )}
-        />
-        {/* )}  */}
-
-        {!isView && (
-          <Button
-            startIcon={<AddIcon />}
-            onClick={() =>
-              append({
-                columnId: null,
-                columnName: "",
-                startValue: "",
-                endValue: "",
-                toBeIncluded: true,
-                dataType: "STRING",
-                decimalCount: null,
-              })
-            }
-          >
-            {/* onClick={handleAddRow}> */}
-            Add Row
-          </Button>
-        )}
-
-        {/* VIEW MODE TABLE */}
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Column Id</TableCell>
-              <TableCell>Column Name</TableCell>
-              <TableCell>Start</TableCell>
-              <TableCell>End</TableCell>
-              <TableCell>Included</TableCell>
-              <TableCell>Data Type</TableCell>
-              <TableCell>Decimal</TableCell>
-              {!isView && <TableCell />}
-            </TableRow>
-          </TableHead>
-
-          <TableBody>
-            {fields.map((row, index) => {
-              const dataType = watch(`rows.${index}.dataType`);
-
-              return (
-                <TableRow key={row.id}>
-                  <TableCell>{row.columnId || "-"}</TableCell>
-
-                  <TableCell>
-                    {isView ? (
-                      row.columnName
-                    ) : (
-                      <Controller
-                        name={`rows.${index}.columnName`}
-                        control={control}
-                        render={({ field }) => (
-                          <TextField
-                            {...field}
-                            disabled={
-                              mode === "CREATE" &&
-                              fileTypeExists &&
-                              row.columnId !== null
-                            }
-                          />
-                        )}
-                      />
-                    )}
-                  </TableCell>
-
-                  <TableCell>
-                    {isView ? (
-                      row.startValue
-                    ) : (
-                      <Controller
-                        name={`rows.${index}.startValue`}
-                        control={control}
-                        render={({ field }) => (
-                          <TextField type="number" {...field} />
-                        )}
-                      />
-                    )}
-                  </TableCell>
-
-                  <TableCell>
-                    {isView ? (
-                      row.endValue
-                    ) : (
-                      <Controller
-                        name={`rows.${index}.endValue`}
-                        control={control}
-                        render={({ field }) => (
-                          <TextField type="number" {...field} />
-                        )}
-                      />
-                    )}
-                  </TableCell>
-
-                  <TableCell>
-                    {isView ? (
-                      row.toBeIncluded ? (
-                        "YES"
-                      ) : (
-                        "NO"
-                      )
-                    ) : (
-                      <Controller
-                        name={`rows.${index}.toBeIncluded`}
-                        control={control}
-                        render={({ field }) => (
-                          <RadioGroup
-                            row
-                            value={field.value ? "YES" : "NO"}
-                            onChange={(e) =>
-                              field.onChange(e.target.value === "YES")
-                            }
-                          >
-                            <FormControlLabel
-                              value="YES"
-                              control={<Radio />}
-                              label="Yes"
-                            />
-                            <FormControlLabel
-                              value="NO"
-                              control={<Radio />}
-                              label="No"
-                            />
-                          </RadioGroup>
-                        )}
-                      />
-                    )}
-                  </TableCell>
-
-                  <TableCell>
-                    {isView ? (
-                      row.dataType
-                    ) : (
-                      <Controller
-                        name={`rows.${index}.dataType`}
-                        control={control}
-                        render={({ field }) => (
-                          <TextField select {...field}>
-                            <MenuItem value="STRING">STRING</MenuItem>
-                            <MenuItem value="AMOUNT">AMOUNT</MenuItem>
-                          </TextField>
-                        )}
-                      />
-                    )}
-                  </TableCell>
-
-                  <TableCell>
-                    {isView ? (
-                      row.decimalCount
-                    ) : (
-                      <Controller
-                        name={`rows.${index}.decimalCount`}
-                        control={control}
-                        render={({ field }) => (
-                          <TextField
-                            type="number"
-                            {...field}
-                            disabled={dataType !== "AMOUNT"}
-                          />
-                        )}
-                      />
-                    )}
-                  </TableCell>
-
-                  {!isView && (
-                    <TableCell>
-                      {!row.columnId && (
-                        <IconButton onClick={() => remove(index)}>
-                          <DeleteIcon />
-                        </IconButton>
-                      )}
-                    </TableCell>
-                  )}
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </DialogContent>
-
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        {!isView && (
-          <Button onClick={onSubmit} variant="contained">
-            Submit
-          </Button>
-        )}
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-
-// request
-
-import {
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Stack,
-  Typography,
-  Tooltip,
-  IconButton,
-  Chip,
-} from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
-import { useEffect, useMemo, useState } from "react";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
-import CancelIcon from "@mui/icons-material/Cancel";
-import DateRangeIcon from "@mui/icons-material/DateRange";
-import GppBadIcon from "@mui/icons-material/GppBad";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-
-import useApi from "../../hooks/useApi";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import CustomChip from "../../utils/CustomChip";
-import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
-
-function CustomNoRowsOverlay() {
-  return (
-    <Stack height="100%" alignItems="center" justifyContent="center">
-      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-      <Typography variant="h6">No Requests Found</Typography>
-      <Typography>You have not created any requests.</Typography>
-    </Stack>
-  );
-}
-
-export default function DataParametersRequestsTab() {
-  const { callApi } = useApi();
-  const snackbar = useCustomSnackbar();
-
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [confirmDialog, setConfirmDialog] = useState(false);
-  const [requestId, setRequestId] = useState(null);
-  const [viewOpen, setViewOpen] = useState(false);
-  const [viewData, setViewData] = useState(null);
-
-  // ================= FETCH =================
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-
-      const payload = { requestType: "MAIN_DATA_PARAMETERS" };
-
-      const response = await callApi("/CR/my-requests", payload, "POST");
-
-      if (response?.data) {
-        const result = response.data.map((row) => {
-          const parsedPayload = {
-            ...row.payload,
-            id: row.id,
-            reqStatus: row.reqStatus,
-            reqDate: row.reqDate,
-            changeType: row.changeType,
-          };
-
-          return parsedPayload;
-        });
-
-        // Pending first, then latest date
-        result.sort((a, b) => {
-          if (a.reqStatus === "PENDING" && b.reqStatus !== "PENDING") return -1;
-          if (a.reqStatus !== "PENDING" && b.reqStatus === "PENDING") return 1;
-          return new Date(b.reqDate) - new Date(a.reqDate);
-        });
-
-        setRows(result);
-      } else {
-        setRows([]);
-      }
-    } catch (error) {
-      snackbar("Failed to fetch requests", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  // ================= CANCEL =================
-
-  const handleCancelRequest = async () => {
-    try {
-      const payload = {
-        requestId,
-        remarks: "User cancelled this request",
-      };
-
-      const response = await callApi("/CR/cancel-request", payload, "PATCH");
-
-      if (response?.success) {
-        snackbar(`Request ${requestId} cancelled successfully`, "success");
-      } else {
-        snackbar(response?.message || "Cancel failed", "error");
-      }
-    } catch (error) {
-      snackbar("Cancel failed", "error");
-    } finally {
-      setConfirmDialog(false);
-      fetchData();
-    }
-  };
-
-  // ================= VIEW =================
-
-  const handleViewClick = (row) => {
-    const showData = {
-       fileType: row.fileType,
-    };
-
-    row.showData = showData;
-    setViewData(row);
-    setViewOpen(true);
-  };
-
-  // ================= COLUMNS =================
-
-  const columns = useMemo(
-    () => [
-      { field: "fileType", headerName: "File Type", flex: 1.5 },
-      { field: "id", headerName: "Request Id", flex: 0.7 },
-
-      {
-        field: "changeType",
-        headerName: "Request Type",
-        flex: 1,
-        align: "center",
-        renderCell: (params) => {
-          const val = params.value;
-
-          const icon =
-            val === "ADD" ? (
-              <AddBoxIcon />
-            ) : val === "DELETE" ? (
-              <AutoDeleteIcon />
-            ) : (
-              <EditDocumentIcon />
-            );
-
-          const label =
-            val === "ADD" ? "Added" : val === "DELETE" ? "Deleted" : "Modified";
-
-          return <CustomChip variant="outlined" icon={icon} label={label} />;
-        },
-      },
-
-      // Date
-      {
-        field: "reqDate",
-        headerName: "Submitted On",
-        flex: 1,
-        renderCell: (params) => (
-          <Chip icon={<DateRangeIcon />} label={params.value?.split("T")[0]} />
-        ),
-      },
-
-      // Status
-      {
-        field: "reqStatus",
-        headerName: "Status",
-        flex: 1,
-        align: "center",
-        renderCell: (params) => {
-          const val = params.value;
-
-          const icon =
-            val === "REJECTED" ? (
-              <BlockFlippedIcon />
-            ) : val === "ACCEPTED" ? (
-              <CheckCircleIcon />
-            ) : val === "CANCELLED" ? (
-              <GppBadIcon />
-            ) : (
-              <PendingActionsIcon />
-            );
-
-          const label =
-            val === "REJECTED"
-              ? "Rejected"
-              : val === "ACCEPTED"
-                ? "Approved"
-                : val === "CANCELLED"
-                  ? "Cancelled"
-                  : "Pending";
-
-          return <CustomChip variant="outlined" icon={icon} label={label} />;
-        },
-      },
-
-      // Actions
-      {
-        field: "actions",
-        headerName: "Action",
-        flex: 1,
-        align: "center",
-        renderCell: (params) => (
-          <Stack direction="row" spacing={1}>
-            <Tooltip title="View">
-              <IconButton onClick={() => handleViewClick(params.row)}>
-                <VisibilityIcon />
-              </IconButton>
-            </Tooltip>
-
-            {params.row.reqStatus === "PENDING" && (
-              <Tooltip title="Cancel">
-                <IconButton
-                  onClick={() => {
-                    setRequestId(params.row.id);
-                    setConfirmDialog(true);
-                  }}
-                >
-                  <CancelIcon />
-                </IconButton>
-              </Tooltip>
-            )}
-          </Stack>
-        ),
-      },
-    ],
-    [],
-  );
-
-  return (
-    <>
-      <Box>
-        <Box>
-          <DataGrid
-            rows={rows}
-            columns={columns}
-            loading={loading}
-            // getRowId={(row) => row.id}
-            pageSizeOptions={[5, 10, 25, 50]}
-            initialState={{
-              pagination: { paginationModel: { pageSize: 10, page: 0 } },
-              // sorting: { sortModel: [{ field: "circleCode", sort: "asc" }] },
-            }}
-            slots={{
-              noRowsOverlay: CustomNoRowsOverlay,
-            }}
-            getRowId={(row) => row.id}
-          />
-        </Box>
-      </Box>
-      {/* View Dialog */}
-      <ViewMyRequestDialog
-        open={viewOpen}
-        handleClose={() => setViewOpen(false)}
-        data={viewData}
-      />
-
-      {/* Cancel Dialog */}
-      <Dialog open={confirmDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>Cancel Request ID: {requestId}</DialogTitle>
-        <DialogContent>
-          <Typography>Are you sure you want to cancel this request?</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDialog(false)}>Close</Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleCancelRequest}
-          >
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </>
-  );
-}
-//style
-
-import * as React from "react";
-import Tabs from "@mui/material/Tabs";
-import Box from "@mui/material/Box";
-import { styled } from "@mui/material/styles";
-import { DataGrid } from "@mui/x-data-grid";
-import { Chip, Fab, Grid, Stack, DialogTitle } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-
-
-export const DataPMastermainBox = styled(Box)(({ theme }) => ({
-  py: 2,
-}));
-export const DataPTabContainer = styled(Box)(({ theme }) => ({
-  borderBottom: 1,
-  borderColor: "divider",
-}));
-
-
-export const DataPMasterTabs = styled(Tabs)(({ theme }) => ({
-  width: "100%",
-}));
-
-export const DataPaamerer1Fab = styled(Fab)(({ theme }) => ({
-  position: "fixed",
-  borderRadius: 1,
-  fontSize: "15px",
-  bottom: theme.spacing(8),
-  right: theme.spacing(4),
-  zIndex: 1200,
-}));
-
-export const DataPaamererAddicon = styled(AddIcon)(({ theme }) => ({
-  mr: 1,
-}));
-export const DataPtab1DialogTitle = styled(DialogTitle)(({ theme }) => ({
-  m: 0,
-  p: 2,
-}));
+#ETL+1 pipeline
+
+
+import sys
+from datetime import datetime, timedelta
+from pyspark.sql import functions as F
+from pyspark.sql.functions import col, lit, concat
+from pyspark.sql.types import DateType, DecimalType
+from common.log_etl_modified import log_etl
+from common.logger import setup_logger
+from common.properties import get_oracle_properties
+from common.dateUtil import get_etl_date
+from common.fileUtil import paths_for_read
+from common.processRun import get_run_id, get_process_run_id
+from common.createSpark import create_spark_session
+from common.fileUtil import get_hdfs_base
+from common.fileUtil import tables_to_read
+from common.read_write_oracle import read_oracle, write_oracle
+from common.constants import Process
+# ==========================================================
+# Spark & ETL setup
+# ==========================================================
+HDFS_BASE = get_hdfs_base()
+spark = create_spark_session("GLIF_Transfer[ETL+1]_PIPELINE", HDFS_BASE)
+
+# db_date_str = "28-FEB-26"
+# today = datetime.strptime(db_date_str, "%d-%b-%y")
+# etl_plus_1_date = today + timedelta(days=1)
+# posting_date_str = today.strftime("%Y-%m-%d")        # "2025-11-21"
+# etl_plus_1_str = etl_plus_1_date.strftime("%Y-%m-%d") # "2025-11-22"
+
+today = get_etl_date(spark)
+etl_plus_1_date = today + timedelta(days=1)
+
+posting_date_str = today.strftime("%Y-%m-%d")
+etl_plus_1_str = etl_plus_1_date.strftime("%Y-%m-%d")
+
+PROCESS_ID = Process.ETL_PLUS_ONE
+RUN_ID = get_run_id(spark, posting_date_str, PROCESS_ID)
+logger = setup_logger("GLIF_DATA_TRANSFER", RUN_ID, posting_date_str)
+
+process_run_id = (
+    sys.argv[1] if len(sys.argv) > 1
+    else get_process_run_id(spark, PROCESS_ID, posting_date_str)
+)
+
+logger.info(f"=== GLIF DATA TRANSFER STARTED FOR {posting_date_str} ===")
+log_etl(spark, process_run_id, "gl_data_transfer_started", 1, "JOB STARTED")
+
+hdfs_paths = paths_for_read("glif",today,posting_date_str)
+GL_DATALAKE_PATH = hdfs_paths["GL_DATALAKE_PATH"]
+oracle_tables = tables_to_read("glif")
+TRANSACTIONS = oracle_tables["TRANSACTIONS"]
+BALANCE = oracle_tables["BALANCE"]
+
+
+
+# ==========================================================
+# STEP 1: Read closing balance
+# ==========================================================
+log_etl(spark, process_run_id, "reading_closing_balance", 1, "Reading from GL BALANCE")
+gl_balance_query = f"""
+(
+    SELECT CGL, CURRENCY, BRANCH_CODE, BALANCE, INR_BALANCE
+    FROM {BALANCE}
+    WHERE BALANCE_DATE = TO_DATE('{posting_date_str}', 'YYYY-MM-DD')
+) T1
+"""
+# gl_balance_query = f"""
+# (
+#     SELECT CGL, CURRENCY, BRANCH_CODE, BALANCE, INR_BALANCE
+#     FROM GL_BALANCE
+#     WHERE BALANCE_DATE = (SELECT MAX(BALANCE_DATE) FROM GL_BALANCE)
+# ) T1
+# """
+
+try:
+    closing_balance_df = read_oracle(spark, gl_balance_query)
+    
+    log_etl(spark, process_run_id, "reading_closing_balance", 2, "Reading from GL BALANCE")
+except Exception as e:
+    print(f"Error {e} while fetching data from {BALANCE} Table")
+    # ==========================================================
+    # Reading closing balance from GLIF DELTA LAKE
+    # ==========================================================
+    try:
+        logger.info(f"=== step 1: reading closing balance for {posting_date_str} ===")
+        log_etl(spark, process_run_id, "reading_closing_balance", 1, "Reading from GLIF Delta Lake")
+
+        path_config = paths_for_read("glif", today, posting_date_str)
+        gl_delta_path = path_config["GL_DATALAKE_PATH"]
+
+        closing_balance_df = spark.read.format("delta").load(gl_delta_path) \
+        .filter(col("BALANCE_DATE") == lit(posting_date_str)) \
+        .select("CGL", "CURRENCY", "BRANCH_CODE", "BALANCE", "INR_BALANCE")
+        logger.info(f"=== closing balance read successfully.")
+        log_etl(spark, process_run_id, "reading_closing_balance", 2, f"Read records from Delta")
+
+    except Exception as e:
+        logger.error(f"error reading closing balance: {e}")
+        log_etl(spark, process_run_id, "reading_closing_balance", 3, "Error reading from Delta")
+        spark.stop()
+        exit(1)
+
+closing_balance_df.cache()
+# ==========================================================
+# STEP 2: Normal day fast path
+# ==========================================================
+is_year_end = (today.month == 3 and today.day == 31)
+opening_balance_df = spark.createDataFrame([], closing_balance_df.schema)
+
+if not is_year_end:
+
+    logger.info("=== Normal day processing ===")
+    log_etl(spark, process_run_id, "creating_opening_bal", 1, "Creating opening balance")
+    opening_balance_df = closing_balance_df.withColumn(
+        "BALANCE_DATE",
+        lit(etl_plus_1_str).cast(DateType())
+    )
+    log_etl(spark, process_run_id, "creating_opening_bal", 2, "Opening balance created")
+
+# ==========================================================
+# STEP 3: Year-end logic (only on March 31)
+# ==========================================================
+else:
+    logger.info("=== Year-end detected ===")
+    try:
+        cal_active_df = read_oracle(spark, "(SELECT 1 FROM CALENDER_CONFIG WHERE ACTIVE_FLAG = 1) T1")
+        if cal_active_df.isEmpty():
+            print(f"Calander config has to be updated.")
+            spark.stop()
+            sys.exit(1)
+    except Exception as e:
+        print(f"Error {e} while loading cal_active_df from CALENDER_CONFIG Table")
+
+    if not cal_active_df.isEmpty():
+        logger.info("=== Active financial year found ===")
+        log_etl(spark, process_run_id, "year_end_rule", 1, "Active financial year found")
+        log_etl(spark, process_run_id, "creating_opening_bal", 1, "Creating opening balance")
+
+        # Base Data: Setting the new date
+        base_df = closing_balance_df.withColumn("BALANCE_DATE", lit(etl_plus_1_str).cast("date"))
+        base_df.cache()
+        # 1. Load Masters for Filtering
+        cgl_master_df = read_oracle(spark, "(SELECT CGL_NUMBER FROM CGL_MASTER WHERE BAL_FWD = 1) T1")
+        circle_master_df = read_oracle(spark, "(SELECT DISTINCT BRANCH_CODE FROM CIRCLE_MASTER WHERE BRANCH_CODE IS NOT NULL) T1")
+
+        # 2. Only keeping CGLs where BAL_FWD = 1
+        # Doing this first to ensure no other logic runs on excluded CGLs
+        fwd_base_df = base_df.join(F.broadcast(cgl_master_df), 
+                                    F.trim(F.col("CGL")) == F.trim(F.col("CGL_NUMBER")), 
+                                    "inner").select(base_df.columns)
+
+        # ---  CGL 7 & 8 RULE ---
+        rule_78_base = base_df.filter(F.col("CGL").rlike("^[78]"))
+        original_78 = rule_78_base.filter(F.trim(F.col("CURRENCY")) != "INR").distinct()
+
+        # Creating the INR Offset rows
+        offset_78 = original_78.withColumn("CURRENCY", F.lit("INR")) \
+                                .withColumn("BALANCE", F.negate(F.col("INR_BALANCE"))) \
+                                .withColumn("INR_BALANCE", F.negate(F.col("INR_BALANCE")))
+
+        # Union (1 Foreign + 1 INR = 2 rows)
+        df_78_final = original_78.unionByName(offset_78)
+
+        # --- CGL 2110505001 rule (Circle Branches) ---
+        # Now automatically respects BAL_FWD=1 because it uses fwd_base_df
+        df_circle_final = fwd_base_df.filter(F.col("CGL") == "2110505001") \
+                                        .join(F.broadcast(circle_master_df), "BRANCH_CODE", "inner")
+        
+        # --- General rule ---
+        # Excluding the 7/8 and Circle CGLs
+        df_general_final = fwd_base_df.filter(
+            (~(F.col("CGL").cast("string").rlike("^[78]"))) & 
+            (F.col("CGL").cast("string") != "2110505001")
+        )
+        
+
+        # --- Final union ---
+        common_cols = ["CGL", "CURRENCY", "BRANCH_CODE", "BALANCE_DATE", "BALANCE", "INR_BALANCE"]
+            
+        opening_balance_df = df_78_final.select(*common_cols) \
+                                .unionByName(df_circle_final.select(*common_cols)) \
+                                .unionByName(df_general_final.select(*common_cols))
+        opening_balance_df.cache()
+
+        # opening_balance_df.show(200, False)
+        log_etl(spark, process_run_id, "creating_opening_bal", 2, "Opening balance created")
+    else:
+        logger.info("=== No active financial year. Skipping ===")
+        log_etl(spark, process_run_id, "year_end_rule", 1, "Skipped: Inactive Year")
+
+        
+# ==========================================================
+# STEP 4: Writing to Delta
+# ==========================================================
+logger.info(f"=== Writing opening balance to delta for {etl_plus_1_str} ===")
+log_etl(spark, process_run_id, "writing_opening_balance_delta", 1, "Writing to Delta Lake")
+
+delta_final_df = opening_balance_df.select(
+    concat(col("BRANCH_CODE"), col("CURRENCY"), col("CGL")).alias("GLCC"),
+    col("BALANCE").cast(DecimalType(25, 4)).alias("CLOSING_BALANCE"),
+    col("BALANCE_DATE")
+)
+
+
+delta_final_df.write.format("delta").mode("overwrite") \
+    .option("replaceWhere", f"BALANCE_DATE = '{etl_plus_1_str}'") \
+    .save(GL_DATALAKE_PATH)
+
+logger.info("=== Delta write completed ===")
+log_etl(spark, process_run_id, "writing_opening_balance_delta", 2, "Delta write successful")
+
+
+# ==========================================================
+# STEP 5: Writing to Oracle
+# ==========================================================
+logger.info("=== Writing opening balance to oracle balance table ===")
+log_etl(spark, process_run_id, "writing_opening_balance_oracle", 1, "Writing to Oracle")
+
+write_oracle(
+    opening_balance_df.select(
+        col("CGL"),
+        col("CURRENCY"),
+        col("BRANCH_CODE"),
+        col("BALANCE_DATE"),
+        col("BALANCE").cast(DecimalType(25, 4)),
+        col("INR_BALANCE").cast(DecimalType(25, 4))
+    ),
+    BALANCE
+)
+
+logger.info("=== Oracle write completed ===")
+log_etl(spark, process_run_id, "writing_opening_balance_oracle", 2, "Oracle write successful")
+
+
+# ==========================================================
+# STEP 6: Updating FINCORE_DATE_DEV 
+# ==========================================================
+try:
+    logger.info(f"=== Updating FINCORE_DATE_DEV to {etl_plus_1_str} ===")
+    log_etl(spark, process_run_id, "fincore_date_update", 1, "Updating user's date")
+
+    oracle_props = get_oracle_properties()
+    url = oracle_props['url']
+    user = oracle_props['user']
+    pwd = oracle_props['password']
+
+    conn = spark._jvm.java.sql.DriverManager.getConnection(url, user, pwd)
+    conn.setAutoCommit(False)
+
+    stmt = conn.createStatement()
+
+    update_sql = f"""
+        UPDATE FINCORE_DATE
+        SET USERS_DATE = TO_DATE('{etl_plus_1_str}', 'YYYY-MM-DD'),
+            LAST_UPDATED_DATE = SYSTIMESTAMP
+        WHERE ROWNUM = 1
+    """
+
+    stmt.executeUpdate(update_sql)
+    conn.commit()
+
+    stmt.close()
+    conn.close()
+
+    logger.info("=== FINCORE_DATE updated successfully ===")
+    log_etl(spark, process_run_id, "fincore_date_update", 2, "User's date advanced")
+
+except Exception as e:
+    logger.error(f"Failed to update FINCORE_DATE: {e}")
+    log_etl(spark, process_run_id, "job_failed", 3, f"Fatal Error: {str(e)[:200]}")
+    spark.stop()
+    sys.exit(1)
+    raise e
+
+logger.info("=== GLIF DATA TRANSFER COMPLETED SUCCESSFULLY ===")
+log_etl(spark, process_run_id, "gl_data_transfer_started", 2, "JOB COMPLETED")
+spark.stop()
+sys.exit(0)
