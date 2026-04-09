@@ -105,9 +105,9 @@ app:
     hosts:
       # Keep 'localhost' host only if you want to access Dashboard using 'kubectl port-forward ...' on:
       # https://localhost:8443
-      - localhost
+      - fincoreuat.sbi
     # - kubernetes.dashboard.domain.com
-    ingressClassName: internal-nginx
+    ingressClassName: cbops-ingressclass
     # Use only if your ingress controllers support default ingress classes.
     # If set to true ingressClassName will be ignored and not added to the Ingress resources.
     # It should fall back to using IngressClass marked as the default.
@@ -117,11 +117,12 @@ app:
     #    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
     #    nginx.ingress.kubernetes.io/ssl-redirect: "true"
     useDefaultAnnotations: true
-    pathType: ImplementationSpecific
+    # pathType: ImplementationSpecific
+    pathType: Prefix
     # If path is not the default (/), rewrite-target annotation will be added to the Ingress.
     # It allows serving Kubernetes Dashboard on a sub-path. Make sure that the configured path
     # does not conflict with gateway route configuration.
-    path: /
+    path: /kubernetes(/|$)(.*)
     issuer:
       name: selfsigned
       # Scope determines what kind of issuer annotation will be used on ingress resource
@@ -135,6 +136,7 @@ app:
       secretName: ""
     labels: {}
     annotations: {}
+    # annotations: ngnix.ingress.kubernetes.io/rewrite-traget:/
   # Use the following toleration if Dashboard can be deployed on a tainted control-plane nodes
   # - key: node-role.kubernetes.io/control-plane
   #   effect: NoSchedule
