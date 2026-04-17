@@ -1,166 +1,373 @@
-import {
-  Box,
-  Drawer,
-  LinearProgress,    
-  Stack,
-  Typography,
-  IconButton,
-  Collapse,
-} from "@mui/material";
-import {
-  Close,
-  AccessTime,
-  CheckCircleOutline,
-  ErrorOutline,
-  Help,
-} from "@mui/icons-material";
-import { useState } from "react";
-import CustomChip from "../utils/CustomChip";
-import { toPascalKebabCase } from "../utils/CommonUtilities";
+package com.tcs.fincore.AsciiGenerationService.Service;
 
-const statusColor = {
-  PROCESSING: "warning",
-  COMPLETED: "success",
-  FAILED: "error",
-};
+import com.tcs.fincore.AsciiGenerationService.DTO.FileJob;
+import com.tcs.fincore.AsciiGenerationService.Model.AsciiConfig;
+import com.tcs.fincore.AsciiGenerationService.Repository.AsciiConfigRepository;
 
-const statusIcon = {
-  PROCESSING: <AccessTime fontSize="small" />,
-  COMPLETED: <CheckCircleOutline fontSize="small" />,
-  FAILED: <ErrorOutline fontSize="small" />,
-  default: <Help fontSize="small" />,
-};
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
-const TaskProgressDrawer = ({ open, onClose, tasks }) => {
-  const [expanded, setExpanded] = useState(null);
+import org.apache.hadoop.fs.*;
 
-  return (
-    <Drawer anchor="right" open={open} onClose={onClose}>
-      {/* HEADER */}
-      <Box
-        sx={{
-          p: 3,
-          borderBottom: "1px solid #E2E8F0",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <Typography variant="h6" fontWeight={700}>
-          Running Tasks
-        </Typography>
-        <IconButton size="small" onClick={onClose}>
-          <Close />
-        </IconButton>
-      </Box>
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 
-      {/* CONTENT */}
-      <Box sx={{ width: 380, p: 2 }}>
-        <Stack spacing={2}>
-          {Object.values(tasks).map((task) => {
-            const isDone = task.percentage === 100;
-            const elapsed = task.startedAt
-              ? Math.floor((Date.now() - task.startedAt) / 1000)
-              : null;
+import java.math.BigDecimal;
 
-            const speed =
-              task.lastUpdated && task.startedAt
-                ? task.percentage / elapsed
-                : null;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 
-            const eta =
-              speed && task.percentage < 100
-                ? Math.ceil((100 - task.percentage) / speed)
-                : null;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
-            return (
-              <Box
-                key={task.taskId}
-                sx={{
-                  p: 2,
-                  borderRadius: 2,
-                  bgcolor: "background.paper",
-                  boxShadow: 1,
-                  cursor: "pointer",
-                  wordBreak:"break-word",
-                }}
-                onClick={() =>
-                  setExpanded(expanded === task.taskId ? null : task.taskId)
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+@Service
+@Slf4j
+public class AsciiGenerationService {
+
+    @Autowired
+    private AsciiConfigRepository configRepo;
+
+    @Autowired
+    private JobQueueManager jobQueueManager;
+
+    @Autowired
+    private HdfsService hdfsService;
+
+    private static final Map<String, Pattern> INPUT_REGEX_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, BatchStats> batchTracker = new ConcurrentHashMap<>();
+
+    private static class BatchStats {
+        long startTime;
+        AtomicInteger remainingFiles;
+        int totalFiles;
+
+        BatchStats(int totalFiles) {
+            this.startTime = System.currentTimeMillis();
+            this.totalFiles = totalFiles;
+            this.remainingFiles = new AtomicInteger(totalFiles);
+        }
+    }
+
+    // =========================
+    // 1. INITIATE BATCH (HDFS)
+    // =========================
+    public String initiateBatch(Long configId) {
+        try {
+            AsciiConfig config = configRepo.findById(configId)
+                    .orElseThrow(() -> new RuntimeException("Config not found: " + configId));
+
+            String reportId = config.getReportId();
+            String keyword = reportId.contains("_") ? reportId.split("_")[0] : reportId;
+
+            FileSystem fs = hdfsService.getFs();
+            Path baseDir = new Path("/reports/2026-03-31/ysa_report");
+
+            RemoteIterator<LocatedFileStatus> files = fs.listFiles(baseDir, true);
+
+            List<Path> foundFiles = new ArrayList<>();
+
+            while (files.hasNext()) {
+                LocatedFileStatus file = files.next();
+                String fileName = file.getPath().getName();
+
+                log.info("Checking the files: {}",file.getPath());
+                
+                if (fileName.contains(keyword) && fileName.endsWith(".psv")) {
+                    foundFiles.add(file.getPath());
                 }
-              >
-                {/* HEADER ROW */}
-                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{minWidth:0}}>
-                  <Typography variant="body2" fontWeight={600}
-                    sx={{
-                      flex:1,
-                      minWidth:0,
-                      wordBreak:"break-word",
-                      whiteSpace:"normal",
-                      overflowWrap:"anywhere",
-                    }}>
-                    {task.taskId?.replace(/_/g," ").toLowerCase().replace(/\b\w/g,(c)=>c.toUpperCase())}
-                  </Typography>
+            }
 
-                   <CustomChip
-                    size="sm"
-                    variant="outlined"
-                    sx={{ height: "100%" , whiteSapce:"nowrap"}}
-                    color={statusColor[task.status?.toUpperCase()] || "default"}
-                    label={toPascalKebabCase(task.status)}
-                    icon={statusIcon[task.status?.toUpperCase()] || "default"}
-                  />
-                </Stack>
+            if (foundFiles.isEmpty()) {
+                return "No files found for keyword: " + keyword;
+            }
 
-                {/* META */}
-                <Stack direction="row" justifyContent="space-between" mt={1.5}>
-                  {/* PROGRESS */}
-                  <LinearProgress
-                    variant="determinate"
-                    value={task.percentage}
-                    sx={{
-                      width: "87%",
-                      mt: 0.8,
-                      height: 8.5,
-                      borderRadius: 5,
-                      transition: "all 0.4s ease",
-                    }}
-                    color={isDone ? "success" : "primary"}
-                  />
+            String batchId = UUID.randomUUID().toString();
+            batchTracker.put(batchId, new BatchStats(foundFiles.size()));
 
-                  {/* PROGRESS PERCENTAGE */}
-                  <Typography variant="caption">{task.percentage}%</Typography>
-                </Stack>
+            log.info("Batch Started | ID: {} | Files: {}", batchId, foundFiles.size());
 
-                <Box>
-                  {eta && (
-                    <Typography variant="caption">ETA: ~{eta}s</Typography>
-                  )}
-                </Box>
+            for (Path file : foundFiles) {
+                jobQueueManager.submitFileJob(new FileJob(configId, file, batchId));
+            }
 
-                {/* DETAILS */}
-                <Collapse in={expanded === task.taskId}>
-                  <Box mt={1}>
-                    <Typography variant="caption" color="text.secondary">
-                      {task.message}
-                    </Typography>
-                    {elapsed && (
-                      <Typography variant="caption" display="block">
-                        Elapsed: {elapsed}s
-                      </Typography>
-                    )}
-                  </Box>
-                </Collapse>
-              </Box>
-            );
-          })}
-        </Stack>
-      </Box>
-    </Drawer>
-  );
-};
+            return "Batch Initiated: " + batchId;
 
-export default TaskProgressDrawer;
+        } catch (Exception e) {
+            log.error("Batch initiation failed", e);
+            throw new RuntimeException(e);
+        }
+    }
 
+    // =========================
+    // 2. PROCESS FILE (HDFS)
+    // =========================
+    public void processSingleFile(FileJob job) {
 
+        Path inputPath = job.getFilePath();
+        Long configId = job.getConfigId();
+        String batchId = job.getBatchId();
 
+        try {
+            FileSystem fs = hdfsService.getFs();
+            AsciiConfig config = configRepo.findById(configId).orElseThrow();
 
+            // ===== SAFE PATH EXTRACTION =====
+            Path parent = inputPath.getParent();              // branch OR filename
+            Path grandParent = parent.getParent();            // filename
+            Path greatGrandParent = grandParent.getParent();  // date
+
+            String filename = grandParent.getName();
+            String date = greatGrandParent.getName();
+
+            // ===== OUTPUT DIRECTORY =====
+            String outputDirStr = "/reports/" + date + "/" + filename + "_ascii/";
+            Path outputDir = new Path(outputDirStr);
+
+            if (!fs.exists(outputDir)) {
+                fs.mkdirs(outputDir);
+            }
+
+            String outputFileName =
+                    "GENERATED_" + config.getReportId() + "_" +
+                    System.currentTimeMillis() + config.getFileType();
+
+            Path outputPath = new Path(outputDir, outputFileName);
+
+            log.info("Processing: {}", inputPath);
+            log.info("Output: {}", outputPath);
+
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(fs.open(inputPath)));
+
+            BufferedWriter writer = new BufferedWriter(
+                    new OutputStreamWriter(fs.create(outputPath)));
+
+            // ===== HEADER =====
+            HeaderInfo headerInfo = parseHeaderEfficiently(fs, inputPath);
+
+            String branchPadded = String.format("%5s", headerInfo.branchCode).replace(' ', '0');
+
+            String header =
+                    config.getOutputFirstLine() +
+                    branchPadded +
+                    headerInfo.reportDate +
+                    "F";
+
+            writer.write(header);
+            writer.newLine();
+
+            // ===== PROCESS DATA =====
+            List<String> buffer = new ArrayList<>();
+            int batchSize = config.getOutputPerLineHead();
+
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                try {
+                    String processed = transformLine(line, config);
+
+                    if (processed != null) {
+                        buffer.add(processed);
+
+                        if (buffer.size() == batchSize) {
+                            writer.write(String.join("", buffer));
+                            writer.newLine();
+                            buffer.clear();
+                        }
+                    }
+
+                } catch (Exception e) {
+                    log.error("Row error in {}", inputPath, e);
+                }
+            }
+
+            if (!buffer.isEmpty()) {
+                writer.write(String.join("", buffer));
+                writer.newLine();
+            }
+
+            // ===== FOOTER =====
+            if (config.getOutputEndLine() != null) {
+                writer.write(config.getOutputEndLine());
+            }
+
+            reader.close();
+            writer.close();
+
+            checkBatchCompletion(batchId);
+
+        } catch (Exception e) {
+            log.error("File processing failed: {}", inputPath, e);
+            checkBatchCompletion(batchId);
+        }
+    }
+
+    private void checkBatchCompletion(String batchId) {
+        BatchStats stats = batchTracker.get(batchId);
+
+        if (stats != null) {
+            int remaining = stats.remainingFiles.decrementAndGet();
+
+            if (remaining == 0) {
+                long time = System.currentTimeMillis() - stats.startTime;
+
+                log.info("BATCH COMPLETED | ID: {} | Time: {} ms", batchId, time);
+
+                batchTracker.remove(batchId);
+            }
+        }
+    }
+
+    // =========================
+    // HEADER PARSE (HDFS FIX)
+    // =========================
+    private HeaderInfo parseHeaderEfficiently(FileSystem fs, Path path) {
+
+        HeaderInfo info = new HeaderInfo();
+        info.branchCode = "00000";
+        info.reportDate = "01012026";
+
+        Pattern branchPattern = Pattern.compile("(?i)BRANCH\\s*::\\s*(\\d+)");
+        Pattern datePattern = Pattern.compile("DATE\\s*::\\s*(\\S+)");
+
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(fs.open(path)))) {
+
+            String line;
+            int count = 0;
+
+            while ((line = reader.readLine()) != null && count < 50) {
+                count++;
+
+                Matcher m1 = branchPattern.matcher(line);
+                if (m1.find()) {
+                    info.branchCode = m1.group(1);
+                }
+
+                Matcher m2 = datePattern.matcher(line);
+                if (m2.find()) {
+                    info.reportDate = normalizeDate(m2.group(1));
+                }
+            }
+
+        } catch (Exception e) {
+            log.warn("Header parsing error", e);
+        }
+
+        return info;
+    }
+
+    private String normalizeDate(String dateStr) {
+        if (dateStr == null) return "01012026";
+
+        List<DateTimeFormatter> formats = Arrays.asList(
+                DateTimeFormatter.ofPattern("dd-MM-yyyy"),
+                DateTimeFormatter.ofPattern("dd/MM/yyyy"),
+                DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        );
+
+        for (DateTimeFormatter f : formats) {
+            try {
+                return LocalDate.parse(dateStr, f)
+                        .format(DateTimeFormatter.ofPattern("ddMMyyyy"));
+            } catch (DateTimeParseException ignored) {}
+        }
+
+        return "01012026";
+    }
+
+    // =========================
+    // CORE LOGIC (UNCHANGED)
+    // =========================
+    private String transformLine(String line, AsciiConfig config) {
+        String[] cols = line.split("\\|", -1);
+
+        if (!isValidRow(cols, config)) return null;
+
+        List<ProcessingItem> items = extractAmountColumns(cols, config);
+
+        StringBuilder sb = new StringBuilder();
+        boolean valid = false;
+
+        for (ProcessingItem item : items) {
+            BigDecimal amt = item.amount;
+
+            if (amt.compareTo(BigDecimal.ZERO) != 0) {
+                sb.append(amt.toPlainString());
+                valid = true;
+            }
+        }
+
+        if (valid) {
+            return items.get(0).head + sb.toString();
+        }
+
+        return null;
+    }
+
+    private List<ProcessingItem> extractAmountColumns(String[] cols, AsciiConfig config) {
+        List<ProcessingItem> list = new ArrayList<>();
+
+        int idx = config.getInputHeadCol() - 1;
+        String head = (idx < cols.length) ? cols[idx] : "";
+
+        int col = Integer.parseInt(config.getAmountColSeq()) - 1;
+
+        list.add(new ProcessingItem(head, parseAmount(cols, col), col + 1));
+
+        return list;
+    }
+
+    private BigDecimal parseAmount(String[] cols, int idx) {
+        if (idx >= cols.length) return BigDecimal.ZERO;
+        return parseAmount(cols[idx]);
+    }
+
+    private BigDecimal parseAmount(String val) {
+        try {
+            if (val == null || val.trim().isEmpty()) return BigDecimal.ZERO;
+            return new BigDecimal(val.trim().replace(",", ""));
+        } catch (Exception e) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+    private boolean isValidRow(String[] cols, AsciiConfig config) {
+        if (cols.length < 2) return false;
+
+        int idx = config.getInputHeadCol() - 1;
+        if (cols.length <= idx) return false;
+
+        String head = cols[idx];
+
+        Pattern p = INPUT_REGEX_CACHE.computeIfAbsent(
+                config.getInputHeadRegex(), Pattern::compile);
+
+        return p.matcher(head).lookingAt();
+    }
+
+    private static class ProcessingItem {
+        String head;
+        BigDecimal amount;
+        int colIndex;
+
+        ProcessingItem(String h, BigDecimal a, int c) {
+            head = h;
+            amount = a;
+            colIndex = c;
+        }
+    }
+
+    private static class HeaderInfo {
+        String branchCode;
+        String reportDate;
+    }
+}
