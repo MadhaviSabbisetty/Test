@@ -1097,3 +1097,24 @@ log.info("HEAD VALUE: [{}]", cols[idx]);
 
 
 
+
+
+
+private String transformLine(String line, AsciiConfig config) {
+
+    String[] cols = line.split("\\|", -1);
+
+    // safety check
+    if (cols.length <= 4) return null;
+
+    String head = cols[0].trim();
+
+    BigDecimal amt = parseAmount(cols[4]);
+
+    // optional: skip completely empty rows
+    if (head.isEmpty()) return null;
+
+    return head + amt.toPlainString();
+}
+
+
