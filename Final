@@ -373,3 +373,364 @@ public class AsciiGenerationService {
         String reportDate;
     }
 }
+
+
+
+
+
+
+
+
+
+package com.tcs.fincore.AsciiGenerationService.Service;
+
+import com.tcs.fincore.AsciiGenerationService.DTO.FileJob;
+import com.tcs.fincore.AsciiGenerationService.Model.AsciiConfig;
+import com.tcs.fincore.AsciiGenerationService.Repository.AsciiConfigRepository;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import org.apache.hadoop.fs.*;
+
+import java.io.*;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.*;
+
+@Service
+@Slf4j
+public class AsciiGenerationService {
+
+    @Autowired
+    private AsciiConfigRepository configRepo;
+
+    @Autowired
+    private JobQueueManager jobQueueManager;
+
+    @Autowired
+    private HdfsService hdfsService;
+
+    private static final Map<String, Pattern> INPUT_REGEX_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, BatchStats> batchTracker = new ConcurrentHashMap<>();
+
+    private static class BatchStats {
+        long startTime;
+        AtomicInteger remainingFiles;
+
+        BatchStats(int total) {
+            this.startTime = System.currentTimeMillis();
+            this.remainingFiles = new AtomicInteger(total);
+        }
+    }
+
+    // =========================
+    // INITIATE BATCH
+    // =========================
+    public String initiateBatch(Long configId) {
+        try {
+            log.info("===== INITIATE BATCH START =====");
+
+            AsciiConfig config = configRepo.findById(configId)
+                    .orElseThrow(() -> new RuntimeException("Config not found"));
+
+            log.info("Config Loaded: {}", config);
+
+            String reportId = config.getReportId();
+            String keyword = reportId.contains("_") ? reportId.split("_")[0] : reportId;
+
+            FileSystem fs = hdfsService.getFs();
+
+            Path baseDir = new Path("/reports/2026-03-31/" + keyword.toLowerCase() + "_report");
+            log.info("Scanning Path: {}", baseDir);
+
+            RemoteIterator<LocatedFileStatus> files = fs.listFiles(baseDir, true);
+
+            List<Path> foundFiles = new ArrayList<>();
+
+            while (files.hasNext()) {
+                LocatedFileStatus file = files.next();
+
+                log.info("Checking file: {}", file.getPath());
+
+                if (file.getPath().getName().contains(keyword)
+                        && file.getPath().getName().endsWith(".psv")) {
+
+                    log.info("Matched File: {}", file.getPath());
+                    foundFiles.add(file.getPath());
+                }
+            }
+
+            if (foundFiles.isEmpty()) {
+                log.warn("No matching files found");
+                return "No files found";
+            }
+
+            String batchId = UUID.randomUUID().toString();
+            batchTracker.put(batchId, new BatchStats(foundFiles.size()));
+
+            for (Path file : foundFiles) {
+                log.info("Submitting Job: {}", file);
+                jobQueueManager.submitFileJob(new FileJob(configId, file, batchId));
+            }
+
+            return "Batch Started: " + batchId;
+
+        } catch (Exception e) {
+            log.error("Batch failed", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    // =========================
+    // PROCESS FILE
+    // =========================
+    public void processSingleFile(FileJob job) {
+
+        Path inputPath = job.getFilePath();
+        Long configId = job.getConfigId();
+        String batchId = job.getBatchId();
+
+        try {
+            log.info("===== PROCESSING FILE ===== {}", inputPath);
+
+            FileSystem fs = hdfsService.getFs();
+            AsciiConfig config = configRepo.findById(configId).orElseThrow();
+
+            String[] parts = inputPath.toString().split("/");
+            String date = parts[2];  // ✅ FIXED
+
+            log.info("Extracted Date: {}", date);
+
+            String reportFolder = config.getReportId().toLowerCase();
+            String reportType = reportFolder.contains("_")
+                    ? reportFolder.split("_")[0]
+                    : reportFolder;
+
+            Path outputDir = new Path("/reports/" + date + "/ascii_files/" + reportType + "/");
+
+            log.info("Output Directory: {}", outputDir);
+
+            if (!fs.exists(outputDir)) {
+                log.info("Creating directory...");
+                fs.mkdirs(outputDir);
+            }
+
+            Path outputPath = new Path(outputDir,
+                    "GENERATED_" + reportFolder + "_" + System.currentTimeMillis() + config.getFileType());
+
+            log.info("Output File: {}", outputPath);
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(inputPath)));
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fs.create(outputPath)));
+
+            // HEADER
+            HeaderInfo header = parseHeaderEfficiently(fs, inputPath);
+
+            String headerLine = config.getOutputFirstLine()
+                    + String.format("%5s", header.branchCode).replace(' ', '0')
+                    + header.reportDate + "F";
+
+            log.info("Writing Header: {}", headerLine);
+
+            writer.write(headerLine);
+            writer.newLine();
+
+            String line;
+            int total = 0;
+            int processed = 0;
+
+            while ((line = reader.readLine()) != null) {
+
+                total++;
+
+                String result = transformLine(line, config);
+
+                if (result != null) {
+                    writer.write(result);
+                    writer.newLine();
+                    processed++;
+                }
+            }
+
+            log.info("Total Lines: {} | Processed: {}", total, processed);
+
+            if (config.getOutputEndLine() != null) {
+                writer.write(config.getOutputEndLine());
+            }
+
+            reader.close();
+            writer.close();
+
+            log.info("File Completed: {}", outputPath);
+
+        } catch (Exception e) {
+            log.error("File Processing Failed", e);
+        }
+    }
+
+    // =========================
+    // TRANSFORM
+    // =========================
+    private String transformLine(String line, AsciiConfig config) {
+
+        String[] cols = line.split("\\|", -1);
+
+        log.debug("LINE: {}", line);
+
+        if (!isValidRow(cols, config)) {
+            log.debug("Skipped row");
+            return null;
+        }
+
+        List<ProcessingItem> items = extractAmountColumns(cols, config);
+
+        StringBuilder sb = new StringBuilder();
+
+        for (ProcessingItem item : items) {
+            sb.append(item.amount.toPlainString());
+        }
+
+        return items.get(0).head + sb.toString();
+    }
+
+    // =========================
+    // AMOUNT LOGIC
+    // =========================
+    private List<ProcessingItem> extractAmountColumns(String[] cols, AsciiConfig config) {
+
+        List<ProcessingItem> items = new ArrayList<>();
+
+        int headIdx = config.getInputHeadCol() - 1;
+        String head = cols[headIdx].trim();
+
+        String seq = config.getAmountColSeq();
+
+        if (seq.contains("else")) {
+
+            String[] parts = seq.split("else");
+
+            for (String p : parts) {
+                int idx = Integer.parseInt(p.trim()) - 1;
+
+                BigDecimal val = parseAmount(cols, idx);
+
+                if (val.compareTo(BigDecimal.ZERO) != 0) {
+                    items.add(new ProcessingItem(head, val, idx));
+                    return items;
+                }
+            }
+
+            items.add(new ProcessingItem(head, BigDecimal.ZERO, 0));
+        }
+
+        else if (seq.contains("and")) {
+
+            for (String p : seq.split("and")) {
+                int idx = Integer.parseInt(p.trim()) - 1;
+                items.add(new ProcessingItem(head, parseAmount(cols, idx), idx));
+            }
+        }
+
+        else {
+            int idx = Integer.parseInt(seq.trim()) - 1;
+            items.add(new ProcessingItem(head, parseAmount(cols, idx), idx));
+        }
+
+        return items;
+    }
+
+    private BigDecimal parseAmount(String[] cols, int idx) {
+        if (idx >= cols.length) return BigDecimal.ZERO;
+        return parseAmount(cols[idx]);
+    }
+
+    private BigDecimal parseAmount(String val) {
+        try {
+            if (val == null || val.trim().isEmpty()) return BigDecimal.ZERO;
+            return new BigDecimal(val.trim().replace(",", ""));
+        } catch (Exception e) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+    // =========================
+    // VALIDATION
+    // =========================
+    private boolean isValidRow(String[] cols, AsciiConfig config) {
+
+        int idx = config.getInputHeadCol() - 1;
+
+        if (cols.length <= idx) return false;
+
+        String head = cols[idx].trim();
+
+        if (head.matches("\\d+")) return true;
+
+        Pattern p = INPUT_REGEX_CACHE.computeIfAbsent(
+                config.getInputHeadRegex(), Pattern::compile);
+
+        return p.matcher(head).lookingAt();
+    }
+
+    // =========================
+    // HEADER
+    // =========================
+    private HeaderInfo parseHeaderEfficiently(FileSystem fs, Path path) {
+
+        HeaderInfo info = new HeaderInfo();
+        info.branchCode = "00000";
+        info.reportDate = "01012026";
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(path)))) {
+
+            String line;
+            int count = 0;
+
+            while ((line = reader.readLine()) != null && count++ < 50) {
+
+                if (line.contains("BRANCH")) {
+                    info.branchCode = line.replaceAll("\\D+", "");
+                }
+
+                if (line.contains("DATE")) {
+                    info.reportDate = normalizeDate(line.replaceAll(".*::", "").trim());
+                }
+            }
+
+        } catch (Exception ignored) {}
+
+        return info;
+    }
+
+    private String normalizeDate(String d) {
+        try {
+            return LocalDate.parse(d, DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                    .format(DateTimeFormatter.ofPattern("ddMMyyyy"));
+        } catch (Exception e) {
+            return "01012026";
+        }
+    }
+
+    private static class ProcessingItem {
+        String head;
+        BigDecimal amount;
+        int colIndex;
+
+        ProcessingItem(String h, BigDecimal a, int c) {
+            head = h;
+            amount = a;
+            colIndex = c;
+        }
+    }
+
+    private static class HeaderInfo {
+        String branchCode;
+        String reportDate;
+    }
+}
