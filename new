@@ -1,117 +1,370 @@
-reportservice
+package com.tcs.fincore.AsciiGenerationService.Service;
 
-securityconfig.java
-package com.fincore.ReportService.config;
+import com.tcs.fincore.AsciiGenerationService.DTO.FileJob;
+import com.tcs.fincore.AsciiGenerationService.Model.AsciiConfig;
+import com.tcs.fincore.AsciiGenerationService.Repository.AsciiConfigRepository;
 
-import com.fincore.commonutilities.config.CommonSecurityConfig;
-import com.fincore.commonutilities.config.RedisConfig;
-import com.fincore.commonutilities.config.ResilienceConfig;
-import com.fincore.commonutilities.jwt.JwtUtil;
-import com.fincore.commonutilities.logging.MdcLoggingFilter;
-import com.fincore.commonutilities.security.ContextRbacFilter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import jakarta.servlet.DispatcherType; // Import this is CRITICAL
+import org.springframework.stereotype.Service;
 
-/**
- * Common Security Configuration.
- * * Aligned with the "Distributed Gateway" architecture.
- * It uses the ContextRbacFilter from Common Utilities to enforce:
- * 1. Token Validity
- * 2. Single Session (Redis check)
- * 3. RBAC Permissions
- * Enforces Centralised Mdc Logging Filter, RESILIENCE4J Retry and Circuit Breaker
- */
-@Configuration
-@EnableWebSecurity
-@Import({
-        RedisConfig.class,
-        JwtUtil.class,
-        CommonSecurityConfig.class,
-        ResilienceConfig.class
-})
-public class SecurityConfig {
+import org.apache.hadoop.fs.*;
+
+import java.io.*;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
+
+@Service
+@Slf4j
+public class AsciiGenerationService {
 
     @Autowired
-    private StringRedisTemplate redisTemplate;
+    private AsciiConfigRepository configRepo;
 
     @Autowired
-    private JwtUtil jwtUtil;
+    private JobQueueManager jobQueueManager;
 
     @Autowired
-    private CommonSecurityConfig commonSecurityConfig;
+    private HdfsService hdfsService;
 
-    // --- 1. Define Filters as Beans (Explicitly) ---
-    @Bean
-    public MdcLoggingFilter mdcLoggingFilter() {
-        return new MdcLoggingFilter(jwtUtil);
+    private static final Map<String, Pattern> INPUT_REGEX_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, BatchStats> batchTracker = new ConcurrentHashMap<>();
+
+    private static class BatchStats {
+        long startTime;
+        AtomicInteger remainingFiles;
+
+        BatchStats(int total) {
+            this.startTime = System.currentTimeMillis();
+            this.remainingFiles = new AtomicInteger(total);
+        }
     }
 
-    @Bean
-    public ContextRbacFilter contextRbacFilter() {
-        return new ContextRbacFilter(redisTemplate, jwtUtil);
+    // =====================================================
+    // 1. INITIATE BATCH (HDFS DISCOVERY)
+    // =====================================================
+    public String initiateBatch(Long configId) {
+        try {
+            AsciiConfig config = configRepo.findById(configId)
+                    .orElseThrow(() -> new RuntimeException("Config not found: " + configId));
+
+            String reportId = config.getReportId();
+            String keyword = reportId.contains("_") ? reportId.split("_")[0] : reportId;
+
+            FileSystem fs = hdfsService.getFs();
+            Path baseDir = new Path("/reports");
+
+            RemoteIterator<LocatedFileStatus> files = fs.listFiles(baseDir, true);
+
+            List<Path> foundFiles = new ArrayList<>();
+
+            while (files.hasNext()) {
+                LocatedFileStatus file = files.next();
+                String fileName = file.getPath().getName();
+
+                if (fileName.contains(keyword) && fileName.endsWith(".psv")) {
+                    foundFiles.add(file.getPath());
+                }
+            }
+
+            if (foundFiles.isEmpty()) {
+                return "No files found for: " + keyword;
+            }
+
+            String batchId = UUID.randomUUID().toString();
+            batchTracker.put(batchId, new BatchStats(foundFiles.size()));
+
+            log.info("Batch Started | ID: {} | Files: {}", batchId, foundFiles.size());
+
+            for (Path file : foundFiles) {
+                jobQueueManager.submitFileJob(new FileJob(configId, file, batchId));
+            }
+
+            return "Batch Started: " + batchId;
+
+        } catch (Exception e) {
+            log.error("Batch initiation failed", e);
+            throw new RuntimeException(e);
+        }
     }
 
-    // --- 2. Prevent Global Registration ---
-    // This stops "The Filter class ... does not have a registered order" error
+    // =====================================================
+    // 2. PROCESS SINGLE FILE
+    // =====================================================
+    public void processSingleFile(FileJob job) {
 
-    @Bean
-    public FilterRegistrationBean<MdcLoggingFilter> mdcFilterRegistration(MdcLoggingFilter filter) {
-        FilterRegistrationBean<MdcLoggingFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.setEnabled(false); // Disable global chain
-        return registration;
+        Path inputPath = job.getFilePath();
+        Long configId = job.getConfigId();
+        String batchId = job.getBatchId();
+
+        try {
+            FileSystem fs = hdfsService.getFs();
+            AsciiConfig config = configRepo.findById(configId).orElseThrow();
+
+            String fullPath = inputPath.toString();
+            String[] parts = fullPath.split("/");
+
+            // works for both branch / non-branch
+            String date = parts[2];
+
+            String reportId = config.getReportId().toLowerCase();
+            String reportType = reportId.contains("_") ? reportId.split("_")[0] : reportId;
+
+            // ✅ FINAL OUTPUT PATH
+            Path outputDir = new Path("/reports/" + date + "/ascii_files/" + reportType + "/");
+
+            if (!fs.exists(outputDir)) {
+                fs.mkdirs(outputDir);
+            }
+
+            String outputFileName =
+                    "GENERATED_" + reportId + "_" +
+                    System.currentTimeMillis() + config.getFileType();
+
+            Path outputPath = new Path(outputDir, outputFileName);
+
+            log.info("INPUT: {}", inputPath);
+            log.info("OUTPUT: {}", outputPath);
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(inputPath)));
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fs.create(outputPath)));
+
+            // ================= HEADER =================
+            HeaderInfo header = parseHeader(fs, inputPath);
+
+            String headerLine =
+                    config.getOutputFirstLine()
+                            + String.format("%5s", header.branchCode).replace(' ', '0')
+                            + header.reportDate
+                            + "F";
+
+            writer.write(headerLine);
+            writer.newLine();
+
+            // ================= BODY =================
+            List<String> buffer = new ArrayList<>();
+            int batchSize = config.getOutputPerLineHead();
+
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+
+                String processed = transformLine(line, config);
+
+                if (processed != null) {
+                    buffer.add(processed);
+
+                    if (buffer.size() == batchSize) {
+                        writer.write(String.join("", buffer));
+                        writer.newLine();
+                        buffer.clear();
+                    }
+                }
+            }
+
+            if (!buffer.isEmpty()) {
+                writer.write(String.join("", buffer));
+                writer.newLine();
+            }
+
+            // ================= FOOTER =================
+            if (config.getOutputEndLine() != null) {
+                writer.write(config.getOutputEndLine());
+            }
+
+            reader.close();
+            writer.close();
+
+            checkBatchCompletion(batchId);
+
+        } catch (Exception e) {
+            log.error("File processing failed: {}", inputPath, e);
+            checkBatchCompletion(batchId);
+        }
     }
 
-    @Bean
-    public FilterRegistrationBean<ContextRbacFilter> rbacFilterRegistration(ContextRbacFilter filter) {
-        FilterRegistrationBean<ContextRbacFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.setEnabled(false); // Disable global chain
-        return registration;
+    // =====================================================
+    // 3. TRANSFORMATION LOGIC (WORKING VERSION)
+    // =====================================================
+    private String transformLine(String line, AsciiConfig config) {
+
+        String[] cols = line.split("\\|", -1);
+
+        if (!isValidRow(cols, config)) return null;
+
+        List<ProcessingItem> items = extractAmountColumns(cols, config);
+
+        StringBuilder sb = new StringBuilder();
+        boolean valid = false;
+
+        for (ProcessingItem item : items) {
+            BigDecimal amt = item.amount;
+
+            if (amt != null) {
+                sb.append(amt.toPlainString());
+                valid = true;
+            }
+        }
+
+        if (valid) {
+            return items.get(0).head + sb.toString();
+        }
+
+        return null;
     }
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable())
-                .cors(cors -> cors.configurationSource(commonSecurityConfig.corsConfigurationSource()))
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authz -> authz
-                        // Allow Async Dispatches (StreamingResponseBody) to proceed without re-auth checks
-                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
-                        .requestMatchers("/actuator/**", "/api/auth/**", "/error").permitAll()
-                        .anyRequest().authenticated()
-                )
-                // Add Filters using the BEAN references (methods above)
-                .addFilterBefore(mdcLoggingFilter(), UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(contextRbacFilter(), MdcLoggingFilter.class);
+    // =====================================================
+    // 4. COLUMN EXTRACTION (OLD LOGIC)
+    // =====================================================
+    private List<ProcessingItem> extractAmountColumns(String[] cols, AsciiConfig config) {
 
-        return http.build();
+        List<ProcessingItem> list = new ArrayList<>();
+
+        int headIdx = config.getInputHeadCol() - 1;
+        String head = (headIdx < cols.length) ? cols[headIdx].trim() : "";
+
+        String seq = config.getAmountColSeq();
+
+        if (seq.contains("else")) {
+            String[] parts = seq.split("else");
+            int primary = Integer.parseInt(parts[0].trim());
+
+            for (String p : parts) {
+                int idx = Integer.parseInt(p.trim()) - 1;
+                BigDecimal val = parseAmount(cols, idx);
+
+                if (val.compareTo(BigDecimal.ZERO) != 0) {
+                    list.add(new ProcessingItem(head, val, primary));
+                    return list;
+                }
+            }
+
+            list.add(new ProcessingItem(head, BigDecimal.ZERO, primary));
+        }
+
+        else if (seq.contains("and")) {
+            for (String p : seq.split("and")) {
+                int idx = Integer.parseInt(p.trim()) - 1;
+                list.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
+            }
+        }
+
+        else {
+            int idx = Integer.parseInt(seq.trim()) - 1;
+            list.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
+        }
+
+        return list;
     }
 
-    /**
-     * Explicitly indicate that local user lookup is not supported
-     * Authentication is handled via JWT in ContextRbacFilter
-     */
-    @Bean
-    public UserDetailsService userDetailsService() {
-        return username ->
-        { throw new UsernameNotFoundException("UserDetailsService is disabled. Use JWT authentication."); };
+    // =====================================================
+    // 5. SAFE PARSE
+    // =====================================================
+    private BigDecimal parseAmount(String[] cols, int idx) {
+        if (idx >= cols.length) return BigDecimal.ZERO;
+        return parseAmount(cols[idx]);
+    }
+
+    private BigDecimal parseAmount(String val) {
+        try {
+            if (val == null || val.trim().isEmpty()) return BigDecimal.ZERO;
+
+            String clean = val.trim().replace(",", "");
+
+            if (!clean.matches("-?\\d+(\\.\\d+)?")) {
+                return BigDecimal.ZERO;
+            }
+
+            return new BigDecimal(clean);
+
+        } catch (Exception e) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+    // =====================================================
+    // 6. VALIDATION
+    // =====================================================
+    private boolean isValidRow(String[] cols, AsciiConfig config) {
+
+        int idx = config.getInputHeadCol() - 1;
+        if (cols.length <= idx) return false;
+
+        String head = cols[idx].trim();
+
+        Pattern p = INPUT_REGEX_CACHE.computeIfAbsent(
+                config.getInputHeadRegex(), Pattern::compile);
+
+        return p.matcher(head).lookingAt();
+    }
+
+    // =====================================================
+    // 7. HEADER PARSER
+    // =====================================================
+    private HeaderInfo parseHeader(FileSystem fs, Path path) {
+
+        HeaderInfo info = new HeaderInfo();
+        info.branchCode = "00000";
+        info.reportDate = "01012026";
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(path)))) {
+
+            String line;
+            int count = 0;
+
+            while ((line = reader.readLine()) != null && count++ < 50) {
+
+                if (line.contains("BRANCH")) {
+                    info.branchCode = line.replaceAll("\\D+", "");
+                }
+
+                if (line.contains("DATE")) {
+                    info.reportDate = normalizeDate(line.replaceAll(".*::", "").trim());
+                }
+            }
+
+        } catch (Exception ignored) {}
+
+        return info;
+    }
+
+    private String normalizeDate(String d) {
+        try {
+            return LocalDate.parse(d, DateTimeFormatter.ofPattern("dd-MM-yyyy"))
+                    .format(DateTimeFormatter.ofPattern("ddMMyyyy"));
+        } catch (Exception e) {
+            return "01012026";
+        }
+    }
+
+    private void checkBatchCompletion(String batchId) {
+        BatchStats stats = batchTracker.get(batchId);
+
+        if (stats != null && stats.remainingFiles.decrementAndGet() == 0) {
+            log.info("BATCH COMPLETED: {}", batchId);
+            batchTracker.remove(batchId);
+        }
+    }
+
+    private static class ProcessingItem {
+        String head;
+        BigDecimal amount;
+        int colIndex;
+
+        ProcessingItem(String h, BigDecimal a, int c) {
+            head = h;
+            amount = a;
+            colIndex = c;
+        }
+    }
+
+    private static class HeaderInfo {
+        String branchCode;
+        String reportDate;
     }
 }
-
-
-
-
-
-
