@@ -1,473 +1,716 @@
-import useNotifications from "../../hooks/useNotifications";
-import { useEffect, useState } from "react";
-import {
-  Box,
-  Typography,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Stack,
-  Button,
-  Card,
-  LinearProgress,
-  Grow,
- Fade,
-} from "@mui/material";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import {
-  Summarize,
-  CloudDownloadTwoTone,
-  LooksOne,
-  LooksTwo,
-  Looks3,
-} from "@mui/icons-material";
-import useApi from "../../hooks/useApi";
-import dayjs from "dayjs";
-import { useSelector } from "react-redux";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import { useTheme } from "@mui/material/styles";
-import CustomChip from "../../utils/CustomChip";
-import GlifReportsStyles from "./GlifReportsStyles";
+previous code 
 
-// 1. Ensure strictly 'en-gb' locale logic if specific DD/MM formats are fighting with browser locale
-import "dayjs/locale/en-gb";
-const moduleType="WHOLE_BANK";
+// package com.tcs.fincore.AsciiGenerationService.Service;
+// import com.tcs.fincore.AsciiGenerationService.DTO.FileJob;
+// import com.tcs.fincore.AsciiGenerationService.Model.AsciiConfig;
+// import com.tcs.fincore.AsciiGenerationService.Repository.AsciiConfigRepository;
+// import lombok.extern.slf4j.Slf4j;
+// import org.springframework.beans.factory.annotation.Autowired;
+// import org.springframework.beans.factory.annotation.Value;
+// import org.springframework.stereotype.Service;
+// import java.io.BufferedWriter;
+// import java.io.IOException;
+// import java.math.BigDecimal;
+// import java.nio.file.DirectoryStream;
+// import java.nio.file.Files;
+// import java.nio.file.Path;
+// import java.nio.file.Paths;
+// import java.time.LocalDate;
+// import java.time.format.DateTimeFormatter;
+// import java.time.format.DateTimeParseException;
+// import java.util.ArrayList;
+// import java.util.Arrays;
+// import java.util.List;
+// import java.util.Map;
+// import java.util.UUID;
+// import java.util.concurrent.ConcurrentHashMap;
+// import java.util.concurrent.atomic.AtomicInteger;
+// import java.util.regex.Matcher;
+// import java.util.regex.Pattern;
+// import java.util.stream.Stream;
 
-export default function GlifReports() {
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
-  const user = useSelector((state) => state.auth.user);
+// @Service
+// @Slf4j
+// public class AsciiGenerationService {
 
-  const [dateError, setDateError] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [repTypes, setRepTypes] = useState([]);
-  const [selectedReport, setReport] = useState(null);
-  const [selectedDate, setDate] = useState(null);
+//     @Autowired
+//     private AsciiConfigRepository configRepo;
 
-  // Defaulting to a safe past date initially
-  const [minDate, setMinDate] = useState(dayjs("2020-01-01"));
+//     @Autowired
+//     private JobQueueManager jobQueueManager;
 
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadedBytes, setDownloadedBytes] = useState(0);
+//     @Value("${app.input.base.path}")
+//     private String baseDirectoryPath;
 
-  const theme = useTheme();
-  const styles = GlifReportsStyles(theme);
+//     private static final Map<String, Pattern> INPUT_REGEX_CACHE = new ConcurrentHashMap<>();
+//     private static final Map<String, BatchStats> batchTracker = new ConcurrentHashMap<>();
 
-  const disableInputs = isLoading ;
+//     private static class BatchStats {
+//         long startTime;
+//         AtomicInteger remainingFiles;
+//         int totalFiles;
+//         BatchStats(int totalFiles) {
+//             this.startTime = System.currentTimeMillis();
+//             this.totalFiles = totalFiles;
+//             this.remainingFiles = new AtomicInteger(totalFiles);
+//         }
+//     }
 
-  const [localProgress,setLocalProgress]=useState(0);
-  //const [isDownloading,setIsDownloading]=useState(false);
+//     // --- 1. THE DISCOVERY PHASE (Unchanged) ---
+//     public String initiateBatch(Long configId) {
+//         try {
+//             AsciiConfig config = configRepo.findById(configId)
+//                     .orElseThrow(() -> new RuntimeException("Config not found: " + configId));
 
-  const downloadedMB =
-    downloadedBytes > 0 ? (downloadedBytes / (1024 * 1024)).toFixed(2) : null;
+//             String reportId = config.getReportId();
+//             String searchKeyword = reportId.contains("_") ? reportId.split("_")[0] : reportId;
 
-    //const {setDownloadState}=useOutletContext();
-    const {upsertTask,removeTask}=useNotifications();
+//             Path baseDir = Paths.get(baseDirectoryPath);
+//             if (!Files.exists(baseDir) || !Files.isDirectory(baseDir)) {
+//                 throw new RuntimeException("Base directory does not exist: " + baseDirectoryPath);
+//             }
 
-  // --- API Fetch ---
-  useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
-      try {
-        const data = await callApi(
-          "/RS/reports/types",
-          { roleId: user.role ,
-            moduleType:moduleType,
-          },
-          "POST"
-        );
-        const types = data.data || [];
-        setRepTypes(types);
+//             List<Path> foundFiles = new ArrayList<>();
+//             try (DirectoryStream<Path> stream = Files.newDirectoryStream(baseDir, entry ->
+//                     Files.isRegularFile(entry) && entry.getFileName().toString().contains(searchKeyword))) {
+//                 for (Path entry : stream) foundFiles.add(entry);
+//             }
 
-        if (types.length > 0 && types[0].selectedDate) {
-          // IMPORTANT: Use .startOf('day') to ensure time is 00:00:00
-          // This fixes the "sometimes enabled/disabled arrow" issue by ensuring strict day comparison
-          setMinDate(dayjs(types[0].selectedDate).startOf("day"));
-        } else {
-          // Fallback
-          setMinDate(dayjs("2025-10-01").startOf("day"));
+//             if (foundFiles.isEmpty()) return "No files found for keyword: " + searchKeyword;
+
+//             String batchId = UUID.randomUUID().toString();
+//             batchTracker.put(batchId, new BatchStats(foundFiles.size()));
+
+//             log.info("Batch Started. Batch ID: {} | Total Files: {}", batchId, foundFiles.size());
+
+//             for (Path entry : foundFiles) {
+//                 jobQueueManager.submitFileJob(new FileJob(configId, entry, batchId));
+//             }
+
+//             return "Batch Initiated. ID: " + batchId + " | Files: " + foundFiles.size();
+
+//         } catch (Exception e) {
+//             log.error("Error during Batch Initiation", e);
+//             throw new RuntimeException("Failed to initiate batch: " + e.getMessage());
+//         }
+//     }
+
+//     // --- 2. THE WORKER PHASE ---
+//     public void processSingleFile(FileJob job) {
+//         Path inputPath = job.getFilePath();
+//         Long id = job.getConfigId();
+//         String batchId = job.getBatchId();
+
+//         try {
+//             AsciiConfig config = configRepo.findById(id).orElseThrow();
+
+//             // --- EDGE CASE FIX: Safe File Name Handling ---
+//             String originalName = inputPath.getFileName().toString();
+//             int dotIndex = originalName.lastIndexOf('.');
+//             String baseName = (dotIndex == -1) ? originalName : originalName.substring(0, dotIndex);
+
+//             String outputFileName = "GENERATED_" + config.getReportId() + "_" + baseName + "_" + System.currentTimeMillis() + config.getFileType();
+//             Path outputPath = inputPath.getParent().resolve(outputFileName);
+
+//             // --- STREAMING PROCESSING ---
+//             try (Stream<String> lines = Files.lines(inputPath);
+//                  BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
+
+//                 // Header
+//                 HeaderInfo headerInfo = parseHeaderEfficiently(inputPath);
+//                 String branchPadded = String.format("%5s", headerInfo.branchCode).replace(' ', '0');
+//                 String header = config.getOutputFirstLine() + branchPadded + headerInfo.reportDate + "F";
+
+//                 writer.write(header);
+//                 writer.newLine();
+
+//                 List<String> lineBuffer = new ArrayList<>();
+//                 int batchSize = config.getOutputPerLineHead();
+
+//                 lines.forEach(line -> {
+//                     try {
+//                         String processedRecord = transformLine(line, config);
+//                         if (processedRecord != null) {
+//                             lineBuffer.add(processedRecord);
+//                             if (lineBuffer.size() == batchSize) {
+//                                 writer.write(String.join("", lineBuffer));
+//                                 writer.newLine();
+//                                 lineBuffer.clear();
+//                             }
+//                         }
+//                     } catch (Exception e) {
+//                         log.error("Row error in {}", inputPath.getFileName(), e);
+//                     }
+//                 });
+
+//                 if (!lineBuffer.isEmpty()) {
+//                     writer.write(String.join("", lineBuffer));
+//                     writer.newLine();
+//                 }
+
+//                 if (config.getOutputEndLine() != null && !config.getOutputEndLine().isEmpty()) {
+//                     writer.write(config.getOutputEndLine());
+//                 }
+//             }
+
+//             checkBatchCompletion(batchId);
+
+//         } catch (Exception e) {
+//             log.error("Failed to process file: {}", inputPath, e);
+//             checkBatchCompletion(batchId);
+//         }
+//     }
+
+//     private void checkBatchCompletion(String batchId) {
+//         BatchStats stats = batchTracker.get(batchId);
+//         if (stats != null) {
+//             int remaining = stats.remainingFiles.decrementAndGet();
+//             if (remaining == 0) {
+//                 long totalDuration = System.currentTimeMillis() - stats.startTime;
+//                 log.info("BATCH COMPLETED | ID: {} | Time: {} ms", batchId, totalDuration);
+//                 batchTracker.remove(batchId);
+//             }
+//         }
+//     }
+
+//     // --- 3. ROBUST EXTRACT LOGIC (The Core Logic) ---
+//     private List<ProcessingItem> extractAmountColumns(String[] cols, AsciiConfig config) {
+//         List<ProcessingItem> items = new ArrayList<>();
+//         int headIdx = config.getInputHeadCol() - 1;
+//         String head = (headIdx < cols.length) ? cols[headIdx].trim() : "";
+
+//         String seq = config.getAmountColSeq();
+
+//         // [3else4] Logic: Skips Zero/Null, Forces Primary Rules
+//         if (seq.contains("else")) {
+//             String[] parts = seq.split("else");
+//             int primaryCol = Integer.parseInt(parts[0].trim()); // Target Rule Set (3)
+
+//             for (String part : parts) {
+//                 int currentIdx = Integer.parseInt(part.trim()) - 1;
+
+//                 // Safe Parse with Bound Check
+//                 BigDecimal val = BigDecimal.ZERO;
+//                 if (currentIdx < cols.length) {
+//                     val = parseAmount(cols[currentIdx]);
+//                 }
+
+//                 if (val.compareTo(BigDecimal.ZERO) != 0) {
+//                     // FOUND IT: Use 'primaryCol' so correct padding/math rules apply
+//                     items.add(new ProcessingItem(head, val, primaryCol));
+//                     return items;
+//                 }
+//             }
+//             // Fallback: Return 0 for Primary Column
+//             items.add(new ProcessingItem(head, BigDecimal.ZERO, primaryCol));
+//         }
+
+//         // [3and4] Logic: Keeps specific rules for each column
+//         else if (seq.contains("and")) {
+//             String[] parts = seq.split("and");
+//             for (String part : parts) {
+//                 int idx = Integer.parseInt(part.trim()) - 1;
+//                 items.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
+//             }
+//         }
+
+//         // Single Column
+//         else {
+//             int idx = Integer.parseInt(seq.trim()) - 1;
+//             items.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
+//         }
+//         return items;
+//     }
+
+//     private String transformLine(String line, AsciiConfig config) {
+//         String[] columns = line.split("\\|", -1);
+//         if (!isValidRow(columns, config)) return null;
+
+//         List<ProcessingItem> itemsToProcess = extractAmountColumns(columns, config);
+
+//         StringBuilder amountsOnlyBuilder = new StringBuilder();
+//         boolean hasValidContent = false;
+
+//         for (ProcessingItem item : itemsToProcess) {
+//             BigDecimal finalAmt = RuleParser.applyMathLogic(item.amount, item.head, item.colIndex, config.getOutputAmtColLogic());
+//             finalAmt = RuleParser.applyDecimalLogic(finalAmt, item.head, item.colIndex, config.getOutputAmtDecimal());
+
+//             if (RuleParser.shouldIncludeValue(finalAmt, item.head, item.colIndex, config.getOutputIncludeCondition())) {
+//                 String amountStr = RuleParser.applyAmountPadding(finalAmt, item.head, item.colIndex, config.getOutputAmtColPad());
+//                 String signedAmt = RuleParser.applySign(amountStr, finalAmt, item.head, item.colIndex, config.getOutputAmtSign());
+//                 amountsOnlyBuilder.append(signedAmt);
+//                 hasValidContent = true;
+//             }
+//         }
+
+//         if (hasValidContent) {
+//             String headPadded = RuleParser.applyHeadPadding(itemsToProcess.get(0).head, config.getOutputHeadColPad());
+//             return headPadded + amountsOnlyBuilder.toString();
+//         }
+//         return null;
+//     }
+
+//     // --- Standard Helpers  ---
+//     private BigDecimal parseAmount(String[] cols, int idx) {
+//         if (idx >= cols.length) return BigDecimal.ZERO;
+//         return parseAmount(cols[idx]);
+//     }
+//     private BigDecimal parseAmount(String val) {
+//         try {
+//             if(val == null || val.trim().isEmpty()) return BigDecimal.ZERO;
+//             // Robust parsing: remove commas, trim spaces
+//             return new BigDecimal(val.trim().replace(",", ""));
+//         } catch (Exception e) { return BigDecimal.ZERO; }
+//     }
+
+//     private HeaderInfo parseHeaderEfficiently(Path path) {
+//         HeaderInfo info = new HeaderInfo();
+//         info.branchCode = "00000"; info.reportDate = "01012026";
+//         Pattern branchPattern = Pattern.compile("(?i)(?:BRANCH|Branch)\\s*::\\s*(\\d+)");
+//         Pattern datePattern1 = Pattern.compile("REPORT DATE\\s*::\\s*(\\S+)");
+//         Pattern datePattern2 = Pattern.compile("Current Year Date\\s*::\\s*(\\S+)");
+
+//         try (Stream<String> stream = Files.lines(path).limit(50)) {
+//             stream.forEach(line -> {
+//                 Matcher mBranch = branchPattern.matcher(line);
+//                 if (mBranch.find()) info.branchCode = mBranch.group(1);
+//                 Matcher mDate1 = datePattern1.matcher(line);
+//                 if (mDate1.find()) info.reportDate = normalizeDate(mDate1.group(1));
+//                 Matcher mDate2 = datePattern2.matcher(line);
+//                 if (mDate2.find()) info.reportDate = normalizeDate(mDate2.group(1));
+//             });
+//         } catch (IOException e) { log.warn("Header read error", e); }
+//         return info;
+//     }
+
+
+//     private boolean isValidRow(String[] cols, AsciiConfig config) {
+//         if (cols.length < 2) return false;
+//         int idx = config.getInputHeadCol() - 1;
+//         if (cols.length <= idx) return false;
+//         String head = cols[idx].trim();
+//         if (head.isEmpty()) return false;
+//         Pattern p = INPUT_REGEX_CACHE.computeIfAbsent(config.getInputHeadRegex(), Pattern::compile);
+//         return p.matcher(head).lookingAt();
+//     }
+
+//     private String normalizeDate(String dateStr) {
+//         if (dateStr == null) return "01012026";
+//         List<DateTimeFormatter> formatters = Arrays.asList(
+//                 DateTimeFormatter.ofPattern("dd-MM-yyyy"), DateTimeFormatter.ofPattern("dd/MM/yyyy"),
+//                 DateTimeFormatter.ofPattern("yyyy-MM-dd"), DateTimeFormatter.ofPattern("dd.MM.yyyy"),
+//                 DateTimeFormatter.ofPattern("MM-dd-yyyy")
+//         );
+//         for (DateTimeFormatter formatter : formatters) {
+//             try { return LocalDate.parse(dateStr, formatter).format(DateTimeFormatter.ofPattern("ddMMyyyy")); }
+//             catch (DateTimeParseException e) {}
+//         }
+//         if (dateStr.contains("-") && dateStr.split("-").length == 3) {
+//             String[] parts = dateStr.split("-");
+//             if (parts[0].length() == 4) return parts[2] + parts[1] + parts[0];
+//         }
+//         return "01012026";
+//     }
+
+//     private static class ProcessingItem {
+//         String head; BigDecimal amount; int colIndex;
+//         ProcessingItem(String h, BigDecimal a, int c) { head=h; amount=a; colIndex=c; }
+//     }
+//     private static class HeaderInfo { String branchCode; String reportDate; }
+// }
+
+
+present code
+
+
+package com.tcs.fincore.AsciiGenerationService.Service;
+
+import com.tcs.fincore.AsciiGenerationService.DTO.FileJob;
+import com.tcs.fincore.AsciiGenerationService.Model.AsciiConfig;
+import com.tcs.fincore.AsciiGenerationService.Repository.AsciiConfigRepository;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import org.apache.hadoop.fs.*;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+
+import java.math.BigDecimal;
+
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+@Service
+@Slf4j
+public class AsciiGenerationService {
+
+    @Autowired
+    private AsciiConfigRepository configRepo;
+
+    @Autowired
+    private JobQueueManager jobQueueManager;
+
+    @Autowired
+    private HdfsService hdfsService;
+
+    private static final Map<String, Pattern> INPUT_REGEX_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, BatchStats> batchTracker = new ConcurrentHashMap<>();
+
+    private static class BatchStats {
+        long startTime;
+        AtomicInteger remainingFiles;
+        int totalFiles;
+
+        BatchStats(int totalFiles) {
+            this.startTime = System.currentTimeMillis();
+            this.totalFiles = totalFiles;
+            this.remainingFiles = new AtomicInteger(totalFiles);
         }
-      } catch (error) {
-        console.error("Failed to fetch report types:", error);
-        showSnackBar("Failed to load report types", "error");
-      }
-      setIsLoading(false);
     }
-    fetchData();
-  }, [callApi, user.role, showSnackBar]);
 
-  const handleSelect = (report) => {
-    setReport(report);
-  };
+    // =========================
+    // 1. INITIATE BATCH (HDFS)
+    // =========================
+    public String initiateBatch(Long configId) {
+        try {
+            AsciiConfig config = configRepo.findById(configId)
+                    .orElseThrow(() -> new RuntimeException("Config not found: " + configId));
 
-  // --- Download Logic ---
-  const handleFetchReportData = async () => {
-    if (!selectedReport?.fileName || !selectedDate) {
-      console.log("Missing report");
-      return;
-    }
-    console.log("calling api");
+            String reportId = config.getReportId();
+            String keyword = reportId.contains("_") ? reportId.split("_")[0] : reportId;
 
-    if (dateError) {
-      showSnackBar(getErrorMessage(dateError), "error");
-      return;
-    }
-const taskId=`report-download-${Date.now()}`;
-upsertTask({
-  id:taskId,
-  percentage:0,
-  title:`Downloading ${selectedReport.reportName}`,
-  status:"Running",
-  //progress:0,
-});
-    setIsLoading(true);
-    // setIsDownloading(true);
-    // setDownloadedBytes(0);
-    // setDownloadState({
-    //   isDownloading:true,
-    //   fileName:selectedReport.fileName,
-    //   downloadedMB:null,
-    // });
+            FileSystem fs = hdfsService.getFs();
+            // Path baseDir = new Path("/reports/2025-12-14/nwsa_report");
 
-    // const payload = {
-    //   moduleType:moduleType,
-    //   fileName: selectedReport.fileName,
-    //   date: selectedDate.format("YYYY-MM-DD"),
-    //   roleId: user.role,
-    // };
+            Path baseDir = new Path("/reports/2026-03-31/ysa_report");
 
-    try {
-      const response = await callApi(
-        "/RS/reports/download",
-       // payload,
-       {
-         moduleType:moduleType,
-      fileName: selectedReport.fileName,
-      date: selectedDate.format("YYYY-MM-DD"),
-      roleId: user.role,
-       },
-        "POST",
-        "blob",
-        "application/json",
-        {
-          onDownloadProgress: (event) => {
-            if(event?.loaded && event?.total){
-              const percent=Math.round((event.loaded/event.total)*100);
-              setIsDownloading(true);
-              setLocalProgress(percent);
-              upsertTask(taskId,{
-                percentage:percent,
-                status:"Running",
-              });
+            RemoteIterator<LocatedFileStatus> files = fs.listFiles(baseDir, true);
+
+            List<Path> foundFiles = new ArrayList<>();
+
+            while (files.hasNext()) {
+                LocatedFileStatus file = files.next();
+                String fileName = file.getPath().getName();
+
+                log.info("------------------Checking the files: {}",file.getPath());
+
+                if (fileName.contains(keyword) && fileName.endsWith(".psv")) {
+                    foundFiles.add(file.getPath());
+                }
             }
-           // setIsDownloading(true);
-           // if (event && typeof event.loaded === "number") {
-              //setDownloadedBytes(event.loaded);
-              // setDownloadState((prev)=>({
-              //   ...prev,
-              //   downloadedMB:(event.loaded/(1024*1024)).toFixed(2),
-              // }));
-            }
-          },
-        false
-      );
 
-      if (response.data && response.data.size > 22) {
-        const contentDisposition =
-          response.headers["content-disposition"] ||
-          response.headers["Content-Disposition"];
-          
-        let filename = "report.zip";
-        if (
-          contentDisposition &&
-          contentDisposition.indexOf("attachment") !== -1
-        ) {
-          const filenameMatch = contentDisposition.match(/filename="(.+?)"/);
-          if (filenameMatch && filenameMatch.length > 1) {
-            filename = filenameMatch[1];
-          }
+            if (foundFiles.isEmpty()) {
+                return "No files found for keyword: " + keyword;
+            }
+
+            String batchId = UUID.randomUUID().toString();
+            batchTracker.put(batchId, new BatchStats(foundFiles.size()));
+
+            log.info("-------------Batch Started | ID: {} | Files: {}", batchId, foundFiles.size());
+
+            for (Path file : foundFiles) {
+                jobQueueManager.submitFileJob(new FileJob(configId, file, batchId));
+            }
+
+            return "Batch Initiated: " + batchId;
+
+        } catch (Exception e) {
+            log.error("--------Batch initiation failed", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    // =========================
+    // 2. PROCESS FILE (HDFS)
+    // =========================
+    public void processSingleFile(FileJob job) {
+
+        Path inputPath = job.getFilePath();
+        Long configId = job.getConfigId();
+        String batchId = job.getBatchId();
+
+        try {
+            FileSystem fs = hdfsService.getFs();
+            AsciiConfig config = configRepo.findById(configId).orElseThrow();
+            String fullPath=inputPath.toString();
+            log.info("-----------------------------------INPUT PATH: {}",fullPath);
+
+            String[] parts =fullPath.split("/");
+            String date=parts[4];
+            String reportFolder=config.getReportId().toLowerCase().trim();
+            String reportType=reportFolder.contains("_")
+                                ? reportFolder.split("_")[0]
+                                : reportFolder;
+
+            // // ===== SAFE PATH EXTRACTION =====
+            // Path parent = inputPath.getParent();              // branch OR filename
+            // Path grandParent = parent.getParent();            // filename
+            // Path greatGrandParent = grandParent.getParent();  // date
+
+            // String filename = grandParent.getName();
+            // String date = greatGrandParent.getName();
+
+            // ===== OUTPUT DIRECTORY =====
+            String outputDirStr = "/reports/" + date + "/ascii_files/" + reportType + "/";
+            Path outputDir = new Path(outputDirStr);
+
+            log.info("----------------------OUTPUT PATH: {}",outputDirStr);
+
+            if (!fs.exists(outputDir)) {
+                fs.mkdirs(outputDir);
+            }
+
+            String outputFileName =
+                    // "GENERATED_" + config.getReportId() + "_" +
+                    "GENERATED_" + reportFolder + "_" +
+                    System.currentTimeMillis() + config.getFileType();
+
+            Path outputPath = new Path(outputDir, outputFileName);
+
+            log.info("---------------------Processing: {}", inputPath);
+            log.info("------------------Output: {}", outputPath);
+
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(fs.open(inputPath)));
+
+            BufferedWriter writer = new BufferedWriter(
+                    new OutputStreamWriter(fs.create(outputPath)));
+
+            // ===== HEADER =====
+            HeaderInfo headerInfo = parseHeaderEfficiently(fs, inputPath);
+
+            String branchPadded = String.format("%5s", headerInfo.branchCode).replace(' ', '0');
+
+            String header =
+                    config.getOutputFirstLine() +
+                    branchPadded +
+                    headerInfo.reportDate +
+                    "F";
+
+            writer.write(header);
+            writer.newLine();
+
+            // ===== PROCESS DATA =====
+            List<String> buffer = new ArrayList<>();
+            int batchSize = config.getOutputPerLineHead();
+
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                try {
+                    String processed = transformLine(line, config);
+
+                    if (processed != null) {
+                        buffer.add(processed);
+
+                        if (buffer.size() == batchSize) {
+                            writer.write(String.join("", buffer));
+                            writer.newLine();
+                            buffer.clear();
+                        }
+                    }
+
+                } catch (Exception e) {
+                    log.error("-----------Row error in {}", inputPath, e);
+                }
+            }
+
+            if (!buffer.isEmpty()) {
+                writer.write(String.join("", buffer));
+                writer.newLine();
+            }
+
+            // ===== FOOTER =====
+            if (config.getOutputEndLine() != null) {
+                writer.write(config.getOutputEndLine());
+            }
+
+            reader.close();
+            writer.close();
+
+            checkBatchCompletion(batchId);
+
+        } catch (Exception e) {
+            log.error("-----------File processing failed: {}", inputPath, e);
+            checkBatchCompletion(batchId);
+        }
+    }
+
+    private void checkBatchCompletion(String batchId) {
+        BatchStats stats = batchTracker.get(batchId);
+
+        if (stats != null) {
+            int remaining = stats.remainingFiles.decrementAndGet();
+
+            if (remaining == 0) {
+                long time = System.currentTimeMillis() - stats.startTime;
+
+                log.info("------------BATCH COMPLETED | ID: {} | Time: {} ms", batchId, time);
+
+                batchTracker.remove(batchId);
+            }
+        }
+    }
+
+    // =========================
+    // HEADER PARSE (HDFS FIX)
+    // =========================
+    private HeaderInfo parseHeaderEfficiently(FileSystem fs, Path path) {
+
+        HeaderInfo info = new HeaderInfo();
+        info.branchCode = "00000";
+        info.reportDate = "01012026";
+
+        Pattern branchPattern = Pattern.compile("(?i)BRANCH\\s*::\\s*(\\d+)");
+        Pattern datePattern = Pattern.compile("DATE\\s*::\\s*(\\S+)");
+
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(fs.open(path)))) {
+
+            String line;
+            int count = 0;
+
+            while ((line = reader.readLine()) != null && count < 50) {
+                count++;
+
+                Matcher m1 = branchPattern.matcher(line);
+                if (m1.find()) {
+                    info.branchCode = m1.group(1);
+                }
+
+                Matcher m2 = datePattern.matcher(line);
+                if (m2.find()) {
+                    info.reportDate = normalizeDate(m2.group(1));
+                }
+            }
+
+        } catch (Exception e) {
+            log.warn("Header parsing error", e);
         }
 
-        const downloadUrl = window.URL.createObjectURL(response.data);
-        const a = document.createElement("a");
-        a.href = downloadUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(downloadUrl);
-        setIsDownloading(false);
-        setLocalProgress(100);
-        upsertTask({taskId,
-          percentage:0,
-          status:"COMPLETED",
-          message:"Download completed",
-        });
-        setTimeout(()=>removeTask(taskId),5000);
-        showSnackBar(
-          `Reports "${filename}" downloaded successfully`,
-          "success"
-        );
-      } else {
-        showSnackBar(
-          "No reports found matching your current filter criteria",
-          "warning"
-        );
-      }
-    } catch (error) {
-      upsertTask({taskId,
-        percentage:0,
-        status:"FAILED",
-        message:"Download failed"
-    });
-        setTimeout(()=>removeTask(taskId),5000);
-
-      console.log("error", error);
-
-      if (error && error instanceof Blob) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          try {
-            const errorJson = JSON.parse(reader.result);
-            console.error(errorJson.message);
-            showSnackBar(
-              errorJson.message || "No reports found matching your criteria",
-              "error"
-            );
-          } catch (e) {
-            console.error(e);
-            showSnackBar("Something went wrong, kindly try again.", "error");
-          }
-        };
-        reader.readAsText(error);
-      } else {
-        showSnackBar("Network Error: Could not connect to server", "error");
-      }
-    } finally {
-      setIsLoading(false);
-      // setIsDownloading(false);
-      // setDownloadedBytes(0);
-      // setDownloadState((prev)=>({
-      //   ...prev,
-      //   isDownloading:false,
-      // }));
+        return info;
     }
-  };
 
-  // --- Validation Message Logic --- 
-  const getErrorMessage = (error) => {
-    const minDateStr = minDate?.isValid()
-      ? minDate.format("DD/MM/YYYY")
-      : "Allowed Min Date";
+    private String normalizeDate(String dateStr) {
+        if (dateStr == null) return "01012026";
 
-    switch (error) {
-      case "maxDate":
-        return "Date cannot be in the future (Today is max)";
-      case "minDate":
-        return `Date cannot be prior to ${minDateStr}`;
-      case "invalidDate":
-        // This covers cases like 31st Feb or 31st April
-        return "Invalid date (Check day for this month)";
-      default:
-        // When no error, return instructions
-        return `Allowed Range: ${minDateStr} - Today`;
+        List<DateTimeFormatter> formats = Arrays.asList(
+                DateTimeFormatter.ofPattern("dd-MM-yyyy"),
+                DateTimeFormatter.ofPattern("dd/MM/yyyy"),
+                DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        );
+
+        for (DateTimeFormatter f : formats) {
+            try {
+                return LocalDate.parse(dateStr, f)
+                        .format(DateTimeFormatter.ofPattern("ddMMyyyy"));
+            } catch (DateTimeParseException ignored) {}
+        }
+
+        return "01012026";
     }
-  };
 
-  return (
-    <Grow in timeout={500}>
-      <Stack spacing={4}>
-        <Box sx={styles.rootBox} elevation={10}>
-          <Stack
-            spacing={3}
-            direction={"column"}
-            alignItems="center"
-            justifyContent="center"
-          >
-            <Card sx={styles.card}>
-              <Box sx={styles.headerContainer}>
-                <Box sx={styles.headerIconWrapper}>
-                  <Summarize sx={styles.summaryIcon} />
-                </Box>
-                <Box sx={styles.headerTextBox}>
-                  <Typography
-                    variant="h5"
-                    fontWeight="bold"
-                    sx={styles.headerTitle}
-                  >
-                    Reports Generation
-                  </Typography>
-                  <Typography variant="body2" sx={styles.headerSubtitle}>
-                    Choose a specific required Report type and Date using the
-                    criteria below to download reports
-                  </Typography>
-                </Box>
-              </Box>
+    // =========================
+    // CORE LOGIC (UNCHANGED)
+    // =========================
+    private String transformLine(String line, AsciiConfig config) {
+        String[] cols = line.split("\\|", -1);
 
-              <Box sx={styles.noteContainer}>
-                <Typography variant="body2" sx={styles.noteText}>
-                  Note: The generated reports cannot be viewed on-screen it can
-                  only be downloaded.
-                </Typography>
-                <Stack direction="row" spacing={2} sx={styles.stepsStack}>
-                  <CustomChip
-                    label="Select a report"
-                    variant="outlined"
-                    icon={<LooksOne />}
-                    color="info"
-                    sx={{ px: 1 }}
-                  />  
-                  <CustomChip
-                    label="Select the report date"
-                    variant="outlined"
-                    icon={<LooksTwo />}
-                    color="info"
-                    sx={{ px: 1 }}
-                  />
-                  <CustomChip
-                    label="Click Fetch & Download button"
-                    variant="outlined"
-                    icon={<Looks3 />}
-                    color="info"
-                    sx={{ px: 1 }}
-                  />
-                </Stack>
-              </Box>
+        log.info("--------------LINE: {}",line);
+        log.info("---------------VALID: {}",isValidRow(cols,config));
+        
+        if (!isValidRow(cols, config)) return null;
 
-              <Box sx={styles.inputOuterBox}>
-                <Box sx={styles.inputInnerBox}>
-                  {/* Dropdown Menu */}
-                  <FormControl sx={styles.formControl}>
-                    <InputLabel id="menu-select-label">
-                      Select a report
-                    </InputLabel>
-                    <Select
-                      labelId="menu-select-label"
-                      id="menu-select"
-                      value={selectedReport || ""}
-                      label="Select a report"
-                      onChange={(e) => handleSelect(e.target.value)}
-                      disabled={repTypes.length === 0 || disableInputs}
-                    >
-                      {repTypes.map((item) => (
-                        <MenuItem key={item.fileName} value={item}>
-                          {item.reportName}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+        List<ProcessingItem> items = extractAmountColumns(cols, config);
 
-                  {/* Date Picker */}
-                  <FormControl sx={styles.formControl}>
-                    {/* Ensure adapterLocale is set to handle DD/MM logic naturally */}
-                    <LocalizationProvider
-                      dateAdapter={AdapterDayjs}
-                      adapterLocale="en-gb"
-                    >
-                      <DatePicker
-                        label="Select report date"
-                        format="DD/MM/YYYY"
-                        views={["year", "month", "day"]}
-                        value={selectedDate}
-                        onChange={(newDate) => setDate(newDate)}
-                        // Explicitly set maxDate to Today
-                        maxDate={dayjs().endOf("day")}
-                        // Explicitly set minDate
-                        minDate={minDate}
-                        onError={(newError) => setDateError(newError)}
-                        disabled={repTypes.length === 0 || disableInputs}
-                        slotProps={{
-                          textField: {
-                            // Logic: If there is an error, show specific error msg.
-                            // If no error, show the range helper text to guide user.
-                            helperText: dateError
-                              ? getErrorMessage(dateError)
-                              : "",
-                            error: !!dateError,
-                            placeholder: "DD/MM/YYYY",
-                          },
-                          // Enhancement: Show days outside current month but verify they are disabled correctly
-                          day: {
-                            showDaysOutsideCurrentMonth: true,
-                          },
-                        }}
-                      />
-                    </LocalizationProvider>
-                  </FormControl>
-                </Box>
-              </Box>
+        StringBuilder sb = new StringBuilder();
+        boolean valid = false;
 
-              <Box sx={styles.buttonContainer}>
-                <Button
-                  sx={styles.downloadButton}
-                  endIcon={<CloudDownloadTwoTone />}
-                  variant="contained"
-                  onClick={handleFetchReportData}
-                  disabled={
-                    disableInputs ||
-                    !selectedReport ||
-                    !selectedDate ||
-                    !!dateError
-                  }
-                >
-                  {/* {isDownloading ? "Downloading..." : "Fetch & Download"} */}
-                  {"Fetch & Download"}
-                </Button>
+        for (ProcessingItem item : items) {
+            BigDecimal amt = item.amount;
 
-                <Fade in={isDownloading} unmountOnExit>
-                  <Box sx={styles.progressContainer}>
-                    <Box sx={styles.progressHeader}>
-                      <Box sx={styles.progressIconWrapper}>
-                        <CloudDownloadTwoTone sx={styles.innerDownloadIcon} />
-                      </Box>
-                      <Box sx={styles.progressHeaderTextBox}>
-                        <Typography variant="body2" fontWeight={600}>
-                          Searching{" "}
-                          {selectedReport?.reportName ?? "the selected report"}{" "}
-                          for the period{" "}
-                          {selectedDate?.isValid()
-                            ? selectedDate.format("YYYY-MM-DD")
-                            : "an unknown period"}{" "}
-                          is in progress.
-                        </Typography>
+            if (amt.compareTo(BigDecimal.ZERO) != 0) {
+                sb.append(amt.toPlainString());
+                valid = true;
+            }
+        }
 
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={styles.progressCaption}
-                        >
-                          {downloadedMB
-                            ? `Streaming report data… ${downloadedMB} MB received`
-                            : "Preparing your report stream…"}
-                        </Typography>
-                      </Box>
+        if (valid) {
+            return items.get(0).head + sb.toString();
+        }
 
-                      {downloadedMB && (
-                        <CustomChip
-                          color="error"
-                          label={`${downloadedMB} MB downloaded`}
-                          variant="filled"
-                        />
-                      )}
-                    </Box>
-                    <LinearProgress
-                      variant="indeterminate"
-                      sx={styles.progressBar}
-                    />
-                  </Box>
-                </Fade>
-              </Box>
-            </Card>
-          </Stack>
-        </Box>
-      </Stack>
-    </Grow>
-  );
+        return null;
+    }
+
+    private List<ProcessingItem> extractAmountColumns(String[] cols, AsciiConfig config) {
+        List<ProcessingItem> list = new ArrayList<>();
+
+        int idx = config.getInputHeadCol() - 1;
+        String head = (idx < cols.length) ? cols[idx] : "";
+
+        int col = Integer.parseInt(config.getAmountColSeq()) - 1;
+
+        list.add(new ProcessingItem(head, parseAmount(cols, col), col + 1));
+
+        return list;
+    }
+
+    private BigDecimal parseAmount(String[] cols, int idx) {
+        if (idx >= cols.length) return BigDecimal.ZERO;
+        return parseAmount(cols[idx]);
+    }
+
+    private BigDecimal parseAmount(String val) {
+        try {
+            if (val == null || val.trim().isEmpty()) return BigDecimal.ZERO;
+            return new BigDecimal(val.trim().replace(",", ""));
+        } catch (Exception e) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+    private boolean isValidRow(String[] cols, AsciiConfig config) {
+        if (cols.length < 2) return false;
+
+        int idx = config.getInputHeadCol() - 1;
+        if (cols.length <= idx) return false;
+
+        String head = cols[idx];
+
+        Pattern p = INPUT_REGEX_CACHE.computeIfAbsent(
+                config.getInputHeadRegex(), Pattern::compile);
+
+        return p.matcher(head).lookingAt();
+    }
+
+    private static class ProcessingItem {
+        String head;
+        BigDecimal amount;
+        int colIndex;
+
+        ProcessingItem(String h, BigDecimal a, int c) {
+            head = h;
+            amount = a;
+            colIndex = c;
+        }
+    }
+
+    private static class HeaderInfo {
+        String branchCode;
+        String reportDate;
+    }
 }
-
-
-
 
