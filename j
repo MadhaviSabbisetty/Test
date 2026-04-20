@@ -30,6 +30,53 @@ BPEP10000131032026F
 
 
 
+
+
+
+
+private String transformLine(String line, AsciiConfig config) {
+
+    String[] cols = line.split("\\|", -1);
+
+    // Skip header/invalid lines
+    if (cols.length < 5) return null;
+
+    String head = cols[3].trim();   // FIELD NO (01099)
+    BigDecimal prevAmt = parseAmount(cols[0]); // Previous
+    BigDecimal currAmt = parseAmount(cols[4]); // Current
+
+    // Skip non-data rows
+    if (!head.matches("\\d+")) return null;
+
+    // Format amounts like your ASCII
+    String prev = formatAmount(prevAmt);
+    String curr = formatAmount(currAmt);
+
+    return head + prev + curr;
+}
+
+
+private String formatAmount(BigDecimal amt) {
+
+    if (amt == null) amt = BigDecimal.ZERO;
+
+    boolean negative = amt.compareTo(BigDecimal.ZERO) < 0;
+
+    amt = amt.abs().setScale(2, BigDecimal.ROUND_HALF_UP);
+
+    String value = amt.movePointRight(2).toPlainString(); // remove decimal
+
+    // pad to 23 digits
+    String padded = String.format("%023d", new java.math.BigInteger(value));
+
+    return padded + (negative ? "-" : "+");
+}
+
+
+
+
+
+
 [root@fcdevhdfsname media]# hdfs dfs -cat /reports/2026-03-31/pnl_report/pnl_report_31032026.psv
 ================================================================================
                               STATE BANK OF INDIA
