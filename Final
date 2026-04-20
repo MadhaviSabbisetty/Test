@@ -1,0 +1,375 @@
+package com.tcs.fincore.AsciiGenerationService.Service;
+
+import com.tcs.fincore.AsciiGenerationService.DTO.FileJob;
+import com.tcs.fincore.AsciiGenerationService.Model.AsciiConfig;
+import com.tcs.fincore.AsciiGenerationService.Repository.AsciiConfigRepository;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import org.apache.hadoop.fs.*;
+
+import java.io.*;
+import java.math.BigDecimal;
+
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.*;
+
+@Service
+@Slf4j
+public class AsciiGenerationService {
+
+    @Autowired
+    private AsciiConfigRepository configRepo;
+
+    @Autowired
+    private JobQueueManager jobQueueManager;
+
+    @Autowired
+    private HdfsService hdfsService;
+
+    private static final Map<String, Pattern> INPUT_REGEX_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, BatchStats> batchTracker = new ConcurrentHashMap<>();
+
+    private static class BatchStats {
+        long startTime;
+        AtomicInteger remainingFiles;
+        int totalFiles;
+
+        BatchStats(int totalFiles) {
+            this.startTime = System.currentTimeMillis();
+            this.totalFiles = totalFiles;
+            this.remainingFiles = new AtomicInteger(totalFiles);
+        }
+    }
+
+    // =========================
+    // 1. INITIATE BATCH
+    // =========================
+    public String initiateBatch(Long configId) {
+        try {
+            AsciiConfig config = configRepo.findById(configId)
+                    .orElseThrow(() -> new RuntimeException("Config not found"));
+
+            String reportId = config.getReportId();
+            String keyword = reportId.contains("_") ? reportId.split("_")[0] : reportId;
+
+            FileSystem fs = hdfsService.getFs();
+            Path baseDir = new Path("/reports/2026-03-31/" + keyword.toLowerCase() + "_report");
+
+            RemoteIterator<LocatedFileStatus> files = fs.listFiles(baseDir, true);
+
+            List<Path> foundFiles = new ArrayList<>();
+
+            while (files.hasNext()) {
+                LocatedFileStatus file = files.next();
+
+                if (file.getPath().getName().contains(keyword)
+                        && file.getPath().getName().endsWith(".psv")) {
+                    foundFiles.add(file.getPath());
+                }
+            }
+
+            if (foundFiles.isEmpty()) return "No files found";
+
+            String batchId = UUID.randomUUID().toString();
+            batchTracker.put(batchId, new BatchStats(foundFiles.size()));
+
+            for (Path file : foundFiles) {
+                jobQueueManager.submitFileJob(new FileJob(configId, file, batchId));
+            }
+
+            return "Batch started: " + batchId;
+
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    // =========================
+    // 2. PROCESS FILE
+    // =========================
+    public void processSingleFile(FileJob job) {
+
+        Path inputPath = job.getFilePath();
+        Long configId = job.getConfigId();
+        String batchId = job.getBatchId();
+
+        try {
+            FileSystem fs = hdfsService.getFs();
+            AsciiConfig config = configRepo.findById(configId).orElseThrow();
+
+            String[] parts = inputPath.toString().split("/");
+            String date = parts[3];
+
+            String reportFolder = config.getReportId().toLowerCase();
+            String reportType = reportFolder.contains("_")
+                    ? reportFolder.split("_")[0]
+                    : reportFolder;
+
+            Path outputDir = new Path("/reports/" + date + "/ascii_files/" + reportType + "/");
+
+            if (!fs.exists(outputDir)) fs.mkdirs(outputDir);
+
+            Path outputPath = new Path(outputDir,
+                    "GENERATED_" + reportFolder + "_" + System.currentTimeMillis() + config.getFileType());
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(inputPath)));
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fs.create(outputPath)));
+
+            // HEADER
+            HeaderInfo headerInfo = parseHeaderEfficiently(fs, inputPath);
+
+            String header = config.getOutputFirstLine()
+                    + String.format("%5s", headerInfo.branchCode).replace(' ', '0')
+                    + headerInfo.reportDate + "F";
+
+            writer.write(header);
+            writer.newLine();
+
+            List<String> buffer = new ArrayList<>();
+            int batchSize = config.getOutputPerLineHead();
+
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+
+                try {
+                    String processed = transformLine(line, config);
+
+                    if (processed != null) {
+                        buffer.add(processed);
+
+                        if (buffer.size() == batchSize) {
+                            writer.write(String.join("", buffer));
+                            writer.newLine();
+                            buffer.clear();
+                        }
+                    }
+
+                } catch (Exception e) {
+                    log.error("Row error", e);
+                }
+            }
+
+            if (!buffer.isEmpty()) {
+                writer.write(String.join("", buffer));
+                writer.newLine();
+            }
+
+            if (config.getOutputEndLine() != null) {
+                writer.write(config.getOutputEndLine());
+            }
+
+            reader.close();
+            writer.close();
+
+            checkBatchCompletion(batchId);
+
+        } catch (Exception e) {
+            log.error("Processing failed", e);
+            checkBatchCompletion(batchId);
+        }
+    }
+
+    private void checkBatchCompletion(String batchId) {
+        BatchStats stats = batchTracker.get(batchId);
+
+        if (stats != null && stats.remainingFiles.decrementAndGet() == 0) {
+            log.info("BATCH COMPLETED: {}", batchId);
+            batchTracker.remove(batchId);
+        }
+    }
+
+    // =========================
+    // CORE LOGIC (FIXED)
+    // =========================
+    private String transformLine(String line, AsciiConfig config) {
+
+        String[] cols = line.split("\\|", -1);
+
+        if (!isValidRow(cols, config)) return null;
+
+        List<ProcessingItem> items = extractAmountColumns(cols, config);
+
+        StringBuilder sb = new StringBuilder();
+        boolean valid = false;
+
+        for (ProcessingItem item : items) {
+
+            BigDecimal amt = item.amount;
+
+            if (amt != null) {
+                sb.append(amt.toPlainString());
+                valid = true;
+            }
+        }
+
+        if (valid) {
+            return items.get(0).head + sb.toString();
+        }
+
+        return null;
+    }
+
+    // =========================
+    // DYNAMIC AMOUNT LOGIC (RESTORED)
+    // =========================
+    private List<ProcessingItem> extractAmountColumns(String[] cols, AsciiConfig config) {
+
+        List<ProcessingItem> items = new ArrayList<>();
+
+        int headIdx = config.getInputHeadCol() - 1;
+        String head = (headIdx < cols.length) ? cols[headIdx].trim() : "";
+
+        String seq = config.getAmountColSeq();
+
+        if (seq.contains("else")) {
+            String[] parts = seq.split("else");
+            int primary = Integer.parseInt(parts[0].trim());
+
+            for (String p : parts) {
+                int idx = Integer.parseInt(p.trim()) - 1;
+                BigDecimal val = parseAmount(cols, idx);
+
+                if (val.compareTo(BigDecimal.ZERO) != 0) {
+                    items.add(new ProcessingItem(head, val, primary));
+                    return items;
+                }
+            }
+
+            items.add(new ProcessingItem(head, BigDecimal.ZERO, primary));
+        }
+
+        else if (seq.contains("and")) {
+            for (String p : seq.split("and")) {
+                int idx = Integer.parseInt(p.trim()) - 1;
+                items.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
+            }
+        }
+
+        else {
+            int idx = Integer.parseInt(seq.trim()) - 1;
+            items.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
+        }
+
+        return items;
+    }
+
+    // =========================
+    // SAFE PARSE
+    // =========================
+    private BigDecimal parseAmount(String[] cols, int idx) {
+        if (idx >= cols.length) return BigDecimal.ZERO;
+        return parseAmount(cols[idx]);
+    }
+
+    private BigDecimal parseAmount(String val) {
+        try {
+            if (val == null || val.trim().isEmpty()) return BigDecimal.ZERO;
+
+            String clean = val.trim().replace(",", "");
+
+            if (!clean.matches("-?\\d+(\\.\\d+)?")) return BigDecimal.ZERO;
+
+            return new BigDecimal(clean);
+
+        } catch (Exception e) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+    // =========================
+    // VALIDATION FIX (CRITICAL)
+    // =========================
+    private boolean isValidRow(String[] cols, AsciiConfig config) {
+
+        int idx = config.getInputHeadCol() - 1;
+        if (cols.length <= idx) return false;
+
+        String head = cols[idx].trim();
+
+        // allow numeric heads (PNL, YSA)
+        if (head.matches("\\d+")) return true;
+
+        Pattern p = INPUT_REGEX_CACHE.computeIfAbsent(
+                config.getInputHeadRegex(), Pattern::compile);
+
+        return p.matcher(head).lookingAt();
+    }
+
+    // =========================
+    // HEADER PARSER
+    // =========================
+    private HeaderInfo parseHeaderEfficiently(FileSystem fs, Path path) {
+
+        HeaderInfo info = new HeaderInfo();
+        info.branchCode = "00000";
+        info.reportDate = "01012026";
+
+        Pattern branchPattern = Pattern.compile("(?i)BRANCH\\s*::\\s*(\\d+)");
+        Pattern datePattern = Pattern.compile("DATE\\s*::\\s*(\\S+)");
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(path)))) {
+
+            String line;
+            int count = 0;
+
+            while ((line = reader.readLine()) != null && count++ < 50) {
+
+                Matcher m1 = branchPattern.matcher(line);
+                if (m1.find()) info.branchCode = m1.group(1);
+
+                Matcher m2 = datePattern.matcher(line);
+                if (m2.find()) info.reportDate = normalizeDate(m2.group(1));
+            }
+
+        } catch (Exception ignored) {}
+
+        return info;
+    }
+
+    private String normalizeDate(String dateStr) {
+
+        if (dateStr == null) return "01012026";
+
+        List<DateTimeFormatter> formats = Arrays.asList(
+                DateTimeFormatter.ofPattern("dd-MM-yyyy"),
+                DateTimeFormatter.ofPattern("dd/MM/yyyy"),
+                DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        );
+
+        for (DateTimeFormatter f : formats) {
+            try {
+                return LocalDate.parse(dateStr, f)
+                        .format(DateTimeFormatter.ofPattern("ddMMyyyy"));
+            } catch (DateTimeParseException ignored) {}
+        }
+
+        return "01012026";
+    }
+
+    private static class ProcessingItem {
+        String head;
+        BigDecimal amount;
+        int colIndex;
+
+        ProcessingItem(String h, BigDecimal a, int c) {
+            head = h;
+            amount = a;
+            colIndex = c;
+        }
+    }
+
+    private static class HeaderInfo {
+        String branchCode;
+        String reportDate;
+    }
+}
