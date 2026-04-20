@@ -1043,3 +1043,57 @@ public class AsciiGenerationService {
 
 
 
+
+
+
+
+....
+
+
+private BigDecimal parseAmount(String val) {
+    try {
+        if (val == null || val.trim().isEmpty()) return BigDecimal.ZERO;
+
+        String clean = val.trim().replace(",", "");
+
+        // ✅ IMPORTANT FIX: allow only numbers
+        if (!clean.matches("-?\\d+(\\.\\d+)?")) {
+            return BigDecimal.ZERO;
+        }
+
+        return new BigDecimal(clean);
+
+    } catch (Exception e) {
+        return BigDecimal.ZERO;
+    }
+}
+
+
+
+
+
+if (amt != null) {
+    sb.append(amt.toPlainString());
+    valid = true;
+}
+
+
+
+
+
+
+
+if (!isValidRow(cols, config)) {
+    log.warn("Skipping row due to regex: {}", line);
+    // TEMP allow processing
+}
+
+
+
+String head = cols[idx].trim();
+
+log.info("HEAD VALUE: [{}]", cols[idx]);
+
+
+
+
