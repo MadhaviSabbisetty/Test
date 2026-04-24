@@ -1,1 +1,939 @@
+controller file 
+
+package com.tcs.fincore.AsciiGenerationService.Controller;
+
+import com.tcs.fincore.AsciiGenerationService.DTO.ReportRequest;
+import com.tcs.fincore.AsciiGenerationService.Service.AsciiGenerationService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/ascii")
+public class AsciiController {
+
+    @Autowired
+    private AsciiGenerationService service;
+
+    @PostMapping("/generate")
+
+    public ResponseEntity<String> generate(@RequestBody ReportRequest request) {
+        try {
+            if (request.getPayload()== null 
+                || request.getPayload().getId() == null 
+                || request.getPayload().getId().isBlank())
+            {
+                return ResponseEntity.badRequest().body("Error: 'Id' is missing");
+            }
+
+             if (request.getPayload().getReportDate() == null || request.getPayload().getReportDate().isBlank()) {
+                return ResponseEntity.badRequest().body("Error: 'Date' is missing");
+            }
+            Long id=Long.valueOf(request.getId());
+            String status = service.initiateBatch(id,request.getReportDate());
+
+            return ResponseEntity.accepted().body("Success: " + status);
+
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
+        }
+    }
+}
+
+
+
+DTO
+filejobdto file
+
+package com.tcs.fincore.AsciiGenerationService.DTO;
+
+
+import org.apache.hadoop.fs.Path;
+
+public class FileJob {
+    private Long configId;
+    private Path filePath;
+    private String batchId; // <--- This was missing
+    private String date;
+
+    // The constructor must accept 3 arguments now
+    public FileJob(Long configId, Path filePath, String batchId, String date) {
+        this.configId = configId;
+        this.filePath = filePath;
+        this.batchId = batchId;
+        this.date=date;
+    }
+
+    public Long getConfigId() { return configId; }
+    public Path getFilePath() { return filePath; }
+    public String getBatchId() { return batchId; } // <--- This getter was missing
+    public String getDate(){ return date; }
+}
+
+
+
+reportgendto
+
+package com.tcs.fincore.AsciiGenerationService.DTO;
+
+
+import java.time.LocalDate;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.Valid;
+import lombok.Data;
+
+@Data
+public class ReportGenerationDTO {
+
+    @NotNull(message = "Process Run Id Cannot be null")
+    private String processRunId;
+
+    @NotNull(message = "Run Id Cannot be null")
+    private Integer runId;
+
+    @NotNull(message = "Stage Id Cannot be null")
+    @NotBlank(message = "Stage Id Cannot be Blank")
+    private String stageId;
+
+    @NotNull(message = "Report Type Cannot be null")
+    @NotBlank(message = "Report Type Cannot be blank")
+    private String type;
+    
+    @Valid
+    @NotNull
+    private Payload payload;
+    @Data
+    public static class Payload
+    {
+        @NotNull(message = "Id cannot be null")
+        private String id;
+
+        @NotNull(message = "Report Date cannot be blank")
+        private String reportDate;
+    }
+
+}
+
+
+reportgenresdto
+
+package com.tcs.fincore.AsciiGenerationService.DTO;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.tcs.fincore.AsciiGenerationService.util.FormatStatus;
+import com.tcs.fincore.AsciiGenerationService.util.ReportFormat;
+import lombok.Data;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+@Data
+public class ReportGenerationResponseDTO {
+    private String processRunId;
+    private Integer runId;
+    private String stageId;
+    
+
+    private String type;
+    private String id;
+    private String reportDate;
+
+    private String status;
+    private String remark;
+    // Map<ReportFormat, FormatStatus> formatResults;
+    // Map<ReportFormat, String> formatErrors;
+
+    private Map<String, String> formatResults;
+    private Map<String, String> formatErrors;
+}
+
+
+reportreqdto
+
+package com.tcs.fincore.AsciiGenerationService.DTO;
+
+import lombok.Data;
+
+@Data
+public class ReportRequest {
+    private String id;
+    private String reportDate; // The user sends this in JSON
+}
+
+
+Kafka file 
+consumer file
+
+package com.tcs.fincore.AsciiGenerationService.kafka;
+
+import com.tcs.fincore.AsciiGenerationService.DTO.ReportGenerationDTO;
+import com.tcs.fincore.AsciiGenerationService.DTO.ReportGenerationResponseDTO;
+import com.tcs.fincore.AsciiGenerationService.Service.KafkaService;
+import com.tcs.fincore.AsciiGenerationService.util.Constants;
+
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import java.time.LocalDateTime;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
+
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.stereotype.Service;
+import org.springframework.validation.annotation.Validated;
+
+// @Slf4j
+// @Service
+// @RequiredArgsConstructor
+// @Validated
+// public class ReportKafkaConsumer {
+
+//     private final KafkaService kafkaService;
+//     private final ReportKafkaProducer producer;
+
+//     @KafkaListener(topics = "report-generation-request", groupId = "Airflow_ETL", properties = {
+//             "spring.json.value.default.type=com.fincore.ReportService.dto.ReportGenerationDTO" })
+//     public void consume(@Valid ReportGenerationDTO request) {
+
+//         try {
+//             log.info("Report Generation Request Recieved:{} ", request);
+//             kafkaService.processReport(request);
+
+//         }
+//         catch (CallNotPermittedException e) {
+//             log.error("Circuit Breaker is OPEN. Skipping/Retrying later for RunId: {}", request.getRunId());
+
+//         }
+
+//         catch (ConstraintViolationException e) {
+//             log.info("Constraint Violation {}",e.getMessage());
+//             ReportGenerationResponseDTO response = new ReportGenerationResponseDTO();
+//             response.setRunId(request.getRunId());
+//             response.setProcessRunId(request.getProcessRunId());
+//             response.setStageId(request.getStageId());
+//             response.setStatus(Constants.FAILED);
+//             response.setRemark("Validation Failed " + e.getMessage());
+//             producer.sendResponse(response);
+//         }
+
+//     }
+// }
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ReportKafkaConsumer {
+
+    private final KafkaService kafkaService;
+    private final ReportKafkaProducer producer;
+    private final Validator validator;
+
+    @KafkaListener(topics = "ascii-report-generation-request", groupId = "Airflow_ETL",
+    properties = {
+            "spring.json.value.default.type=com.tcs.fincore.AsciiGenerationService.DTO.ReportGenerationDTO"}  
+    )
+    public void consume(@Valid @Payload ReportGenerationDTO request) {
+        log.info("Received ASCII Report Generation Request: {}", request);
+        log.info("------Payload object: {}",request.getPayload());
+        ReportGenerationResponseDTO response = new ReportGenerationResponseDTO();
+        try {
+            Set<ConstraintViolation<ReportGenerationDTO>> violations = validator.validate(request);
+            if (!violations.isEmpty()) {
+                String errorMessage = violations.stream()
+                        .map(ConstraintViolation::getMessage)
+                        .collect(Collectors.joining(", "));
+                log.error("Validation Failed: {}", errorMessage);
+                response.setRunId(request.getRunId());
+                response.setProcessRunId(request.getProcessRunId());
+                response.setStageId(request.getStageId());
+                // response.setStatus(Constants.FAILED);
+                // response.setRemark("Validation Failed: " + errorMessage);
+                // response.setTimestamp(LocalDateTime.now());
+
+               producer.sendResponse(response);
+                return;
+            }
+            kafkaService.processReport(request);
+        } catch (RuntimeException e) {
+            log.error("Processing Failed for RunId {}: {}", request.getRunId(), e.getMessage(), e);
+            response.setRunId(request.getRunId());
+            response.setProcessRunId(request.getProcessRunId());
+            response.setStageId(request.getStageId());
+            response.setStatus(Constants.FAILED);
+            response.setRemark("Processing Failed: " + e.getMessage());
+            // response.setTimestamp(LocalDateTime.now());
+           producer.sendResponse(response);
+        }
+    }
+}
+
+
+producer file 
+
+package com.tcs.fincore.AsciiGenerationService.kafka;
+
+import com.tcs.fincore.AsciiGenerationService.DTO.ReportGenerationResponseDTO;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Service;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ReportKafkaProducer {
+
+    private final KafkaTemplate<String, ReportGenerationResponseDTO> kafkaTemplate;
+
+    private static final String RESPONSE_TOPIC = "ascii-report-generation-response";
+
+    public void sendResponse(ReportGenerationResponseDTO response) {
+         log.info("-----------------ASCII Report Generation Response Sent :{} ",response);
+
+        // kafkaTemplate.send(RESPONSE_TOPIC, String.valueOf(response.getRunId()),response);
+        kafkaTemplate.send(RESPONSE_TOPIC, response);
+    }
+}
+
+
+model file
+
+package com.tcs.fincore.AsciiGenerationService.Model;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.Data;
+
+@Entity
+@Table(name = "ASCII_CONFIG")
+@Data
+public class AsciiConfig {
+
+    @Id
+    @Column(name = "ID")
+    private Long id;
+
+    @Column(name = "REPORT_ID")
+    private String reportId;
+
+    @Column(name = "FILE_TYPE")
+    private String fileType;
+
+    @Column(name = "INPUT_FILE_NAME")
+    private String inputFileName;
+
+    @Column(name = "OUTPUT_FIRST_LINE")
+    private String outputFirstLine;
+
+    @Column(name = "OUTPUT_END_LINE")
+    private String outputEndLine;
+
+    @Column(name = "INPUT_HEAD_COL")
+    private Integer inputHeadCol;
+
+    @Column(name = "INPUT_HEAD_REGEX")
+    private String inputHeadRegex;
+
+    @Column(name = "OUTPUT_HEAD_COL_PAD")
+    private String outputHeadColPad;
+
+    @Column(name = "AMOUNT_COL_SEQ")
+    private String amountColSeq;
+
+    @Column(name = "OUTPUT_AMT_COL_LOGIC")
+    private String outputAmtColLogic;
+
+    @Column(name = "OUTPUT_AMT_DECIMAL")
+    private String outputAmtDecimal;
+
+    @Column(name = "OUTPUT_AMT_COL_PAD")
+    private String outputAmtColPad;
+
+    @Column(name = "OUTPUT_AMT_SIGN")
+    private String outputAmtSign;
+
+    @Column(name = "OUTPUT_PER_LINE_HEAD")
+    private Integer outputPerLineHead;
+
+    @Column(name = "OUTPUT_INCLUDE_CONDITION")
+    private String outputIncludeCondition;
+}
+
+
+repository
+
+package com.tcs.fincore.AsciiGenerationService.Repository;
+
+
+import com.tcs.fincore.AsciiGenerationService.Model.AsciiConfig;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface AsciiConfigRepository extends JpaRepository<AsciiConfig, Long> {
+}
+
+
+service files
+
+asciigenservice file
+
+package com.tcs.fincore.AsciiGenerationService.Service;
+
+import com.tcs.fincore.AsciiGenerationService.DTO.FileJob;
+import com.tcs.fincore.AsciiGenerationService.Model.AsciiConfig;
+import com.tcs.fincore.AsciiGenerationService.Repository.AsciiConfigRepository;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import org.apache.hadoop.fs.*;
+
+import java.io.*;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.*;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+
+@Service
+@Slf4j
+public class AsciiGenerationService {
+
+    @Autowired
+    private AsciiConfigRepository configRepo;
+
+    @Autowired
+    private JobQueueManager jobQueueManager;
+
+    @Autowired
+    private HdfsService hdfsService;
+
+    private static final Map<String, Pattern> INPUT_REGEX_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, BatchStats> batchTracker = new ConcurrentHashMap<>();
+
+    private static class BatchStats {
+        long startTime;
+        AtomicInteger remainingFiles;
+
+        BatchStats(int total) {
+            this.startTime = System.currentTimeMillis();
+            this.remainingFiles = new AtomicInteger(total);
+        }
+    }
+
+    // =========================
+    // 1. INITIATE BATCH
+    // =========================
+    public String initiateBatch(Long configId,String date) {
+        System.out.println("=========DEBUG: initiateBatch STARTED =========");
+        try {
+            AsciiConfig config = configRepo.findById(configId)
+                    .orElseThrow(() -> new RuntimeException("Config not found"));
+
+            // FileSystem fs = hdfsService.getFs();
+            Configuration conf= new Configuration();
+            conf.set("fs.defaultFS","files:///");
+            FileSystem fs = FileSystem.get(conf);
+
+            String reportId = config.getReportId();
+            String keyword = reportId.contains("_") ? reportId.split("_")[0] : reportId;
+
+            String inputPathStr="/reports/"+date+"/"+keyword+"_report";
+
+            //Path baseDir = new Path("/reports/2025-12-14/nwsa_report");
+            Path baseDir=new Path(inputPathStr);
+
+            log.info("----------Using FileSystem : {}",fs.getUri());
+            log.info("------Reading from path: {}",baseDir);
+
+            log.info("------------Scanning directory: {}", baseDir);
+
+            RemoteIterator<LocatedFileStatus> files = fs.listFiles(baseDir, true);
+
+            List<Path> foundFiles = new ArrayList<>();
+
+            while (files.hasNext()) {
+                Path p = files.next().getPath();
+                log.info("Checking file: {}", p);
+
+                if (p.getName().endsWith(".psv")) {
+                    foundFiles.add(p);
+                }
+            }
+
+            if (foundFiles.isEmpty()) return "No files found";
+
+            String batchId = UUID.randomUUID().toString();
+            batchTracker.put(batchId, new BatchStats(foundFiles.size()));
+
+            for (Path p : foundFiles) {
+                jobQueueManager.submitFileJob(new FileJob(configId, p, batchId,date));
+            }
+
+            return "Batch Started: " + batchId;
+
+        } catch (Exception e) {
+            log.error("Batch initiation failed", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    // =========================
+    // 2. PROCESS FILE
+    // =========================
+    public void processSingleFile(FileJob job) {
+
+        try {
+            FileSystem fs = hdfsService.getFs();
+            AsciiConfig config = configRepo.findById(job.getConfigId()).orElseThrow();
+
+            Path inputPath = job.getFilePath();
+
+            log.info("Processing file: {}", inputPath);
+
+            //  SAFE DATE EXTRACTION (IMPORTANT FIX)
+            String date = job.getDate();
+            String reportType = config.getReportId().split("_")[0].toLowerCase();
+
+            Path outputDir = new Path("/reports/" + date + "/ascii_files/" + reportType + "/");
+
+            if (!fs.exists(outputDir)) {
+                fs.mkdirs(outputDir);
+                log.info("Created output dir: {}", outputDir);
+            }
+
+            Path outputFile = new Path(outputDir,
+                    "GENERATED_" + config.getReportId() + "_" + System.currentTimeMillis() + config.getFileType());
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(inputPath)));
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fs.create(outputFile)));
+
+            // HEADER
+            HeaderInfo header = parseHeaderEfficiently(fs, inputPath);
+
+            String headerLine = config.getOutputFirstLine()
+                    + String.format("%5s", header.branchCode).replace(' ', '0')
+                    + header.reportDate + "F";
+
+            writer.write(headerLine);
+            writer.newLine();
+
+            List<String> allLines=new ArrayList<>();
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                try {
+                    String processed = transformLine(line, config);
+
+                    if (processed != null) {
+                        allLines.add(processed);
+                    }
+
+                } catch (Exception e) {
+                    log.error("Row error: {}", line, e);
+                }
+            }
+
+
+            log.info("Sorting {} records.....",allLines.size());
+
+            allLines.sort(Comparator.comparingInt(s->{
+                try{
+                    return Integer.parseInt(s.substring(0,5));
+                }
+                catch(Exception e){
+                    return Integer.MAX_VALUE;
+                }
+            }));
+
+            for(String record: allLines){
+                writer.write(record);
+                writer.newLine();
+            }
+
+            if (config.getOutputEndLine() != null) {
+                writer.write(config.getOutputEndLine());
+            }
+
+            reader.close();
+            writer.close();
+
+            log.info("File completed: {}", outputFile);
+
+        } catch (Exception e) {
+            log.error("Processing failed", e);
+        }
+    }
+
+    // =========================
+    // CORE LOGIC (ORIGINAL RESTORED)
+    // =========================
+    private String transformLine(String line, AsciiConfig config) {
+
+        String[] columns = line.split("\\|", -1);
+        if (!isValidRow(columns, config)) return null;
+
+        List<ProcessingItem> items = extractAmountColumns(columns, config);
+
+        StringBuilder sb = new StringBuilder();
+        boolean valid = false;
+
+        for (ProcessingItem item : items) {
+
+            BigDecimal finalAmt = RuleParser.applyMathLogic(
+                    item.amount, item.head, item.colIndex, config.getOutputAmtColLogic());
+
+            finalAmt = RuleParser.applyDecimalLogic(
+                    finalAmt, item.head, item.colIndex, config.getOutputAmtDecimal());
+
+            if (RuleParser.shouldIncludeValue(
+                    finalAmt, item.head, item.colIndex, config.getOutputIncludeCondition())) {
+
+                String amtStr = RuleParser.applyAmountPadding(
+                        finalAmt, item.head, item.colIndex, config.getOutputAmtColPad());
+
+                String signed = RuleParser.applySign(
+                        amtStr, finalAmt, item.head, item.colIndex, config.getOutputAmtSign());
+
+                sb.append(signed);
+                valid = true;
+            }
+        }
+
+        if (valid) {
+            String headPadded = RuleParser.applyHeadPadding(
+                    items.get(0).head, config.getOutputHeadColPad());
+
+            return headPadded + sb.toString();
+        }
+
+        return null;
+    }
+
+    // =========================
+    // COLUMN EXTRACTION (DB DRIVEN)
+    // =========================
+    private List<ProcessingItem> extractAmountColumns(String[] cols, AsciiConfig config) {
+
+        List<ProcessingItem> items = new ArrayList<>();
+
+        int headIdx = config.getInputHeadCol() - 1;
+        String head = (headIdx < cols.length) ? cols[headIdx].trim() : "";
+
+        String seq = config.getAmountColSeq();
+
+        if (seq.contains("else")) {
+            String[] parts = seq.split("else");
+            int primary = Integer.parseInt(parts[0].trim());
+
+            for (String p : parts) {
+                int idx = Integer.parseInt(p.trim()) - 1;
+
+                BigDecimal val = parseAmount(cols, idx);
+
+                if (val.compareTo(BigDecimal.ZERO) != 0) {
+                    items.add(new ProcessingItem(head, val, primary));
+                    return items;
+                }
+            }
+
+            items.add(new ProcessingItem(head, BigDecimal.ZERO, primary));
+        }
+
+        else if (seq.contains("and")) {
+            for (String p : seq.split("and")) {
+                int idx = Integer.parseInt(p.trim()) - 1;
+                items.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
+            }
+        }
+
+        else {
+            int idx = Integer.parseInt(seq.trim()) - 1;
+            items.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
+        }
+
+        return items;
+    }
+
+    private BigDecimal parseAmount(String[] cols, int idx) {
+        if (idx >= cols.length) return BigDecimal.ZERO;
+        return parseAmount(cols[idx]);
+    }
+
+    private BigDecimal parseAmount(String val) {
+        try {
+            if (val == null || val.trim().isEmpty()) return BigDecimal.ZERO;
+            return new BigDecimal(val.trim().replace(",", ""));
+        } catch (Exception e) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+    private boolean isValidRow(String[] cols, AsciiConfig config) {
+        int idx = config.getInputHeadCol() - 1;
+        if (cols.length <= idx) return false;
+
+        String head = cols[idx].trim();
+
+        Pattern p = INPUT_REGEX_CACHE.computeIfAbsent(
+                config.getInputHeadRegex(), Pattern::compile);
+
+        return p.matcher(head).lookingAt();
+    }
+
+    // =========================
+    // HEADER
+    // =========================
+    private HeaderInfo parseHeaderEfficiently(FileSystem fs, Path path) {
+
+        HeaderInfo info = new HeaderInfo();
+        info.branchCode = "00000";
+        info.reportDate = "01012026";
+
+        Pattern branchPattern = Pattern.compile("(?i)BRANCH\\s*::\\s*(\\d+)");
+        Pattern datePattern = Pattern.compile("DATE\\s*::\\s*(\\S+)");
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(path)))) {
+
+            String line;
+            int count = 0;
+
+            while ((line = reader.readLine()) != null && count++ < 50) {
+
+                Matcher m1 = branchPattern.matcher(line);
+                if (m1.find()) info.branchCode = m1.group(1);
+
+                Matcher m2 = datePattern.matcher(line);
+                if (m2.find()) info.reportDate = normalizeDate(m2.group(1));
+            }
+
+        } catch (Exception e) {
+            log.warn("Header parse error", e);
+        }
+
+        return info;
+    }
+
+    private String normalizeDate(String d) {
+        try {
+            return LocalDate.parse(d, DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                    .format(DateTimeFormatter.ofPattern("ddMMyyyy"));
+        } catch (Exception e) {
+            return "01012026";
+        }
+    }
+
+    private static class ProcessingItem {
+        String head;
+        BigDecimal amount;
+        int colIndex;
+
+        ProcessingItem(String h, BigDecimal a, int c) {
+            head = h;
+            amount = a;
+            colIndex = c;
+        }
+    }
+
+    private static class HeaderInfo {
+        String branchCode;
+        String reportDate;
+    }
+}
+
+
+hdfs service
+
+package com.tcs.fincore.AsciiGenerationService.Service;
+import jakarta.annotation.PostConstruct;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import lombok.extern.slf4j.Slf4j;
+import java.net.URI;
+
+@Slf4j
+@Service
+public class HdfsService{
+    @Value("${hadoop.fs.uri}")
+    private String hdfsUri;
+     
+    @Value("${hadoop.fs.user}")
+    private String hdfsUser;
+
+    private FileSystem fs;
+
+    @PostConstruct
+    public void init(){
+        try{
+            Configuration conf= new Configuration();
+            //fs=FileSystem.get(new URI(hdfsUri), conf, hdfsUser);
+            conf.set("fs")
+            log.info("Connection to hdfs as user: {}",hdfsUser);
+        }
+        catch(Exception e){
+            log.error("HDFS connection failed",e);
+        }
+    }
+
+    public FileSystem getFs(){
+        return fs;
+    }
+}
+
+
+jobquwuwmanager
+
+package com.tcs.fincore.AsciiGenerationService.Service;
+
+
+import com.tcs.fincore.AsciiGenerationService.DTO.FileJob;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy; // <--- IMPORT THIS
+import org.springframework.stereotype.Service;
+
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+
+@Service
+@Slf4j
+public class JobQueueManager {
+
+    private final AsciiGenerationService asciiService;
+
+    // Use Constructor Injection with @Lazy to break the cycle
+    @Autowired
+    public JobQueueManager(@Lazy AsciiGenerationService asciiService) {
+        this.asciiService = asciiService;
+    }
+
+    // The Queue: Holds 'FileJob' (Config ID + Specific File Path)
+    private final BlockingQueue<FileJob> jobQueue = new LinkedBlockingQueue<>();
+
+    // 10 Threads processing files in parallel
+    private final ExecutorService executorService = Executors.newFixedThreadPool(10);
+
+    private volatile boolean running = true;
+
+    @PostConstruct
+    public void startWorkers() {
+        Thread dispatcher = new Thread(() -> {
+            while (running) {
+                try {
+                    FileJob job = jobQueue.take();
+                    executorService.submit(() -> asciiService.processSingleFile(job));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        });
+        dispatcher.setName("Job-Dispatcher");
+        dispatcher.start();
+        log.info("Batch Processor Started. Waiting for jobs...");
+    }
+
+    public void submitFileJob(FileJob job) {
+        jobQueue.offer(job);
+    }
+
+    public int getQueueSize() {
+        return jobQueue.size();
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        running = false;
+        executorService.shutdown();
+    }
+}
+
+kafka service 
+
+package com.tcs.fincore.AsciiGenerationService.Service;
+import com.tcs.fincore.AsciiGenerationService.DTO.FileJob;
+import com.tcs.fincore.AsciiGenerationService.DTO.ReportGenerationDTO;
+import com.tcs.fincore.AsciiGenerationService.DTO.ReportGenerationResponseDTO;
+import com.tcs.fincore.AsciiGenerationService.kafka.ReportKafkaProducer;
+import com.tcs.fincore.AsciiGenerationService.util.Constants;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import java.io.IOException;
+import lombok.extern.slf4j.Slf4j;
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class KafkaService {
+    private final AsciiGenerationService asciiService;
+    private final ReportKafkaProducer producer;
+    public void processReport(ReportGenerationDTO request) {
+        log.info("Received ASCII Report Generation Request in kafka service: {}", request);
+        log.info("------Payload object: {}",request.getPayload());
+        ReportGenerationResponseDTO response = new ReportGenerationResponseDTO();
+        try {
+            String idStr=request.getPayload().getId();
+            log.info("Received Id: {}",request.getPayload().getId());
+            String date=request.getPayload().getReportDate();
+            log.info("Received Date: {}",request.getPayload().getReportDate());
+             Long id= Long.valueOf(idStr);
+            String status = asciiService.initiateBatch(id,date);
+            // if (response.getStatus() == null) {
+            //     response.setStatus(Constants.FAILED);
+            //     response.setRemark("Internal failure.");
+            // }
+            //response = new ReportGenerationResponseDTO();
+            response.setRunId(request.getRunId());
+            response.setProcessRunId(request.getProcessRunId());
+            response.setStageId(request.getStageId());
+           //response.setType(request.getType());
+            response.setId(idStr);
+            response.setReportDate(date);
+
+            response.setStatus(Constants.SUCCESS);
+            response.setRemark(status != null ? status : "Batch started successfully" );
+
+        } catch (Exception e ) {
+            // response = new ReportGenerationResponseDTO();
+            response.setRunId(request.getRunId());
+            response.setProcessRunId(request.getProcessRunId());
+            response.setStageId(request.getStageId());
+
+            response.setId(request.getPayload().getId());
+            response.setReportDate(request.getPayload().getReportDate());
+
+            response.setStatus(Constants.FAILED);
+            response.setRemark("Exception: " + e.getMessage());
+       
+        }
+        producer.sendResponse(response);
+    }
+}
+
+
+
+
 
