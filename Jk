@@ -1,157 +1,532 @@
+package com.fincore.gateway.Service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fincore.gateway.Config.KeyUtils;
+import com.fincore.gateway.JwtUtil.HmacJwtUtil;
+import com.fincore.gateway.dto.*;
+import com.fincore.gateway.model.LoginAttempt;
+import com.fincore.gateway.model.LoginParam;
+import com.fincore.gateway.model.User;
+import com.fincore.gateway.model.UserRoles;
+import com.fincore.gateway.repository.*;
+import com.fincore.gateway.utility.Constants;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.orm.jpa.JpaSystemException;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Service implementation handling user login/verification, menu resolution, and password updates.
+ *
+ * <p><strong>Responsibilities</strong>
+ * <ul>
+ *   <li>Validate credentials (password-based and SSO-based)</li>
+ *   <li>Issue HS256 JWTs and embed limited user/role claims</li>
+ *   <li>Transform role permissions into menu responses</li>
+ *   <li>Track login attempts and enforce wrong password limits</li>
+ * </ul>
+ *
+ * <p><strong>Notes</strong>
+ * <ul>
+ *   <li>JWT generation uses an HMAC Base64 secret; ensure it is configured for the environment.</li>
+ *   <li>{@code BCryptPasswordEncoder} is created locally for convenience; consider injecting a singleton bean instead.</li>
+ *   <li>Write operations are wrapped in {@link Transactional} where appropriate.</li>
+ * </ul>
+ */
+@Slf4j
+@Service("LoginService")
+@RequiredArgsConstructor
+public class LoginServiceImpl implements LoginService {
+
+    /**
+     * Prefer injecting a singleton bean; retained local instance for compatibility.
+     */
+    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+
+    // ======= Config =======
+    private final UserRepository userRepository;
+    private final LoginAttemptRepository loginAttemptRepository;
+
+    // ======= Dependencies =======
+    private final LoginParamRepository loginParamRepository;
+    private final RolePermissionsRepository rolePermissionsRepository;
+    private final MenuService menuService;
+    private final ObjectMapper mapper;
+    private final BranchRepository branchRepository;
+
+    // LDAP Service
+    private final AdAuthenticationService adAuthenticationService;
+
+    @Value("${security.payload.rsa-private:}")
+    private String rsaPrivatePem;
+
+    /**
+     * Base64-encoded HMAC secret used to sign HS256 JWTs.
+     */
+    @Value("${security.jwt.hmac-base64-secret:}")
+    private String hmacSecret;
+
+    /**
+     * Token time-to-live in seconds.
+     */
+    @Value("${security.jwt.ttl-seconds:900}")
+    private long ttlSeconds;
+
+    // ======= Public API =======
+
+    /**
+     * Fetches role-wise permissions for the given user and transforms them into a menu response.
+     *
+     * @param userId ID of the user
+     * @return {@link MenuResponse} built from ordered permissions; empty if none or on error
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public MenuResponse fetchRoleWiseData(String userId) {
+        log.info("Fetching role-wise data for userId: {}", userId);
+        try {
+            List<PermissionRow> rows = rolePermissionsRepository.findAllPermissionsByUserId(userId);
+
+            if (rows == null || rows.isEmpty()) {
+                log.info("No permissions found for userId: {}", userId);
+                return new MenuResponse(Collections.emptyList());
+            }
+            return menuService.transformFromProjection(rows);
+        } catch (Exception e) {
+            log.error("Error fetching permissions for userId: {}", userId, e);
+            return new MenuResponse(Collections.emptyList());
+        }
+    }
+
+    /**
+     * Verifies user credentials and, on success, builds {@link UserDto} populated with an access token and token data.
+     * <p>Also records the login attempt and enforces password attempt limits.</p>
+     *
+     * @param userCredentials payload containing {@code userId} and (for password mode) {@code password}
+     * @param clientIp        caller's IP address for audit
+     * @return {@link UserDto} with validity flags, statuses, and (if valid) a signed access token
+     */
+    @Transactional
+    @Override
+    public UserDto verifyUserCredentials(UserDto userCredentials, String clientIp) {
+
+        final String userId = userCredentials.getUserId();
+        final String encryptedPassword = userCredentials.getPassword(); // This is now RSA Encrypted
+
+        UserDto result = new UserDto();
+
+        // 1. AUTHORIZATION CHECK (Must exist in Local DB)
+        User user = userRepository.findByUserId(userId);
+        if (user == null) {
+            result.setValidCredentials(false);
+            result.setUserStatus(Constants.INVALID);
+            log.warn("Login blocked: User {} not found in local DB.", userId);
+            return result;
+        }
+
+        LoginParam loginParam = loginParamRepository.getLoginParam();
+        char activeMode = loginParam.getActiveLoginMode();
+
+        // Prepare Audit Log
+        LoginAttempt attempt = new LoginAttempt();
+        attempt.setLoginMethod(determineMethodString(activeMode));
+        attempt.setSuccess("N");
+        attempt.setIpAddress(clientIp);
+        attempt.setUserId(userId);
+
+        result.setLoginMethod(activeMode);
+        result.setUserId(user.getUserId());
+        UserRoles userRole = userRepository.getUserRole(userId);
+
+        // 2. STATUS CHECKS
+        result.setRoleStatus(userRole.getRoleStatus());
+        result.setUserStatus(user.getAccountStatus());
+        result.setPasswordLoginStatus(user.getPasswordLogin());
+
+        if (!Constants.ACTIVE.equalsIgnoreCase(userRole.getRoleStatus())) {
+            attempt.setFailureReason(generateStatusMessage(userRole.getRoleStatus(), "role"));
+            loginAttemptRepository.save(attempt);
+            result.setValidCredentials(false);
+            return result;
+        }
+
+        if (!Constants.ACTIVE.equalsIgnoreCase(user.getAccountStatus())) {
+            attempt.setFailureReason(generateStatusMessage(user.getAccountStatus(), "user"));
+            loginAttemptRepository.save(attempt);
+            result.setValidCredentials(false);
+            return result;
+        }
+
+        try {
+            // Decrypt RSA Payload
+            String rawPassword = KeyUtils.decryptRsaPassword(encryptedPassword, rsaPrivatePem);
+
+            // 3. AUTHENTICATION LOGIC BASED ON MODE
+            if (activeMode == Constants.LDAP) {
+                // --- MODE: LDAP ---
+                log.info("Processing LDAP Login for user: {}", userId);
+                try {
+                    boolean ldapSuccess = adAuthenticationService.authenticate(userId, rawPassword);
+                    if (ldapSuccess) {
+                        // Success: Generate Token
+                        handleSuccess(attempt, result, user, userRole);
+                    } else {
+                        // Failure: Wrong Password -> Count it against limits
+                        handleFailure(attempt, result, user, loginParam, "LDAP Authentication Failed");
+                    }
+                } catch (RuntimeException e) {
+                    log.error("LDAP Server Error for user {}: {}", userId, e.getMessage());
+                    // NOT incrementing wrong password count (It's not the user's fault)
+                    attempt.setSuccess("N");
+                    attempt.setFailureReason("LDAP Server Down / Connectivity Issue");
+                    result.setValidCredentials(false);
+                    result.setMessage("System Error: Unable to connect to Authentication Server. Please try again later.");
+                    // We do NOT save the attempt or lock the user here
+                    return result;
+                }
+
+            } else if (activeMode == Constants.PASSWORD) {
+                // MODE: LOCAL PASSWORD
+                // Check if Password Login is explicitly disabled for this specific user
+                if (Constants.ACTIVE.equalsIgnoreCase(user.getPasswordLogin())) {
+                    passwordBasedLogin(rawPassword, attempt, result, user, loginParam);
+                } else {
+                    // Account is Locked or Disabled
+                    handleAccountLocked(attempt, result, user);
+                }
+
+            }
+        } catch (SecurityException e) {
+            log.error("Login rejected for user {}: Payload decryption failed", userId);
+            result.setValidCredentials(false);
+            result.setMessage("Security Error: Invalid encrypted payload");
+            attempt.setFailureReason("Payload Decryption Failed (Possible MITM or invalid format)");
+            return result;
+        }
+
+        loginAttemptRepository.save(attempt);
+        log.debug("verifyUserCredentials result={}", result);
+        return result;
+    }
 
 
+    /**
+     * Password-based authentication flow that enforces wrong password limits and updates counters/flags.
+     * 1. Increments count on failure.
+     * 2. Calculates remaining attempts.
+     * 3. Locks account immediately if limit reached.
+     *
+     * @param password     raw password from the request
+     * @param loginAttempt login attempt entity to be updated with success/failure
+     * @param userInfo     output DTO updated with validity and attempts left
+     * @param user         the user entity being authenticated
+     * @param loginParam   login parameter configuration (e.g., permitted attempts)
+     */
+    @Transactional
+    @Override
+    public void passwordBasedLogin(String password, LoginAttempt loginAttempt, UserDto userInfo, User user, LoginParam loginParam) {
+        log.info("Password-based login for userId={}", user.getUserId());
 
-pom file
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
-	<parent>
-		<groupId>org.springframework.boot</groupId>
-		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.3.0</version>
-		<relativePath/> <!-- lookup parent from repository -->
-	</parent>
-	<groupId>com.tcs.fincore</groupId>
-	<artifactId>AsciiGenerationService</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
-	<name>AsciiGenerationService</name>
-	<description>Ascii Generation Service</description>
-	<url/>
-	<licenses>
-		<license/>
-	</licenses>
-	<developers>
-		<developer/>
-	</developers>
-	<scm>
-		<connection/>
-		<developerConnection/>
-		<tag/>
-		<url/>
-	</scm>
-	<properties>
-		<java.version>21</java.version>
-	</properties>
-	<dependencies>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-actuator</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-jpa</artifactId>
-		</dependency>
+        if (Constants.INACTIVE.equalsIgnoreCase(user.getPasswordLogin())) {
+            handleAccountLocked(loginAttempt, userInfo, user);
+            return;
+        }
 
-		<dependency>
-			<groupId>com.oracle.database.jdbc</groupId>
-			<artifactId>ojdbc11</artifactId>
-			<scope>runtime</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.projectlombok</groupId>
-			<artifactId>lombok</artifactId>
-			<optional>true</optional>
-		</dependency>
-		
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-
-		<dependency>
-            <groupId>org.apache.hadoop</groupId>
-            <artifactId>hadoop-client</artifactId>
-            <version>3.3.6</version> <exclusions>
-            <exclusion>
-                <groupId>org.slf4j</groupId>
-                <artifactId>slf4j-reload4j</artifactId>
-            </exclusion>
-            <exclusion>
-                <groupId>org.slf4j</groupId>
-                <artifactId>slf4j-log4j12</artifactId>
-            </exclusion>
-            <exclusion>
-                <groupId>log4j</groupId>
-                <artifactId>log4j</artifactId>
-            </exclusion>
-            <exclusion>
-                <groupId>ch.qos.logback</groupId>
-                <artifactId>logback-classic</artifactId>
-            </exclusion>
-        </exclusions>
-    	</dependency>
-
-		<dependency>
-            <groupId>jakarta.validation</groupId>
-            <artifactId>jakarta.validation-api</artifactId>
-        </dependency>
-
-		<dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-devtools</artifactId>
-            <scope>runtime</scope>
-            <optional>true</optional>
-        </dependency>
-
-		<dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
+        if (encoder.matches(password, user.getPasswordHash())) {
+            UserRoles userRole = userRepository.getUserRole(user.getUserId());
+            handleSuccess(loginAttempt, userInfo, user, userRole);
+        } else {
+            handleFailure(loginAttempt, userInfo, user, loginParam, "Wrong Password");
+        }
+    }
 
 
-		<!-- Spring Kafka Support -->
-	<dependency>
-		<groupId>org.springframework.kafka</groupId>
-		<artifactId>spring-kafka</artifactId>
-	</dependency>
+    /**
+     * Produces a human-readable message describing a blocked login due to {@code status} of a given {@code type}.
+     *
+     * @param status status string (e.g., ACTIVE/INACTIVE/LOCKED)
+     * @param type   subject type (e.g., "user", "role")
+     * @return formatted message
+     */
+    @Override
+    public String generateStatusMessage(String status, String type) {
+        return String.format("Trying to login with a %s %s", status, type);
+    }
 
-	<!-- Resilience4j for Circuit Breaker -->
-	<dependency>
-		<groupId>io.github.resilience4j</groupId>
-		<artifactId>resilience4j-spring-boot3</artifactId>
-		<version>2.2.0</version> <!-- Use the version compatible with your Boot version -->
-	</dependency>
+    /**
+     * Checks the status and requirements for a user attempting to log in (without performing login).
+     *
+     * @param userId the user identifier
+     * @return {@link VerifyUserDTO} describing status, password update requirements, and messages
+     */
+    @Transactional(readOnly = true)
+    public VerifyUserDTO checkUser(String userId) {
+        VerifyUserDTO out = new VerifyUserDTO();
+        out.setUserId(userId);
 
-	<!-- Validation Support (for @Valid and Validator) -->
-	<dependency>
-		<groupId>org.springframework.boot</groupId>
-		<artifactId>spring-boot-starter-validation</artifactId>
-	</dependency>
+        User user = userRepository.findByUserId(userId);
+        LoginParam loginParam = loginParamRepository.getLoginParam();
+        out.setLoginMethod(loginParam.getActiveLoginMode());
 
-	<dependency>
-    	<groupId>com.fasterxml.jackson.core</groupId>
-    	<artifactId>jackson-databind</artifactId>
-    </dependency>
+        if (user == null) {
+            out.setUserCheck(false);
+            out.setUserStatus(Constants.INVALID);
+            out.setMessage("Invalid User");
+            return out;
+        }
 
-    </dependencies>
-	
+        if (Constants.ACTIVE.equalsIgnoreCase(user.getAccountStatus())) {
+            Timestamp setAt = user.getTempPasswordSetAt();
+            boolean isPasswordValid = false;
 
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<configuration>
-					<annotationProcessorPaths>
-						<path>
-							<groupId>org.projectlombok</groupId>
-							<artifactId>lombok</artifactId>
-						</path>
-					</annotationProcessorPaths>
-				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-				<configuration>
-					<excludes>
-						<exclude>
-							<groupId>org.projectlombok</groupId>
-							<artifactId>lombok</artifactId>
-						</exclude>
-					</excludes>
-				</configuration>
-			</plugin>
-		</plugins>
+            // Validate password expiration only for Password Mode
+            if (loginParam.getActiveLoginMode() == Constants.PASSWORD && setAt != null) {
+                LocalDateTime lastUpdate = setAt.toLocalDateTime();
+                isPasswordValid = LocalDateTime.now()
+                        .isBefore(lastUpdate.plusHours(loginParam.getPasswordValidity()));
+            } else {
+                // For LDAP/SSO, we rely on their policies, so treat local validity as true
+                isPasswordValid = true;
+            }
+
+            UserRoles userRole = userRepository.getUserRole(userId);
+            out.setRoleStatus(userRole.getRoleStatus());
+
+            // Logic: Update Password only needed if Mode is Password AND (Password is null OR Expired)
+            boolean updateNeeded = (loginParam.getActiveLoginMode() == Constants.PASSWORD)
+                    && (user.getPasswordHash() == null || !isPasswordValid);
+
+            out.setUpdatePassword(updateNeeded);
+            out.setUserStatus(Constants.ACTIVE);
+            out.setMessage(Constants.ACTIVE_USER);
+            out.setPasswordLoginStatus(user.getPasswordLogin());
+        } else {
+            String accountStatus = user.getAccountStatus();
+            out.setUserCheck(true);
+            out.setUserStatus(accountStatus);
+            out.setMessage(
+                    accountStatus.equalsIgnoreCase("locked") ? "Your account is locked. Please contact support."
+                            : accountStatus.equalsIgnoreCase("inactive") ? "Inactive User" : "Verification Pending"
+            );
+        }
+
+        return out;
+    }
+
+    /**
+     * Updates the user's password hash and resets the temporary password timestamp.
+     * <p><strong>TODO:</strong> Integrate OTP validation before update.</p>
+     *
+     * @param userCredentials input DTO with {@code userId} and new raw {@code password}
+     * @return {@link UpdatePasswordDTO} indicating success and message; sensitive fields are cleared
+     */
+    @Transactional
+    public UpdatePasswordDTO updatePassword(UpdatePasswordDTO userCredentials) {
+        String userId = userCredentials.getUserId();
+        String encryptedPassword = userCredentials.getPassword();
+
+        // Always sanitize outbound fields
+        userCredentials.setUpdateFlag(false);
+        userCredentials.setPassword("");
+        userCredentials.setOtp("");
+
+        try {
+            User user = userRepository.findByUserId(userId);
+            if (user == null) {
+                userCredentials.setMessage("Invalid user id");
+                return userCredentials;
+            }
+
+            String rawPassword;
+            try {
+                rawPassword = KeyUtils.decryptRsaPassword(encryptedPassword, rsaPrivatePem);
+            } catch (SecurityException e) {
+                log.error("Update password rejected for user {}: Payload decryption failed", userId);
+                userCredentials.setMessage("Security Error: Invalid encrypted payload");
+                return userCredentials;
+            }
+
+            String passwordHash = encoder.encode(rawPassword);
+            user.setPasswordHash(passwordHash);
+            user.setTempPasswordSetAt(Timestamp.valueOf(LocalDateTime.now()));
+            userRepository.save(user);
+
+            userCredentials.setMessage("User password successfully updated");
+            userCredentials.setUpdateFlag(true);
+
+        } catch (DataIntegrityViolationException e) {
+            log.warn("Data integrity violation while updating password for userId={}", userId, e);
+            userCredentials.setMessage("Failed to change password, please try again");
+        } catch (ObjectOptimisticLockingFailureException e) {
+            log.warn("Optimistic locking failure while updating password for userId={}", userId, e);
+            userCredentials.setMessage("The user data was modified by another process, please retry");
+        } catch (JpaSystemException e) {
+            log.error("JPA system error while updating password for userId={}", userId, e);
+            userCredentials.setMessage("A database error occurred, please try again later");
+        }
+
+        return userCredentials;
+    }
+
+
+    // ===================================== Helpers ===================================
+
+    /**
+     * Initializes the token-visible user data embedded/returned alongside the JWT.
+     * Fetches branch and circle mapping dynamically.
+     *
+     * @param user     the user entity
+     * @param userRole the role mapping for the user
+     * @return user token DTO with non-sensitive fields
+     */
+    private UserTokenDataDto initializeTokenData(User user, UserRoles userRole) {
+        UserTokenDataDto tokenData = new UserTokenDataDto();
+        tokenData.setFirstName(user.getFirstName());
+        tokenData.setLastName(user.getLastName());
+        tokenData.setPhoneNumber(user.getPhoneNumber());
+        tokenData.setUserId(user.getUserId());
+        tokenData.setBranch(user.getBranch());
+        tokenData.setEmail(user.getEmail());
+        tokenData.setRole(userRole.getRole());
+        tokenData.setRoleName(userRole.getRoleName());
+
+        // FORMAT the branch integer to a 5-digit string (e.g., 8080 -> "08080")
+        String branchCodeStr = String.format("%05d", user.getBranch());
+
+        // Fetch specific details from the database
+        BranchCircleProjection bcInfo = branchRepository.findBranchAndCircleDetails(branchCodeStr);
+
+        if (bcInfo != null) {
+            tokenData.setBranchName(bcInfo.getBranchName());
+            tokenData.setCircleCode(bcInfo.getCircleCode());
+            tokenData.setCircleName(bcInfo.getCircleName());
+            tokenData.setCircleBranch(bcInfo.getCircleBranch());
+
+            // Check if user's branch matches the Circle's designated branch code
+            boolean isCircle = branchCodeStr.equals(bcInfo.getCircleBranch());
+            tokenData.setIsCircle(isCircle);
+        } else {
+            // Fallback if branch is somehow missing in the master table
+            tokenData.setIsCircle(false);
+            log.warn("Branch details not found in BRANCH_MASTER for branch code: {}", branchCodeStr);
+        }
+
+        return tokenData;
+    }
+
+
+    /**
+     * Retrieves the full user profile for Token Refresh.
+     * Uses the exact same structure as verifyUserCredentials to ensure token claims are identical.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public UserDto getUserProfile(String userId) {
+        User user = userRepository.findByUserId(userId);
+        UserRoles userRole = userRepository.getUserRole(userId);
+
+        // Return null if user doesn't exist, caller handles the error
+        if (user == null) {
+            return null;
+        }
+        UserDto userDto = new UserDto();
+        userDto.setUserId(user.getUserId());
+        userDto.setUserStatus(user.getPasswordLogin());
+        userDto.setPasswordLoginStatus(user.getPasswordLogin());
+        userDto.setUser(initializeTokenData(user, userRole));
+        return userDto;
+    }
+
+
+    private String determineMethodString(char mode) {
+        if (mode == Constants.LDAP) return "LDAP";
+        if (mode == Constants.PASSWORD) return Constants.PASSWORD_BASED_LOGIN;
+        return Constants.SSO_BASED_LOGIN;
+    }
+
+    private void handleAccountLocked(LoginAttempt attempt, UserDto result, User user) {
+        result.setValidCredentials(false);
+        result.setPasswordLoginStatus(user.getPasswordLogin());
+        result.setMessage("Your account is locked due to multiple failed attempts.");
+
+        if (Constants.INACTIVE.equalsIgnoreCase(user.getPasswordLogin())) {
+            result.setAttemptsLeft(0);
+            attempt.setFailureReason("Account Locked (Pre-check)");
+        } else {
+            result.setMessage("Password login is disabled.");
+            attempt.setFailureReason("Password login disabled");
+        }
+    }
+
+    private void handleSuccess(LoginAttempt attempt, UserDto result, User user, UserRoles userRole) {
+        attempt.setSuccess("Y");
+        attempt.setFailureReason("Success");
+        result.setValidCredentials(true);
+        result.setMessage("Login Successful");
+
+        // Reset wrong password count on successful login
+        if (user.getUserWrongPasswordCount() > 0) {
+            user.setUserWrongPasswordCount(0);
+            userRepository.save(user);
+        }
+
+        log.info("Credentials validated. Issuing token for userId={}", user.getUserId());
+
+        // Fetch contextual user data (including branch and circle)
+        UserTokenDataDto tokenData = initializeTokenData(user, userRole);
+
+        @SuppressWarnings("unchecked")
+        String accessToken = HmacJwtUtil.generate(
+                hmacSecret,
+                user.getUserId(),
+                ttlSeconds,
+                mapper.convertValue(tokenData, Map.class) // Embed all tokenData properties into the JWT claims
+        );
+
+        result.setAccessToken(accessToken);
+        result.setUser(tokenData);
+    }
+
+    private void handleFailure(LoginAttempt attempt, UserDto userInfo, User user, LoginParam loginParam, String reason) {
+        log.warn("Login failed for user {}: {}", user.getUserId(), reason);
+        attempt.setSuccess("N");
+
+        int currentFailedCount = user.getUserWrongPasswordCount();
+        int maxAllowed = loginParam.getWrongPasswordAttempts();
+        int newFailedCount = currentFailedCount + 1;
+
+        user.setUserWrongPasswordCount(newFailedCount);
+        userInfo.setValidCredentials(false);
+
+        if (newFailedCount >= maxAllowed) {
+            user.setPasswordLogin(Constants.INACTIVE);
+            // user.setAccountStatus(Constants.LOCKED); // Optional: Depending on business rule
+            attempt.setFailureReason(reason + " -> Account Locked");
+            userInfo.setMessage("Your account has been locked due to multiple unsuccessful login attempts.");
+            userInfo.setPasswordLoginStatus(Constants.INACTIVE);
+            userInfo.setAttemptsLeft(0);
+        } else {
+            int remaining = maxAllowed - newFailedCount;
+            attempt.setFailureReason(reason);
+            if (remaining > 1) {
+                userInfo.setMessage("Incorrect credentials. Please check and try again.");
+            } else {
+                userInfo.setMessage("Incorrect credentials. Final attempt before lock.");
+            }
+            userInfo.setAttemptsLeft(remaining);
+        }
+        userRepository.save(user);
+    }
+
+}
