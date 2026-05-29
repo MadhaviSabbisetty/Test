@@ -1,1120 +1,1513 @@
-previous code 
-
-// package com.tcs.fincore.AsciiGenerationService.Service;
-// import com.tcs.fincore.AsciiGenerationService.DTO.FileJob;
-// import com.tcs.fincore.AsciiGenerationService.Model.AsciiConfig;
-// import com.tcs.fincore.AsciiGenerationService.Repository.AsciiConfigRepository;
-// import lombok.extern.slf4j.Slf4j;
-// import org.springframework.beans.factory.annotation.Autowired;
-// import org.springframework.beans.factory.annotation.Value;
-// import org.springframework.stereotype.Service;
-// import java.io.BufferedWriter;
-// import java.io.IOException;
-// import java.math.BigDecimal;
-// import java.nio.file.DirectoryStream;
-// import java.nio.file.Files;
-// import java.nio.file.Path;
-// import java.nio.file.Paths;
-// import java.time.LocalDate;
-// import java.time.format.DateTimeFormatter;
-// import java.time.format.DateTimeParseException;
-// import java.util.ArrayList;
-// import java.util.Arrays;
-// import java.util.List;
-// import java.util.Map;
-// import java.util.UUID;
-// import java.util.concurrent.ConcurrentHashMap;
-// import java.util.concurrent.atomic.AtomicInteger;
-// import java.util.regex.Matcher;
-// import java.util.regex.Pattern;
-// import java.util.stream.Stream;
-
-// @Service
-// @Slf4j
-// public class AsciiGenerationService {
-
-//     @Autowired
-//     private AsciiConfigRepository configRepo;
-
-//     @Autowired
-//     private JobQueueManager jobQueueManager;
-
-//     @Value("${app.input.base.path}")
-//     private String baseDirectoryPath;
-
-//     private static final Map<String, Pattern> INPUT_REGEX_CACHE = new ConcurrentHashMap<>();
-//     private static final Map<String, BatchStats> batchTracker = new ConcurrentHashMap<>();
-
-//     private static class BatchStats {
-//         long startTime;
-//         AtomicInteger remainingFiles;
-//         int totalFiles;
-//         BatchStats(int totalFiles) {
-//             this.startTime = System.currentTimeMillis();
-//             this.totalFiles = totalFiles;
-//             this.remainingFiles = new AtomicInteger(totalFiles);
-//         }
-//     }
-
-//     // --- 1. THE DISCOVERY PHASE (Unchanged) ---
-//     public String initiateBatch(Long configId) {
-//         try {
-//             AsciiConfig config = configRepo.findById(configId)
-//                     .orElseThrow(() -> new RuntimeException("Config not found: " + configId));
-
-//             String reportId = config.getReportId();
-//             String searchKeyword = reportId.contains("_") ? reportId.split("_")[0] : reportId;
-
-//             Path baseDir = Paths.get(baseDirectoryPath);
-//             if (!Files.exists(baseDir) || !Files.isDirectory(baseDir)) {
-//                 throw new RuntimeException("Base directory does not exist: " + baseDirectoryPath);
-//             }
-
-//             List<Path> foundFiles = new ArrayList<>();
-//             try (DirectoryStream<Path> stream = Files.newDirectoryStream(baseDir, entry ->
-//                     Files.isRegularFile(entry) && entry.getFileName().toString().contains(searchKeyword))) {
-//                 for (Path entry : stream) foundFiles.add(entry);
-//             }
-
-//             if (foundFiles.isEmpty()) return "No files found for keyword: " + searchKeyword;
-
-//             String batchId = UUID.randomUUID().toString();
-//             batchTracker.put(batchId, new BatchStats(foundFiles.size()));
-
-//             log.info("Batch Started. Batch ID: {} | Total Files: {}", batchId, foundFiles.size());
-
-//             for (Path entry : foundFiles) {
-//                 jobQueueManager.submitFileJob(new FileJob(configId, entry, batchId));
-//             }
-
-//             return "Batch Initiated. ID: " + batchId + " | Files: " + foundFiles.size();
-
-//         } catch (Exception e) {
-//             log.error("Error during Batch Initiation", e);
-//             throw new RuntimeException("Failed to initiate batch: " + e.getMessage());
-//         }
-//     }
-
-//     // --- 2. THE WORKER PHASE ---
-//     public void processSingleFile(FileJob job) {
-//         Path inputPath = job.getFilePath();
-//         Long id = job.getConfigId();
-//         String batchId = job.getBatchId();
-
-//         try {
-//             AsciiConfig config = configRepo.findById(id).orElseThrow();
-
-//             // --- EDGE CASE FIX: Safe File Name Handling ---
-//             String originalName = inputPath.getFileName().toString();
-//             int dotIndex = originalName.lastIndexOf('.');
-//             String baseName = (dotIndex == -1) ? originalName : originalName.substring(0, dotIndex);
-
-//             String outputFileName = "GENERATED_" + config.getReportId() + "_" + baseName + "_" + System.currentTimeMillis() + config.getFileType();
-//             Path outputPath = inputPath.getParent().resolve(outputFileName);
-
-//             // --- STREAMING PROCESSING ---
-//             try (Stream<String> lines = Files.lines(inputPath);
-//                  BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
-
-//                 // Header
-//                 HeaderInfo headerInfo = parseHeaderEfficiently(inputPath);
-//                 String branchPadded = String.format("%5s", headerInfo.branchCode).replace(' ', '0');
-//                 String header = config.getOutputFirstLine() + branchPadded + headerInfo.reportDate + "F";
-
-//                 writer.write(header);
-//                 writer.newLine();
-
-//                 List<String> lineBuffer = new ArrayList<>();
-//                 int batchSize = config.getOutputPerLineHead();
-
-//                 lines.forEach(line -> {
-//                     try {
-//                         String processedRecord = transformLine(line, config);
-//                         if (processedRecord != null) {
-//                             lineBuffer.add(processedRecord);
-//                             if (lineBuffer.size() == batchSize) {
-//                                 writer.write(String.join("", lineBuffer));
-//                                 writer.newLine();
-//                                 lineBuffer.clear();
-//                             }
-//                         }
-//                     } catch (Exception e) {
-//                         log.error("Row error in {}", inputPath.getFileName(), e);
-//                     }
-//                 });
-
-//                 if (!lineBuffer.isEmpty()) {
-//                     writer.write(String.join("", lineBuffer));
-//                     writer.newLine();
-//                 }
-
-//                 if (config.getOutputEndLine() != null && !config.getOutputEndLine().isEmpty()) {
-//                     writer.write(config.getOutputEndLine());
-//                 }
-//             }
-
-//             checkBatchCompletion(batchId);
-
-//         } catch (Exception e) {
-//             log.error("Failed to process file: {}", inputPath, e);
-//             checkBatchCompletion(batchId);
-//         }
-//     }
-
-//     private void checkBatchCompletion(String batchId) {
-//         BatchStats stats = batchTracker.get(batchId);
-//         if (stats != null) {
-//             int remaining = stats.remainingFiles.decrementAndGet();
-//             if (remaining == 0) {
-//                 long totalDuration = System.currentTimeMillis() - stats.startTime;
-//                 log.info("BATCH COMPLETED | ID: {} | Time: {} ms", batchId, totalDuration);
-//                 batchTracker.remove(batchId);
-//             }
-//         }
-//     }
-
-//     // --- 3. ROBUST EXTRACT LOGIC (The Core Logic) ---
-//     private List<ProcessingItem> extractAmountColumns(String[] cols, AsciiConfig config) {
-//         List<ProcessingItem> items = new ArrayList<>();
-//         int headIdx = config.getInputHeadCol() - 1;
-//         String head = (headIdx < cols.length) ? cols[headIdx].trim() : "";
-
-//         String seq = config.getAmountColSeq();
-
-//         // [3else4] Logic: Skips Zero/Null, Forces Primary Rules
-//         if (seq.contains("else")) {
-//             String[] parts = seq.split("else");
-//             int primaryCol = Integer.parseInt(parts[0].trim()); // Target Rule Set (3)
-
-//             for (String part : parts) {
-//                 int currentIdx = Integer.parseInt(part.trim()) - 1;
-
-//                 // Safe Parse with Bound Check
-//                 BigDecimal val = BigDecimal.ZERO;
-//                 if (currentIdx < cols.length) {
-//                     val = parseAmount(cols[currentIdx]);
-//                 }
-
-//                 if (val.compareTo(BigDecimal.ZERO) != 0) {
-//                     // FOUND IT: Use 'primaryCol' so correct padding/math rules apply
-//                     items.add(new ProcessingItem(head, val, primaryCol));
-//                     return items;
-//                 }
-//             }
-//             // Fallback: Return 0 for Primary Column
-//             items.add(new ProcessingItem(head, BigDecimal.ZERO, primaryCol));
-//         }
-
-//         // [3and4] Logic: Keeps specific rules for each column
-//         else if (seq.contains("and")) {
-//             String[] parts = seq.split("and");
-//             for (String part : parts) {
-//                 int idx = Integer.parseInt(part.trim()) - 1;
-//                 items.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
-//             }
-//         }
-
-//         // Single Column
-//         else {
-//             int idx = Integer.parseInt(seq.trim()) - 1;
-//             items.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
-//         }
-//         return items;
-//     }
-
-//     private String transformLine(String line, AsciiConfig config) {
-//         String[] columns = line.split("\\|", -1);
-//         if (!isValidRow(columns, config)) return null;
-
-//         List<ProcessingItem> itemsToProcess = extractAmountColumns(columns, config);
-
-//         StringBuilder amountsOnlyBuilder = new StringBuilder();
-//         boolean hasValidContent = false;
-
-//         for (ProcessingItem item : itemsToProcess) {
-//             BigDecimal finalAmt = RuleParser.applyMathLogic(item.amount, item.head, item.colIndex, config.getOutputAmtColLogic());
-//             finalAmt = RuleParser.applyDecimalLogic(finalAmt, item.head, item.colIndex, config.getOutputAmtDecimal());
-
-//             if (RuleParser.shouldIncludeValue(finalAmt, item.head, item.colIndex, config.getOutputIncludeCondition())) {
-//                 String amountStr = RuleParser.applyAmountPadding(finalAmt, item.head, item.colIndex, config.getOutputAmtColPad());
-//                 String signedAmt = RuleParser.applySign(amountStr, finalAmt, item.head, item.colIndex, config.getOutputAmtSign());
-//                 amountsOnlyBuilder.append(signedAmt);
-//                 hasValidContent = true;
-//             }
-//         }
-
-//         if (hasValidContent) {
-//             String headPadded = RuleParser.applyHeadPadding(itemsToProcess.get(0).head, config.getOutputHeadColPad());
-//             return headPadded + amountsOnlyBuilder.toString();
-//         }
-//         return null;
-//     }
-
-//     // --- Standard Helpers  ---
-//     private BigDecimal parseAmount(String[] cols, int idx) {
-//         if (idx >= cols.length) return BigDecimal.ZERO;
-//         return parseAmount(cols[idx]);
-//     }
-//     private BigDecimal parseAmount(String val) {
-//         try {
-//             if(val == null || val.trim().isEmpty()) return BigDecimal.ZERO;
-//             // Robust parsing: remove commas, trim spaces
-//             return new BigDecimal(val.trim().replace(",", ""));
-//         } catch (Exception e) { return BigDecimal.ZERO; }
-//     }
-
-//     private HeaderInfo parseHeaderEfficiently(Path path) {
-//         HeaderInfo info = new HeaderInfo();
-//         info.branchCode = "00000"; info.reportDate = "01012026";
-//         Pattern branchPattern = Pattern.compile("(?i)(?:BRANCH|Branch)\\s*::\\s*(\\d+)");
-//         Pattern datePattern1 = Pattern.compile("REPORT DATE\\s*::\\s*(\\S+)");
-//         Pattern datePattern2 = Pattern.compile("Current Year Date\\s*::\\s*(\\S+)");
-
-//         try (Stream<String> stream = Files.lines(path).limit(50)) {
-//             stream.forEach(line -> {
-//                 Matcher mBranch = branchPattern.matcher(line);
-//                 if (mBranch.find()) info.branchCode = mBranch.group(1);
-//                 Matcher mDate1 = datePattern1.matcher(line);
-//                 if (mDate1.find()) info.reportDate = normalizeDate(mDate1.group(1));
-//                 Matcher mDate2 = datePattern2.matcher(line);
-//                 if (mDate2.find()) info.reportDate = normalizeDate(mDate2.group(1));
-//             });
-//         } catch (IOException e) { log.warn("Header read error", e); }
-//         return info;
-//     }
-
-
-//     private boolean isValidRow(String[] cols, AsciiConfig config) {
-//         if (cols.length < 2) return false;
-//         int idx = config.getInputHeadCol() - 1;
-//         if (cols.length <= idx) return false;
-//         String head = cols[idx].trim();
-//         if (head.isEmpty()) return false;
-//         Pattern p = INPUT_REGEX_CACHE.computeIfAbsent(config.getInputHeadRegex(), Pattern::compile);
-//         return p.matcher(head).lookingAt();
-//     }
-
-//     private String normalizeDate(String dateStr) {
-//         if (dateStr == null) return "01012026";
-//         List<DateTimeFormatter> formatters = Arrays.asList(
-//                 DateTimeFormatter.ofPattern("dd-MM-yyyy"), DateTimeFormatter.ofPattern("dd/MM/yyyy"),
-//                 DateTimeFormatter.ofPattern("yyyy-MM-dd"), DateTimeFormatter.ofPattern("dd.MM.yyyy"),
-//                 DateTimeFormatter.ofPattern("MM-dd-yyyy")
-//         );
-//         for (DateTimeFormatter formatter : formatters) {
-//             try { return LocalDate.parse(dateStr, formatter).format(DateTimeFormatter.ofPattern("ddMMyyyy")); }
-//             catch (DateTimeParseException e) {}
-//         }
-//         if (dateStr.contains("-") && dateStr.split("-").length == 3) {
-//             String[] parts = dateStr.split("-");
-//             if (parts[0].length() == 4) return parts[2] + parts[1] + parts[0];
-//         }
-//         return "01012026";
-//     }
-
-//     private static class ProcessingItem {
-//         String head; BigDecimal amount; int colIndex;
-//         ProcessingItem(String h, BigDecimal a, int c) { head=h; amount=a; colIndex=c; }
-//     }
-//     private static class HeaderInfo { String branchCode; String reportDate; }
-// }
-
-
-present code
-
-
-package com.tcs.fincore.AsciiGenerationService.Service;
-
-import com.tcs.fincore.AsciiGenerationService.DTO.FileJob;
-import com.tcs.fincore.AsciiGenerationService.Model.AsciiConfig;
-import com.tcs.fincore.AsciiGenerationService.Repository.AsciiConfigRepository;
-
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
-import org.apache.hadoop.fs.*;
-
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-
-import java.math.BigDecimal;
-
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-@Service
-@Slf4j
-public class AsciiGenerationService {
-
-    @Autowired
-    private AsciiConfigRepository configRepo;
-
-    @Autowired
-    private JobQueueManager jobQueueManager;
-
-    @Autowired
-    private HdfsService hdfsService;
-
-    private static final Map<String, Pattern> INPUT_REGEX_CACHE = new ConcurrentHashMap<>();
-    private static final Map<String, BatchStats> batchTracker = new ConcurrentHashMap<>();
-
-    private static class BatchStats {
-        long startTime;
-        AtomicInteger remainingFiles;
-        int totalFiles;
-
-        BatchStats(int totalFiles) {
-            this.startTime = System.currentTimeMillis();
-            this.totalFiles = totalFiles;
-            this.remainingFiles = new AtomicInteger(totalFiles);
-        }
+import { useCallback, useEffect, useState } from "react";
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import downloadFile from "../../utils/DownloadUtils";
+import dayjs from "dayjs";
+import ReceiptIcon from "@mui/icons-material/Receipt";
+import ManageSearchIcon from '@mui/icons-material/ManageSearch';
+import LinearProgress from "@mui/material/LinearProgress";
+
+import {
+  Box,
+  Paper,
+  Typography,
+  Stack,
+  Button,
+} from "@mui/material";
+
+import {
+  StyledBox,
+  StyledFormHeader,
+} from "./components/TransactionStyles";
+
+import TransactionFilters from "./components/TransactionFilters";
+import TransactionTable from "./components/TransactionTable";
+import { areUserInputsValid } from "./utils/InputValidations";
+import { useSelector } from "react-redux";
+
+const TransactionEnquiryScreen = () => {
+  const { callApi } = useApi();
+  const snackbar = useCustomSnackbar();
+
+  const user = useSelector((state) => state.auth.user);
+
+  const [currencies, setCurrencies] = useState([]);
+  const [data, setData] = useState(null);
+  const [sourceOptions, setSourceOptions] = useState([]);
+  const [etlDate, setEtlDate] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [exportLoading , setExportLoading] = useState(false);
+  const [searchLoading ,setSearchLoading] =useState(false);
+
+  const [filtersExpanded, setFiltersExpanded] =
+    useState(true);
+
+  const [userInputs, setUserInputs] = useState({
+    branch:
+      user?.isCircle === false
+        ? `${user.branch}-${user.branchName}`
+        : "",
+    currency: null,
+    cgl: "",
+    fromDate: null,
+    toDate: null,
+    minAmount: "",
+    maxAmount: "",
+    sourceFlags: [],
+  });
+
+  const fetchCurrencies = useCallback(async () => {
+    const res = await callApi(
+      "/CM/common-master/currency-code-name-only",
+      null,
+      "GET"
+    );
+
+    const formattedCurrencies =
+      res?.data?.map(
+        (c) =>
+          `${c.currencyCode} (${c.currencyName})`
+      ) || [];
+
+    const sortedCurrencies =
+      formattedCurrencies.sort((a, b) => {
+        if (a.startsWith("INR")) return -1;
+        if (b.startsWith("INR")) return 1;
+        return a.localeCompare(b);
+      });
+
+    setCurrencies(sortedCurrencies);
+  }, [callApi]);
+
+  const [rowCount, setRowCount] = useState(0);
+
+  const [paginationModel, setPaginationModel] =
+    useState({
+      page: 0,
+      pageSize:25,
+    });
+
+  const fetchTransactions = useCallback(async () => {
+    try {
+      if (!areUserInputsValid(userInputs)) return;
+
+      setLoading(true);
+
+      const payload = {
+        branch:
+          userInputs?.branch?.split(" (")[0],
+        currency:
+          userInputs?.currency?.split(" (")[0],
+        cgl:
+          userInputs?.cgl?.split(" - ")[0],
+        fromDate: dayjs(
+          userInputs?.fromDate
+        ).format("DD/MM/YYYY"),
+        toDate: dayjs(
+          userInputs?.toDate
+        ).format("DD/MM/YYYY"),
+        minAmount: userInputs.minAmount
+          ? Number(userInputs.minAmount)
+          : null,
+        maxAmount: userInputs.maxAmount
+          ? Number(userInputs.maxAmount)
+          : null,
+        sourceFlags: (
+          userInputs.sourceFlags || []
+        ).map((item) => item.flagId),
+        page: paginationModel.page,
+        size: paginationModel.pageSize,
+      };
+
+      setSearchLoading(true);
+
+      const res = await callApi(
+        "/ES/transaction-con/transactions",
+        payload,
+        "POST"
+      );
+
+      if (res?.data?.length > 0) {
+        setData(res);
+        setFiltersExpanded(false);
+        setRowCount(res.totalElements || 0);
+      } else {
+        setData({
+          data: [],
+          extraData: null,
+        });
+        setRowCount(0);
+      }
+    } catch {
+      snackbar(
+        "Failed to fetch transactions",
+        "error"
+      );
+    } finally {
+      setLoading(false);
+      setSearchLoading(false);
     }
+  }, [
+    userInputs,
+    callApi,
+    paginationModel,
+    snackbar,
+  ]);
 
-    // =========================
-    // 1. INITIATE BATCH (HDFS)
-    // =========================
-    public String initiateBatch(Long configId) {
-        try {
-            AsciiConfig config = configRepo.findById(configId)
-                    .orElseThrow(() -> new RuntimeException("Config not found: " + configId));
+  const handleDownload = async () => {
+    try{
+      setExportLoading(true);
+    const payload = {
+      branch:
+        userInputs?.branch
+          ?.split("-")[0]
+          .trim(),
+      currency:
+        userInputs?.currency?.split(" (")[0],
+      cgl:
+        userInputs?.cgl?.split(" -")[0],
+      fromDate: dayjs(
+        userInputs?.fromDate
+      ).format("DD/MM/YYYY"),
+      toDate: dayjs(
+        userInputs?.toDate
+      ).format("DD/MM/YYYY"),
+      minAmount: userInputs.minAmount
+        ? Number(userInputs.minAmount)
+        : null,
+      maxAmount: userInputs.maxAmount
+        ? Number(userInputs.maxAmount)
+        : null,
+      sourceFlags: (
+        userInputs.sourceFlags || []
+      ).map((item) => item.flagId),
+    };
 
-            String reportId = config.getReportId();
-            String keyword = reportId.contains("_") ? reportId.split("_")[0] : reportId;
+    const res = await callApi(
+      "/ES/transaction-con/transactions-download",
+      payload,
+      "POST",
+      "arraybuffer"
+    );
 
-            FileSystem fs = hdfsService.getFs();
-            // Path baseDir = new Path("/reports/2025-12-14/nwsa_report");
-
-            Path baseDir = new Path("/reports/2026-03-31/ysa_report");
-
-            RemoteIterator<LocatedFileStatus> files = fs.listFiles(baseDir, true);
-
-            List<Path> foundFiles = new ArrayList<>();
-
-            while (files.hasNext()) {
-                LocatedFileStatus file = files.next();
-                String fileName = file.getPath().getName();
-
-                log.info("------------------Checking the files: {}",file.getPath());
-
-                if (fileName.contains(keyword) && fileName.endsWith(".psv")) {
-                    foundFiles.add(file.getPath());
-                }
-            }
-
-            if (foundFiles.isEmpty()) {
-                return "No files found for keyword: " + keyword;
-            }
-
-            String batchId = UUID.randomUUID().toString();
-            batchTracker.put(batchId, new BatchStats(foundFiles.size()));
-
-            log.info("-------------Batch Started | ID: {} | Files: {}", batchId, foundFiles.size());
-
-            for (Path file : foundFiles) {
-                jobQueueManager.submitFileJob(new FileJob(configId, file, batchId));
-            }
-
-            return "Batch Initiated: " + batchId;
-
-        } catch (Exception e) {
-            log.error("--------Batch initiation failed", e);
-            throw new RuntimeException(e);
-        }
+    if (res?.byteLength) {
+      downloadFile(
+        res,
+        "excel",
+        "transactions"
+      );
     }
+  } finally {
+    setExportLoading(false);
+  }
+  };
 
-    // =========================
-    // 2. PROCESS FILE (HDFS)
-    // =========================
-    public void processSingleFile(FileJob job) {
+  useEffect(() => {
+    if (rowCount > 0) fetchTransactions();
+  }, [
+    paginationModel.page,
+    paginationModel.pageSize,
+    // fetchTransactions,
+    // rowCount,
+  ]);
 
-        Path inputPath = job.getFilePath();
-        Long configId = job.getConfigId();
-        String batchId = job.getBatchId();
+  const resetState = () => {
+    setData(null);
+    setRowCount(0);
+    setLoading(false);
 
-        try {
-            FileSystem fs = hdfsService.getFs();
-            AsciiConfig config = configRepo.findById(configId).orElseThrow();
-            String fullPath=inputPath.toString();
-            log.info("-----------------------------------INPUT PATH: {}",fullPath);
+    // NEW
+    setFiltersExpanded(true);
 
-            String[] parts =fullPath.split("/");
-            String date=parts[4];
-            String reportFolder=config.getReportId().toLowerCase().trim();
-            String reportType=reportFolder.contains("_")
-                                ? reportFolder.split("_")[0]
-                                : reportFolder;
+    setUserInputs({
+      branch: "",
+      currency: null,
+      cgl: "",
+      fromDate: null,
+      toDate: null,
+      minAmount: "",
+      maxAmount: "",
+      sourceFlags:[
+        {
+          flagId:"ALL",
+          flagName: "Select All",
+        },
+      ],
+    });
 
-            // // ===== SAFE PATH EXTRACTION =====
-            // Path parent = inputPath.getParent();              // branch OR filename
-            // Path grandParent = parent.getParent();            // filename
-            // Path greatGrandParent = grandParent.getParent();  // date
+    setPaginationModel({
+      page: 0,
+      pageSize: 10,
+    });
+  };
 
-            // String filename = grandParent.getName();
-            // String date = greatGrandParent.getName();
+  // Date Requirement
+useEffect(() => {
+  const fetchSystemDate = async () => {
+    try {
+      const dateRes = await callApi("/PS/file/fincore-date", {}, "GET");
+      
+      const etlRaw = dateRes?.data?.userDate;
+      const etl = etlRaw ? dayjs(etlRaw.split("T")[0]) : dayjs();
+      // const startDate = dayjs("2026-03-31");
 
-            // ===== OUTPUT DIRECTORY =====
-            String outputDirStr = "/reports/" + date + "/ascii_files/" + reportType + "/";
-            Path outputDir = new Path(outputDirStr);
-
-            log.info("----------------------OUTPUT PATH: {}",outputDirStr);
-
-            if (!fs.exists(outputDir)) {
-                fs.mkdirs(outputDir);
-            }
-
-            String outputFileName =
-                    // "GENERATED_" + config.getReportId() + "_" +
-                    "GENERATED_" + reportFolder + "_" +
-                    System.currentTimeMillis() + config.getFileType();
-
-            Path outputPath = new Path(outputDir, outputFileName);
-
-            log.info("---------------------Processing: {}", inputPath);
-            log.info("------------------Output: {}", outputPath);
-
-            BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(fs.open(inputPath)));
-
-            BufferedWriter writer = new BufferedWriter(
-                    new OutputStreamWriter(fs.create(outputPath)));
-
-            // ===== HEADER =====
-            HeaderInfo headerInfo = parseHeaderEfficiently(fs, inputPath);
-
-            String branchPadded = String.format("%5s", headerInfo.branchCode).replace(' ', '0');
-
-            String header =
-                    config.getOutputFirstLine() +
-                    branchPadded +
-                    headerInfo.reportDate +
-                    "F";
-
-            writer.write(header);
-            writer.newLine();
-
-            // ===== PROCESS DATA =====
-            List<String> buffer = new ArrayList<>();
-            int batchSize = config.getOutputPerLineHead();
-
-            String line;
-
-            while ((line = reader.readLine()) != null) {
-                try {
-                    String processed = transformLine(line, config);
-
-                    if (processed != null) {
-                        buffer.add(processed);
-
-                        if (buffer.size() == batchSize) {
-                            writer.write(String.join("", buffer));
-                            writer.newLine();
-                            buffer.clear();
-                        }
-                    }
-
-                } catch (Exception e) {
-                    log.error("-----------Row error in {}", inputPath, e);
-                }
-            }
-
-            if (!buffer.isEmpty()) {
-                writer.write(String.join("", buffer));
-                writer.newLine();
-            }
-
-            // ===== FOOTER =====
-            if (config.getOutputEndLine() != null) {
-                writer.write(config.getOutputEndLine());
-            }
-
-            reader.close();
-            writer.close();
-
-            checkBatchCompletion(batchId);
-
-        } catch (Exception e) {
-            log.error("-----------File processing failed: {}", inputPath, e);
-            checkBatchCompletion(batchId);
-        }
+      setEtlDate(etl);
+      // setUserInputs((prev) => ({
+      //   ...prev,
+      //   fromDate: startDate,
+      //   toDate: etl,
+      // }));
+    } catch (e) {
+      console.error("System Date Fetch Error:", e);
     }
+  };
+  fetchSystemDate();
+}, [callApi]); 
 
-    private void checkBatchCompletion(String batchId) {
-        BatchStats stats = batchTracker.get(batchId);
 
-        if (stats != null) {
-            int remaining = stats.remainingFiles.decrementAndGet();
-
-            if (remaining == 0) {
-                long time = System.currentTimeMillis() - stats.startTime;
-
-                log.info("------------BATCH COMPLETED | ID: {} | Time: {} ms", batchId, time);
-
-                batchTracker.remove(batchId);
-            }
-        }
-    }
-
-    // =========================
-    // HEADER PARSE (HDFS FIX)
-    // =========================
-    private HeaderInfo parseHeaderEfficiently(FileSystem fs, Path path) {
-
-        HeaderInfo info = new HeaderInfo();
-        info.branchCode = "00000";
-        info.reportDate = "01012026";
-
-        Pattern branchPattern = Pattern.compile("(?i)BRANCH\\s*::\\s*(\\d+)");
-        Pattern datePattern = Pattern.compile("DATE\\s*::\\s*(\\S+)");
-
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(fs.open(path)))) {
-
-            String line;
-            int count = 0;
-
-            while ((line = reader.readLine()) != null && count < 50) {
-                count++;
-
-                Matcher m1 = branchPattern.matcher(line);
-                if (m1.find()) {
-                    info.branchCode = m1.group(1);
-                }
-
-                Matcher m2 = datePattern.matcher(line);
-                if (m2.find()) {
-                    info.reportDate = normalizeDate(m2.group(1));
-                }
-            }
-
-        } catch (Exception e) {
-            log.warn("Header parsing error", e);
-        }
-
-        return info;
-    }
-
-    private String normalizeDate(String dateStr) {
-        if (dateStr == null) return "01012026";
-
-        List<DateTimeFormatter> formats = Arrays.asList(
-                DateTimeFormatter.ofPattern("dd-MM-yyyy"),
-                DateTimeFormatter.ofPattern("dd/MM/yyyy"),
-                DateTimeFormatter.ofPattern("yyyy-MM-dd")
+  useEffect(() => {
+    const fetchFlags = async () => {
+      try {
+        const res = await callApi(
+          "/CM/common-master/source-flag",
+          null,
+          "GET"
         );
 
-        for (DateTimeFormatter f : formats) {
-            try {
-                return LocalDate.parse(dateStr, f)
-                        .format(DateTimeFormatter.ofPattern("ddMMyyyy"));
-            } catch (DateTimeParseException ignored) {}
+        const flags = res?.data || [];
+
+        setSourceOptions(flags);
+
+        if (flags.length > 0) {
+          setUserInputs((prev) => ({
+            ...prev,
+            sourceFlags: flags,
+          }));
         }
-
-        return "01012026";
-    }
-
-    // =========================
-    // CORE LOGIC (UNCHANGED)
-    // =========================
-    private String transformLine(String line, AsciiConfig config) {
-        String[] cols = line.split("\\|", -1);
-
-        log.info("--------------LINE: {}",line);
-        log.info("---------------VALID: {}",isValidRow(cols,config));
-        
-        if (!isValidRow(cols, config)) return null;
-
-        List<ProcessingItem> items = extractAmountColumns(cols, config);
-
-        StringBuilder sb = new StringBuilder();
-        boolean valid = false;
-
-        for (ProcessingItem item : items) {
-            BigDecimal amt = item.amount;
-
-            if (amt.compareTo(BigDecimal.ZERO) != 0) {
-                sb.append(amt.toPlainString());
-                valid = true;
-            }
-        }
-
-        if (valid) {
-            return items.get(0).head + sb.toString();
-        }
-
-        return null;
-    }
-
-    private List<ProcessingItem> extractAmountColumns(String[] cols, AsciiConfig config) {
-        List<ProcessingItem> list = new ArrayList<>();
-
-        int idx = config.getInputHeadCol() - 1;
-        String head = (idx < cols.length) ? cols[idx] : "";
-
-        int col = Integer.parseInt(config.getAmountColSeq()) - 1;
-
-        list.add(new ProcessingItem(head, parseAmount(cols, col), col + 1));
-
-        return list;
-    }
-
-    private BigDecimal parseAmount(String[] cols, int idx) {
-        if (idx >= cols.length) return BigDecimal.ZERO;
-        return parseAmount(cols[idx]);
-    }
-
-    private BigDecimal parseAmount(String val) {
-        try {
-            if (val == null || val.trim().isEmpty()) return BigDecimal.ZERO;
-            return new BigDecimal(val.trim().replace(",", ""));
-        } catch (Exception e) {
-            return BigDecimal.ZERO;
-        }
-    }
-
-    private boolean isValidRow(String[] cols, AsciiConfig config) {
-        if (cols.length < 2) return false;
-
-        int idx = config.getInputHeadCol() - 1;
-        if (cols.length <= idx) return false;
-
-        String head = cols[idx];
-
-        Pattern p = INPUT_REGEX_CACHE.computeIfAbsent(
-                config.getInputHeadRegex(), Pattern::compile);
-
-        return p.matcher(head).lookingAt();
-    }
-
-    private static class ProcessingItem {
-        String head;
-        BigDecimal amount;
-        int colIndex;
-
-        ProcessingItem(String h, BigDecimal a, int c) {
-            head = h;
-            amount = a;
-            colIndex = c;
-        }
-    }
-
-    private static class HeaderInfo {
-        String branchCode;
-        String reportDate;
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-package com.tcs.fincore.AsciiGenerationService.Service;
-
-import com.tcs.fincore.AsciiGenerationService.DTO.FileJob;
-import com.tcs.fincore.AsciiGenerationService.Model.AsciiConfig;
-import com.tcs.fincore.AsciiGenerationService.Repository.AsciiConfigRepository;
-
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
-import org.apache.hadoop.fs.*;
-
-import java.io.*;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.*;
-import java.util.stream.Stream;
-
-@Service
-@Slf4j
-public class AsciiGenerationService {
-
-    @Autowired
-    private AsciiConfigRepository configRepo;
-
-    @Autowired
-    private JobQueueManager jobQueueManager;
-
-    @Autowired
-    private HdfsService hdfsService;
-
-    private static final Map<String, Pattern> INPUT_REGEX_CACHE = new ConcurrentHashMap<>();
-    private static final Map<String, BatchStats> batchTracker = new ConcurrentHashMap<>();
-
-    private static class BatchStats {
-        long startTime;
-        AtomicInteger remainingFiles;
-
-        BatchStats(int total) {
-            this.startTime = System.currentTimeMillis();
-            this.remainingFiles = new AtomicInteger(total);
-        }
-    }
-
-    // =========================
-    // PROCESS FILE (FINAL FIXED)
-    // =========================
-    public void processSingleFile(FileJob job) {
-
-        Path inputPath = job.getFilePath();
-        Long configId = job.getConfigId();
-        String batchId = job.getBatchId();
-
-        try {
-            FileSystem fs = hdfsService.getFs();
-            AsciiConfig config = configRepo.findById(configId).orElseThrow();
-
-            String fullPath = inputPath.toString();
-            String[] parts = fullPath.split("/");
-            String date = parts[4];
-
-            String reportId = config.getReportId().toLowerCase();
-            String reportType = reportId.contains("_") ? reportId.split("_")[0] : reportId;
-
-            // ✅ FINAL OUTPUT PATH
-            Path outputDir = new Path("/reports/" + date + "/ascii_files/" + reportType + "/");
-
-            if (!fs.exists(outputDir)) {
-                fs.mkdirs(outputDir);
-            }
-
-            String outputFileName =
-                    "GENERATED_" + reportId + "_" +
-                    System.currentTimeMillis() + config.getFileType();
-
-            Path outputPath = new Path(outputDir, outputFileName);
-
-            BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(inputPath)));
-            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fs.create(outputPath)));
-
-            // HEADER
-            HeaderInfo header = parseHeaderEfficiently(fs, inputPath);
-            String headLine = config.getOutputFirstLine()
-                    + String.format("%5s", header.branchCode).replace(' ', '0')
-                    + header.reportDate + "F";
-
-            writer.write(headLine);
-            writer.newLine();
-
-            List<String> buffer = new ArrayList<>();
-            int batchSize = config.getOutputPerLineHead();
-
-            String line;
-
-            while ((line = reader.readLine()) != null) {
-
-                String processed = transformLine(line, config);
-
-                if (processed != null) {
-                    buffer.add(processed);
-
-                    if (buffer.size() == batchSize) {
-                        writer.write(String.join("", buffer));
-                        writer.newLine();
-                        buffer.clear();
-                    }
+      } catch (e) {
+        console.error("Flags error:", e);
+      }
+    };
+
+    fetchFlags();
+  }, [callApi]);
+
+  return (
+    <>
+      <Box sx={{ p: 1 }}>
+        <Paper
+          elevation={0}
+          sx={{
+            p:2,
+            mt:-2,
+            mb: 3,
+            bgcolor:
+              "rgba(255, 255, 255, 0.4)",
+            backdropFilter: "blur(4px)",
+            border: "1px solid",
+            borderColor: "divider",
+            borderRadius: 3,
+          }}
+        >
+          <Box
+            sx={{
+              mb: filtersExpanded ? 1 : 0.5,
+              p: 1.2,
+              borderRadius: 2,
+              bgcolor: "background.paper",
+              boxShadow: 2,
+              borderLeft: "6px solid",
+              borderColor: "primary.main",
+            }}
+          >
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+            >
+              {/* LEFT */}
+              <Stack
+                direction="row"
+                spacing={2}
+                alignItems="center"
+              >
+                <ReceiptIcon
+                  color="primary"
+                  fontSize="medium"
+                />
+
+                <Box>
+                  <Typography
+                    variant="subtitle1"
+                    fontWeight={700}
+                    lineHeight={1.2}
+                  >
+                    Transaction Search &
+                    Records Enquiry
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mt: 0.2 }}
+                  >
+                    Enter the required
+                    details below to retrieve
+                    and view historical
+                    transaction records.
+                  </Typography>
+                </Box>
+              </Stack>
+
+              {/* BUTTON */}
+              {data && (
+                <Button
+                startIcon={<ManageSearchIcon />}
+                  variant="contained"
+                  size="small"
+                  onClick={() =>
+                    setFiltersExpanded(
+                      (prev) => !prev
+                    )
+                  }
+                  sx={{
+                    textTransform: "none",
+                    borderRadius: "8px",
+                    fontWeight: 600,
+                    minWidth: "90px",
+                  }}
+                >
+                  {filtersExpanded
+                    ? "Hide Filters"
+                    : "Edit Search"}
+                </Button>
+              )}
+            </Stack>
+
+          </Box>
+           {/* SUMMARY CHIPS */}
+            {data && !filtersExpanded && (
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  mt: 2,
+                  flexWrap: "wrap",
+                }}
+              >
+                {[
+                `Branch: ${userInputs?.branch}`,
+                `Currency: ${userInputs?.currency}`,
+                `CGL: ${userInputs?.cgl}`,
+                `Date: ${dayjs(userInputs?.fromDate).format(
+                  "DD MMM YYYY"
+                )} - ${dayjs(userInputs?.toDate).format(
+                  "DD MMM YYYY"
+                )}`,
+                ...(
+                  userInputs?.minAmount || userInputs?.maxAmount
+                    ? [
+                        `Amount: ${
+                          userInputs?.minAmount || 0
+                        } - ${
+                          userInputs?.maxAmount || "∞"
+                        }`,
+                      ]
+                    : []
+                ),
+              ].map((item, index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      px: 1.5,
+                      py: 0.45,
+                      borderRadius: "20px",
+                      bgcolor:
+                        "rgba(88, 70, 159, 0.08)",
+                      border:
+                        "1px solid rgba(88, 70, 159, 0.36)",
+                      fontSize: "0.72rem",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {item}
+                  </Box>
+                ))}
+              </Stack>
+            )}
+
+          {/* FILTERS */}
+          {filtersExpanded && (
+            <>
+            {searchLoading && !data?.data?.length && (
+              <LinearProgress
+              sx={{height:3,
+                borderRadius:999,
+                mb:2,
+                bgcolor:"rgba(88,70,159,0.08)",
+                "& .MuiLinearProgress-bar":{
+                  bgcolor:"#58469f",
+                },
+              }}
+              />
+            )}
+            <TransactionFilters
+              userInputs={userInputs}
+              setUserInputs={setUserInputs}
+              currencies={currencies}
+              fetchCurrencies={fetchCurrencies}
+              onSubmit={() => {
+                // setFiltersExpanded(false);
+                if(paginationModel.page===0){
+                  fetchTransactions();
                 }
-            }
-
-            if (!buffer.isEmpty()) {
-                writer.write(String.join("", buffer));
-                writer.newLine();
-            }
-
-            if (config.getOutputEndLine() != null) {
-                writer.write(config.getOutputEndLine());
-            }
-
-            reader.close();
-            writer.close();
-
-            checkBatchCompletion(batchId);
-
-        } catch (Exception e) {
-            log.error("Processing failed", e);
-            checkBatchCompletion(batchId);
-        }
-    }
-
-    // =========================
-    // OLD LOGIC RESTORED
-    // =========================
-    private String transformLine(String line, AsciiConfig config) {
-
-        String[] cols = line.split("\\|", -1);
-
-        if (!isValidRow(cols, config)) return null;
-
-        List<ProcessingItem> items = extractAmountColumns(cols, config);
-
-        StringBuilder sb = new StringBuilder();
-        boolean valid = false;
-
-        for (ProcessingItem item : items) {
-
-            BigDecimal finalAmt = item.amount;
-
-            // 🔥 safe skip
-            if (finalAmt == null) continue;
-
-            String amtStr = finalAmt.toPlainString();
-            sb.append(amtStr);
-            valid = true;
-        }
-
-        if (valid) {
-            return items.get(0).head + sb.toString();
-        }
-
-        return null;
-    }
-
-    private List<ProcessingItem> extractAmountColumns(String[] cols, AsciiConfig config) {
-
-        List<ProcessingItem> items = new ArrayList<>();
-
-        int headIdx = config.getInputHeadCol() - 1;
-        String head = (headIdx < cols.length) ? cols[headIdx].trim() : "";
-
-        String seq = config.getAmountColSeq();
-
-        if (seq.contains("else")) {
-            String[] parts = seq.split("else");
-            int primary = Integer.parseInt(parts[0].trim());
-
-            for (String p : parts) {
-                int idx = Integer.parseInt(p.trim()) - 1;
-                BigDecimal val = parseAmount(cols, idx);
-
-                if (val.compareTo(BigDecimal.ZERO) != 0) {
-                    items.add(new ProcessingItem(head, val, primary));
-                    return items;
+                else{
+                  setPaginationModel((prev) => ({
+                  ...prev,
+                  page: 0,
+                }));
                 }
+              }}
+              resetState={resetState}
+              user={user}
+              sourceOptions={sourceOptions}
+              etlDate={etlDate}
+            />
+            </>
+          )}
+        </Paper>
+
+        {data && (
+          <TransactionTable
+            data={data}
+            loading={loading}
+            userInputs={userInputs}
+            sourceOptions={sourceOptions}
+            onDownload={handleDownload}
+            rowCount={rowCount}
+            paginationModel={
+              paginationModel
             }
-
-            items.add(new ProcessingItem(head, BigDecimal.ZERO, primary));
-        }
-
-        else if (seq.contains("and")) {
-            for (String p : seq.split("and")) {
-                int idx = Integer.parseInt(p.trim()) - 1;
-                items.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
+            setPaginationModel={
+              setPaginationModel
             }
-        }
+            exportLoading= {exportLoading}
+          />
+        )}
+      </Box>
+    </>
+  );
+};
 
-        else {
-            int idx = Integer.parseInt(seq.trim()) - 1;
-            items.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
-        }
+export default TransactionEnquiryScreen;
 
-        return items;
-    }
+util file
+import dayjs from "dayjs";
 
-    // =========================
-    // SAFE PARSE FIX
-    // =========================
-    private BigDecimal parseAmount(String[] cols, int idx) {
-        if (idx >= cols.length) return BigDecimal.ZERO;
-        return parseAmount(cols[idx]);
-    }
+export const branchRegex = /^[a-zA-Z0-9()\-_ ]+$/;
+export const currencyRegex = /^[a-zA-Z()\-_ ]+$/;
+export const cglRegex = /^[a-zA-Z0-9()\-_ ]+$/; 
 
-    private BigDecimal parseAmount(String val) {
-        try {
-            if (val == null || val.trim().isEmpty()) return BigDecimal.ZERO;
+export const areUserInputsValid = (userInputs) => {
+  
+  const branchCode = userInputs?.branch?.split(' - ')[0];
+  const currencyCode = userInputs?.currency?.split(' (')[0];
+  const cglNumber = userInputs?.cgl?.split(' - ')[0];
+  
+  const fromDate = userInputs?.fromDate;
+  const toDate = userInputs?.toDate;
 
-            String clean = val.trim().replace(",", "");
+  const min = userInputs.minAmount ? Number(userInputs.minAmount) : null;
+  const max = userInputs.maxAmount ? Number(userInputs.maxAmount) : null;
+  // Valid if: both are empty, only one is filled, or min <= max
+  const isAmtValid = (min !== null && max !== null) ? min <= max : true;
 
-            if (!clean.matches("-?\\d+(\\.\\d+)?")) {
-                return BigDecimal.ZERO;
+  if (!branchCode || !currencyCode || !cglNumber || !fromDate || !toDate) return false;
+
+  return (
+    branchRegex.test(branchCode) &&
+    currencyRegex.test(currencyCode) &&
+    cglRegex.test(cglNumber) &&
+    (dayjs(fromDate).isSame(dayjs(toDate)) || dayjs(fromDate).isBefore(dayjs(toDate))) &&
+    isAmtValid 
+  );
+};
+
+table file
+// import React, { useState } from "react";
+import { DataGrid } from "@mui/x-data-grid";
+import { 
+  Button, 
+  Typography, 
+  Stack, 
+  Box, 
+  styled, 
+  Avatar, 
+  Grid, 
+  Divider 
+} from "@mui/material";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import EventIcon from '@mui/icons-material/Event';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import TrendingDownIcon from '@mui/icons-material/TrendingDown';
+import LockIcon from '@mui/icons-material/Lock';
+import { transactionColumns } from "./TransactionColumns";
+import { StyledDataBox } from "./TransactionStyles";
+import { GridToolbar } from "@mui/x-data-grid/internals";
+import CircularProgress from "@mui/material/CircularProgress";
+
+const OverlayBox = styled(Box)(() => ({
+  display: "flex",
+  flexDirection: "column",
+  height: "100%",
+  justifyContent: "center",
+  alignItems: "center",
+}));
+
+const CustomNoRowsOverlay = () => (
+  <OverlayBox>
+    <ErrorOutlineIcon fontSize="large" color="action" />
+    <Typography variant="h5" fontSize="1.2rem" color="text.secondary">
+      No transactions available for the selected criteria
+    </Typography>
+  </OverlayBox>
+);
+  const TransactionTable = ({ data, loading, onDownload, rowCount, paginationModel, setPaginationModel, userInputs, sourceOptions ,exportLoading }) => {
+  const rows = data?.data || [];
+  const balances = data?.extraData || {};
+
+ const showBalances = 
+    userInputs?.sourceFlags?.length === sourceOptions?.length && 
+    !userInputs?.minAmount && 
+    !userInputs?.maxAmount &&
+    rows.length > 0; 
+
+  return (
+    <StyledDataBox sx={{ mt: 2, height : '100%' ,display: 'flex', flexDirection: 'column' }}>
+      
+      {/* MASTER HEADER: Unified Actions & Balances */}
+      <Box 
+        sx={{ 
+          p: 1.2, 
+          mb: 3, 
+          mt: -2,
+          borderRadius: '16px',
+          background: "rgba(255, 255, 255, 0.1)",
+          backdropFilter: "blur(12px)",
+          border: "1px solid rgba(255, 255, 255, 0.3)",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.03)",
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 0.8
+        }}
+      >
+        {/* ROW 1: TITLE, RECORDS & EXPORT */}
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5 }}>
+            <Typography variant="subtitle1" fontWeight={800} sx={{ color: "#1a1a1a", letterSpacing: "-0.5px" }}>
+              Transaction Ledger
+            </Typography>
+            
+            <Typography 
+              variant="caption" 
+              fontWeight={700} 
+              sx={{ 
+                color: "#58469f", 
+                textTransform: "uppercase", 
+                bgcolor: "rgba(88, 70, 159, 0.1)", 
+                px: 1.2, 
+                py: 0.3, 
+                borderRadius: 1.5,
+                fontSize: '0.65rem'
+              }}
+            >
+              {rowCount > 0 ? `${rowCount.toLocaleString()} Records Found` : "No Records"}
+            </Typography>
+          </Box>
+
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={exportLoading?(<CircularProgress size={16} color="inherit"/>):(<FileDownloadIcon/>)}
+            onClick={onDownload}
+            disabled={!rowCount || loading || exportLoading}
+            sx={{ 
+              textTransform: 'none',
+              bgcolor: '#58469f',
+              fontWeight: 700,
+              borderRadius: '8px',
+              px: 3,
+              boxShadow: '0 4px 12px rgba(88, 70, 159, 0.3)',
+              '&:hover': { bgcolor: '#45357a' } 
+            }}
+          >
+            {exportLoading? "Exporting...":"Export" } 
+          </Button>
+
+        </Stack>
+
+        {/* ROW 2: BALANCES */}
+        {showBalances && balances && (
+        <Stack direction="row" spacing={2}> 
+          {[
+            { 
+              label: "Opening Balance", 
+              date: balances.openingDate || balances.OpeningDate, 
+              amt: balances.openingBalance, 
+              icon: <AccountBalanceWalletIcon />,
+            },
+            { 
+              label: "Closing Balance", 
+              date: balances.closingDate || balances.ClosingDate,
+              amt: balances.closingBalance, 
+              icon: <AccountBalanceWalletIcon />,
             }
+          ].map((item, index) => {
+            const isNeg = item.amt < 0;
+            const indicator = isNeg ? "DR" : "CR";
+            const absVal = Math.abs(item.amt || 0).toFixed(4);
 
-            return new BigDecimal(clean);
+            const activeColor = isNeg ? "#b84646f3" : "#427a44"; 
+            const activeBg = isNeg 
+              ? "linear-gradient(135deg, #fff5f5 0%, #fed7d759 100%)" 
+              : "linear-gradient(135deg, #f6fdf9 0%, #c6f6d556 100%)";
 
-        } catch (Exception e) {
-            return BigDecimal.ZERO;
+            return (
+              <Box 
+                key={index}
+                sx={{ 
+                  flex: 1, 
+                  p: 0.8, 
+                  borderRadius: '12px', 
+                  background: activeBg,
+                  border: '1px solid rgba(255, 255, 255, 0.3)',
+                  borderBottom: `4px solid ${activeColor}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  position: "relative",
+                  overflow: "hidden"
+                }}
+              >
+                <Stack direction="row" alignItems="center" sx={{ zIndex: 1 }}>
+                  <Box sx={{ p: 0.6, borderRadius: '10px', bgcolor: '#fff', display: 'flex', mr: 1.5, boxShadow: '0 2px 6px rgba(0,0,0,0.05)', color: activeColor }}>
+                    {item.icon}
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ textTransform: 'uppercase', fontSize: '0.72rem' }}>
+                      {item.label}
+                    </Typography>
+                    <Typography variant="body2" fontWeight={800} sx={{ color: '#2c3e50', lineHeight: 1 }}>
+                      {absVal}
+                      <Box component="span" sx={{ fontSize: '0.7rem', ml: 0.5, color: activeColor, fontWeight: 900 }}>
+                        {indicator}
+                      </Box>
+                    </Typography>
+                  </Box>
+                </Stack>
+
+                {isNeg ? (
+                  <TrendingDownIcon sx={{ 
+                    position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
+                    fontSize: '2.8rem', opacity: 0.25, color: activeColor, zIndex: 0 
+                  }} />
+                ) : (
+                  <TrendingUpIcon sx={{ 
+                    position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
+                    fontSize: '2.8rem', opacity: 0.25, color: activeColor, zIndex: 0 
+                  }} />
+                )}
+
+                <Box sx={{ textAlign: 'right', zIndex: 1 }}>
+                  <Stack direction="row" alignItems="center" spacing={0.5} justifyContent="flex-end">
+                    <EventIcon sx={{ fontSize: '0.8rem', color: 'text.secondary' }} />
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700 ,fontSize: '0.72rem' }}>
+                      AS OF
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" sx={{ color: '#2c3e50', fontWeight: 700, display: 'block' }}>
+                    {item.date || 'N/A'}
+                  </Typography>
+                </Box>
+              </Box>
+            );
+          })}
+        </Stack>
+        )}
+      </Box>
+
+      {/* DATA GRID SECTION */}
+      <Box sx={{ flex: 1}}>
+      <DataGrid
+      density="compact"
+        rows={rows}
+        columns={transactionColumns}
+        loading={loading}
+        disableRowSelectionOnClick
+        getRowId={(row) => row.transactionId} 
+        paginationMode="server"
+        rowCount={rowCount}
+        paginationModel={paginationModel}
+        onPaginationModelChange={setPaginationModel}
+        pageSizeOptions={[25,50,75,100]}
+        slots={{
+          noRowsOverlay: CustomNoRowsOverlay,
+        }}
+        sx={{
+          mt:-2,
+          backgroundColor: "#ffffff6b", 
+          border: 'none',
+          "& .MuiDataGrid-columnHeaders": {
+            backgroundColor: "#f5f5f5 !important", 
+            fontWeight: 700,
+            borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+            position: 'sticky', 
+            top: 0,
+            zIndex: 1,
+          },
+           "& .MuiDataGrid-virtualScroller": {
+             overflowY: 'auto' 
+          },
+          "& .MuiDataGrid-main": {
+            border :"none",
+          },
+          // "& .MuiDataGrid-withBorderColor":{
+          //   borderColor:"transparent",
+          // }
+        }}
+      />
+      </Box>
+    </StyledDataBox>
+  );
+};
+
+export default TransactionTable;
+styles file
+import { Box, FormControl, Stack, Typography, styled } from "@mui/material";
+
+export const StyledBox = styled(Box)(({ theme }) => ({
+  backgroundColor: "rgba(255, 255, 255, 0.15)",
+  backdropFilter: "blur(20px)",
+  padding: "2%",
+  borderRadius: "15px",
+  marginBottom: "2%",
+  border: `0.5px solid ${theme.palette.primary.light}`,
+}));
+
+export const StyledDataBox = styled(StyledBox)(() => ({
+  height: "50%",
+}));
+
+export const StyledStack = styled(Stack)(() => ({
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "end",
+  flexWrap: "wrap",
+}));
+
+export const StyledFormBox = styled(Box)(() => ({
+  padding: "10px",
+  flexGrow: 1,
+  minWidth: "18%",
+  flexBasis: "200px",
+}));
+
+export const StyledFormControl = styled(FormControl)(() => ({
+  padding: "10px",
+  flexGrow: 1,
+  flexBasis: "200px",
+}));
+
+export const StyledDateBox = styled(Box)(() => ({
+  padding: "10px",
+  minWidth: "38%",
+}));
+
+export const ButtonBox = styled(Box)(() => ({
+  marginTop: "2%",
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+}));
+
+export const StyledFormHeader = styled(Typography)(({ theme }) => ({
+  fontSize: "1.18rem",
+  marginBottom: theme.spacing(3),
+  borderBottom: `2px solid ${theme.palette.divider}`,
+  paddingBottom: theme.spacing(1),
+}));
+filters file
+import {
+  Box,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
+  Button,
+  Autocomplete,
+  Checkbox,
+  Chip,
+  Typography,
+} from "@mui/material";
+import {
+  StyledFormBox,
+  StyledFormControl,
+  StyledDateBox,
+  ButtonBox,
+  StyledStack,
+} from "./TransactionStyles";
+
+import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+
+import { useState, useEffect, useCallback } from "react";
+// import { debounce } from "lodash";
+import useApi from "../../../hooks/useApi";
+import useCustomSnackbar from "../../../utils/useCustomSnackbar";
+import dayjs from "dayjs";
+import { useSelector } from "react-redux";
+import { getPermissions } from "../../../utils/CommonUtilities";
+import SearchIcon from "@mui/icons-material/Search";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
+
+const TransactionFilters = ({
+  userInputs,
+  setUserInputs,
+  currencies,
+  fetchCurrencies,
+  onSubmit,
+  resetState,
+  user,
+  sourceOptions,
+  etlDate,
+}) => {
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  const selectedMenu = useSelector((state) => state.menus.selectedMenuItem);
+  const permissions = getPermissions(selectedMenu);
+  console.log(permissions);
+  console.log(selectedMenu);
+
+  const update = (key, value) =>
+    setUserInputs((prev) => ({ ...prev, [key]: value }));
+
+  // ================= STATE =================
+  const [branches, setBranches] = useState([]);
+  const [cgls, setCgls] = useState([]);
+
+  const [loading, setLoading] = useState({
+    branch: false,
+    cgl: false,
+  });
+
+  const [req, setReq] = useState({
+    branch: true,
+    cgl: true,
+  });
+
+  // const [sourceOptions, setSourceOptions] = useState([]);
+
+  // ================= SEARCH OPTIONS =================
+  const setSearchOptions = (type, data) => {
+    if (type === "branch") setBranches(data);
+    if (type === "cgl") setCgls(data);
+  };
+
+  // // ================= API CALL =================
+  const fetchSearchData = useCallback(
+    async (type, term) => {
+      try {
+        setLoading((p) => ({ ...p, [type]: true }));
+
+        let circleValue =
+          permissions?.wholebank === true
+            ? "null"
+            : user?.isCircle === true || permissions?.circle
+              ? user?.circleCode
+              : "";
+
+        const url =
+          type === "branch"
+            ? `/CM/common-master/branches-code-name-only?q=${encodeURIComponent(term)}&circleCode=${circleValue || ""}`
+            : `/CM/common-master/cgl-code-description-only?q=${encodeURIComponent(term)}`;
+
+        const result = await callApi(url, null, "GET");
+        let options = [];
+
+        if (result?.data?.length > 0) {
+          result.data.forEach((item) => {
+            options.unshift(
+              type === "branch"
+                ? `${item.code}-${item.name}`
+                : `${item.cglNumber} - ${item.description}`,
+            );
+          });
+          setSearchOptions(type, options);
+        } else {
+          showSnackBar("Data is not available");
         }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading((p) => ({ ...p, [type]: false }));
+      }
+    },
+    [callApi, permissions, user, showSnackBar],
+  );
+
+  // ================= INPUT HANDLER =================
+  const handleSearchChange = (value = null, reason, type) => {
+    if (reason === "input") {
+      const val = value || "";
+      if (val.length >= 3) {
+        setReq((prev) => ({ ...prev, [type]: false }));
+        fetchSearchData(type, val);
+      } else {
+        setReq((prev) => ({ ...prev, [type]: true }));
+        // DELETE THIS LINE: fetchSearchData.cancel();
+      }
+    } else if (reason === "clear") {
+      setReq((prev) => ({ ...prev, [type]: true }));
     }
+  };
 
-    // =========================
-    // VALIDATION
-    // =========================
-    private boolean isValidRow(String[] cols, AsciiConfig config) {
-
-        int idx = config.getInputHeadCol() - 1;
-        if (cols.length <= idx) return false;
-
-        String head = cols[idx].trim();
-
-        Pattern p = INPUT_REGEX_CACHE.computeIfAbsent(
-                config.getInputHeadRegex(), Pattern::compile);
-
-        return p.matcher(head).lookingAt();
+  const isNumeric = (value) => {
+    if (value) {
+      const regex = /^\d+$/;
+      return regex.test(value);
     }
+    return false;
+  };
 
-    // =========================
-    // HEADER PARSER
-    // =========================
-    private HeaderInfo parseHeaderEfficiently(FileSystem fs, Path path) {
+  // ================= EFFECTS =================
+  useEffect(() => {
+    if (req.branch) {
+      setBranches([]);
+    }
+  }, [req.branch]);
 
-        HeaderInfo info = new HeaderInfo();
-        info.branchCode = "00000";
-        info.reportDate = "01012026";
+  useEffect(() => {
+    fetchCurrencies();
+  }, [fetchCurrencies]);
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(path)))) {
+  useEffect(() => {
+    if (req.cgl) {
+      setCgls([]);
+    }
+  }, [req.cgl]);
 
-            String line;
-            int count = 0;
+  // ================= UI =================
+  return (
+    <>
+      <StyledStack direction="row">
+        {/* BRANCH */}
+        <StyledFormBox sx={{ flex: 1 }}>
+          <Autocomplete
+            // disabled={user?.isCircle === "false" || permissions.branch}
+            disabled={
+              !permissions?.wholebank &&
+              (user?.isCircle === false || permissions?.branch)
+            }
+            forcePopupIcon={false}
+            autoHighlight
+            value={userInputs?.branch || ""}
+            loading={!req.branch && loading.branch}
+            options={branches}
+            noOptionsText={
+              req.branch ? "Please enter at least 3 characters" : "No Options"
+            }
+            onInputChange={(e, value, reason) => {
+              handleSearchChange(value, reason, "branch");
+            }}
+            onChange={(e, value) => update("branch", value)}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Branch Code or Branch Name*"
+                placeholder="eg. 12365 or ABC"
+                InputLabelProps={{ shrink: true }}
+                slotProps={{
+                  htmlInput: {
+                    ...params.inputProps,
+                    maxLength: isNumeric(params.inputProps.value) ? 5 : 15,
+                  },
+                }}
+                sx={{
+                  "& .MuiInputLabel-root": {
+                    fontWeight: 500,
+                    color: "text.primary",
+                  },
+                  "& .MuiOutlinedInput-root": {
+                    backgroundColor: "transparent",
+                  },
+                }}
+              />
+            )}
+          />
+        </StyledFormBox>
 
-            while ((line = reader.readLine()) != null && count++ < 50) {
+        {/* CURRENCY */}
+        <StyledFormBox sx={{ flex: 1 }}>
+          <Autocomplete
+            options={currencies || []}
+            value={userInputs?.currency || null}
+            onOpen={fetchCurrencies}
+            onChange={(event, newValue) => update("currency", newValue)}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Currency*"
+                InputLabelProps={{ shrink: true }}
+                placeholder="Select Currency"
+                sx={{
+                  "& .MuiInputLabel-root": {
+                    fontWeight: 500,
+                    color: "text.primary",
+                  },
+                  "& .MuiOutlinedInput-root": {
+                    backgroundColor: "transparent",
+                  },
+                }}
+              />
+            )}
+          />
+        </StyledFormBox>
 
-                if (line.contains("BRANCH")) {
-                    info.branchCode = line.replaceAll("\\D+", "");
+        {/* CGL */}
+        <StyledFormBox sx={{ flex: 1 }}>
+          <Autocomplete
+            forcePopupIcon={false}
+            autoHighlight
+            value={userInputs?.cgl || ""}
+            loading={!req.cgl && loading.cgl}
+            options={cgls}
+            noOptionsText={
+              req.cgl ? "Please enter at least 3 characters" : "No Options"
+            }
+            onInputChange={(e, value, reason) => {
+              handleSearchChange(value, reason, "cgl");
+            }}
+            onChange={(e, value) => update("cgl", value)}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="CGL*"
+                InputLabelProps={{ shrink: true }}
+                placeholder="eg. 9999999999"
+                sx={{
+                  "& .MuiInputLabel-root": {
+                    fontWeight: 500,
+                    color: "text.primary",
+                  },
+                  "& .MuiOutlinedInput-root": {
+                    backgroundColor: "transparent",
+                  },
+                }}
+                slotProps={{
+                  htmlInput: {
+                    ...params.inputProps,
+                    maxLength: isNumeric(params.inputProps.value) ? 10 : 30,
+                  },
+                }}
+              />
+            )}
+          />
+        </StyledFormBox>
+
+        {/* SOURCE FLAG */}
+        <StyledFormBox sx={{ flex: 1 }}>
+          <Autocomplete
+            multiple
+            disableCloseOnSelect
+            forcePopupIcon={true}
+            openOnFocus
+            options={sourceOptions}
+            value={userInputs?.sourceFlags || []}
+            isOptionEqualToValue={(opt, val) => opt.flagId === val.flagId}
+            getOptionLabel={(opt) => opt.flagName || ""}
+            renderTags={(value, getTagProps) => {
+              const allSelected = value.length === sourceOptions.length;
+
+              if (allSelected) {
+                return (
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 500,
+                      color: "text.secondary",
+                      ml: 0.5,
+                    }}
+                  >
+                    Select All
+                  </Typography>
+                );
+              }
+
+              if (value.length === 0) return null;
+
+              const moreCount = value.length - 1;
+
+              const { onDelete: _onDelete, ...tagProps } = getTagProps({
+                index: 0,
+              });
+
+              return (
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                  }}
+                >
+                  <Chip
+                    {...tagProps}
+                    key={value[0].flagId}
+                    label={value[0].flagName}
+                    size="small"
+                    sx={{
+                      borderRadius: "6px",
+                      pointerEvents: "none",
+                      height: "24px",
+                    }}
+                  />
+
+                  {moreCount > 0 && (
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontWeight: 600,
+                        color: "text.secondary",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      +{moreCount} more
+                    </Typography>
+                  )}
+                </Box>
+              );
+            }}
+            onChange={(e, newValue) => {
+              if (newValue.find((option) => option.flagId === "all")) {
+                const isAllSelected =
+                  userInputs?.sourceFlags?.length === sourceOptions.length;
+                update("sourceFlags", isAllSelected ? [] : sourceOptions);
+              } else {
+                update("sourceFlags", newValue);
+              }
+            }}
+            filterOptions={(options) => [
+              { flagId: "all", flagName: "Select All" },
+              ...options,
+            ]}
+            renderOption={(props, option, { selected }) => {
+              const { key, ...optionProps } = props;
+              const isSelectAll = option.flagId === "all";
+              const allSelected =
+                userInputs?.sourceFlags?.length === sourceOptions.length;
+              return (
+                <li key={key} {...optionProps} style={{ fontSize: "0.875rem" }}>
+                  <Checkbox
+                    size="small"
+                    style={{ marginRight: 8 }}
+                    checked={isSelectAll ? allSelected : selected}
+                  />
+                  <Typography
+                    variant="body2"
+                    sx={{ fontWeight: isSelectAll ? 600 : 400 }}
+                  >
+                    {option.flagName}
+                  </Typography>
+                </li>
+              );
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Transaction Type*"
+                placeholder={
+                  userInputs?.sourceFlags?.length > 0 ? "" : "Select Options"
                 }
+                InputLabelProps={{ shrink: true }}
+                sx={{
+                  "& .MuiInputLabel-root": {
+                    fontWeight: 500,
+                    color: "text.primary",
+                  },
+                  "& .MuiOutlinedInput-root": {
+                    backgroundColor: "transparent",
+                    minHeight: "56px !important",
+                    height: "56px !important",
+                    display: "flex",
+                    alignItems: "center",
+                    flexWrap: "nowrap !important",
+                    overflow: "hidden",
+                    cursor: "pointer",
+                    paddingRight: "65px !important",
+                    "& .MuiAutocomplete-input": {
+                      padding: "0px !important",
+                      minWidth: "0px !important",
+                    },
+                    "& .MuiAutocomplete-endAdornment": {
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      display: "flex",
+                      alignItems: "center",
+                      right: "8px",
+                    },
+                  },
+                }}
+              />
+            )}
+          />
+        </StyledFormBox>
 
-                if (line.contains("DATE")) {
-                    info.reportDate = normalizeDate(line.replaceAll(".*::", "").trim());
-                }
-            }
+        <Stack direction="row" sx={{ flexGrow: 1 }}>
+          {/* FROM AMOUNT */}
+          <StyledFormBox sx={{ flex: 1 }}>
+            <TextField
+              label="From Amount"
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+              placeholder="eg. 0.00"
+              value={userInputs?.minAmount || ""}
+              onPaste={(e) => e.preventDefault()}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "" || /^\d*\.?\d*$/.test(val))
+                  update("minAmount", val);
+              }}
+              inputProps={{ maxLength: 20, inputMode: "decimal" }}
+              sx={{
+                "& .MuiInputLabel-root": {
+                  fontWeight: 500,
+                  color: "text.primary",
+                },
+                "& .MuiOutlinedInput-root": { backgroundColor: "transparent" },
+              }}
+            />
+          </StyledFormBox>
 
-        } catch (Exception ignored) {}
+          {/* TO AMOUNT */}
+          <StyledFormBox sx={{ flex: 1 }}>
+            <TextField
+              label="To Amount"
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+              placeholder="eg. 999999999..."
+              value={userInputs?.maxAmount || ""}
+              onPaste={(e) => e.preventDefault()}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "" || /^\d*\.?\d*$/.test(val))
+                  update("maxAmount", val);
+              }}
+              inputProps={{ maxLength: 20, inputMode: "decimal" }}
+              sx={{
+                "& .MuiInputLabel-root": {
+                  fontWeight: 500,
+                  color: "text.primary",
+                },
+                "& .MuiOutlinedInput-root": { backgroundColor: "transparent" },
+              }}
+            />
+          </StyledFormBox>
 
-        return info;
-    }
+          {/* START DATE */}
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <StyledFormBox sx={{ flex: 1 }}>
+              <DatePicker
+                disableHighlightToday
+                value={userInputs?.fromDate || null}
+                // onChange={(v) => update("fromDate", v)}
+                onChange={(v) => {
+                  update("fromDate", v);
+                  if (
+                    userInputs?.toDate &&
+                    v &&
+                    userInputs?.toDate.isBefore(v)
+                  ) {
+                    update("toDate", null);
+                  }
+                }}
+                format="DD-MM-YYYY"
+                minDate={dayjs("2026-03-31")}
+                maxDate={etlDate}
+                slotProps={{
+                  textField: {
+                    label: "From Date*",
+                    fullWidth: true,
+                    InputLabelProps: { shrink: true },
+                    readOnly: true,
+                    sx: {
+                      "& .MuiInputLabel-root": {
+                        fontWeight: 500,
+                      },
+                      "& .MuiInputBase-input": { caretColor: "transparent" },
+                    },
+                  },
+                }}
+              />
+            </StyledFormBox>
+            <StyledFormBox sx={{ flex: 1 }}>
+              <DatePicker
+                disableHighlightToday
+                value={userInputs?.toDate || null}
+                onChange={(v) => update("toDate", v)}
+                format="DD-MM-YYYY"
+                disabled={!userInputs?.fromDate}
+                minDate={dayjs(userInputs.fromDate)}
+                maxDate={etlDate}
+                slotProps={{
+                  textField: {
+                    label: "To Date*",
+                    fullWidth: true,
+                    InputLabelProps: { shrink: true },
+                    readOnly: true,
+                    sx: {
+                      "& .MuiInputLabel-root": {
+                        fontWeight: 500,
+                      },
+                      "& .MuiInputBase-input": { caretColor: "transparent" },
+                    },
+                  },
+                }}
+              />
+            </StyledFormBox>
+          </LocalizationProvider>
+        </Stack>
+      </StyledStack>
 
-    private String normalizeDate(String d) {
-        try {
-            return LocalDate.parse(d, DateTimeFormatter.ofPattern("dd-MM-yyyy"))
-                    .format(DateTimeFormatter.ofPattern("ddMMyyyy"));
-        } catch (Exception e) {
-            return "01012026";
-        }
-    }
+      {/* BUTTONS */}
+      <ButtonBox sx={{ mt: 2 }}>
+        <Button
+          variant="contained"
+          onClick={resetState}
+          startIcon={<RestartAltIcon />}
+        >
+          Reset
+        </Button>
+        &nbsp;&nbsp;
+        <Button
+          variant="contained"
+          startIcon={<SearchIcon />}
+          disabled={
+            !(
+              userInputs?.branch &&
+              userInputs?.currency &&
+              userInputs?.cgl &&
+              userInputs?.fromDate?.isValid?.() &&
+              userInputs?.toDate?.isValid?.() &&
+              !userInputs.toDate.isBefore(userInputs.fromDate) &&
+              userInputs?.sourceFlags?.length > 0
+            )
+          }
+          onClick={onSubmit}
+        >
+          Search
+        </Button>
+      </ButtonBox>
+    </>
+  );
+};
 
-    private void checkBatchCompletion(String batchId) {
-        BatchStats stats = batchTracker.get(batchId);
+export default TransactionFilters;
 
-        if (stats != null && stats.remainingFiles.decrementAndGet() == 0) {
-            log.info("BATCH COMPLETED: {}", batchId);
-            batchTracker.remove(batchId);
-        }
-    }
+columns file
+import { timeStampFormatter } from "../../../utils/CommonUtilities";
 
-    private static class ProcessingItem {
-        String head;
-        BigDecimal amount;
-        int colIndex;
+const flagMap = {
+  C: "Consolidated Transaction",
+  F: "FCNB",
+  J: "Journal Entry",
+  P: "PPF",
+  T: "Profit Transfer",
+  V: "Provision",
+};
 
-        ProcessingItem(String h, BigDecimal a, int c) {
-            head = h;
-            amount = a;
-            colIndex = c;
-        }
-    }
-
-    private static class HeaderInfo {
-        String branchCode;
-        String reportDate;
-    }
-}
-
-
-
-
-
-
-
-....
-
-
-private BigDecimal parseAmount(String val) {
-    try {
-        if (val == null || val.trim().isEmpty()) return BigDecimal.ZERO;
-
-        String clean = val.trim().replace(",", "");
-
-        // ✅ IMPORTANT FIX: allow only numbers
-        if (!clean.matches("-?\\d+(\\.\\d+)?")) {
-            return BigDecimal.ZERO;
-        }
-
-        return new BigDecimal(clean);
-
-    } catch (Exception e) {
-        return BigDecimal.ZERO;
-    }
-}
-
-
-
-
-
-if (amt != null) {
-    sb.append(amt.toPlainString());
-    valid = true;
-}
-
-
-
-
-
-
-
-if (!isValidRow(cols, config)) {
-    log.warn("Skipping row due to regex: {}", line);
-    // TEMP allow processing
-}
-
-
-
-String head = cols[idx].trim();
-
-log.info("HEAD VALUE: [{}]", cols[idx]);
-
-
-
-
-
-
-
-private String transformLine(String line, AsciiConfig config) {
-
-    String[] cols = line.split("\\|", -1);
-
-    // safety check
-    if (cols.length <= 4) return null;
-
-    String head = cols[0].trim();
-
-    BigDecimal amt = parseAmount(cols[4]);
-
-    // optional: skip completely empty rows
-    if (head.isEmpty()) return null;
-
-    return head + amt.toPlainString();
-}
-
-
+export const transactionColumns = [
+  {
+    field: "date",
+    headerName: "Transaction Date",
+    flex: 1,
+    headerAlign: "center",
+    align: "center",
+  },
+    {
+    field: "batchId",
+    headerName: "Batch Id",
+    flex: 0.7,
+    headerAlign: "center",
+    align: "center",
+  },
+  {
+    field: "journalNumber",
+    headerName: "Journal No.",
+    flex: 0.8,
+    headerAlign: "center",
+    align: "center",
+  },
+    {
+    field: "debitAmount",
+    headerName: "Debit",
+    flex: 1,
+    headerAlign: "right",
+    align: "right",
+    valueFormatter: (value) =>
+      Number(value || 0).toFixed(4),
+  },
+  {
+    field: "creditAmount",
+    headerName: "Credit",
+    flex: 1,
+    headerAlign: "right",
+    align: "right",
+    valueFormatter: (value) =>
+      Number(value || 0).toFixed(4),
+  },
+  {
+    field: "particulars",
+    headerName: "Narration",
+    flex: 1.5,
+    headerAlign: "center",
+    align: "center",
+  },
+  {
+    field: "transactionCount",
+    headerName: "Transaction Count",
+    flex: 0.5,
+    headerAlign: "center",
+    align: "center",
+  },
+  {
+    field: "sourceFlag",
+    headerName: "Transaction Type",
+    flex: 1,
+    headerAlign: "center",
+    align: "center",
+    valueGetter: (value) => flagMap[value] || value,
+  },
+  {
+    field: "postDate",
+    headerName: "Posted Date",
+    flex: 1.2,
+    headerAlign: "center",
+    align: "center",
+    valueFormatter: (params) => timeStampFormatter(params),
+  },
+    // {
+  //   field: "balance",
+  //   headerName: "Balance",
+  //   flex: 1,
+  //   headerAlign: "right",
+  //   align: "right",
+  // },
+  // {
+  //   field: "crDr",
+  //   headerName: "CR/DR",
+  //   flex: 1,
+  //   headerAlign: "center",
+  //   align: "center",
+  // },
+];
