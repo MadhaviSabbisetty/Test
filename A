@@ -297,3 +297,68 @@ public class AsciiFileController {
 
 
 
+
+
+package com.fincore.ReportService.entity;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+import lombok.Data;
+
+@Data
+@Entity
+@Table(name = "ASCII_MASTER")
+public class AsciiMaster {
+
+    @Id
+    @Column(name = "ID")
+    private Long id;
+
+    @Column(name = "REPORT_NAME")
+    private String reportName;
+
+    @Column(name = "LOCATION")
+    private String location;
+
+    @Column(name = "FREQUENCY")
+    private String frequency;
+}
+
+
+package com.fincore.ReportService.service;
+
+import org.apache.hadoop.fs.FileSystem;
+
+public interface HdfsService {
+
+    FileSystem getFs();
+}
+
+
+
+
+package com.fincore.ReportService.service.impl;
+
+import com.fincore.ReportService.service.HdfsService;
+
+import lombok.RequiredArgsConstructor;
+
+import org.apache.hadoop.fs.FileSystem;
+import org.springframework.stereotype.Service;
+
+@Service
+@RequiredArgsConstructor
+public class HdfsServiceImpl implements HdfsService {
+
+    private final FileSystem fileSystem;
+
+    @Override
+    public FileSystem getFs() {
+        return fileSystem;
+    }
+}
+
+
