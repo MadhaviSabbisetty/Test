@@ -1,303 +1,351 @@
-package com.tcs.fincore.report_service.dto;
+package com.fincore.ReportService.service;
 
-import lombok.Data;
-
-@Data
-public class AsciiFileRequest {
-
-    private String reportDate;
-    private String fileType;      // ysa,pnl,nwsa(cwp),nwsa(wk)
-    private String level;         // bank / branch
-    private String branchCode;    // only for branch
-}
-
-
-
-
-
-
-package com.tcs.fincore.report_service.dto;
-
-import lombok.AllArgsConstructor;
-import lombok.Data;
-
-@Data
-@AllArgsConstructor
-public class AsciiFileResponse {
-
-    private String fileName;
-    private String content;
-}
-
-
-
-
-
-package com.tcs.fincore.report_service.service;
-
-import com.tcs.fincore.report_service.dto.AsciiFileRequest;
-import com.tcs.fincore.report_service.dto.AsciiFileResponse;
-import org.springframework.core.io.Resource;
-
-public interface AsciiViewerService {
-
-    AsciiFileResponse viewFile(AsciiFileRequest request);
-
-    Resource downloadFile(AsciiFileRequest request);
-}
-
-
-
-
-package com.tcs.fincore.report_service.controller;
-
-import com.tcs.fincore.report_service.dto.AsciiFileRequest;
-import com.tcs.fincore.report_service.dto.AsciiFileResponse;
-import com.tcs.fincore.report_service.service.AsciiViewerService;
-
-import lombok.RequiredArgsConstructor;
-
-import org.springframework.core.io.Resource;
-import org.springframework.http.*;
-import org.springframework.web.bind.annotation.*;
-
-@RestController
-@RequestMapping("/ascii")
-@RequiredArgsConstructor
-public class AsciiViewerController {
-
-    private final AsciiViewerService service;
-
-    @PostMapping("/view")
-    public ResponseEntity<AsciiFileResponse> viewFile(
-            @RequestBody AsciiFileRequest request) {
-
-        return ResponseEntity.ok(service.viewFile(request));
-    }
-
-    @PostMapping("/download")
-    public ResponseEntity<Resource> downloadFile(
-            @RequestBody AsciiFileRequest request) {
-
-        Resource resource = service.downloadFile(request);
-
-        return ResponseEntity.ok()
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + resource.getFilename() + "\"")
-                .body(resource);
-    }
-}
-
-
-
-package com.tcs.fincore.report_service.service;
-
-import com.tcs.fincore.report_service.dto.AsciiFileRequest;
-import com.tcs.fincore.report_service.dto.AsciiFileResponse;
+import com.fincore.ReportService.dto.AsciiFileRequest;
+import com.fincore.ReportService.dto.AsciiFileResponse;
+import com.fincore.ReportService.dto.AsciiTypeResponse;
+import com.fincore.ReportService.dto.BranchResponse;
+import com.fincore.ReportService.model.AsciiMaster;
+import com.fincore.ReportService.model.BranchMaster;
+import com.fincore.ReportService.repository.AsciiMasterRepository;
+import com.fincore.ReportService.repository.BranchMasterRepository;
+import com.fincore.ReportService.service.AsciiFileService;
+import com.fincore.ReportService.service.HdfsService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.apache.hadoop.fs.*;
-import org.springframework.core.io.InputStreamResource;
-import org.springframework.core.io.Resource;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.*;
+
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class AsciiViewerServiceImpl implements AsciiViewerService {
+public class AsciiFileServiceImpl implements AsciiFileService {
+
+    private final AsciiMasterRepository asciiMasterRepository;
+
+    private final BranchMasterRepository branchMasterRepository;
 
     private final HdfsService hdfsService;
 
     @Override
-    public AsciiFileResponse viewFile(AsciiFileRequest request) {
+    public List<AsciiTypeResponse> getAsciiTypes(){
+
+        return asciiMasterRepository.findAll()
+            .stream()
+            .map(a->
+                    new AsciiTypeResponse(
+                        a.getId(),
+                        a.getReportName()
+                    ))
+                    .toList();
+    }
+
+
+    @Override
+    public List<BranchResponse> getBranches(){
+
+        return branchMasterRepository.findAll()
+            .stream()
+            .map(b->
+                    new BranchResponse(
+                        b.getCode(),
+                        b.getName()
+                    ))
+                    .toList();
+    }
+
+
+    @Override
+    public AsciiFileResponse viewAscii(AsciiFileRequest request) {
 
         try {
 
-            String filePath = buildFilePath(request);
+            log.info("ASCII VIEW REQUEST : {}", request);
 
-            log.info("Reading ASCII File : {}", filePath);
+            AsciiMaster master =
+                    asciiMasterRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new RuntimeException("Invalid ASCII ID:"+request.getId()));
+
+            String hdfsPath = buildFilePath(master, request);
+
+            log.info("FINAL HDFS PATH : {}", hdfsPath);
 
             FileSystem fs = hdfsService.getFs();
 
-            Path path = new Path(filePath);
+            Path path = new Path(hdfsPath);
+            log.info("checking file existence....");
 
-            if (!fs.exists(path)) {
-                throw new RuntimeException("File not found : " + filePath);
+            boolean fileExists=fs.exists(path);
+            log.info("file exists:{}",fileExists);
+
+            if(!fileExists){
+                AsciiFileResponse response=new AsciiFileResponse();
+                response.setId(request.getId());
+                response.setReportDate(request.getReportDate());
+                response.setSearchBy(request.getSearchBy());
+
+                if("branch".equalsIgnoreCase(request.getSearchBy())){
+                    response.setBranchCode(request.getBranchCode());
+                }
+                response.setContent("ASCII File not found");
+                return response;
+            // if (!fs.exists(path)) {
+               // throw new RuntimeException("ASCII File not found : " + hdfsPath);
             }
 
             StringBuilder content = new StringBuilder();
 
-            try (BufferedReader reader =
-                         new BufferedReader(
-                                 new InputStreamReader(
-                                         fs.open(path),
-                                         StandardCharsets.UTF_8))) {
+            try (FSDataInputStream inputStream = fs.open(path);
+                 BufferedReader reader =
+                         new BufferedReader(new InputStreamReader(inputStream))) {
 
                 String line;
 
                 while ((line = reader.readLine()) != null) {
                     content.append(line)
-                            .append(System.lineSeparator());
+                           .append(System.lineSeparator());
                 }
             }
 
-            return new AsciiFileResponse(
-                    path.getName(),
-                    content.toString());
+            AsciiFileResponse response = new AsciiFileResponse();
+
+            response.setId(request.getId());
+            response.setReportDate(request.getReportDate());
+            response.setSearchBy(request.getSearchBy());
+
+            if ("branch".equalsIgnoreCase(request.getSearchBy())) {
+                response.setBranchCode(request.getBranchCode());
+            }
+
+            response.setContent(content.toString());
+
+            return response;
 
         } catch (Exception e) {
 
-            log.error("Error reading ascii file", e);
+            log.error("Error while viewing ascii file", e);
+
             throw new RuntimeException(e.getMessage());
         }
     }
 
     @Override
-    public Resource downloadFile(AsciiFileRequest request) {
+    public ResponseEntity<byte[]> downloadAscii(AsciiFileRequest request) {
 
         try {
 
-            String filePath = buildFilePath(request);
+            AsciiMaster master =
+                    asciiMasterRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new RuntimeException("Ascii Master not found"));
+
+            String hdfsPath = buildFilePath(master, request);
 
             FileSystem fs = hdfsService.getFs();
 
-            Path path = new Path(filePath);
+            Path path = new Path(hdfsPath);
 
             if (!fs.exists(path)) {
-                throw new RuntimeException("File not found : " + filePath);
+                throw new RuntimeException("ASCII File not found");
             }
 
-            return new InputStreamResource(fs.open(path)) {
+            FSDataInputStream inputStream = fs.open(path);
 
-                @Override
-                public String getFilename() {
-                    return path.getName();
-                }
-            };
+            byte[] fileContent =
+                    inputStream.readAllBytes();
+
+            inputStream.close();
+
+            String fileName = path.getName();
+
+            return ResponseEntity.ok()
+                    .header(
+                            HttpHeaders.CONTENT_DISPOSITION,
+                            "attachment; filename=" + fileName)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(fileContent);
 
         } catch (Exception e) {
 
-            log.error("Download failed", e);
+            log.error("Error while downloading ascii file", e);
+
             throw new RuntimeException(e.getMessage());
         }
     }
 
-    private String buildFilePath(AsciiFileRequest request) {
-
-        String reportFolder;
-
-        switch (request.getFileType().toLowerCase()) {
-
-            case "ysa":
-                reportFolder = "ysa_report";
-                break;
-
-            case "pnl":
-                reportFolder = "pnl_report";
-                break;
-
-            case "nwsa(cwp)":
-            case "nwsa(wk)":
-                reportFolder = "nwsa_report";
-                break;
-
-            default:
-                throw new RuntimeException(
-                        "Unsupported file type : " + request.getFileType());
+    private String buildFilePath(
+            AsciiMaster master,
+            AsciiFileRequest request) {
+        
+        if
+        ("branch".equalsIgnoreCase(request.getSearchBy())
+        && (request.getBranchCode()==null 
+        || request.getBranchCode().isBlank())){
+            throw new RuntimeException("Branch code is mandatory for branch search");
         }
 
-        String branchCode;
+        String dateFolder = request.getReportDate();
 
-        if ("bank".equalsIgnoreCase(request.getLevel())) {
-
-            branchCode = "00000";
-
-        } else {
-
-            if (request.getBranchCode() == null
-                    || request.getBranchCode().isBlank()) {
-
-                throw new RuntimeException(
-                        "Branch code is mandatory");
-            }
-
-            branchCode = request.getBranchCode();
-        }
-
-        String date =
+        String fileDate =
                 request.getReportDate().replace("-", "");
+
+        String location =
+                master.getLocation()
+                        .replace("{date}", dateFolder);
+
+        String branchCode =
+                "bank".equalsIgnoreCase(request.getSearchBy())
+                        ? "00000"
+                        : request.getBranchCode();
+
+        log.info("report date:{}",dateFolder);
+        log.info("location:{}",location);
+        log.info("branch code:{}",branchCode);
+        
 
         String fileName;
 
-        switch (request.getFileType().toLowerCase()) {
+        switch (request.getId().intValue()) {
 
-            case "ysa":
-                fileName = branchCode + ".YSA." + date;
+            case 101:
+                fileName =
+                        branchCode + ".INR." +
+                                fileDate + ".CWP";
                 break;
 
-            case "pnl":
-                fileName = branchCode + ".PL." + date;
+            case 102:
+                fileName =
+                        branchCode + ".INR." +
+                                fileDate + ".WK";
                 break;
 
-            case "nwsa(cwp)":
-                fileName = branchCode + ".INR." + date + ".CWP";
+            case 103:
+                fileName =
+                        branchCode + ".YSA." +
+                                fileDate;
                 break;
 
-            case "nwsa(wk)":
-                fileName = branchCode + ".INR." + date + ".WK";
+            case 104:
+                fileName =
+                        branchCode + ".PL." +
+                                fileDate;
+                break;
+
+            case 105:
+                fileName =
+                        branchCode + ".TBY." +
+                                fileDate;
+                break;
+
+            case 106:
+                fileName =
+                        branchCode + ".TBP." +
+                                fileDate;
+                break;
+            
+            case 107:
+                fileName =
+                        branchCode + ".TBNWSA." +
+                                fileDate;
                 break;
 
             default:
-                throw new RuntimeException(
-                        "Unsupported file type");
+                throw new RuntimeException("Invalid ASCII ID");
+        }
+        log.info("file name:{}",fileName);
+        String  finalPath="/" + location + "/" + fileName;
+        log.info("final path: {}",finalPath);
+        return finalPath;
+
+        // return "/" + location + "/" + fileName;
+    }
+} 
+
+
+
+package com.fincore.ReportService.controller;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+
+import com.fincore.ReportService.dto.*;
+import com.fincore.commonutilities.jwt.JwtUtil;
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+
+import com.fincore.ReportService.service.AsciiFileService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/ascii")
+@RequiredArgsConstructor
+public class AsciiFileController {
+
+    private final AsciiFileService asciiFileService;
+
+    @GetMapping("/file-types")
+    public ResponseEntity<List<AsciiTypeResponse>> getAsciiTypes(){
+        return ResponseEntity.ok(
+            asciiFileService.getAsciiTypes()
+        );
+    }
+
+    @GetMapping("/branches")
+    public ResponseEntity<List<BranchResponse>> getBranches(){
+        return ResponseEntity.ok(
+            asciiFileService.getBranches()
+        );
+    }
+
+    @PostMapping("/view")
+    public ResponseEntity<ApiResponse<AsciiFileResponse>> viewAscii(
+            @RequestBody AsciiFileRequest request) {
+
+        AsciiFileResponse response =
+                asciiFileService.viewAscii(request);
+        
+        if("ASCII File not found".equals(response.getContent())){
+            return ResponseEntity.ok(
+                ApiResponse.success(response,"ASCII file not found")
+            );
         }
 
-        return "/reports/"
-                + request.getReportDate()
-                + "/ascii_files/"
-                + reportFolder
-                + "/"
-                + fileName;
+        return ResponseEntity.ok(
+                ApiResponse.success(response,"ASCII file fetched successfully")
+        );
+    }
+
+    @PostMapping("/download")
+    public ResponseEntity<byte[]> downloadAscii(
+            @RequestBody AsciiFileRequest request) {
+
+        return asciiFileService.downloadAscii(request);
     }
 }
-
-
-
-<dependency>
-    <groupId>org.apache.hadoop</groupId>
-    <artifactId>hadoop-common</artifactId>
-    <version>3.3.6</version>
-</dependency>
-
-<dependency>
-    <groupId>org.apache.hadoop</groupId>
-    <artifactId>hadoop-hdfs-client</artifactId>
-    <version>3.3.6</version>
-</dependency>
-
-
-
-{
-  "reportDate":"2026-03-31",
-  "fileType":"ysa",
-  "level":"bank"
-}
-
-
-{
-  "reportDate":"2026-03-31",
-  "fileType":"pnl",
-  "level":"branch",
-  "branchCode":"10101"
-}
-
-
-
-
