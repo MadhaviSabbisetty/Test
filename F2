@@ -1,492 +1,350 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { debounce } from "lodash";
-import useApi from "../../hooks/useApi";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import dayjs from "dayjs";
-import downloadFile from "../../utils/DownloadUtils";
-import FileDownloadIcon from "@mui/icons-material/FileDownload";
-import { Box, Paper, Typography, Stack } from "@mui/material";
-import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
-import { useSelector } from "react-redux"; 
-import { getPermissions } from "../../utils/CommonUtilities";
-import ManageSearchOutlinedIcon from "@mui/icons-material/ManageSearchOutlined";
-import LinearProgress from "@mui/material/LinearProgress";
-import CircularProgress from "@mui/material/CircularProgress";
+package com.fincore.ReportService.service;
 
-import BalanceFilters from "./components/BalanceFilters";
-import BalanceTable from "./components/BalanceTable";
-import {
-  ButtonBox,
-  StyledBox,
-  StyledButton,
-  StyledDataBox,
-  StyledFormHeader,
-} from "./components/BalanceStyles";
+import com.fincore.ReportService.dto.AsciiFileRequest;
+import com.fincore.ReportService.dto.AsciiFileResponse;
+import com.fincore.ReportService.dto.AsciiTypeResponse;
+import com.fincore.ReportService.dto.BranchResponse;
+import com.fincore.ReportService.model.AsciiMaster;
+import com.fincore.ReportService.model.AsciiConfig;
+import com.fincore.ReportService.model.AsciiConfigTb;
+// import com.fincore.ReportService.model.BranchMaster;
+import com.fincore.ReportService.repository.AsciiMasterRepository;
+import com.fincore.ReportService.repository.AsciiConfigRepository;
+import com.fincore.ReportService.repository.AsciiConfigTbRepository;
+// import com.fincore.ReportService.repository.BranchMasterRepository;
+import com.fincore.ReportService.service.AsciiFileService;
+import com.fincore.ReportService.service.HdfsService;
 
-export default function BalanceEnquiryScreen() {
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
-  const user = useSelector((state) => state.auth.user);
-  console.log(user);
-  console.log(user.branch);
-  const selectedMenu = useSelector((state) => state.menus.selectedMenuItem);
-  console.log(selectedMenu)
-  const permissions = getPermissions(selectedMenu);
-  console.log(permissions)
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
-  const [data, setData] = useState(null);
-  const [branches, setBranches] = useState([]);
-  const [cgls, setCgls] = useState([]);
-  const [currencies, setCurrencies] = useState([]);
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
 
-  const [mode, setMode] = useState("datewise");
-  const [start, setStart] = useState(null);
-  const [end, setEnd] = useState(null);
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
-  const [currency, setCurrency] = useState();
-  const [cgl, setCgl] = useState(null);
-  const [branch, setBranch] = useState(user?.isCircle ===false?`${user.branch}-${user.branchName}`:"");
 
-  const [etlDate, setEtlDate] = useState(null);
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class AsciiFileServiceImpl implements AsciiFileService {
 
-  const [exportLoading , setExportLoading] = useState(false);
-  const [searchLoading ,setSearchLoading] =useState(false);
+    private final AsciiMasterRepository asciiMasterRepository;
 
-  const [loading, setLoading] = useState({
-    branch: false,
-    cgl: false,
-    currency: false,
-    balance: false,
-  });
+    // private final BranchMasterRepository branchMasterRepository;
 
-  const [rowCount, setRowCount] = useState(200);
+    private final AsciiConfigRepository asciiConfigRepository;
 
-  const [req, setReq] = useState({
-    branch: true,
-    cgl: true,
-  });
+    private final AsciiConfigTbRepository asciiConfigTbRepository;
 
-  const [filtersExpanded, setFiltersExpanded] = useState(true);
+    private final HdfsService hdfsService;
 
-  const [fetchConf, setFetchConf] = useState({
-    page: 0,
-    pageSize: 25,
-    sortByDate: true,
-  });
+    @Override
+    public List<AsciiTypeResponse> getAsciiTypes(){
 
-  const isNumeric = (value) => {
-    if (value) {
-      const regex = /^\d+$/;
-      return regex.test(value);
+        // return asciiMasterRepository.findAll()
+        log.info("API called - into service");
+        List<AsciiTypeResponse> response=asciiMasterRepository.findAll()
+            .stream()
+            .map(a->
+                    new AsciiTypeResponse(
+                        a.getId(),
+                        a.getReportName()
+                    ))
+                    .toList();
+                    if(response.isEmpty()){
+                        throw new IllegalArgumentException("No ASCII file types found");
+                    }
+                    return response;
     }
-    return false;
-  };
 
-  const fetchBalance = useCallback(
-    debounce(async (configOverride) => {
-      try {
-        setLoading((prev) => ({ ...prev, balance: true }));
 
-        const matched = branch?.match(/^(\d{5})-/);
-        if (!matched) return;
+    // @Override
+    // public List<BranchResponse> getBranches(){
 
-        const effectiveConfig = configOverride || fetchConf;
+    //     List<BranchResponse> response= branchMasterRepository.findAll()
+    //         .stream()
+    //         .map(b->
+    //                 new BranchResponse(
+    //                     b.getCode(),
+    //                     b.getName()
+    //                 ))
+    //                 .toList();
+    //                 if(response.isEmpty()){
+    //                     throw new IllegalArgumentException("No Branches found");
+    //                 }
+    //                 return response;
+    // }
 
-        const payload = {
-          currency,
-          cgl: cgl?.split(" - ")[0],
-          branch: matched[1],
-          startDate: start.format("DD-MM-YYYY"),
-          endDate: end.format("DD-MM-YYYY"),
-          page: effectiveConfig.page,
-          size: effectiveConfig.pageSize,
-        };
 
-        if (effectiveConfig.sortByDate) {
-          payload.sortIn = "DESC";
+    @Override
+    public AsciiFileResponse viewAscii(AsciiFileRequest request) {
+
+        try {
+
+            log.info("ASCII VIEW REQUEST : {}", request);
+
+            AsciiMaster master =
+                    asciiMasterRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException("Invalid ASCII ID"));
+
+            String hdfsPath = buildFilePath(master, request);
+
+            log.info("FINAL HDFS PATH : {}", hdfsPath);
+
+            FileSystem fs = hdfsService.getFs();
+
+            Path path = new Path(hdfsPath);
+            log.info("checking file existence....");
+
+            boolean fileExists=fs.exists(path);
+            log.info("file exists:{}",fileExists);
+
+            // if(!fileExists){
+            //     AsciiFileResponse response=new AsciiFileResponse();
+            //     response.setId(request.getId());
+            //     response.setReportDate(request.getReportDate());
+            //     response.setSearchBy(request.getSearchBy());
+
+            //     if("branch".equalsIgnoreCase(request.getSearchBy())){
+            //         response.setBranchCode(request.getBranchCode());
+            //     }
+            //     response.setContent("ASCII File not found");
+            //     return response;
+            if (!fs.exists(path)) {
+               throw new IllegalArgumentException("ASCII File not found");
+            }
+
+            StringBuilder content = new StringBuilder();
+
+            try (FSDataInputStream inputStream = fs.open(path);
+                 BufferedReader reader =
+                         new BufferedReader(new InputStreamReader(inputStream))) {
+
+                String line;
+
+                while ((line = reader.readLine()) != null) {
+                    content.append(line)
+                           .append(System.lineSeparator());
+                }
+            }
+
+            AsciiFileResponse response = new AsciiFileResponse();
+
+            response.setId(request.getId());
+            response.setReportDate(request.getReportDate());
+            response.setSearchBy(request.getSearchBy());
+
+            if ("branch".equalsIgnoreCase(request.getSearchBy())) {
+                response.setBranchCode(request.getBranchCode());
+            }
+
+            response.setContent(content.toString());
+
+            return response;
+
+        } catch (Exception e) {
+
+            log.error("Error while viewing ascii file", e);
+
+            throw new IllegalArgumentException(e.getMessage());
+        }
+    }
+
+    @Override
+    public ResponseEntity<byte[]> downloadAscii(AsciiFileRequest request) {
+
+        try {
+
+            AsciiMaster master =
+                    asciiMasterRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException("Invalid ASCII ID"));
+
+            String hdfsPath = buildFilePath(master, request);
+
+            FileSystem fs = hdfsService.getFs();
+
+            Path path = new Path(hdfsPath);
+
+            if (!fs.exists(path)) {
+                throw new IllegalArgumentException("Failed to download. ASCII File not found");
+            }
+
+            FSDataInputStream inputStream = fs.open(path);
+
+            byte[] fileContent =
+                    inputStream.readAllBytes();
+
+            inputStream.close();
+
+            String fileName = path.getName();
+
+            return ResponseEntity.ok()
+                    .header(
+                            HttpHeaders.CONTENT_DISPOSITION,
+                            "attachment; filename=" + fileName)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(fileContent);
+
+        } catch (Exception e) {
+
+            log.error("Error while downloading ascii file", e);
+
+            throw new IllegalArgumentException(e.getMessage());
+        }
+    }
+
+    private String buildFilePath(
+            AsciiMaster master,
+            AsciiFileRequest request) {
+        
+        if
+        ("branch".equalsIgnoreCase(request.getSearchBy())
+        && (request.getBranchCode()==null 
+        || request.getBranchCode().isBlank())){
+            throw new IllegalArgumentException("Branch code is mandatory for branch search");
         }
 
-        const result = await callApi("/ES/balance/enquires", payload, "POST");
+        String dateFolder = request.getReportDate();
 
-        if (result?.data?.data?.length > 0) {
-          setData(result.data.data);
-          setRowCount(result.data.totalElements);
-          setFiltersExpanded(false);
-        } else {
-          setData([]);
-          setRowCount(0);
+        String fileDate =
+                request.getReportDate().replace("-", "");
+
+        String location =
+                master.getLocation()
+                        .replace("{date}", dateFolder);
+
+        String branchCode =
+                "bank".equalsIgnoreCase(request.getSearchBy())
+                        ? "00000"
+                        : request.getBranchCode();
+
+        log.info("report date:{}",dateFolder);
+        log.info("location:{}",location);
+        log.info("branch code:{}",branchCode);
+        
+
+        String fileName;
+
+        if (request.getId() >= 101 && request.getId() <= 104) {
+
+            AsciiConfig config =
+                    asciiConfigRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException(
+                                            "ASCII Config not found"));
+
+            if (config.getFileType() != null &&
+                    !config.getFileType().isBlank()) {
+
+                fileName =
+                        branchCode +
+                        "." +
+                        config.getOutputFileName() +
+                        "." +
+                        fileDate +
+                        "." +
+                        config.getFileType();
+            }
+            else {
+
+                fileName =
+                        branchCode +
+                        "." +
+                        config.getOutputFileName() +
+                        "." +
+                        fileDate;
+            }
+
         }
-      } catch (e) {
-        setData([]);
-        setRowCount(0);
-        showSnackBar("No records found");
-      } finally {
-        setLoading((prev) => ({ ...prev, balance: false }));
-        setSearchLoading(false);
-      }
-    }, 300),
-    [callApi, branch, currency, cgl, start, end, fetchConf],
-  );
+        else if (request.getId() >= 105 && request.getId() <= 107) {
 
-  const fetchCurrencies = async () => {
-  setLoading((prev) => ({ ...prev, currency: true }));
-  try {
-    const result = await callApi("/CM/common-master/currency-code-name-only", null, "GET");
-    
-    const sortedData = (result?.data || []).sort((a, b) => {
-      if (a.currencyCode === "INR") return -1;
-      if (b.currencyCode === "INR") return 1;
+            AsciiConfigTb configTb =
+                    asciiConfigTbRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException(
+                                            "ASCII Config TB not found"));
 
-      return a.currencyName.localeCompare(b.currencyName);
-  });
-    
-    setCurrencies(sortedData);
-  } catch {
-    showSnackBar("Currency data not available");
-  } finally {
-    setLoading((prev) => ({ ...prev, currency: false }));
-  }
-};
-
-  const handleDownloadExcel = async () => {
-    try {
-      setExportLoading(true);
-      const payload = {
-        currency: currency,
-        cgl: cgl?.split(" - ")[0],
-        branch: branch.split("-")[0],
-        startDate:
-          mode === "datewise"
-            ? start.format("DD-MM-YYYY")
-            : dayjs(start).format("DD-MM-YYYY"),
-        endDate:
-          mode === "datewise"
-            ? end.format("DD-MM-YYYY")
-            : dayjs(end).format("DD-MM-YYYY"),
-      };
-
-      const downloadResponse = await callApi(
-        "/ES/balance/export",
-        payload,
-        "POST",
-        "arraybuffer",
-      );
-      if (downloadResponse && downloadResponse?.byteLength > 0) {
-        downloadFile(downloadResponse, "excel", "Balance_Enquiry");
-        return;
-      }
-    } catch (error) {
-      console.error("Something Went Wrong!!", error);
-      showSnackBar("Download Failed");
-    } finally {
-      setExportLoading(false);
-    }
-  };
-
-  const fetchSearchData = useCallback(async (type, term) => {
-    try {
-      setLoading((prev) => ({ ...prev, [type]: true }));
-
-      // Permissions logic for Circle/WholeBank
-      let circleValue = "";
-      if (permissions?.wholebank === true) {
-        circleValue = "null";
-      } else if (user?.isCircle === true || permissions?.circle) {
-        circleValue = user?.circleCode;
-      }
-
-      const url =
-        type === "branch"
-          ? `/CM/common-master/branches-code-name-only?q=${encodeURIComponent(term)}&circleCode=${circleValue || ""}`
-          : `/CM/common-master/cgl-code-description-only?q=${encodeURIComponent(term)}`;
-
-      const result = await callApi(url, null, "GET");
-
-      if (result?.data?.length > 0) {
-        if (type === "branch") {
-          setBranches(result.data.map((i) => `${i.code}-${i.name}`));
-        } else {
-          setCgls(result.data.map((i) => `${i.cglNumber} - ${i.description}`));
+            fileName =
+                    branchCode +
+                    "." +
+                    configTb.getFileIdentifier() +
+                    "." +
+                    fileDate;
         }
-      } else {
-        showSnackBar("Data not available");
-      }               
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading((prev) => ({ ...prev, [type]: false }));
-    }
-  }, [callApi, permissions, user]);
+        else {
 
-    const handleSearchChange = (value, reason, type) => {
-    if (reason === "input") {
-      // Fires instantly as soon as the 3rd character is typed
-      if (value?.length >= 3) {
-        fetchSearchData(type, value);
-      }
-    } else if (reason === "clear") {
-      // Optional: Clear the options when the user clears the input
-      if (type === "branch") setBranches([]);
-      if (type === "cgl") setCgls([]);
-    }
-  };
+            throw new IllegalArgumentException(
+                    "Invalid ASCII ID");
+        }
 
-  const handleSubmit = () => {
-    setSearchLoading(true);
-  setData(null);
-  fetchBalance();
-};
+        // switch (request.getId().intValue()) {
 
-  const resetState = () => {
-    setData(null);
-    setCgl(null);
-    setCgls([]);
-    setBranch(null);
-    setCurrency(null);
-    setCurrencies([]);
-    setStart(null);
-    setEnd(null);
-    setBranches([]);
-    setFetchConf({
-      page: 0,
-      pageSize: 10,
-      sortByDate: true,
-    });
-  };
+        //     case 101:
+        //         fileName =
+        //                 branchCode + ".INR." +
+        //                         fileDate + ".CWP";
+        //         break;
+        //     fileName=branchCode+"."+output_file_name+"."+fileDate+"."+file_type
 
-  useEffect(() => {
-    if (data) {
-      fetchBalance();
-    }
-  }, [fetchConf]);
+        //     case 102:
+        //         fileName =
+        //                 branchCode + ".INR." +
+        //                         fileDate + ".WK";
+        //         break;
 
-  useEffect(() => {
-  const fetchSystemDate = async () => {
-    try {
-      const dateRes = await callApi("/PS/file/fincore-date", {}, "GET");
-      const etlRaw = dateRes?.data?.userDate;
-      
-      // Parse ISO and strip time
-      const etl = etlRaw ? dayjs(etlRaw.split("T")[0]) : dayjs();
-      // const march31 = dayjs("2026-03-31");
+        //     case 103:
+        //         fileName =
+        //                 branchCode + ".YSA." +
+        //                         fileDate;
+        //         break;
 
-      setEtlDate(etl);
-      
-      // Set defaults
-      // setStart(march31);
-      // setEnd(etl);
-    } catch (e) {
-      console.error("Date error:", e);
-      setEtlDate(dayjs());
-    }
-  };
-  fetchSystemDate();
-}, [callApi]);
+        //     case 104:
+        //         fileName =
+        //                 branchCode + ".PL." +
+        //                         fileDate;
+        //         break;
 
+        //     case 105:
+        //         fileName =
+        //                 branchCode + ".TBY." +
+        //                         fileDate;
+        //         break;
 
-  return (
-    <>
-      <Box sx={{ p: 1 }}>
-        <Paper  
-          elevation={0}
-          sx={{
-            p:2,
-            mt:-2,
-            mb: 3,
-            bgcolor: "rgba(255, 255, 255, 0.4)",
-            backdropFilter: "blur(4px)",
-            border: "1px solid",
-            borderColor: "divider",
-            borderRadius: 3,
-          }}
-        >
-          <Box
-            sx={{
-              mb: filtersExpanded ? 1 : 0.5,
-              p: 1.2,
-              borderRadius: 2,
-              bgcolor: "background.paper",
-              boxShadow: 2,
-              borderLeft: "6px solid",
-              borderColor: "primary.main",
-            }}
-          >
-            <Stack direction="row" alignItems="center" justifyContent="space-between">
-              <Stack direction="row" spacing={2} alignItems="center">
-              <AccountBalanceIcon color="primary" fontSize="large" />
+        //         fileName=branchCode+"."+file_identifier+"."+fileDate
 
-              <Box>
-                <Typography variant="subtitle1" fontWeight={700} lineHeight={1.2}>
-                  Balance Search & Records Enquiry
-                </Typography>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 0.2 }}
-                >
-                  Enter the required details below to retrieve and view Balance
-                  records.
-                </Typography>
-              </Box>
-              </Stack>
-
-               {data && (
-            <StyledButton
-              variant="contained"
-              // size="small"
-              startIcon={<ManageSearchOutlinedIcon />}
-              onClick={() =>
-                setFiltersExpanded((prev) => !prev)
-              }
-              sx={{
-                    textTransform: "none",
-                    borderRadius: "8px",
-                    fontWeight: 600,
-                    minWidth: "70px",
-                    height:"30px",
-                    px:1.2,
-                    fontSize:"0.82rem"
-                  }}
-            >
-              {filtersExpanded
-                    ? "Hide Filters"
-                    : "Edit Search"}
-            </StyledButton>
-          )}
-            </Stack>
+        //     case 106:
+        //         fileName =
+        //                 branchCode + ".TBP." +
+        //                         fileDate;
+        //         break;
             
-          </Box>
-          {data && !filtersExpanded && (
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{
-              mt: 2,
-              mb: 1,
-              flexWrap: "wrap",
-            }}
-          >
-            {[
-              {
-                value: `Branch: ${branch}`,
-              },
-              {
-                value: `Currency: ${currency}`,
-              },
-              {
-                value: `Cgl: ${cgl}`,
-              },
-              {
-                value: `Date : ${dayjs(start).format(
-                  "DD MMM YYYY"
-                )} - ${dayjs(end).format(
-                  "DD MMM YYYY"
-                )}`,
-              },
-            ]
-              .filter((item) => item.value)
-              .map((item, index) => (
-                <Box
-                  key={index}
-                  sx={{
-                      px: 1.5,
-                      py: 0.45,
-                      borderRadius: "20px",
-                      bgcolor:
-                        "rgba(88, 70, 159, 0.08)",
-                      border:
-                        "1px solid rgba(88, 70, 159, 0.36)",
-                      fontSize: "0.72rem",
-                      fontWeight: 500,
-                    }}
-                >
-                  {/* <Typography
-                    sx={{
-                      fontSize: "8px",
-                      fontWeight: 700,
-                      color: "#7b6ba8",
-                      letterSpacing: "1px",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {item.label}
-                  </Typography> */}
+        //     case 107:
+        //         fileName =
+        //                 branchCode + ".TBNWSA." +
+        //                         fileDate;
+        //         break;
 
-                  <Typography
-                    sx={{
-                      fontSize: "0.72rem",
-                      fontWeight: 500,
-                      color: "#58469f",
-                    }}
-                  >
-                    {item.value}
-                  </Typography>
-                </Box>
-              ))}
-          </Stack>
-        )}
+        //     default:
+        //         throw new IllegalArgumentException("Invalid ASCII ID");
+        // }
+        log.info("file name:{}",fileName);
+        String  finalPath="/" + location + "/" + fileName;
+        log.info("final path: {}",finalPath);
+        return finalPath;
 
- {/* FILTERS */}
-          {filtersExpanded && (
-            <>
-            {searchLoading &&  (
-              <LinearProgress
-              sx={{height:3,
-                borderRadius:999,
-                mb:2,
-                bgcolor:"rgba(88,70,159,0.08)",
-                "& .MuiLinearProgress-bar":{
-                  bgcolor:"#58469f",
-                },
-              }}
-              />
-            )}
-  <BalanceFilters
-            branch={branch}
-            setBranch={setBranch}
-            currency={currency}
-            setCurrency={setCurrency}
-            cgl={cgl}
-            setCgl={setCgl}
-            start={start}
-            setStart={setStart}
-            end={end}
-            setEnd={setEnd}
-            mode={mode}
-            setMode={setMode}
-            currencies={currencies}
-            branches={branches}
-            cgls={cgls}
-            loading={loading}
-            req={req}
-            handleSearchChange={handleSearchChange}
-            fetchCurrencies={fetchCurrencies}
-            handleSubmit={handleSubmit}
-            resetState={resetState}
-            isNumeric={isNumeric}
-            user={user}
-            permissions={permissions}
-            etlDate={etlDate}
-          />
-          </>
-        )}
-        </Paper>
+        // return "/" + location + "/" + fileName;
+    }
+} 
 
-        {data && (
-          <StyledDataBox>
-            <BalanceTable
-              data={data}
-              loading={loading.balance}
-              rowCount={rowCount}
-              fetchConf={fetchConf}
-              setFetchConf={setFetchConf}
-              handleDownloadExcel={handleDownloadExcel}
-              exportLoading={exportLoading}
-            />
-          </StyledDataBox>
-        )}
-      </Box>
-    </>
-  );
-}
