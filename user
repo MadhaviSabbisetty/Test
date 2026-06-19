@@ -1,0 +1,972 @@
+package com.tcs.userservice.service;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tcs.userservice.ResponseVO;
+import com.tcs.userservice.dto.*;
+import com.tcs.userservice.exception.ResourceNotFoundException;
+import com.tcs.userservice.model.User;
+import com.tcs.userservice.model.UserRequest;
+import com.tcs.userservice.model.UserRole;
+import com.tcs.userservice.repository.RoleRepository;
+import com.tcs.userservice.repository.UserRepository;
+import com.tcs.userservice.repository.UserRequestRepository;
+import com.tcs.userservice.repository.UserRoleRepository;
+import com.tcs.userservice.utility.ClobUtil;
+import com.tcs.userservice.utility.Constant;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class UserRequestServiceImpl implements UserRequestService {
+
+    private static final String EVENT_SOURCE = "USER_SERVICE";
+    private static final String REQUEST_TYPE_KEY = "USER_MANAGEMENT";
+    private static final int RESTRICTED_F1_ROLE_ID = 11;
+    private final UserRequestRepository userRequestRepository;
+    private final AdAuthenticationService adAuthenticationService;
+    private final UserRepository userRepository;
+    private final UserRoleRepository userRoleRepository;
+    private final ObjectMapper objectMapper;
+    private final NotificationWriterService notificationWriterService;
+    private final PermissionConfigService permissionConfigService;
+    private final RoleRepository roleRepository;
+
+    @Override
+    @Transactional
+    public ResponseEntity<ResponseVO<Map<String, Object>>> createNewRequest(UserRequestCreateDto dto, String userId) {
+        String targetUserId = dto.getTargetUserId();
+        String requestType = dto.getRequestType();
+        UserPayloadDto payload = dto.getRequestPayload();
+
+        // 1. Mandatory & Format Validations
+        if (targetUserId == null || targetUserId.trim().isEmpty()) {
+            throw new IllegalArgumentException("User Id is mandatory");
+        }
+
+        if (isInvalidUserId(targetUserId)) {
+            throw new IllegalArgumentException("Invalid User Id format.");
+        }
+
+        // 2. AD Server Checks
+        if (adAuthenticationService.checkIfUserAbsent(targetUserId)) {
+            throw new IllegalStateException("User ID does not exist in AD Server!"); // Map to 409 or 400
+        }
+
+        // 3. Conflict & State Checks
+        if (userRequestRepository.countUserPendingRequests(targetUserId) > 0) {
+            throw new IllegalStateException("A pending request already exists for this User ID.");
+        }
+
+        User existingUser = userRepository.findUserByUserId(targetUserId);
+
+        // Case: Create but User already exists
+        if (Constant.CREATE.equalsIgnoreCase(requestType) && existingUser != null) {
+            throw new IllegalStateException("User already exists in the system.");
+        }
+
+        // Case: Action on non-existent user (Modify/Lock/Delete/etc)
+        if (!Constant.CREATE.equalsIgnoreCase(requestType) && existingUser == null) {
+            throw new ResourceNotFoundException("User does not exist.");
+        }
+
+        // Case: Delete validation from old code
+        if (Constant.DELETE.equalsIgnoreCase(requestType) && existingUser != null && "Y".equalsIgnoreCase(String.valueOf(existingUser.getIsDeleted()))) {
+            throw new IllegalStateException("User is already deleted.");
+        }
+
+        // 4. AD Email Match Check
+        if (adAuthenticationService.checkIfUserEmailInvalid(targetUserId, payload.getEmail())) {
+            throw new IllegalStateException("User ID and Email combination mismatch with AD Server!");
+        }
+
+        // 5. Role Validation
+        int roleId = payload.getRoleId();
+        if (!roleRepository.existsById(roleId)) {
+            throw new ResourceNotFoundException("Role does not exist in the database.");
+        }
+
+        // 6. Advanced Business Logic (F1/BOG Constraints)
+        validateF1BogConstraints(requestType, payload, existingUser);
+
+        // 7. Entity Creation & Persistence
+        UserRequest request = new UserRequest();
+        request.setRequestType(requestType);
+        request.setTargetUserId(targetUserId);
+        request.setRequestorUserId(userId);
+        request.setRequestStatus(Constant.PENDING);
+        request.setRequestDate(LocalDateTime.now(ZoneId.of("Asia/Kolkata")));
+        try {
+            request.setRequestPayload(objectMapper.writeValueAsString(payload));
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Error processing payload");
+        }
+
+        UserRequest saved = userRequestRepository.save(request);
+
+        // 8. Notification Logic
+        String notifMsg = String.format("New User Request (id: %s) for user %s (%s) is pending approval.", saved.getRequestId(),
+                saved.getTargetUserId(), saved.getRequestType());
+
+        NotificationConfigDto config = permissionConfigService.getConfig(REQUEST_TYPE_KEY);
+
+        createNotification(saved.getRequestorUserId(), config.getTargetRoles(), config.getTargetUrl(), notifMsg, String.valueOf(saved.getRequestId()));
+
+        // 9. Success Response
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                ResponseVO.<Map<String, Object>>builder()
+                        .statusCode(HttpStatus.CREATED)
+                        .message("Request Created Successfully")
+                        .result(Map.of("userRequest", saved))
+                        .build());
+    }
+
+    @Override
+    public ResponseEntity<ResponseVO<Map<String, Object>>> getPendingRequests(Map<String, Object> params, String userId) {
+        List<UserRequestProjection> rawList = userRequestRepository.findUserPendingRequests(userId);
+        return processProjections(rawList, "pendingRequests");
+    }
+
+    private ResponseEntity<ResponseVO<Map<String, Object>>> processProjections(List<UserRequestProjection> rawList, String key) {
+        List<Map<String, Object>> processed = rawList.stream().map(req -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("requestId", req.getRequestId());
+            map.put("requestType", req.getRequestType());
+            map.put("targetUserId", req.getTargetUserId());
+            map.put("requestStatus", req.getRequestStatus());
+            map.put("requestDate", formatTimestamp(req.getRequestDate()));
+            map.put("requestPayload", ClobUtil.clobToString(req.getRequestPayload()));
+            log.info("approverId id : {}", req.getApprovalDate());
+            map.put("requestorUserId", req.getRequestorUserId());
+            map.put("approverId", req.getApproverUserId());
+            map.put("approvalDate", formatTimestamp(req.getApprovalDate()));
+            map.put("rejectionReason", req.getReasonForRejection());
+            return map;
+        }).toList();
+
+        return ResponseEntity.ok(ResponseVO.<Map<String, Object>>builder().statusCode(HttpStatus.OK).result(Map.of(key, processed)).build());
+    }
+
+    // Format: "yyyy-MM-dd'T'HH:mm:ss.SSS" (No 'Z' or offset)
+    private String formatTimestamp(Timestamp ts) {
+        if (ts == null) return null;
+        return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS").format(ts);
+    }
+
+    @Override
+    @Transactional
+    public ResponseEntity<ResponseVO<Map<String, Object>>> acceptOrRejectUserRequest(UserRequestDto dto, String ipAddress, String userId) {
+
+        UserRequest request = userRequestRepository.findUserRequestsByRequestId(dto.getRequestId());
+        request.setApproverUserId(userId);
+        request.setApprovalDate(LocalDateTime.now(ZoneId.of("Asia/Kolkata")));
+
+        // set values to dto for logging purpose
+        dto.setRequesterUserId(request.getRequestorUserId());
+        dto.setRequestType(request.getRequestType());
+
+        Map<String, Object> result = new HashMap<>();
+        String action = dto.getActionFlag();
+
+        boolean isApproved = Constant.ACCEPT.equalsIgnoreCase(action) || Constant.APPROVE.equalsIgnoreCase(action);
+
+        if (isApproved) {
+            try {
+                String jsonPayload = ClobUtil.clobToString(request.getRequestPayload());
+                Map<String, Object> payloadMap = objectMapper.readValue(jsonPayload, new TypeReference<>() {
+                });
+
+                // check in ad only for accept case, if not present in ad then reject the request.
+                if (adAuthenticationService.checkIfUserAbsent(userId)) {
+                    throw new IllegalArgumentException("User ID does not exist in AD Server!");
+                }
+
+                if (adAuthenticationService.checkIfUserEmailInvalid(request.getTargetUserId(), (String) payloadMap.get("email"))) {
+                    throw new IllegalArgumentException("User ID and Email combination does not match with the AD Server data!");
+                }
+
+                handleAccept(request, payloadMap, result, dto, ipAddress);
+            } catch (JsonProcessingException e) {
+                throw new IllegalArgumentException("Error while processing request payload data.");
+            }
+        } else {
+            request.setRequestStatus(Constant.REJECTED);
+            request.setReasonForRejection(dto.getRemarks() != null ? dto.getRemarks() : "NO REMARKS");
+            request.setExecutionDate(LocalDateTime.now(ZoneId.of("Asia/Kolkata")));
+            request.setExecutionDetails("SUCCESS");
+            userRequestRepository.save(request);
+            result.put("status", true);
+            result.put("message", "Rejected");
+        }
+
+        boolean success = (boolean) result.get("status");
+        if (success && isApproved) {
+            request.setRequestStatus(Constant.ACCEPTED);
+            request.setExecutionDate(LocalDateTime.now(ZoneId.of("Asia/Kolkata")));
+            request.setExecutionDetails("SUCCESS");
+            userRequestRepository.save(request);
+        }
+
+        // Notification (To Requestor)
+        // Msg: "Your User Request (ID: 123) for User 1015698 has been ACCEPTED."
+        // Or: "Your User Request (ID: 123) ... has been REJECTED. Reason: ..."
+        String status = isApproved ? "ACCEPTED" : "REJECTED";
+        String notifMsg = String.format("Your Request (ID: %s) for User %s has been %s.", request.getRequestId(), request.getTargetUserId(), status.toLowerCase());
+
+        if (!isApproved && dto.getRemarks() != null && !dto.getRemarks().isEmpty()) {
+            notifMsg += " Reason: " + dto.getRemarks();
+        }
+
+        // Pass requestorUserId to target specifically the maker
+        createNotification(request.getRequestorUserId(), null, "/user-management/create", notifMsg, String.valueOf(request.getRequestId()));
+
+        return ResponseEntity.ok(ResponseVO.<Map<String, Object>>builder().statusCode(HttpStatus.OK).result(result).build());
+    }
+
+    private void handleAccept(UserRequest request, Map<String, Object> payloadMap, Map<String, Object> result, UserRequestDto dto, String ip) {
+        User user = userRepository.findUserByUserId(request.getTargetUserId());
+        String type = request.getRequestType();
+
+        // 2. Validate existence based on Type
+        if (Constant.CREATE.equalsIgnoreCase(type)) {
+            if (user != null) {
+                throw new IllegalStateException("User with ID " + request.getTargetUserId() + " already exists.");
+            }
+            user = new User();
+            user.setCreatedAt(LocalDateTime.now(ZoneId.of("Asia/Kolkata")));
+            user.setAccountStatus(Constant.ACTIVE);
+            user.setIsDeleted('N');
+            user.setUserWrongPasswordCount(0);
+        } else {
+            if (user == null) {
+                throw new ResourceNotFoundException("User not found with ID: " + request.getTargetUserId());
+            }
+        }
+
+        // 2. Map Fields (Create/Modify)
+        if (Constant.CREATE.equalsIgnoreCase(type) || Constant.MODIFY.equalsIgnoreCase(type)) {
+            user.setUserId(request.getTargetUserId());
+
+            // Map all common fields safely
+            if (payloadMap.containsKey("firstName")) user.setFirstName((String) payloadMap.get("firstName"));
+            if (payloadMap.containsKey("middleName")) user.setMiddleName((String) payloadMap.get("middleName"));
+            if (payloadMap.containsKey("lastName")) user.setLastName((String) payloadMap.get("lastName"));
+            if (payloadMap.containsKey("email")) user.setEmail((String) payloadMap.get("email"));
+
+            // ========== Phone number can be null ===========
+            String phone = (String) payloadMap.get("phoneNumber");
+            user.setPhoneNumber(phone != null ? phone.trim() : "");
+
+            // Branch mapping
+            if (payloadMap.get("branch") != null) {
+                user.setBranch(Integer.parseInt(String.valueOf(payloadMap.get("branch"))));
+            }
+
+            user.setUpdatedAt(LocalDateTime.now(ZoneId.of("Asia/Kolkata")));
+            userRepository.save(user);
+
+            // Role mapping
+            if (payloadMap.get("roleId") != null) {
+                UserRole ur = userRoleRepository.getUserRolesByUserId(user.getUserId());
+                if (ur == null) ur = new UserRole();
+                ur.setUserId(user.getUserId());
+                ur.setRoleId(Integer.parseInt(String.valueOf(payloadMap.get("roleId"))));
+                userRoleRepository.save(ur);
+            }
+
+//            // Update User Role linkage
+//            if (payloadMap.containsKey("roleId")) {
+//                UserRole ur = userRoleRepository.getUserRolesByUserId(user.getUserId());
+//                if (ur == null) ur = new UserRole();
+//                ur.setUserId(user.getUserId());
+//                ur.setRoleId(Integer.parseInt(String.valueOf(payloadMap.get("roleId"))));
+//                userRoleRepository.save(ur);
+//            }
+
+        } else if (Constant.LOCK.equalsIgnoreCase(type)) {
+            user.setAccountStatus(Constant.LOCKED);
+            user.setUpdatedAt(LocalDateTime.now(ZoneId.of("Asia/Kolkata"))); // Fix for Lock
+            userRepository.save(user);
+        } else if (Constant.UNLOCK.equalsIgnoreCase(type)) {
+            user.setAccountStatus(Constant.ACTIVE);
+            user.setUpdatedAt(LocalDateTime.now(ZoneId.of("Asia/Kolkata"))); // Fix for Unlock
+            userRepository.save(user);
+        } else if (Constant.DELETE.equalsIgnoreCase(type)) {
+            userRepository.deleteById(user.getUserId());
+            log.info("User Id {} Deleted Permanently.", user.getUserId());
+        }
+
+        // 4. Success State (Only reached if no exception thrown)
+        result.put("status", true);
+        result.put("message", "User Updated Successfully");
+    }
+
+    @Override
+    public ResponseEntity getUserDetails(Map<String, String> params) {
+        ResponseVO<Map<String, Object>> responseVo = new ResponseVO<>();
+
+        String userId = params.get("id");
+        Integer role = params.get("roleId") != null ? Integer.parseInt(params.get("roleId")) : null;
+
+        //Integer branch = params.get("branch")!=null?Integer.parseInt(params.get("branch")):null;
+        Map<String, Object> result = new HashMap<>();
+
+        List<Map<String, Object>> users = userRepository.getUsers(userId, role);
+        users = users.stream().filter(u -> {
+            Object roleId = u.get("role_id");
+            return roleId == null || Integer.parseInt(roleId.toString()) != 10;
+        }).toList();
+        if (users.isEmpty()) {
+            result.put("status", false);
+            result.put("message", "Users not found");
+        } else {
+            result.put("status", true);
+            result.put("message", String.format("%d users found ", users.size()));
+            result.put("users", users);
+        }
+        responseVo.setResult(result);
+        responseVo.setStatusCode(HttpStatusCode.valueOf(HttpStatus.OK.value()));
+        responseVo.setMessage(HttpStatus.OK.getReasonPhrase());
+        return new ResponseEntity<>(responseVo, responseVo.getStatusCode());
+    }
+
+    @Override
+    public ResponseEntity<ResponseVO<Map<String, Object>>> getMyRequests(Map<String, String> params, String userId) {
+        List<UserRequestProjection> rawList = userRequestRepository.findUserRequestsByRequestorUserId(userId);
+        for (UserRequestProjection u : rawList) {
+            log.info("raw list : {}", u);
+        }
+        return processProjections(rawList, "myRequests");
+    }
+
+    @Override
+    @Transactional
+    public ResponseEntity cancelRequest(Map<String, Object> request, String userId) {
+
+        int requestId = Integer.parseInt(String.valueOf(request.get("requestId")));
+        String remarks = request.get("reason") != null ? (String) request.get("reason") : "No Remarks";
+        UserRequest userRequest = userRequestRepository.findUserRequestsByRequestId(requestId);
+
+        if (!userRequest.getRequestorUserId().equals(userId)) {
+            log.warn("SECURITY VIOLATION: User {} attempted to cancel request {} owned by {}", userId, requestId, userRequest.getRequestorUserId());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        // 3. State Check: Must be PENDING
+        if (!userRequest.getRequestStatus().equals(Constant.PENDING)) {
+            log.warn("Attempted to cancel a processed request. ID: {}, Status: {}", requestId, userRequest.getRequestStatus());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+
+        // update cancel status
+        userRequest.setRequestStatus(Constant.CANCEL);
+        // update creator id as approver for cancel case
+        userRequest.setApproverUserId(userId);
+        userRequest.setApprovalDate(LocalDateTime.now(ZoneId.of("Asia/Kolkata")));
+        userRequest.setReasonForRejection("CANCELLED BY USER: " + remarks);
+
+        userRequestRepository.save(userRequest);
+
+        createNotification(userRequest.getRequestorUserId(), null, "/user-create", "User Request (ID: " + requestId + ") has been cancelled.", String.valueOf(requestId));
+
+        return ResponseEntity.ok(ResponseVO.<Map<String, Object>>builder().statusCode(HttpStatus.OK).message("Cancelled").result(Map.of("status", true)).build());
+
+    }
+
+    @Override
+    public ResponseEntity<ResponseVO<Map<String, Object>>> validateUserId(String userId) {
+        if (isInvalidUserId(userId)) {
+            return ResponseEntity.ok(ResponseVO.<Map<String, Object>>builder().statusCode(HttpStatus.OK).message("Invalid User Id format")
+                    .result(Map.of("valid", false, "reason", "'INVALID_USER_ID_FORMAT")).build());
+        }
+        boolean exists = (userRepository.existsByUserId(userId));
+        return ResponseEntity.ok(ResponseVO.<Map<String, Object>>builder().statusCode(HttpStatus.OK).message(exists ? "User already exists"
+                : "User id does not exist").result(Map.of("exists", exists)).build());
+    }
+
+    private ResponseEntity<ResponseVO<Map<String, Object>>> buildError(HttpStatus status, String msg) {
+        return ResponseEntity.status(status).body(ResponseVO.<Map<String, Object>>builder().statusCode(status).message(msg).result(Map.of("status", false, "message", msg)).build());
+    }
+
+    private boolean isInvalidUserId(String userId) {
+        if (userId == null) return true;
+        String id = userId.toLowerCase();
+        // Return TRUE if it DOES NOT match
+        return !id.matches("^(v|tcs)?\\d{7}$");
+    }
+
+    /**
+     * Strict validation for F1/Bog Role (ID 11).
+     * Returns a ResponseEntity with error details if validation fails, otherwise returns null.
+     */
+    private void validateF1BogConstraints(String requestType, UserPayloadDto payload, User existingUser) {
+        Integer payloadRoleId = payload.getRoleId();
+
+        // 1. CREATE REQUEST Constraints
+        if (Constant.CREATE.equalsIgnoreCase(requestType)) {
+            if (payloadRoleId != null && payloadRoleId == RESTRICTED_F1_ROLE_ID) {
+                throw new IllegalArgumentException("Creation of F1/Bog (Role ID " + RESTRICTED_F1_ROLE_ID + ") users is not allowed via this request.");
+            }
+        }
+
+        // 2. MODIFY REQUEST Constraints
+        if (Constant.MODIFY.equalsIgnoreCase(requestType) && existingUser != null) {
+            // Fetch Current Role from DB
+            UserRole currentRoleEntity = userRoleRepository.getUserRolesByUserId(existingUser.getUserId());
+            int currentRoleId = (currentRoleEntity != null) ? currentRoleEntity.getRoleId() : -1;
+
+            // Validate Role Transitions
+            if (payloadRoleId != null) {
+                // Rule: If you are NOT currently an F1, you cannot become an F1
+                if (currentRoleId != RESTRICTED_F1_ROLE_ID && payloadRoleId == RESTRICTED_F1_ROLE_ID) {
+                    throw new IllegalArgumentException("Security Violation: Cannot change user role TO F1/Bog.");
+                }
+            }
+        }
+        // If we reached here, validation passed. No return needed as it's void.
+    }
+
+    private void createNotification(String targetUser, String roles, String url, String msg, String refId) {
+        notificationWriterService.createNotification(targetUser, roles, msg, url, refId, EVENT_SOURCE);
+    }
+}
+
+package com.tcs.userservice.controller;
+
+import com.fincore.commonutilities.jwt.JwtUtil;
+import com.tcs.userservice.dto.UserLogsDto;
+import com.tcs.userservice.dto.UserRequestCreateDto;
+import com.tcs.userservice.dto.UserRequestDto;
+import com.tcs.userservice.service.UserLogsService;
+import com.tcs.userservice.service.UserRequestService;
+import com.tcs.userservice.utility.RequestUtility;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/user")
+@RequiredArgsConstructor
+public class UserRequestController {
+
+    private final UserRequestService userRequestService;
+    private final UserLogsService userLogsService;
+    private final JwtUtil jwtUtil;
+
+    // UPDATED: Now accepts DTO
+    @PostMapping("/create-request")
+    public ResponseEntity createNewRequest(@Valid @RequestBody UserRequestCreateDto request,
+                                              @RequestHeader("Authorization") String token) {
+        log.info("Received request to create user : {}", request);
+        String userId = jwtUtil.getUserIdFromToken(token);
+        return userRequestService.createNewRequest(request, userId);
+    }
+
+    @GetMapping("/pending-user-requests")
+    public ResponseEntity getPendingRequests(@RequestParam Map<String, Object> params,
+                                             @RequestHeader("Authorization") String token) {
+        String userId = jwtUtil.getUserIdFromToken(token);
+        log.info("Received request to fetch all user creation pending requests for user id : {}", userId);
+        return userRequestService.getPendingRequests(params, userId);
+    }
+
+    @PostMapping("/accept-request")
+    public ResponseEntity acceptRequest(HttpServletRequest request,
+                                        @RequestBody UserRequestDto userRequest,
+                                        @RequestHeader("Authorization") String token) {
+        String clientIp = RequestUtility.getClientIp(request);
+        String userId = jwtUtil.getUserIdFromToken(token);
+        userRequest.setApproverUserId(userId);
+        log.info("Received request to execute user request : {}", userRequest);
+        return userRequestService.acceptOrRejectUserRequest(userRequest, clientIp, userId);
+    }
+
+    @GetMapping("/user-details")
+    public ResponseEntity getUserDetails(@RequestParam Map<String, String> request) {
+        String userId = request.get("id");
+        String role = request.get("roleId");
+        log.info("Received request to fetch all user details for the user : {} and role {}", userId, role);
+        return userRequestService.getUserDetails(request);
+    }
+
+    @GetMapping("/my-requests")
+    public ResponseEntity getMyRequests(@RequestHeader("Authorization") String token, @RequestParam Map<String, String> params) {
+        String userId = jwtUtil.getUserIdFromToken(token);
+        log.info("Received request to fetch my requests for user : {}", userId);
+        return userRequestService.getMyRequests(params, userId);
+    }
+
+    @PostMapping("/cancel-request")
+    public ResponseEntity cancelRequest(@RequestHeader("Authorization") String token, @RequestBody Map<String, Object> request) {
+        log.info("Received request to cancel request with request id : {}", request.get("requestId"));
+        return userRequestService.cancelRequest(request, jwtUtil.getUserIdFromToken(token));
+    }
+
+    @GetMapping("/validate/userid")
+    public ResponseEntity validateUserId(@RequestParam("userId") String userId){
+        log.info("Received request to validate user Id : {}", userId);
+        return userRequestService.validateUserId(userId);
+    }
+}
+
+package com.tcs.userservice.dto;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
+@Data
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class UserPayloadDto {
+
+    @NotBlank(message = "User ID is required.")
+    @Pattern(regexp = "^(v|tcs)?\\d{7}$", message = "Invalid User Id format.")
+    private String userId;
+
+    @NotBlank(message = "First Name is mandatory")
+    @Size(min = 3, max = 30)
+    @Pattern(regexp = "^[a-zA-Z. ]+$", message = "First Name: letters, spaces, and dots only.")
+    private String firstName;
+
+    @Size(max = 30)
+    @Pattern(regexp = "^[a-zA-Z. ]*$", message = "Middle Name: letters, spaces, and dots only.")
+    private String middleName;
+
+    @Size(max = 30)
+    @Pattern(regexp = "^[a-zA-Z. ]*$", message = "Last Name: letters, spaces, and dots only.")
+    private String lastName;
+
+    @NotBlank(message = "Email is mandatory")
+    @Pattern(regexp = "^[a-zA-Z0-9._%+-]+@sbi\\.co\\.in$", message = "Email must be a valid @sbi.co.in address")
+    private String email;
+
+    @Pattern(regexp = "^$|[1-9][0-9]{9}$", message = "Mobile Number: 10 digits only, cannot start with 0.")
+    private String phoneNumber;
+
+    @NotNull(message = "Role is mandatory")
+    private Integer roleId;
+
+    private String roleName;
+
+    @Pattern(regexp = "^(ACTIVE|INACTIVE|LOCKED|BLOCKED|CANCELLED|REJECTED|ACCEPTED)$")
+    private String accountStatus;
+
+    private Integer branch;
+}
+package com.tcs.userservice.dto;
+
+import java.sql.Timestamp;
+
+import lombok.Data;
+@Data
+public class UserLogsDto {
+	
+	private Integer logId;
+
+	private String actionType;
+
+	private String changeType;
+
+	private Timestamp actionTime;
+
+	private String userId;
+
+	private String oldValue;
+
+	private String newValue;
+}
+
+package com.tcs.userservice.dto;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import com.fincore.commonutilities.util.MaskingUtil;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import lombok.Data;
+
+@Data
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class UserRequestCreateDto {
+    @NotBlank
+    @Pattern(regexp = "^(CREATE|MODIFY|LOCK|UNLOCK|DELETE|CANCEL)$")
+    private String requestType;
+
+    @NotBlank
+    @Pattern(regexp = "^(v|tcs)?\\d{7}$", message = "Invalid User Id format.")
+    private String targetUserId;
+
+    @Valid
+    @NotNull
+    private UserPayloadDto requestPayload;
+
+    @Override
+    public String toString() {
+        return "UserRequestCreateDto(" +
+                "requestType=" + requestType +
+                ", targetUserId=" + targetUserId +
+                ", requestPayload=" + MaskingUtil.maskJsonString(String.valueOf(requestPayload)) +
+                ")";
+    }
+}
+
+package com.tcs.userservice.dto;
+
+import com.fasterxml.jackson.annotation.JsonAlias;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserRequestDto {
+
+    private long requestId;
+
+    private String approverUserId;
+
+    private String oldValue;
+
+    @JsonAlias("reason")
+    private String remarks;
+
+    @JsonAlias("action")
+    private String actionFlag;
+
+    private String requestType;
+
+    private String requesterUserId;
+
+}
+
+package com.tcs.userservice.dto;
+
+import lombok.Data;
+
+import java.sql.Timestamp;
+
+public interface UserRequestProjection {
+
+    // Core fields
+    String getRequestId();
+    String getRequestType();
+    String getRequestorUserId();
+    String getRequestStatus();
+    Timestamp getRequestDate();
+
+    // Role specific
+    String getTargetRoleId();
+
+    // User specific
+    String getTargetUserId();
+
+    // Return Object (Clob) instead of String to prevent conversion crashes
+    Object getRequestPayload();
+
+    // Audit fields
+    Timestamp getApprovalDate();
+    String getApproverUserId();
+    String getReasonForRejection();
+    Timestamp getExecutionDate();
+    String getExecutionDetails();
+}
+package com.tcs.userservice;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.context.annotation.EnableAspectJAutoProxy;
+
+@SpringBootApplication
+@EnableCaching
+@EnableAspectJAutoProxy
+public class UserServiceApplication {
+
+    public static void main(String[] args) {
+        System.setProperty("spring.classformat.ignore", "true");
+        SpringApplication.run(UserServiceApplication.class, args);
+    }
+
+}
+package com.tcs.userservice.repository;
+
+import com.tcs.userservice.model.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Map;
+
+@Repository
+public interface UserRepository extends JpaRepository<User, String> {
+
+        User findUserByUserId(String userId);
+
+        @Query(value = "select u.user_Id   , u.first_name as firstName,u.last_name,u.email,u.phone_number,u.branch, u.ACCOUNT_STATUS,r.role_id"
+                        +
+                        ",r.role_name " +
+                        "from users  u  join user_roles ur on u.user_id= ur.user_id " +
+                        "join roles r on ur.role_id  = r.role_id where u.user_id = :userId", nativeQuery = true)
+        Map<String, Object> getUserByUserId(@Param("userId") String userId);
+
+        @Query(value = "select u.user_Id as userid , u.first_name,u.last_name,u.email,u.phone_number,u.branch,r.role_id "
+                        +
+                        ",r.role_name " +
+                        "from users  u  join user_roles ur on u.user_id= ur.user_id " +
+                        "join roles r on ur.role_id = r.role_id where u.branch = :branch", nativeQuery = true)
+        List<Map<String, Object>> getUsersByBranch(@Param("branch") int branch);
+
+        @Query(value = "select u.user_Id as userid , u.first_name,u.last_name,u.email,u.phone_number,u.branch,r.role_id "
+                        +
+                        ",r.role_name " +
+                        "from users  u  join user_roles ur on u.user_id= ur.user_id " +
+                        "join roles r on ur.role_id = r.role_id where r.role_name = :role", nativeQuery = true)
+        List<Map<String, Object>> getUsersByRole(@Param("role") String role);
+
+        @Query(value = "select u.user_Id as userid , u.first_name,u.last_name,u.middle_name,u.email,u.phone_number,u.ACCOUNT_STATUS,u.branch,r.role_id ,r.role_name\n"
+                        +
+                        "from users  u  join user_roles ur on u.user_id= ur.user_id join roles r on ur.role_id = r.role_id where  (:userId is NULL or u.user_id=:userId ) and (:role is NULL or  r.role_id = :role)", nativeQuery = true)
+        List<Map<String, Object>> getUsers(@Param("userId") String userId, @Param("role") Integer role);
+
+        boolean existsByUserId(String userId);
+}
+package com.tcs.userservice.repository;
+
+import com.tcs.userservice.dto.UserRequestProjection;
+import com.tcs.userservice.model.UserRequest;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface UserRequestRepository extends JpaRepository<UserRequest, Integer> {
+
+    @Query(value="SELECT count(*) FROM user_requests WHERE target_user_id=:targetUserId AND request_status='PENDING'", nativeQuery=true)
+    int countUserPendingRequests(@Param("targetUserId") String targetUserId);
+
+    @Query(value = """
+            SELECT 
+                request_id AS requestId,
+                request_type AS requestType,
+                requestor_user_id AS requestorUserId,
+                target_user_id AS targetUserId,
+                request_payload AS requestPayload,
+                request_status AS requestStatus,
+                request_date AS requestDate
+            FROM user_requests 
+            WHERE REQUESTOR_USER_ID != :requestedByUserId 
+            AND request_status='PENDING'
+            """, nativeQuery = true)
+    List<UserRequestProjection> findUserPendingRequests(@Param("requestedByUserId") String requestedByUserId);
+
+    UserRequest findUserRequestsByRequestId(long requestId);
+
+    @Query(value = """
+            
+            SELECT
+                request_id AS requestId,
+                request_type AS requestType,
+                requestor_user_id AS requestorUserId,
+                target_user_id AS targetUserId,
+                request_payload AS requestPayload,
+                request_status AS requestStatus,
+                request_date AS requestDate,
+                APPROVAL_DATE AS approvalDate,
+                APPROVER_USER_ID AS approverUserId,
+                REASON_FOR_REJECTION AS reasonForRejection,
+                EXECUTION_DATE AS executionDate,
+                EXECUTION_DETAILS AS executionDetails
+             FROM user_requests
+             WHERE REQUESTOR_USER_ID = :userId
+             ORDER BY request_id DESC
+            """, nativeQuery = true)
+    List<UserRequestProjection> findUserRequestsByRequestorUserId(@Param("userId") String userId);
+}
+
+package com.tcs.userservice.repository;
+
+import com.tcs.userservice.model.UserRole;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface UserRoleRepository extends JpaRepository<UserRole, String> {
+    UserRole getUserRolesByUserId(String targetUserId);
+}
+package com.tcs.userservice.model;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
+
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+
+@Entity
+@Getter
+@Setter
+@ToString
+@Table(name = "USER_REQUESTS")
+public class UserRequest {
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	@Column(name = "REQUEST_ID")
+	private int requestId;
+	
+	@Column(name = "REQUEST_TYPE")
+	private String requestType;
+	
+	@Column(name = "REQUESTOR_USER_ID")
+	private String requestorUserId;
+	
+	@Column(name = "TARGET_USER_ID")
+	private String targetUserId;
+	
+	@Column(name = "REQUEST_PAYLOAD")
+	private String requestPayload;
+	
+	@Column(name = "REQUEST_STATUS")
+	private String requestStatus;
+	
+	@Column(name = "REQUEST_DATE", nullable = false, updatable = false)
+	private LocalDateTime requestDate;
+	
+	@Column(name = "APPROVAL_DATE")
+	private LocalDateTime approvalDate;
+	
+	@Column(name = "APPROVER_USER_ID")
+	private String approverUserId;
+	
+	@Column(name = "REASON_FOR_REJECTION")
+	private String reasonForRejection;
+	
+	@Column(name = "EXECUTION_DATE")
+	private LocalDateTime executionDate;
+	
+	@Column(name = "EXECUTION_DETAILS")
+	private String executionDetails;
+}
+package com.tcs.userservice.model;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.Data;
+
+@Entity
+@Data
+@Table(name = "USER_ROLES")
+public class UserRole {
+    
+    @Id
+    @Column(name = "USER_ID")
+    private String userId;
+
+    @Column(name = "ROLE_ID")
+    private int roleId;
+
+}
+package com.tcs.userservice.model;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+
+@Entity
+@Getter
+@Setter
+@Table(name="users")
+public class User {
+
+    @Id
+    @Column(name="USER_ID")
+    private String userId;
+
+    @Column(name="FIRST_NAME")
+    private String firstName;
+
+    @Column(name="MIDDLE_NAME")
+    private String middleName;
+
+    @Column(name="LAST_NAME")
+    private String lastName;
+
+    @Column(name="PHONE_NUMBER")
+    private String phoneNumber;
+
+    @Column(name="EMAIL")
+    private String email;
+
+    @Column(name="PASSWORD_HASH")
+    private String passwordHash;
+
+    @Column(name="ACCOUNT_STATUS")
+    private String accountStatus;
+
+    @Column(name="CREATED_AT")
+    private LocalDateTime createdAt;
+
+    @Column(name="UPDATED_AT")
+    private LocalDateTime updatedAt;
+
+    @Column(name="LAST_LOGIN_AT")
+    private LocalDateTime lastLoginAt;
+
+    @Column(name="IS_DELETED")
+    private char isDeleted;
+
+    @Column(name="DELETED_AT")
+    private LocalDateTime deletedAt;
+
+    @Column(name="TEMP_PASSWORD_SET_AT")
+    private LocalDateTime tempPasswordSetAt;
+
+    @Column(name="USER_WRONG_PASSWORD_COUNT")
+    private int userWrongPasswordCount;
+
+    @Column(name="BRANCH")
+    private int branch;
+}
