@@ -1,532 +1,184 @@
-package com.fincore.gateway.Service;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fincore.gateway.Config.KeyUtils;
-import com.fincore.gateway.JwtUtil.HmacJwtUtil;
-import com.fincore.gateway.dto.*;
-import com.fincore.gateway.model.LoginAttempt;
-import com.fincore.gateway.model.LoginParam;
-import com.fincore.gateway.model.User;
-import com.fincore.gateway.model.UserRoles;
-import com.fincore.gateway.repository.*;
-import com.fincore.gateway.utility.Constants;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
-import org.springframework.orm.jpa.JpaSystemException;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.sql.Timestamp;
-import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
-/**
- * Service implementation handling user login/verification, menu resolution, and password updates.
- *
- * <p><strong>Responsibilities</strong>
- * <ul>
- *   <li>Validate credentials (password-based and SSO-based)</li>
- *   <li>Issue HS256 JWTs and embed limited user/role claims</li>
- *   <li>Transform role permissions into menu responses</li>
- *   <li>Track login attempts and enforce wrong password limits</li>
- * </ul>
- *
- * <p><strong>Notes</strong>
- * <ul>
- *   <li>JWT generation uses an HMAC Base64 secret; ensure it is configured for the environment.</li>
- *   <li>{@code BCryptPasswordEncoder} is created locally for convenience; consider injecting a singleton bean instead.</li>
- *   <li>Write operations are wrapped in {@link Transactional} where appropriate.</li>
- * </ul>
- */
-@Slf4j
-@Service("LoginService")
-@RequiredArgsConstructor
-public class LoginServiceImpl implements LoginService {
-
-    /**
-     * Prefer injecting a singleton bean; retained local instance for compatibility.
-     */
-    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
-
-    // ======= Config =======
-    private final UserRepository userRepository;
-    private final LoginAttemptRepository loginAttemptRepository;
-
-    // ======= Dependencies =======
-    private final LoginParamRepository loginParamRepository;
-    private final RolePermissionsRepository rolePermissionsRepository;
-    private final MenuService menuService;
-    private final ObjectMapper mapper;
-    private final BranchRepository branchRepository;
-
-    // LDAP Service
-    private final AdAuthenticationService adAuthenticationService;
-
-    @Value("${security.payload.rsa-private:}")
-    private String rsaPrivatePem;
-
-    /**
-     * Base64-encoded HMAC secret used to sign HS256 JWTs.
-     */
-    @Value("${security.jwt.hmac-base64-secret:}")
-    private String hmacSecret;
-
-    /**
-     * Token time-to-live in seconds.
-     */
-    @Value("${security.jwt.ttl-seconds:900}")
-    private long ttlSeconds;
-
-    // ======= Public API =======
-
-    /**
-     * Fetches role-wise permissions for the given user and transforms them into a menu response.
-     *
-     * @param userId ID of the user
-     * @return {@link MenuResponse} built from ordered permissions; empty if none or on error
-     */
-    @Transactional(readOnly = true)
-    @Override
-    public MenuResponse fetchRoleWiseData(String userId) {
-        log.info("Fetching role-wise data for userId: {}", userId);
-        try {
-            List<PermissionRow> rows = rolePermissionsRepository.findAllPermissionsByUserId(userId);
-
-            if (rows == null || rows.isEmpty()) {
-                log.info("No permissions found for userId: {}", userId);
-                return new MenuResponse(Collections.emptyList());
-            }
-            return menuService.transformFromProjection(rows);
-        } catch (Exception e) {
-            log.error("Error fetching permissions for userId: {}", userId, e);
-            return new MenuResponse(Collections.emptyList());
-        }
-    }
-
-    /**
-     * Verifies user credentials and, on success, builds {@link UserDto} populated with an access token and token data.
-     * <p>Also records the login attempt and enforces password attempt limits.</p>
-     *
-     * @param userCredentials payload containing {@code userId} and (for password mode) {@code password}
-     * @param clientIp        caller's IP address for audit
-     * @return {@link UserDto} with validity flags, statuses, and (if valid) a signed access token
-     */
-    @Transactional
-    @Override
-    public UserDto verifyUserCredentials(UserDto userCredentials, String clientIp) {
-
-        final String userId = userCredentials.getUserId();
-        final String encryptedPassword = userCredentials.getPassword(); // This is now RSA Encrypted
-
-        UserDto result = new UserDto();
-
-        // 1. AUTHORIZATION CHECK (Must exist in Local DB)
-        User user = userRepository.findByUserId(userId);
-        if (user == null) {
-            result.setValidCredentials(false);
-            result.setUserStatus(Constants.INVALID);
-            log.warn("Login blocked: User {} not found in local DB.", userId);
-            return result;
-        }
-
-        LoginParam loginParam = loginParamRepository.getLoginParam();
-        char activeMode = loginParam.getActiveLoginMode();
-
-        // Prepare Audit Log
-        LoginAttempt attempt = new LoginAttempt();
-        attempt.setLoginMethod(determineMethodString(activeMode));
-        attempt.setSuccess("N");
-        attempt.setIpAddress(clientIp);
-        attempt.setUserId(userId);
-
-        result.setLoginMethod(activeMode);
-        result.setUserId(user.getUserId());
-        UserRoles userRole = userRepository.getUserRole(userId);
-
-        // 2. STATUS CHECKS
-        result.setRoleStatus(userRole.getRoleStatus());
-        result.setUserStatus(user.getAccountStatus());
-        result.setPasswordLoginStatus(user.getPasswordLogin());
-
-        if (!Constants.ACTIVE.equalsIgnoreCase(userRole.getRoleStatus())) {
-            attempt.setFailureReason(generateStatusMessage(userRole.getRoleStatus(), "role"));
-            loginAttemptRepository.save(attempt);
-            result.setValidCredentials(false);
-            return result;
-        }
-
-        if (!Constants.ACTIVE.equalsIgnoreCase(user.getAccountStatus())) {
-            attempt.setFailureReason(generateStatusMessage(user.getAccountStatus(), "user"));
-            loginAttemptRepository.save(attempt);
-            result.setValidCredentials(false);
-            return result;
-        }
-
-        try {
-            // Decrypt RSA Payload
-            String rawPassword = KeyUtils.decryptRsaPassword(encryptedPassword, rsaPrivatePem);
-
-            // 3. AUTHENTICATION LOGIC BASED ON MODE
-            if (activeMode == Constants.LDAP) {
-                // --- MODE: LDAP ---
-                log.info("Processing LDAP Login for user: {}", userId);
-                try {
-                    boolean ldapSuccess = adAuthenticationService.authenticate(userId, rawPassword);
-                    if (ldapSuccess) {
-                        // Success: Generate Token
-                        handleSuccess(attempt, result, user, userRole);
-                    } else {
-                        // Failure: Wrong Password -> Count it against limits
-                        handleFailure(attempt, result, user, loginParam, "LDAP Authentication Failed");
-                    }
-                } catch (RuntimeException e) {
-                    log.error("LDAP Server Error for user {}: {}", userId, e.getMessage());
-                    // NOT incrementing wrong password count (It's not the user's fault)
-                    attempt.setSuccess("N");
-                    attempt.setFailureReason("LDAP Server Down / Connectivity Issue");
-                    result.setValidCredentials(false);
-                    result.setMessage("System Error: Unable to connect to Authentication Server. Please try again later.");
-                    // We do NOT save the attempt or lock the user here
-                    return result;
-                }
-
-            } else if (activeMode == Constants.PASSWORD) {
-                // MODE: LOCAL PASSWORD
-                // Check if Password Login is explicitly disabled for this specific user
-                if (Constants.ACTIVE.equalsIgnoreCase(user.getPasswordLogin())) {
-                    passwordBasedLogin(rawPassword, attempt, result, user, loginParam);
-                } else {
-                    // Account is Locked or Disabled
-                    handleAccountLocked(attempt, result, user);
-                }
-
-            }
-        } catch (SecurityException e) {
-            log.error("Login rejected for user {}: Payload decryption failed", userId);
-            result.setValidCredentials(false);
-            result.setMessage("Security Error: Invalid encrypted payload");
-            attempt.setFailureReason("Payload Decryption Failed (Possible MITM or invalid format)");
-            return result;
-        }
-
-        loginAttemptRepository.save(attempt);
-        log.debug("verifyUserCredentials result={}", result);
-        return result;
-    }
-
-
-    /**
-     * Password-based authentication flow that enforces wrong password limits and updates counters/flags.
-     * 1. Increments count on failure.
-     * 2. Calculates remaining attempts.
-     * 3. Locks account immediately if limit reached.
-     *
-     * @param password     raw password from the request
-     * @param loginAttempt login attempt entity to be updated with success/failure
-     * @param userInfo     output DTO updated with validity and attempts left
-     * @param user         the user entity being authenticated
-     * @param loginParam   login parameter configuration (e.g., permitted attempts)
-     */
-    @Transactional
-    @Override
-    public void passwordBasedLogin(String password, LoginAttempt loginAttempt, UserDto userInfo, User user, LoginParam loginParam) {
-        log.info("Password-based login for userId={}", user.getUserId());
-
-        if (Constants.INACTIVE.equalsIgnoreCase(user.getPasswordLogin())) {
-            handleAccountLocked(loginAttempt, userInfo, user);
-            return;
-        }
-
-        if (encoder.matches(password, user.getPasswordHash())) {
-            UserRoles userRole = userRepository.getUserRole(user.getUserId());
-            handleSuccess(loginAttempt, userInfo, user, userRole);
-        } else {
-            handleFailure(loginAttempt, userInfo, user, loginParam, "Wrong Password");
-        }
-    }
-
-
-    /**
-     * Produces a human-readable message describing a blocked login due to {@code status} of a given {@code type}.
-     *
-     * @param status status string (e.g., ACTIVE/INACTIVE/LOCKED)
-     * @param type   subject type (e.g., "user", "role")
-     * @return formatted message
-     */
-    @Override
-    public String generateStatusMessage(String status, String type) {
-        return String.format("Trying to login with a %s %s", status, type);
-    }
-
-    /**
-     * Checks the status and requirements for a user attempting to log in (without performing login).
-     *
-     * @param userId the user identifier
-     * @return {@link VerifyUserDTO} describing status, password update requirements, and messages
-     */
-    @Transactional(readOnly = true)
-    public VerifyUserDTO checkUser(String userId) {
-        VerifyUserDTO out = new VerifyUserDTO();
-        out.setUserId(userId);
-
-        User user = userRepository.findByUserId(userId);
-        LoginParam loginParam = loginParamRepository.getLoginParam();
-        out.setLoginMethod(loginParam.getActiveLoginMode());
-
-        if (user == null) {
-            out.setUserCheck(false);
-            out.setUserStatus(Constants.INVALID);
-            out.setMessage("Invalid User");
-            return out;
-        }
-
-        if (Constants.ACTIVE.equalsIgnoreCase(user.getAccountStatus())) {
-            Timestamp setAt = user.getTempPasswordSetAt();
-            boolean isPasswordValid = false;
-
-            // Validate password expiration only for Password Mode
-            if (loginParam.getActiveLoginMode() == Constants.PASSWORD && setAt != null) {
-                LocalDateTime lastUpdate = setAt.toLocalDateTime();
-                isPasswordValid = LocalDateTime.now()
-                        .isBefore(lastUpdate.plusHours(loginParam.getPasswordValidity()));
-            } else {
-                // For LDAP/SSO, we rely on their policies, so treat local validity as true
-                isPasswordValid = true;
-            }
-
-            UserRoles userRole = userRepository.getUserRole(userId);
-            out.setRoleStatus(userRole.getRoleStatus());
-
-            // Logic: Update Password only needed if Mode is Password AND (Password is null OR Expired)
-            boolean updateNeeded = (loginParam.getActiveLoginMode() == Constants.PASSWORD)
-                    && (user.getPasswordHash() == null || !isPasswordValid);
-
-            out.setUpdatePassword(updateNeeded);
-            out.setUserStatus(Constants.ACTIVE);
-            out.setMessage(Constants.ACTIVE_USER);
-            out.setPasswordLoginStatus(user.getPasswordLogin());
-        } else {
-            String accountStatus = user.getAccountStatus();
-            out.setUserCheck(true);
-            out.setUserStatus(accountStatus);
-            out.setMessage(
-                    accountStatus.equalsIgnoreCase("locked") ? "Your account is locked. Please contact support."
-                            : accountStatus.equalsIgnoreCase("inactive") ? "Inactive User" : "Verification Pending"
-            );
-        }
-
-        return out;
-    }
-
-    /**
-     * Updates the user's password hash and resets the temporary password timestamp.
-     * <p><strong>TODO:</strong> Integrate OTP validation before update.</p>
-     *
-     * @param userCredentials input DTO with {@code userId} and new raw {@code password}
-     * @return {@link UpdatePasswordDTO} indicating success and message; sensitive fields are cleared
-     */
-    @Transactional
-    public UpdatePasswordDTO updatePassword(UpdatePasswordDTO userCredentials) {
-        String userId = userCredentials.getUserId();
-        String encryptedPassword = userCredentials.getPassword();
-
-        // Always sanitize outbound fields
-        userCredentials.setUpdateFlag(false);
-        userCredentials.setPassword("");
-        userCredentials.setOtp("");
-
-        try {
-            User user = userRepository.findByUserId(userId);
-            if (user == null) {
-                userCredentials.setMessage("Invalid user id");
-                return userCredentials;
-            }
-
-            String rawPassword;
-            try {
-                rawPassword = KeyUtils.decryptRsaPassword(encryptedPassword, rsaPrivatePem);
-            } catch (SecurityException e) {
-                log.error("Update password rejected for user {}: Payload decryption failed", userId);
-                userCredentials.setMessage("Security Error: Invalid encrypted payload");
-                return userCredentials;
-            }
-
-            String passwordHash = encoder.encode(rawPassword);
-            user.setPasswordHash(passwordHash);
-            user.setTempPasswordSetAt(Timestamp.valueOf(LocalDateTime.now()));
-            userRepository.save(user);
-
-            userCredentials.setMessage("User password successfully updated");
-            userCredentials.setUpdateFlag(true);
-
-        } catch (DataIntegrityViolationException e) {
-            log.warn("Data integrity violation while updating password for userId={}", userId, e);
-            userCredentials.setMessage("Failed to change password, please try again");
-        } catch (ObjectOptimisticLockingFailureException e) {
-            log.warn("Optimistic locking failure while updating password for userId={}", userId, e);
-            userCredentials.setMessage("The user data was modified by another process, please retry");
-        } catch (JpaSystemException e) {
-            log.error("JPA system error while updating password for userId={}", userId, e);
-            userCredentials.setMessage("A database error occurred, please try again later");
-        }
-
-        return userCredentials;
-    }
-
-
-    // ===================================== Helpers ===================================
-
-    /**
-     * Initializes the token-visible user data embedded/returned alongside the JWT.
-     * Fetches branch and circle mapping dynamically.
-     *
-     * @param user     the user entity
-     * @param userRole the role mapping for the user
-     * @return user token DTO with non-sensitive fields
-     */
-    private UserTokenDataDto initializeTokenData(User user, UserRoles userRole) {
-        UserTokenDataDto tokenData = new UserTokenDataDto();
-        tokenData.setFirstName(user.getFirstName());
-        tokenData.setLastName(user.getLastName());
-        tokenData.setPhoneNumber(user.getPhoneNumber());
-        tokenData.setUserId(user.getUserId());
-        tokenData.setBranch(user.getBranch());
-        tokenData.setEmail(user.getEmail());
-        tokenData.setRole(userRole.getRole());
-        tokenData.setRoleName(userRole.getRoleName());
-
-        // FORMAT the branch integer to a 5-digit string (e.g., 8080 -> "08080")
-        String branchCodeStr = String.format("%05d", user.getBranch());
-
-        // Fetch specific details from the database
-        BranchCircleProjection bcInfo = branchRepository.findBranchAndCircleDetails(branchCodeStr);
-
-        if (bcInfo != null) {
-            tokenData.setBranchName(bcInfo.getBranchName());
-            tokenData.setCircleCode(bcInfo.getCircleCode());
-            tokenData.setCircleName(bcInfo.getCircleName());
-            tokenData.setCircleBranch(bcInfo.getCircleBranch());
-
-            // Check if user's branch matches the Circle's designated branch code
-            boolean isCircle = branchCodeStr.equals(bcInfo.getCircleBranch());
-            tokenData.setIsCircle(isCircle);
-        } else {
-            // Fallback if branch is somehow missing in the master table
-            tokenData.setIsCircle(false);
-            log.warn("Branch details not found in BRANCH_MASTER for branch code: {}", branchCodeStr);
-        }
-
-        return tokenData;
-    }
-
-
-    /**
-     * Retrieves the full user profile for Token Refresh.
-     * Uses the exact same structure as verifyUserCredentials to ensure token claims are identical.
-     */
-    @Override
-    @Transactional(readOnly = true)
-    public UserDto getUserProfile(String userId) {
-        User user = userRepository.findByUserId(userId);
-        UserRoles userRole = userRepository.getUserRole(userId);
-
-        // Return null if user doesn't exist, caller handles the error
-        if (user == null) {
-            return null;
-        }
-        UserDto userDto = new UserDto();
-        userDto.setUserId(user.getUserId());
-        userDto.setUserStatus(user.getPasswordLogin());
-        userDto.setPasswordLoginStatus(user.getPasswordLogin());
-        userDto.setUser(initializeTokenData(user, userRole));
-        return userDto;
-    }
-
-
-    private String determineMethodString(char mode) {
-        if (mode == Constants.LDAP) return "LDAP";
-        if (mode == Constants.PASSWORD) return Constants.PASSWORD_BASED_LOGIN;
-        return Constants.SSO_BASED_LOGIN;
-    }
-
-    private void handleAccountLocked(LoginAttempt attempt, UserDto result, User user) {
-        result.setValidCredentials(false);
-        result.setPasswordLoginStatus(user.getPasswordLogin());
-        result.setMessage("Your account is locked due to multiple failed attempts.");
-
-        if (Constants.INACTIVE.equalsIgnoreCase(user.getPasswordLogin())) {
-            result.setAttemptsLeft(0);
-            attempt.setFailureReason("Account Locked (Pre-check)");
-        } else {
-            result.setMessage("Password login is disabled.");
-            attempt.setFailureReason("Password login disabled");
-        }
-    }
-
-    private void handleSuccess(LoginAttempt attempt, UserDto result, User user, UserRoles userRole) {
-        attempt.setSuccess("Y");
-        attempt.setFailureReason("Success");
-        result.setValidCredentials(true);
-        result.setMessage("Login Successful");
-
-        // Reset wrong password count on successful login
-        if (user.getUserWrongPasswordCount() > 0) {
-            user.setUserWrongPasswordCount(0);
-            userRepository.save(user);
-        }
-
-        log.info("Credentials validated. Issuing token for userId={}", user.getUserId());
-
-        // Fetch contextual user data (including branch and circle)
-        UserTokenDataDto tokenData = initializeTokenData(user, userRole);
-
-        @SuppressWarnings("unchecked")
-        String accessToken = HmacJwtUtil.generate(
-                hmacSecret,
-                user.getUserId(),
-                ttlSeconds,
-                mapper.convertValue(tokenData, Map.class) // Embed all tokenData properties into the JWT claims
-        );
-
-        result.setAccessToken(accessToken);
-        result.setUser(tokenData);
-    }
-
-    private void handleFailure(LoginAttempt attempt, UserDto userInfo, User user, LoginParam loginParam, String reason) {
-        log.warn("Login failed for user {}: {}", user.getUserId(), reason);
-        attempt.setSuccess("N");
-
-        int currentFailedCount = user.getUserWrongPasswordCount();
-        int maxAllowed = loginParam.getWrongPasswordAttempts();
-        int newFailedCount = currentFailedCount + 1;
-
-        user.setUserWrongPasswordCount(newFailedCount);
-        userInfo.setValidCredentials(false);
-
-        if (newFailedCount >= maxAllowed) {
-            user.setPasswordLogin(Constants.INACTIVE);
-            // user.setAccountStatus(Constants.LOCKED); // Optional: Depending on business rule
-            attempt.setFailureReason(reason + " -> Account Locked");
-            userInfo.setMessage("Your account has been locked due to multiple unsuccessful login attempts.");
-            userInfo.setPasswordLoginStatus(Constants.INACTIVE);
-            userInfo.setAttemptsLeft(0);
-        } else {
-            int remaining = maxAllowed - newFailedCount;
-            attempt.setFailureReason(reason);
-            if (remaining > 1) {
-                userInfo.setMessage("Incorrect credentials. Please check and try again.");
-            } else {
-                userInfo.setMessage("Incorrect credentials. Final attempt before lock.");
-            }
-            userInfo.setAttemptsLeft(remaining);
-        }
-        userRepository.save(user);
-    }
-
-}
+# BGL PIPELINE
+ 
+import sys
+import os
+from datetime import date
+from py4j.java_gateway import java_import
+from pyspark.sql.functions import col, split, substring, concat, regexp_replace, when, length
+from common.dateUtil import get_etl_date
+from common.fileUtil import paths_for_read
+from common.processRun import get_process_run_id
+from common.processRun import get_run_id
+from common.log_etl_modified import log_etl
+from common.constants import Process
+from common.logger import setup_logger
+from common.fileUtil import get_hdfs_base
+from common.createSpark import create_spark_session
+from common.create_path_if_not_exists import create_path_if_not_exists
+from pathlib import Path
+ 
+# ==========================================================
+# MANIFEST CREATION
+# ==========================================================
+def create_manifest(spark, BASE_MANIFEST_PATH, RUN_ID, process_run_id, logger):
+    try:
+        etl_date_path = get_etl_date(spark).strftime("%Y%m%d")
+        hdfs_dir = f"{BASE_MANIFEST_PATH}/{etl_date_path}"
+        java_import(spark._jvm, "org.apache.hadoop.fs.FileSystem")
+        java_import(spark._jvm, "org.apache.hadoop.fs.Path")
+        fs = spark._jvm.FileSystem.get(spark._jsc.hadoopConfiguration())
+ 
+        manifest_filename = (f"BGL_successful_{RUN_ID}_Manifest.txt")
+        dest_file_path = spark._jvm.Path(f"{hdfs_dir}/{manifest_filename}")
+ 
+        log_etl(spark,process_run_id,"bgl_manifest_writing",1,"Starting manifest stage.")
+ 
+        hdfs_dir_obj = spark._jvm.Path(hdfs_dir)
+ 
+        if not fs.exists(hdfs_dir_obj):
+            fs.mkdirs(hdfs_dir_obj)
+ 
+        out_stream = fs.create(dest_file_path, True)
+        out_stream.write(bytearray("BGL successfully loaded","utf-8"))
+        out_stream.close()
+ 
+        logger.info(f"Manifest written to HDFS : {dest_file_path}")
+        log_etl(spark,process_run_id,"bgl_manifest_writing",2,"Manifest uploaded successfully.")
+ 
+    except Exception as e:
+        logger.error(f"Error in manifest creation : {e}")
+        log_etl(spark,process_run_id,"bgl_manifest_writing",3,"Error in creating manifest file")
+        raise
+ 
+# ==========================================================
+# MAIN
+# ==========================================================
+ 
+if __name__ == "__main__":
+    PROCESS_ID = Process.BGL
+    HDFS_BASE = get_hdfs_base()
+    spark = create_spark_session("BGL_PIPELINE", HDFS_BASE)
+ 
+    spark.sparkContext.setLogLevel("ERROR")
+ 
+    process_run_id = None
+    run_id = None
+    logger = None
+ 
+    try:
+        today = get_etl_date(spark)
+        posting_date_str = today.strftime("%Y-%m-%d")
+        today_str = posting_date_str
+        process_run_id = (
+            sys.argv[1] if len(sys.argv) > 1
+            else get_process_run_id(spark, PROCESS_ID, posting_date_str)
+        )
+        run_id = get_run_id(spark, posting_date_str, PROCESS_ID)
+        logger = setup_logger("BGL", run_id, posting_date_str)
+        logger.info("========== BGL PIPELINE STARTED ==========")
+ 
+        # # to add this type "bgl" in paths_for_read function==== done
+   
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+        hdfs_paths = paths_for_read("bgl", today, posting_date_str)
+        HDFS_PATH = hdfs_paths["HDFS_PATH"]
+        BGL_DATALAKE_PATH = hdfs_paths["BGL_DATALAKE_PATH"]
+        MANIFEST_BASE_PATH = hdfs_paths["MANIFEST_BASE_PATH"]
+ 
+        logger.info(f"HDFS_PATH : {HDFS_PATH}")
+        logger.info(f"DELTA_PATH : {BGL_DATALAKE_PATH}")
+        logger.info(f"MANIFEST_FILE_PATH : {MANIFEST_BASE_PATH}")
+ 
+        log_etl(spark,process_run_id,"bgl_pipeline",1,"BGL pipeline started")
+       
+     
+        # --------------------------------------------------
+        # READING FILES
+        # --------------------------------------------------
+        # file contains BGL_Ext_*.txt.gz
+       
+        input_path = "file:///app/Scripts/BGL_Ext_12052026_234901.txt"
+        # Read all .txt files in the directory
+        file_df = spark.read.text(input_path)
+        # file_df.show()
+        file_df.show(20, False)
+       
+        logger.info("BGL files read successfully")
+ 
+        clean_df = file_df.filter(
+            (col("value").startswith("|")) &
+            (length(col("value")) > 10)
+        )
+        if clean_df.count() == 0:
+            logger.error("No valid data rows found. Check if file contains table borders.")
+            exit(1)
+ 
+        logger.info(f"Valid data rows found")
+ 
+        # --------------------------------------------------
+        # SPLITTING PIPE DATA
+        # --------------------------------------------------
+        parts = split(col("value"), r"\|")
+ 
+        # --------------------------------------------------
+        # TRANSFORMATION
+        # --------------------------------------------------
+        parsed_df = clean_df.select(
+            concat(substring(
+                parts.getItem(0),8,7),parts.getItem(1)).alias("ACCOUNT_NO"),
+                parts.getItem(1).alias("BRANCH_CODE"),
+                parts.getItem(2).alias("PRODUCT"),
+                parts.getItem(3).alias("SEGMENT"),
+                parts.getItem(4).alias("AMOUNT"),
+                parts.getItem(5).alias("GLCC"),
+                parts.getItem(6).alias("ACCOUNT_NAME"),
+                when(regexp_replace(parts.getItem(7),"^0+","") == "","0")
+                .otherwise(regexp_replace(parts.getItem(7),"^0+","")).alias("STATUS")
+        )
+        parsed_df.show(20, False)
+        # --------------------------------------------------
+        # COUNT
+        # --------------------------------------------------
+        row_count = parsed_df.count()
+        logger.info(f"Total rows : {row_count}")
+ 
+        # --------------------------------------------------
+        # WRITING TO DELTA
+        # # --------------------------------------------------
+ 
+        (
+            parsed_df.write
+            .format("delta")
+            .mode("append")
+            .save(BGL_DATALAKE_PATH)
+        )
+       
+        logger.info("================ Data written to Delta successfully ========================")
+ 
+        # --------------------------------------------------
+        # MANIFEST
+        # --------------------------------------------------
+        create_manifest(spark=spark,BASE_MANIFEST_PATH=MANIFEST_BASE_PATH,RUN_ID=run_id,process_run_id=process_run_id,logger=logger)
+ 
+        log_etl(spark,process_run_id,"bgl_pipeline",2,f"BGL pipeline completed successfully. Rows={row_count}")
+        logger.info("========== BGL PIPELINE COMPLETED ==========")
+ 
+    except Exception as e:
+        error_message = str(e)
+        if logger:
+            logger.error(error_message)
+        try:
+            log_etl(spark, process_run_id, "bgl_pipeline", 3, error_message)
+        except Exception:
+            pass
+        raise
+ 
+    finally:
+        spark.stop()
