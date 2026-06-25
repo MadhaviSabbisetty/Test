@@ -1,101 +1,431 @@
-package com.fincore.ReportService.exception;
+package com.fincore.ReportService.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fincore.ReportService.dto.ApiResponse;
+import com.fincore.ReportService.dto.AsciiFileRequest;
+import com.fincore.ReportService.dto.AsciiFileResponse;
+import com.fincore.ReportService.dto.AsciiTypeResponse;
+import com.fincore.ReportService.model.AsciiMaster;
+import com.fincore.ReportService.model.AsciiConfig;
+import com.fincore.ReportService.model.AsciiConfigTb;
+import com.fincore.ReportService.repository.AsciiMasterRepository;
+import com.fincore.ReportService.repository.AsciiConfigRepository;
+import com.fincore.ReportService.repository.AsciiConfigTbRepository;
+import com.fincore.ReportService.service.AsciiFileService;
+import com.fincore.ReportService.service.HdfsService;
+
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
+
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ControllerAdvice;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.context.request.WebRequest;
+import org.springframework.stereotype.Service;
 
-import jakarta.validation.ConstraintViolationException;
-import java.util.stream.Collectors;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
-@ControllerAdvice
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+
+
+@Service
+@RequiredArgsConstructor
 @Slf4j
-public class GlobalExceptionHandler {
+public class AsciiFileServiceImpl implements AsciiFileService {
 
+    private final AsciiMasterRepository asciiMasterRepository;
 
+    private final AsciiConfigRepository asciiConfigRepository;
 
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ApiResponse<Object>> handleResourceNotFoundException(ResourceNotFoundException ex, WebRequest request) {
-        log.error("Report not found: {}", ex.getMessage());
-        return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.NOT_FOUND);
+    private final AsciiConfigTbRepository asciiConfigTbRepository;
+
+    private final HdfsService hdfsService;
+
+    @Override
+    public List<AsciiTypeResponse> getAsciiTypes(){
+
+        // return asciiMasterRepository.findAll()
+        log.info("API called - into service");
+        List<AsciiTypeResponse> response=asciiMasterRepository.findAll()
+            .stream()
+            .map(a->
+                    new AsciiTypeResponse(
+                        a.getId(),
+                        a.getReportName()
+                    ))
+                    .toList();
+                    if(response.isEmpty()){
+                        throw new IllegalArgumentException("No ASCII file types found");
+                    }
+                    return response;
     }
 
-    @ExceptionHandler({JsonProcessingException.class, HttpMessageNotReadableException.class})
-    public ResponseEntity<ApiResponse<Object>> handleJsonProcessingException(Exception ex, WebRequest request) {
-        log.error("Error processing JSON payload: {}", ex.getMessage());
-        return new ResponseEntity<>(ApiResponse.error("Invalid request payload format. Please check the JSON structure and data types."), HttpStatus.BAD_REQUEST);
-    }
 
-    @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<ApiResponse<Object>> handleDataIntegrityViolationException(DataIntegrityViolationException ex, WebRequest request) {
-        log.error("Data integrity violation: {}", ex.getMessage());
-        if (ex.getMostSpecificCause().getMessage().contains("already exists")) {
-            return new ResponseEntity<>(ApiResponse.error("A resource with the provided identifier already exists."), HttpStatus.CONFLICT);
+    @Override
+    public AsciiFileResponse viewAscii(AsciiFileRequest request) {
+
+        try {
+
+            log.info("ASCII VIEW REQUEST : {}", request);
+
+            AsciiMaster master =
+                    asciiMasterRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException("Invalid ASCII ID"));
+
+            String hdfsPath = buildFilePath(master, request);
+
+            log.info("FINAL HDFS PATH : {}", hdfsPath);
+
+            FileSystem fs = hdfsService.getFs();
+
+            Path path = new Path(hdfsPath);
+            log.info("checking file existence....");
+
+            boolean fileExists=fs.exists(path);
+            log.info("file exists:{}",fileExists);
+
+            if (!fs.exists(path)) {
+               throw new IllegalArgumentException("ASCII File not found");
+            }
+
+            StringBuilder content = new StringBuilder();
+
+            try (FSDataInputStream inputStream = fs.open(path);
+                 BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+
+                String line;
+
+                while ((line = reader.readLine()) != null) {
+                    content.append(line)
+                           .append(System.lineSeparator());
+                }
+            }
+
+            AsciiFileResponse response = new AsciiFileResponse();
+
+            response.setId(request.getId());
+            response.setReportDate(request.getReportDate());
+            response.setSearchBy(request.getSearchBy());
+
+            if ("branch".equalsIgnoreCase(request.getSearchBy())) {
+                response.setBranchCode(request.getBranchCode());
+            }
+
+            response.setContent(content.toString());
+
+            return response;
+
+        } catch (Exception e) {
+
+            log.error("Error while viewing ascii file", e);
+
+            throw new IllegalArgumentException(e.getMessage());
         }
-        return new ResponseEntity<>(ApiResponse.error("Database constraint violation. A required field may be missing or a value is invalid."), HttpStatus.CONFLICT);
     }
 
-    // This ALREADY handles IllegalArgumentException, so we don't need a new one
-    @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
-    public ResponseEntity<ApiResponse<Object>> handleArgumentAndStateExceptions(RuntimeException ex, WebRequest request) {
-        log.error("Illegal argument or state: {}", ex.getMessage());
-        return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.BAD_REQUEST);
+    @Override
+    public ResponseEntity<byte[]> downloadAscii(AsciiFileRequest request) {
+
+        try {
+
+            AsciiMaster master =
+                    asciiMasterRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException("Invalid ASCII ID"));
+
+            String hdfsPath = buildFilePath(master, request);
+
+            FileSystem fs = hdfsService.getFs();
+
+            Path path = new Path(hdfsPath);
+
+            if (!fs.exists(path)) {
+                throw new IllegalArgumentException("Failed to download. ASCII File not found");
+            }
+
+            FSDataInputStream inputStream = fs.open(path);
+
+            byte[] fileContent =inputStream.readAllBytes();
+            
+            inputStream.close();
+
+            String fileName = path.getName();
+
+            log.info("Download response preparing for file: {}",fileName);
+            log.info("File size :{} bytes",fileContent.length);
+
+            log.info("Download response sent successfully");
+ 
+            return ResponseEntity.ok()
+                    .header(
+                            HttpHeaders.CONTENT_DISPOSITION,
+                            "attachment; filename=\"" + fileName+".txt\"")
+                    .header(HttpHeaders.CONTENT_TYPE,"text/plain")
+                    .contentLength(fileContent.length)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(fileContent);
+
+        } catch (Exception e) {
+
+            log.error("Error while downloading ascii file", e);
+
+            throw new IllegalArgumentException(e.getMessage());
+        }
     }
 
-    // This ALREADY handles global Exception, so we don't need a new one
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Object>> handleGlobalException(Exception ex, WebRequest request) {
-        log.error("An unexpected error occurred: {}", ex.getMessage(), ex);
-        return new ResponseEntity<>(ApiResponse.error("An internal server error occurred."), HttpStatus.INTERNAL_SERVER_ERROR);
+    private String buildFilePath(AsciiMaster master,AsciiFileRequest request) {
+        
+        if("branch".equalsIgnoreCase(request.getSearchBy())
+        && (request.getBranchCode()==null 
+        || request.getBranchCode().isBlank())){
+            throw new IllegalArgumentException("Branch code is mandatory for branch search");
+        }
+
+        LocalDate reportDate=LocalDate.parse(request.getReportDate(),
+        DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+
+        String dateFolder= reportDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+
+        String fileDate= reportDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+
+        String location = master.getLocation().replace("{date}", dateFolder);
+
+        String branchCode = "bank".equalsIgnoreCase(request.getSearchBy())
+                        ? "00000" : request.getBranchCode();
+
+        log.info("report date:{}",dateFolder);
+        log.info("location:{}",location);
+        log.info("branch code:{}",branchCode);
+        
+
+        String fileName;
+
+        if (request.getId() >= 101 && request.getId() <= 104) {
+
+            AsciiConfig config = asciiConfigRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException("ASCII Config not found"));
+
+            if (config.getFileType() != null &&
+                    !config.getFileType().isBlank()) {
+
+                fileName = branchCode +"." +config.getOutputFileName() +"." +fileDate +"." +config.getFileType();
+            }
+            else {
+
+                fileName = branchCode +"." +config.getOutputFileName() +"." +fileDate;
+            }
+
+        }
+        else if (request.getId() >= 105 && request.getId() <= 107) {
+
+            AsciiConfigTb configTb = asciiConfigTbRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException("ASCII Config TB not found"));
+
+            fileName = branchCode +"." +configTb.getFileIdentifier() +"." +fileDate;
+        }
+        else {
+
+            throw new IllegalArgumentException("Invalid ASCII ID");
+        }
+
+        log.info("file name:{}",fileName);
+        String  finalPath="/" + location + "/" + fileName;
+        log.info("final path: {}",finalPath);
+        log.info("Downloading file: {}",fileName);
+        return finalPath;
+
+    }
+} 
+
+
+
+package com.fincore.ReportService.controller;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+
+import com.fincore.ReportService.dto.*;
+import com.fincore.commonutilities.jwt.JwtUtil;
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+
+import com.fincore.ReportService.service.AsciiFileService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/ascii")
+@RequiredArgsConstructor
+public class AsciiFileController {
+
+    private final AsciiFileService asciiFileService;
+
+    @GetMapping("/file-types")
+    public ResponseEntity<ApiResponse<List<AsciiTypeResponse>>> getAsciiTypes(){
+        log.info("API called");
+       
+        List<AsciiTypeResponse> response=asciiFileService.getAsciiTypes();
+        return ResponseEntity.ok(
+            ApiResponse.success(response,"ASCII file types fetched successfully")
+        );
     }
 
+    @PostMapping("/view")
+    public ResponseEntity<ApiResponse<AsciiFileResponse>> viewAscii(
+            @RequestBody AsciiFileRequest request) {
+        log.info("requested={}",request);
+        AsciiFileResponse response =
+                asciiFileService.viewAscii(request);     
+
+        return ResponseEntity.ok(
+                ApiResponse.success(response,"ASCII file fetched successfully")
+        );
+    }
+
+    @PostMapping("/download")
+    public ResponseEntity<byte[]> downloadAscii(
+            @RequestBody AsciiFileRequest request) {
+            
+        log.info("Download request Received: {}",request);
+        return asciiFileService.downloadAscii(request);
+    }
+
+
+    
+}
+
+package com.fincore.ReportService.config;
+
+import com.fincore.commonutilities.buisnessobject.ControlDateService;
+import com.fincore.commonutilities.config.CommonSecurityConfig;
+import com.fincore.commonutilities.config.RedisConfig;
+import com.fincore.commonutilities.config.ResilienceConfig;
+import com.fincore.commonutilities.jwt.JwtUtil;
+import com.fincore.commonutilities.logging.MdcLoggingFilter;
+import com.fincore.commonutilities.security.ContextRbacFilter;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import jakarta.servlet.DispatcherType; // Import this is CRITICAL
+import com.fincore.commonutilities.security.DecryptRequestBodyAdvice;
+import com.fincore.commonutilities.util.AesEncryptionUtil;
+
+/**
+ * Common Security Configuration.
+ * * Aligned with the "Distributed Gateway" architecture.
+ * It uses the ContextRbacFilter from Common Utilities to enforce:
+ * 1. Token Validity
+ * 2. Single Session (Redis check)
+ * 3. RBAC Permissions
+ * Enforces Centralised Mdc Logging Filter, RESILIENCE4J Retry and Circuit
+ * Breaker
+ */
+@Configuration
+@EnableWebSecurity
+@Import({
+        RedisConfig.class,
+        JwtUtil.class,
+        CommonSecurityConfig.class,
+        ResilienceConfig.class, ControlDateService.class,
+                AesEncryptionUtil.class,
+        DecryptRequestBodyAdvice.class
+})
+public class SecurityConfig {
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @Autowired
+    private CommonSecurityConfig commonSecurityConfig;
+
+    // --- 1. Define Filters as Beans (Explicitly) ---
+    @Bean
+    public MdcLoggingFilter mdcLoggingFilter() {
+        return new MdcLoggingFilter(jwtUtil);
+    }
+
+    @Bean
+    public ContextRbacFilter contextRbacFilter() {
+        return new ContextRbacFilter(redisTemplate, jwtUtil);
+    }
+
+    // --- 2. Prevent Global Registration ---
+    // This stops "The Filter class ... does not have a registered order" error
+
+    @Bean
+    public FilterRegistrationBean<MdcLoggingFilter> mdcFilterRegistration(MdcLoggingFilter filter) {
+        FilterRegistrationBean<MdcLoggingFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false); // Disable global chain
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<ContextRbacFilter> rbacFilterRegistration(ContextRbacFilter filter) {
+        FilterRegistrationBean<ContextRbacFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false); // Disable global chain
+        return registration;
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.configurationSource(commonSecurityConfig.corsConfigurationSource()))
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authz -> authz
+                        // Allow Async Dispatches (StreamingResponseBody) to proceed without re-auth
+                        // checks
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
+                        .requestMatchers("/actuator/**", "/api/auth/**", "/error").permitAll()
+                        .anyRequest().authenticated())
+                // Add Filters using the BEAN references (methods above)
+                .addFilterBefore(mdcLoggingFilter(), UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(contextRbacFilter(), MdcLoggingFilter.class);
+
+        return http.build();
+    }
 
     /**
-     * Handles exceptions thrown when @Valid validation fails on a request body.
-     * Returns a 400 Bad Request with a list of validation errors.
+     * Explicitly indicate that local user lookup is not supported
+     * Authentication is handled via JWT in ContextRbacFilter
      */
-
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ResponseEntity<ApiResponse<Object>> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        String errors = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> error.getField() + ": " + error.getDefaultMessage())
-                .collect(Collectors.joining(", "));
-
-        log.warn("Validation failed for incoming request: {}", errors);
-        return new ResponseEntity<>(ApiResponse.error("Validation Failed: " + errors), HttpStatus.BAD_REQUEST);
+    @Bean
+    public UserDetailsService userDetailsService() {
+        return username -> {
+            throw new UsernameNotFoundException("UserDetailsService is disabled. Use JWT authentication.");
+        };
     }
-
-    /**
-     * Handles exceptions thrown by the Jakarta Validator, for example,
-     * when we manually trigger validation in our strategies.
-     */
-
-    @ExceptionHandler(ConstraintViolationException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ResponseEntity<ApiResponse<Object>> handleConstraintViolationException(ConstraintViolationException ex) {
-        String errors = ex.getConstraintViolations().stream()
-                .map(cv -> cv.getPropertyPath() + ": " + cv.getMessage())
-                .collect(Collectors.joining(", "));
-
-        log.warn("Constraint violation during processing: {}", errors);
-        return new ResponseEntity<>(ApiResponse.error("Validation Failed: " + errors), HttpStatus.BAD_REQUEST);
-    }
-
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAccessDeniedException(AccessDeniedException ex, WebRequest request) {
-        log.error("Access Denied: {}", ex.getMessage());
-        return new ResponseEntity<>(ApiResponse.error("Report Not Found or You are not authorized to perform this action."), HttpStatus.NOT_FOUND);
-    }
-
-
 }
