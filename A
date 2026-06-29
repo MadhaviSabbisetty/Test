@@ -1,364 +1,279 @@
-@Data
-public class AsciiFileRequest {
+package com.fincore.commonutilities.security;
 
-    private Long id;
-
-    private String reportDate;
-
-    private String searchBy;
-
-    private String branchCode;
-}
-
-
-@Data
-public class AsciiFileResponse {
-
-    private Long id;
-
-    private String reportDate;
-
-    private String searchBy;
-
-    private String branchCode;
-
-    private String content;
-}
-
-
-
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class ApiResponse<T> {
-
-    private String status;
-
-    private T data;
-}
-
-
-
-@Repository
-public interface AsciiMasterRepository
-        extends JpaRepository<AsciiMaster, Long> {
-}
-
-
-
-package com.fincore.reportservice.service;
-
-import com.fincore.reportservice.dto.AsciiFileRequest;
-import com.fincore.reportservice.dto.AsciiFileResponse;
-import org.springframework.http.ResponseEntity;
-
-public interface AsciiFileService {
-
-    AsciiFileResponse viewAscii(AsciiFileRequest request);
-
-    ResponseEntity<byte[]> downloadAscii(AsciiFileRequest request);
-}
-
-package com.fincore.reportservice.service.impl;
-
-import com.fincore.reportservice.dto.AsciiFileRequest;
-import com.fincore.reportservice.dto.AsciiFileResponse;
-import com.fincore.reportservice.entity.AsciiMaster;
-import com.fincore.reportservice.repository.AsciiMasterRepository;
-import com.fincore.reportservice.service.AsciiFileService;
-import com.fincore.reportservice.service.HdfsService;
-
+import com.fincore.commonutilities.jwt.JwtUtil;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.util.AntPathMatcher;
+import org.springframework.web.filter.OncePerRequestFilter;
 
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import java.io.IOException;
+import java.util.List;
+import java.util.Set;
 
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Service;
-
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-
-@Service
-@RequiredArgsConstructor
+/**
+ * A Blocking (Servlet) Filter that enforces security for microservices.
+ * * Responsibilities:
+ * 1. Validate JWT Signature.
+ * 2. Enforce "One Session Per User" by comparing JWT 'jti' with Redis 'USR:<userId>'.
+ * 3. Enforce RBAC (Role Based Access Control) via Redis permissions.
+ * 4. Respects the Gateway 'GRACE:<jti>' period during Token Rotation to prevent dropped streams.
+ * 5. Respects Grace Period for expired token
+ *
+ *  @author SHUBHANKAR DAS [Emp ID: V1018405]
+ *  <a href="mailto:shubhankar.das.cbstcs@sbi.co.in">shubhankar.das.cbstcs@sbi.co.in</a>
+ *  @version 1.0.1
+ *  @since 2025-08-01
+ */
 @Slf4j
-public class AsciiFileServiceImpl implements AsciiFileService {
+@RequiredArgsConstructor
+public class ContextRbacFilter extends OncePerRequestFilter {
 
-    private final AsciiMasterRepository asciiMasterRepository;
+    private static final String REDIS_USER_PREFIX = "USR:";
+    private static final String REDIS_RBAC_PREFIX = "RBAC::PERMISSIONS::";
+    private static final String REDIS_GRACE_PREFIX = "GRACE:";
 
-    private final HdfsService hdfsService;
+    private static final Set<String> WHITELIST = Set.of(
+            "/api/auth/**", "/actuator/**", "/error", "/swagger-ui/**", "/v3/api-docs/**", "/api/login",
+            "/api/auth/login", "/api/auth/logout", "/api/auth/check-user", "/swagger-ui.html", "/api/auth/refresh-token)"
+    );
+
+    private final StringRedisTemplate redisTemplate;
+    private final JwtUtil jwtUtil;
+    private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
     @Override
-    public AsciiFileResponse viewAscii(AsciiFileRequest request) {
+    protected void doFilterInternal(
+            @NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
+            @NonNull FilterChain filterChain
+    ) throws ServletException, IOException {
 
-        try {
+        String uri = request.getRequestURI();
 
-            log.info("ASCII VIEW REQUEST : {}", request);
-
-            AsciiMaster master =
-                    asciiMasterRepository.findById(request.getId())
-                            .orElseThrow(() ->
-                                    new RuntimeException("Ascii Master not found"));
-
-            String hdfsPath = buildFilePath(master, request);
-
-            log.info("FINAL HDFS PATH : {}", hdfsPath);
-
-            FileSystem fs = hdfsService.getFs();
-
-            Path path = new Path(hdfsPath);
-
-            if (!fs.exists(path)) {
-                throw new RuntimeException("ASCII File not found : " + hdfsPath);
+        // 1. SKIP WHITELIST
+        for (String pattern : WHITELIST) {
+            if (pathMatcher.match(pattern, uri)) {
+                filterChain.doFilter(request, response);
+                return;
             }
+        }
 
-            StringBuilder content = new StringBuilder();
+        // 2. VALIDATE TOKEN
+        String token = request.getHeader("Authorization");
 
-            try (FSDataInputStream inputStream = fs.open(path);
-                 BufferedReader reader =
-                         new BufferedReader(new InputStreamReader(inputStream))) {
-
-                String line;
-
-                while ((line = reader.readLine()) != null) {
-                    content.append(line)
-                           .append(System.lineSeparator());
+        if (token != null) {
+            try {
+                // A. STANDARD VALIDATION (Signature + Expiry)
+                if (!jwtUtil.isTokenValid(token)) {
+                    throw new JwtException("Invalid Token Signature");
                 }
+
+                // If valid, extract info
+                String userId = jwtUtil.getUserIdFromToken(token);
+                String incomingJti = jwtUtil.extractClaim(removeBearer(token), Claims::getId);
+                int roleIdInt = jwtUtil.getUserRoleFromToken(token);
+
+                // B. ACTIVE SESSION CHECK
+                if (!checkRedisSession(response, userId, incomingJti)) {
+                    return; // Error sent
+                }
+
+                // C. RBAC / CONTEXT SETUP
+                setSecurityContext(userId, roleIdInt);
+
+                if (!checkRbac(request, response, String.valueOf(roleIdInt), userId)) {
+                    return;
+                }
+
+            } catch (ExpiredJwtException e) {
+                // -----------------------------------------------------------------
+                // HANDLE EXPIRED TOKEN: Distinguish between "Time out" vs "Concurrent Login"
+                // -----------------------------------------------------------------
+                try {
+                    Claims claims = e.getClaims();
+                    String userId = claims.getSubject();
+                    String incomingJti = claims.getId();
+
+                    // CHECK 1: Missing JTI ---
+                    if (incomingJti == null) {
+                        log.error("Expired Token missing JTI for user {}", userId);
+                        sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "INVALID_TOKEN", "Token missing JTI");
+                        return;
+                    }
+
+                    String activeJti = redisTemplate.opsForValue().get(REDIS_USER_PREFIX + userId);
+
+                    // CASE 1: Session totally gone from Redis (User idle > 24h)
+                    if (activeJti == null) {
+                        log.warn("Session expired in Redis (found during token expiry check) for user {}", userId);
+                        sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "SESSION_EXPIRED", "Session timed out.");
+                        return;
+                    }
+
+                    // CASE 2: Concurrent Login (Redis has newer JTI)
+                    if (!activeJti.equals(incomingJti)) {
+                        // THE GRACE PERIOD CHECK
+                        Boolean isInGrace = redisTemplate.hasKey(REDIS_GRACE_PREFIX + incomingJti);
+                        if (isInGrace) {
+                            log.debug("Expired token is in Grace Period, proceeding to TOKEN_EXPIRED instead of CONCURRENT_LOGIN. user={}", userId);
+                            // Fall through to send TOKEN_EXPIRED so frontend initiates refresh instead of hard logout
+                            sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "TOKEN_EXPIRED", "JWT has expired.");
+                            return;
+                        } else {
+                            log.warn("Concurrent Login Detected on Expired Token. User: {}", userId);
+                            sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "CONCURRENT_LOGIN", "Logged in on another device.");
+                            return;
+                        }
+                    }
+
+                    // CASE 3: Normal Expiry (Redis matches) -> Allow Frontend to Refresh
+                } catch (Exception ex) {
+                    log.error("Error checking concurrency on expired token", ex);
+                }
+
+                // Default behavior: Tell frontend token is expired so it can call /refresh-token
+                sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "TOKEN_EXPIRED", "JWT has expired.");
+                return;
+
+            } catch (Exception e) {
+                log.error("Auth Error: {}", e.getMessage());
+                sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_ERROR", "Authentication failed.");
+                return;
             }
-
-            AsciiFileResponse response = new AsciiFileResponse();
-
-            response.setId(request.getId());
-            response.setReportDate(request.getReportDate());
-            response.setSearchBy(request.getSearchBy());
-
-            if ("branch".equalsIgnoreCase(request.getSearchBy())) {
-                response.setBranchCode(request.getBranchCode());
-            }
-
-            response.setContent(content.toString());
-
-            return response;
-
-        } catch (Exception e) {
-
-            log.error("Error while viewing ascii file", e);
-
-            throw new RuntimeException(e.getMessage());
+        } else {
+            sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "MISSING_TOKEN", "Authorization header missing.");
+            return;
         }
+
+        filterChain.doFilter(request, response);
     }
 
-    @Override
-    public ResponseEntity<byte[]> downloadAscii(AsciiFileRequest request) {
-
+    private boolean checkRedisSession(HttpServletResponse response, String userId, String incomingJti) throws IOException {
+        if (incomingJti == null) {
+            sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "INVALID_TOKEN", "Token missing JTI");
+            return false;
+        }
         try {
+            String activeJti = redisTemplate.opsForValue().get(REDIS_USER_PREFIX + userId);
 
-            AsciiMaster master =
-                    asciiMasterRepository.findById(request.getId())
-                            .orElseThrow(() ->
-                                    new RuntimeException("Ascii Master not found"));
-
-            String hdfsPath = buildFilePath(master, request);
-
-            FileSystem fs = hdfsService.getFs();
-
-            Path path = new Path(hdfsPath);
-
-            if (!fs.exists(path)) {
-                throw new RuntimeException("ASCII File not found");
+            if (activeJti == null) {
+                sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "SESSION_EXPIRED", "Session timed out.");
+                return false;
             }
 
-            FSDataInputStream inputStream = fs.open(path);
+            if (!incomingJti.equals(activeJti)) {
+                // THE GRACE PERIOD CHECK
+                Boolean isInGrace = redisTemplate.hasKey(REDIS_GRACE_PREFIX + incomingJti);
+                if (isInGrace) {
+                    log.debug("Microservice accepted token under Grace Period for user={} jti={}", userId, incomingJti);
+                    return true; // Valid during rotation window
+                }
 
-            byte[] fileContent =
-                    inputStream.readAllBytes();
+                sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "CONCURRENT_LOGIN", "Logged in on another device.");
+                return false;
+            }
+        } catch (RedisConnectionFailureException e) {
+            sendError(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "SYSTEM_ERROR", "Auth Service Unavailable");
+            return false;
+        }
+        return true;
+    }
 
-            inputStream.close();
-
-            String fileName = path.getName();
-
-            return ResponseEntity.ok()
-                    .header(
-                            HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=" + fileName)
-                    .contentType(MediaType.TEXT_PLAIN)
-                    .body(fileContent);
-
-        } catch (Exception e) {
-
-            log.error("Error while downloading ascii file", e);
-
-            throw new RuntimeException(e.getMessage());
+    private void setSecurityContext(String userId, int roleId) {
+        if (SecurityContextHolder.getContext().getAuthentication() == null) {
+            UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                    userId, null, List.of(new SimpleGrantedAuthority("ROLE_" + roleId))
+            );
+            SecurityContextHolder.getContext().setAuthentication(authToken);
         }
     }
 
-    private String buildFilePath(
-            AsciiMaster master,
-            AsciiFileRequest request) {
+    /**
+     * Checks if the user's role has permission to access the requested Method + URL + Context.
+     */
+    private boolean checkRbac(HttpServletRequest request, HttpServletResponse response, String roleId, String userId) throws IOException {
 
-        String dateFolder = request.getReportDate();
+        String uri = request.getRequestURI();
+        String method = request.getMethod().toUpperCase();
 
-        String fileDate =
-                request.getReportDate().replace("-", "");
+        // DETERMINE CONTEXT (Header)
+        String contextHeader = request.getHeader("X-Request-Type");
 
-        String location =
-                master.getLocation()
-                        .replace("{date}", dateFolder);
+        // If header is missing, treat as "*" (Global Context)
+        String requestContext = (contextHeader != null && !contextHeader.trim().isEmpty()) ? contextHeader : "*";
 
-        String branchCode =
-                "bank".equalsIgnoreCase(request.getSearchBy())
-                        ? "00000"
-                        : request.getBranchCode();
+        // REDIS AUTHORIZATION CHECK
+        String redisKey = REDIS_RBAC_PREFIX + roleId;
 
-        String fileName;
+        // Fetch permissions set from Redis
+        // Format: "METHOD:URL_PATTERN|CONTEXT" -> e.g., "POST:/user/create|USER_MANAGEMENT"
+        Set<String> permissions = redisTemplate.opsForSet().members(redisKey);
 
-        switch (request.getId().intValue()) {
+        boolean isAuthorized = false;
 
-            case 101:
-                fileName =
-                        branchCode + ".INR." +
-                                fileDate + ".CWP";
-                break;
+        if (permissions != null) {
+            for (String perm : permissions) {
+                // Format: "METHOD:URL_PATTERN|CONTEXT"
+                String[] parts = perm.split("\\|");
+                if (parts.length < 2) continue;
 
-            case 102:
-                fileName =
-                        branchCode + ".INR." +
-                                fileDate + ".WK";
-                break;
+                String methodAndUrl = parts[0];
+                String allowedContext = parts[1];
 
-            case 103:
-                fileName =
-                        branchCode + ".YSA." +
-                                fileDate;
-                break;
+                // --- A. CONTEXT CHECK ---
+                // 1. Exact Match: Header "SEGMENT_CODE" matches Permission "SEGMENT_CODE"
+                // 2. Wildcard Match: Permission has "*" (e.g. Reports), allows any header (or no header)
+                if (!allowedContext.equals(requestContext) && !allowedContext.equals("*")) {
+                    continue;
+                }
 
-            case 104:
-                fileName =
-                        branchCode + ".PL." +
-                                fileDate;
-                break;
+                // --- B. URL & METHOD CHECK ---
+                String[] muParts = methodAndUrl.split(":", 2);
+                if (muParts.length < 2) continue;
 
-            case 105:
-                fileName =
-                        branchCode + ".YSA." +
-                                fileDate;
-                break;
+                String allowedMethod = muParts[0];
+                String allowedUrlPattern = muParts[1];
 
-            case 106:
-                fileName =
-                        branchCode + ".PL." +
-                                fileDate;
-                break;
+                // Method Match AND URL Pattern Match
+                if (allowedMethod.equals(method) && pathMatcher.match(allowedUrlPattern, uri)) {
+                    isAuthorized = true;
+                    break;
+                }
 
-            default:
-                throw new RuntimeException("Invalid ASCII ID");
+            }
         }
 
-        return "/" + location + "/" + fileName;
-    }
-} no
-
-
-
-
-
-@RestController
-@RequestMapping("/ascii")
-@RequiredArgsConstructor
-public class AsciiFileController {
-
-    private final AsciiFileService asciiFileService;
-
-    @PostMapping("/view")
-    public ResponseEntity<ApiResponse<AsciiFileResponse>> viewAscii(
-            @RequestBody AsciiFileRequest request) {
-
-        AsciiFileResponse response =
-                asciiFileService.viewAscii(request);
-
-        return ResponseEntity.ok(
-                new ApiResponse<>("success", response)
-        );
+        if (!isAuthorized) {
+            log.warn("RBAC Deny \uD83D\uDEAB: User {} (Role {}) -> {} {} (Context: {})", userId, roleId, method, uri, requestContext);
+            sendError(response, HttpServletResponse.SC_FORBIDDEN, "ACCESS_DENIED", "Insufficient Permissions for this resource.");
+            return false;
+        }
+        return true;
     }
 
-    @PostMapping("/download")
-    public ResponseEntity<byte[]> downloadAscii(
-            @RequestBody AsciiFileRequest request) {
+    private void sendError(HttpServletResponse response, int status, String error, String message) throws IOException {
+        response.setStatus(status);
+        response.setContentType("application/json");
+        response.getWriter().write(String.format("{\"status\": %d, \"error\": \"%s\", \"message\": \"%s\"}", status, error, message));
+    }
 
-        return asciiFileService.downloadAscii(request);
+    private String removeBearer(String token) {
+        if (token != null && token.startsWith("Bearer ")) {
+            return token.substring(7);
+        }
+        return token;
     }
 }
-
-
-
-
-
-package com.fincore.ReportService.entity;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-
-import lombok.Data;
-
-@Data
-@Entity
-@Table(name = "ASCII_MASTER")
-public class AsciiMaster {
-
-    @Id
-    @Column(name = "ID")
-    private Long id;
-
-    @Column(name = "REPORT_NAME")
-    private String reportName;
-
-    @Column(name = "LOCATION")
-    private String location;
-
-    @Column(name = "FREQUENCY")
-    private String frequency;
-}
-
-
-package com.fincore.ReportService.service;
-
-import org.apache.hadoop.fs.FileSystem;
-
-public interface HdfsService {
-
-    FileSystem getFs();
-}
-
-
-
-
-package com.fincore.ReportService.service.impl;
-
-import com.fincore.ReportService.service.HdfsService;
-
-import lombok.RequiredArgsConstructor;
-
-import org.apache.hadoop.fs.FileSystem;
-import org.springframework.stereotype.Service;
-
-@Service
-@RequiredArgsConstructor
-public class HdfsServiceImpl implements HdfsService {
-
-    private final FileSystem fileSystem;
-
-    @Override
-    public FileSystem getFs() {
-        return fileSystem;
-    }
-}
-
-
