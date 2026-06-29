@@ -153,3 +153,16 @@ public record ViewConfig(
 ]
 
 
+
+{
+  "viewCode": "PNL_MAIN_VIEW",
+  "reportDate": "2026-05-31",
+  "dimensions": [
+    "PnlCategory"
+  ],
+  "metrics": [
+    "TotalAmount"
+  ],
+  "filters": []
+}
+
