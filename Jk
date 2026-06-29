@@ -123,3 +123,33 @@ public record ViewConfig(
         List<String> availableDates
 ) {
 }
+
+[
+  {
+    "reportCode": "PNL_REPORT",
+    "displayName": "Profit & Loss Analysis",
+    "availableDates": [
+      "2026-05-31",
+      "2026-04-30"
+    ],
+    "views": [
+      {
+        "viewCode": "PNL_MAIN_VIEW",
+        "displayName": "PNL_MAIN_VIEW",
+        "hierarchy": [
+          "PnlCategory",
+          "HeadCode",
+          "GlCode"
+        ],
+        "availableMetrics": [
+          {
+            "logicalName": "TotalAmount",
+            "displayName": "Total P&L Amount"
+          }
+        ]
+      }
+    ]
+  }
+]
+
+
