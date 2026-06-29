@@ -1,184 +1,125 @@
-# BGL PIPELINE
- 
-import sys
-import os
-from datetime import date
-from py4j.java_gateway import java_import
-from pyspark.sql.functions import col, split, substring, concat, regexp_replace, when, length
-from common.dateUtil import get_etl_date
-from common.fileUtil import paths_for_read
-from common.processRun import get_process_run_id
-from common.processRun import get_run_id
-from common.log_etl_modified import log_etl
-from common.constants import Process
-from common.logger import setup_logger
-from common.fileUtil import get_hdfs_base
-from common.createSpark import create_spark_session
-from common.create_path_if_not_exists import create_path_if_not_exists
-from pathlib import Path
- 
-# ==========================================================
-# MANIFEST CREATION
-# ==========================================================
-def create_manifest(spark, BASE_MANIFEST_PATH, RUN_ID, process_run_id, logger):
-    try:
-        etl_date_path = get_etl_date(spark).strftime("%Y%m%d")
-        hdfs_dir = f"{BASE_MANIFEST_PATH}/{etl_date_path}"
-        java_import(spark._jvm, "org.apache.hadoop.fs.FileSystem")
-        java_import(spark._jvm, "org.apache.hadoop.fs.Path")
-        fs = spark._jvm.FileSystem.get(spark._jsc.hadoopConfiguration())
- 
-        manifest_filename = (f"BGL_successful_{RUN_ID}_Manifest.txt")
-        dest_file_path = spark._jvm.Path(f"{hdfs_dir}/{manifest_filename}")
- 
-        log_etl(spark,process_run_id,"bgl_manifest_writing",1,"Starting manifest stage.")
- 
-        hdfs_dir_obj = spark._jvm.Path(hdfs_dir)
- 
-        if not fs.exists(hdfs_dir_obj):
-            fs.mkdirs(hdfs_dir_obj)
- 
-        out_stream = fs.create(dest_file_path, True)
-        out_stream.write(bytearray("BGL successfully loaded","utf-8"))
-        out_stream.close()
- 
-        logger.info(f"Manifest written to HDFS : {dest_file_path}")
-        log_etl(spark,process_run_id,"bgl_manifest_writing",2,"Manifest uploaded successfully.")
- 
-    except Exception as e:
-        logger.error(f"Error in manifest creation : {e}")
-        log_etl(spark,process_run_id,"bgl_manifest_writing",3,"Error in creating manifest file")
-        raise
- 
-# ==========================================================
-# MAIN
-# ==========================================================
- 
-if __name__ == "__main__":
-    PROCESS_ID = Process.BGL
-    HDFS_BASE = get_hdfs_base()
-    spark = create_spark_session("BGL_PIPELINE", HDFS_BASE)
- 
-    spark.sparkContext.setLogLevel("ERROR")
- 
-    process_run_id = None
-    run_id = None
-    logger = None
- 
-    try:
-        today = get_etl_date(spark)
-        posting_date_str = today.strftime("%Y-%m-%d")
-        today_str = posting_date_str
-        process_run_id = (
-            sys.argv[1] if len(sys.argv) > 1
-            else get_process_run_id(spark, PROCESS_ID, posting_date_str)
-        )
-        run_id = get_run_id(spark, posting_date_str, PROCESS_ID)
-        logger = setup_logger("BGL", run_id, posting_date_str)
-        logger.info("========== BGL PIPELINE STARTED ==========")
- 
-        # # to add this type "bgl" in paths_for_read function==== done
-   
- 
- 
- 
- 
- 
- 
- 
- 
-        hdfs_paths = paths_for_read("bgl", today, posting_date_str)
-        HDFS_PATH = hdfs_paths["HDFS_PATH"]
-        BGL_DATALAKE_PATH = hdfs_paths["BGL_DATALAKE_PATH"]
-        MANIFEST_BASE_PATH = hdfs_paths["MANIFEST_BASE_PATH"]
- 
-        logger.info(f"HDFS_PATH : {HDFS_PATH}")
-        logger.info(f"DELTA_PATH : {BGL_DATALAKE_PATH}")
-        logger.info(f"MANIFEST_FILE_PATH : {MANIFEST_BASE_PATH}")
- 
-        log_etl(spark,process_run_id,"bgl_pipeline",1,"BGL pipeline started")
-       
-     
-        # --------------------------------------------------
-        # READING FILES
-        # --------------------------------------------------
-        # file contains BGL_Ext_*.txt.gz
-       
-        input_path = "file:///app/Scripts/BGL_Ext_12052026_234901.txt"
-        # Read all .txt files in the directory
-        file_df = spark.read.text(input_path)
-        # file_df.show()
-        file_df.show(20, False)
-       
-        logger.info("BGL files read successfully")
- 
-        clean_df = file_df.filter(
-            (col("value").startswith("|")) &
-            (length(col("value")) > 10)
-        )
-        if clean_df.count() == 0:
-            logger.error("No valid data rows found. Check if file contains table borders.")
-            exit(1)
- 
-        logger.info(f"Valid data rows found")
- 
-        # --------------------------------------------------
-        # SPLITTING PIPE DATA
-        # --------------------------------------------------
-        parts = split(col("value"), r"\|")
- 
-        # --------------------------------------------------
-        # TRANSFORMATION
-        # --------------------------------------------------
-        parsed_df = clean_df.select(
-            concat(substring(
-                parts.getItem(0),8,7),parts.getItem(1)).alias("ACCOUNT_NO"),
-                parts.getItem(1).alias("BRANCH_CODE"),
-                parts.getItem(2).alias("PRODUCT"),
-                parts.getItem(3).alias("SEGMENT"),
-                parts.getItem(4).alias("AMOUNT"),
-                parts.getItem(5).alias("GLCC"),
-                parts.getItem(6).alias("ACCOUNT_NAME"),
-                when(regexp_replace(parts.getItem(7),"^0+","") == "","0")
-                .otherwise(regexp_replace(parts.getItem(7),"^0+","")).alias("STATUS")
-        )
-        parsed_df.show(20, False)
-        # --------------------------------------------------
-        # COUNT
-        # --------------------------------------------------
-        row_count = parsed_df.count()
-        logger.info(f"Total rows : {row_count}")
- 
-        # --------------------------------------------------
-        # WRITING TO DELTA
-        # # --------------------------------------------------
- 
-        (
-            parsed_df.write
-            .format("delta")
-            .mode("append")
-            .save(BGL_DATALAKE_PATH)
-        )
-       
-        logger.info("================ Data written to Delta successfully ========================")
- 
-        # --------------------------------------------------
-        # MANIFEST
-        # --------------------------------------------------
-        create_manifest(spark=spark,BASE_MANIFEST_PATH=MANIFEST_BASE_PATH,RUN_ID=run_id,process_run_id=process_run_id,logger=logger)
- 
-        log_etl(spark,process_run_id,"bgl_pipeline",2,f"BGL pipeline completed successfully. Rows={row_count}")
-        logger.info("========== BGL PIPELINE COMPLETED ==========")
- 
-    except Exception as e:
-        error_message = str(e)
-        if logger:
-            logger.error(error_message)
-        try:
-            log_etl(spark, process_run_id, "bgl_pipeline", 3, error_message)
-        except Exception:
-            pass
-        raise
- 
-    finally:
-        spark.stop()
+report config service
+package com.fincore.analyticsservice.service;
+
+import com.fincore.analyticsservice.dto.MetricConfig;
+import com.fincore.analyticsservice.dto.ReportConfigResponse;
+import com.fincore.analyticsservice.dto.ViewConfig;
+import com.fincore.analyticsservice.model.DrReport;
+import com.fincore.analyticsservice.model.DrReportView;
+import com.fincore.analyticsservice.model.DrViewDimension;
+import com.fincore.analyticsservice.repository.DrReportRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.*;
+
+@Service
+public class ReportConfigService {
+
+    private static final Integer ROLE_ADMIN = 10;
+    private static final Logger log = LoggerFactory.getLogger(ReportConfigService.class);
+    private final DrReportRepository reportRepository;
+
+    public ReportConfigService(DrReportRepository reportRepository) {
+        this.reportRepository = reportRepository;
+    }
+
+    /**
+     * Fetches UI metadata.
+     * Caches the response by User Roles to ensure users only see their permitted views.
+     */
+    @Transactional(readOnly = true)
+    @Cacheable(value = "uiReportConfig", key = "#roleId")
+    public List<ReportConfigResponse> getPermittedConfigurations(Integer roleId) {
+        log.info("Fetching Oracle UI configurations for roles: {}", roleId);
+
+        List<DrReport> allActiveReports = reportRepository.findAllActiveReportsWithViews();
+        List<ReportConfigResponse> permittedReports = new ArrayList<>();
+
+        for (DrReport report : allActiveReports) {
+            List<ViewConfig> permittedViews = processViews(report.getViews(), roleId);
+
+            // Only return the report if the user has access to at least one view inside it
+            if (!permittedViews.isEmpty()) {
+                permittedReports.add(new ReportConfigResponse(
+                        report.getReportCode(),
+                        report.getDisplayName(),
+                        permittedViews
+                ));
+            }
+        }
+
+        if (permittedReports.isEmpty()) {
+            log.warn("User with role {} requested config but has zero report permissions.", roleId);
+            throw new AccessDeniedException("You do not have permission to view any reports.");
+        }
+
+        return permittedReports;
+    }
+
+    private List<ViewConfig> processViews(Set<DrReportView> views, Integer roleId) {
+        List<ViewConfig> permittedViews = new ArrayList<>();
+
+        for (DrReportView view : views) {
+            if (hasAccess(roleId, view.getRequiredRoleIds())) {
+
+                // 1. Map Hierarchy (Must be strictly ordered by drillLevel)
+                List<String> logicalHierarchy = view.getDimensions().stream()
+                        .sorted(Comparator.comparing(DrViewDimension::getDrillLevel))
+                        .map(DrViewDimension::getLogicalName)
+                        .toList();
+
+                // 2. Map Metrics
+                List<MetricConfig> logicalMetrics = view.getMetrics().stream()
+                        .map(m -> new MetricConfig(m.getLogicalName(), m.getDisplayName()))//Cannot resolve method 'getDisplayName' in 'DrViewMetric'
+                        .toList();
+
+                permittedViews.add(new ViewConfig(
+                        view.getViewCode(),
+                        // Assuming you have a displayName in DrReportView, otherwise use viewCode
+                        view.getViewCode(),
+                        logicalHierarchy,
+                        logicalMetrics,
+                        semanticDrillDownService.getAvailableDates(view.getViewCode(),roleId)
+                ));
+            }
+        }
+        return permittedViews;
+    }
+
+    private boolean hasAccess(Integer roleId, String requiredRoleIds) {
+        // admin has access of everything
+        if (ROLE_ADMIN.equals(roleId)) {
+            return true;
+        }
+
+        // If no role is required, it's public. Otherwise, check user roles.
+        if (requiredRoleIds == null || requiredRoleIds.isBlank() || "NULL".equalsIgnoreCase(requiredRoleIds.trim())) {
+            return true;
+        }
+
+        List<String> allowedRoles = Arrays.asList(requiredRoleIds.split(","));
+
+        // return true if allowed roles contains the role id
+        return allowedRoles.contains(String.valueOf(roleId));
+    }
+}
+
+
+view config dto
+package com.fincore.analyticsservice.dto;
+
+import java.util.List;
+
+public record ViewConfig(
+        String viewCode,
+        String displayName,
+        List<String> hierarchy, // e.g., ["Branch", "GeneralLedger", "Account"]
+        List<MetricConfig> availableMetrics,
+        List<String> availableDates
+) {
+}
