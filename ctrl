@@ -1,256 +1,580 @@
-Exception files
-1.package com.fincore.ReportService.exception;
+model files
+all
+package com.fincore.ReportService.model;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fincore.ReportService.dto.ApiResponse;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ControllerAdvice;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.context.request.WebRequest;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
 
-import jakarta.validation.ConstraintViolationException;
-import java.util.stream.Collectors;
+@Entity
+@Table(name = "APP_CONFIG")
+@Getter
+@Setter
+public class AppConfig {
 
-@ControllerAdvice
-@Slf4j
-public class GlobalExceptionHandler {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
 
+    @Column(name = "CONFIG_KEY", nullable = false, unique = true)
+    private String configKey;
 
+    @Column(name = "CONFIG_VALUE", nullable = false)
+    private String configValue;
 
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ApiResponse<Object>> handleResourceNotFoundException(ResourceNotFoundException ex, WebRequest request) {
-        log.error("Report not found: {}", ex.getMessage());
-        return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.NOT_FOUND);
-    }
-
-    @ExceptionHandler({JsonProcessingException.class, HttpMessageNotReadableException.class})
-    public ResponseEntity<ApiResponse<Object>> handleJsonProcessingException(Exception ex, WebRequest request) {
-        log.error("Error processing JSON payload: {}", ex.getMessage());
-        return new ResponseEntity<>(ApiResponse.error("Invalid request payload format. Please check the JSON structure and data types."), HttpStatus.BAD_REQUEST);
-    }
-
-    @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<ApiResponse<Object>> handleDataIntegrityViolationException(DataIntegrityViolationException ex, WebRequest request) {
-        log.error("Data integrity violation: {}", ex.getMessage());
-        if (ex.getMostSpecificCause().getMessage().contains("already exists")) {
-            return new ResponseEntity<>(ApiResponse.error("A resource with the provided identifier already exists."), HttpStatus.CONFLICT);
-        }
-        return new ResponseEntity<>(ApiResponse.error("Database constraint violation. A required field may be missing or a value is invalid."), HttpStatus.CONFLICT);
-    }
-
-    // This ALREADY handles IllegalArgumentException, so we don't need a new one
-    @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
-    public ResponseEntity<ApiResponse<Object>> handleArgumentAndStateExceptions(RuntimeException ex, WebRequest request) {
-        log.error("Illegal argument or state: {}", ex.getMessage());
-        return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.BAD_REQUEST);
-    }
-
-    // This ALREADY handles global Exception, so we don't need a new one
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Object>> handleGlobalException(Exception ex, WebRequest request) {
-        log.error("An unexpected error occurred: {}", ex.getMessage(), ex);
-        return new ResponseEntity<>(ApiResponse.error("An internal server error occurred."), HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-
-
-    /**
-     * Handles exceptions thrown when @Valid validation fails on a request body.
-     * Returns a 400 Bad Request with a list of validation errors.
-     */
-
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ResponseEntity<ApiResponse<Object>> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        String errors = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> error.getField() + ": " + error.getDefaultMessage())
-                .collect(Collectors.joining(", "));
-
-        log.warn("Validation failed for incoming request: {}", errors);
-        return new ResponseEntity<>(ApiResponse.error("Validation Failed: " + errors), HttpStatus.BAD_REQUEST);
-    }
-
-    /**
-     * Handles exceptions thrown by the Jakarta Validator, for example,
-     * when we manually trigger validation in our strategies.
-     */
-
-    @ExceptionHandler(ConstraintViolationException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ResponseEntity<ApiResponse<Object>> handleConstraintViolationException(ConstraintViolationException ex) {
-        String errors = ex.getConstraintViolations().stream()
-                .map(cv -> cv.getPropertyPath() + ": " + cv.getMessage())
-                .collect(Collectors.joining(", "));
-
-        log.warn("Constraint violation during processing: {}", errors);
-        return new ResponseEntity<>(ApiResponse.error("Validation Failed: " + errors), HttpStatus.BAD_REQUEST);
-    }
-
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAccessDeniedException(AccessDeniedException ex, WebRequest request) {
-        log.error("Access Denied: {}", ex.getMessage());
-        return new ResponseEntity<>(ApiResponse.error("Report Not Found or You are not authorized to perform this action."), HttpStatus.NOT_FOUND);
-    }
-
+    @Column(name = "DESCRIPTION")
+    private String description;
 
 }
-2.package com.fincore.ReportService.exception;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.ResponseStatus;
 
-@ResponseStatus(HttpStatus.NOT_FOUND)
-public class ResourceNotFoundException extends RuntimeException {
-    public ResourceNotFoundException(String message) {
-        super(message);
+package com.fincore.ReportService.model;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+
+@Data
+@Entity
+@NoArgsConstructor
+@AllArgsConstructor
+@Getter
+@Setter
+@Table(name = "ASCII_CONFIG")
+public class AsciiConfig {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "ID")
+    private Long id;
+
+    @Column(name = "REPORT_ID")
+    private String reportId;
+
+    @Column(name = "FILE_TYPE")
+    private String fileType;
+
+    @Column(name = "OUTPUT_FILE_NAME")
+    private String outputFileName;
+}
+
+package com.fincore.ReportService.model;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+
+@Data
+@Entity
+@NoArgsConstructor
+@AllArgsConstructor
+@Getter
+@Setter
+@Table(name = "ASCII_CONFIG_TB")
+public class AsciiConfigTb {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "ID")
+    private Long id;
+
+    @Column(name = "REPORT_ID")
+    private String reportId;
+
+    @Column(name = "FILE_IDENTIFIER")
+    private String fileIdentifier;
+
+}
+package com.fincore.ReportService.model;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+
+@Data
+@Entity
+@NoArgsConstructor
+@AllArgsConstructor
+@Getter
+@Setter
+@Table(name = "ASCII_MASTER")
+public class AsciiMaster {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "ID")
+    private Long id;
+
+    @Column(name = "ASCII_NAME")
+    private String reportName;
+
+    @Column(name = "LOCATION")
+    private String location;
+
+    @Column(name = "FREQUENCY")
+    private String frequency;
+}
+package com.fincore.ReportService.model;
+
+import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Entity
+@Data
+@NoArgsConstructor
+public class Difference {
+
+    @Id
+    @Column(name = "ID")
+    private Long id;
+
+    @Column(name = "RECON_RUN_DATE")
+    private LocalDate reconRunDate;
+
+    @Column(name = "BRANCH_CODE", length = 5)
+    private String branchCode;
+
+    @Column(name = "CURRENCY", length = 3)
+    private String currency;
+
+    @Column(name = "CGL", length = 10)
+    private String cgl;
+
+    @Column(name = "CBS_BALANCE", precision = 25, scale = 4)
+    private BigDecimal cbsBalance;
+
+    @Column(name = "GL_BALANCE", precision = 25, scale = 4)
+    private BigDecimal glBalance;
+
+    @Column(name = "DIFFERENCE_AMOUNT", precision = 25, scale = 4)
+    private BigDecimal differenceAmount;
+
+    @Column(name = "DIFF_BW_YESTERDAY", precision = 25, scale = 4)
+    private BigDecimal diffBwYesterday;
+
+    @Column(name = "TYPE", length = 40)
+    private String type;
+
+    @Column(name = "HEAD", length = 30)
+    private String head;
+
+    @Column(name = "FIRST_ERROR_DATE")
+    private LocalDate FIRST_ERROR_DATE;
+}
+package com.fincore.ReportService.model;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
+
+@Entity
+@Table(name = "JASPER_REPORTS")
+@Getter
+@Setter
+public class JasperReports {
+
+    @Id
+    private String type;
+
+    @Column(name = "FILENAME", nullable = false)
+    private String fileName;
+
+    @Column(name = "PARAMS")
+    private String params;
+ }
+package com.fincore.ReportService.model;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp; // Import this
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import java.io.Serializable;
+import java.time.Instant; // This is the correct type
+import java.util.Objects;
+import java.util.UUID;
+
+/**
+ * Represents an event in the outbox system, intended for notification purposes.
+ * UPDATED: Added @CreationTimestamp for automatic timestamping.
+ */
+@Entity
+@Table(name = "Notifications")
+@Builder
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@EntityListeners(AuditingEntityListener.class)
+public class Notifications implements Serializable {
+
+    // Unique primary key for the outbox event.
+    // Using UUID strategy is correct for Oracle's SYS_GUID() or RAW(16)
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "EVENT_ID", updatable = false, nullable = false)
+    private UUID eventId;
+
+    // The ID of the user who should receive this notification (for 1-to-1).
+    @Column(name = "USER_ID", length = 255)
+    private String userId;
+
+    // The human-readable message to be displayed.
+    @Column(name = "MESSAGE", length = 1024, nullable = false)
+    private String message;
+
+    // The relative URL the user should be taken to when clicking the notification.
+    @Column(name = "LINK_URL", length = 1024)
+    private String linkUrl;
+
+    // The microservice that generated this event.
+    @Column(name = "EVENT_SOURCE", length = 100)
+    private String eventSource;
+
+    // The primary key of the business object (e.g., the CommonReq ID).
+    @Column(name = "AGGREGATE_ID", length = 255)
+    private String aggregateId;
+
+    // The timestamp when the event was created.
+    @CreationTimestamp
+    @Column(name = "EVENT_TIMESTAMP", nullable = false, updatable = false)
+    private Instant eventTimestamp;
+
+    // For 1-to-Many notifications. If USER_ID is null, this role is used.
+    @Column(name = "TARGET_ROLE", length = 100)
+    private String targetRole;
+
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Notifications that = (Notifications) o;
+        return Objects.equals(eventId, that.eventId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(eventId);
+    }
+
+
+    @Override
+    public String toString() {
+        return "NotificationTable{" +
+                "eventId='" + eventId + '\'' +
+                ", userId='" + userId + '\'' +
+                ", targetRole='" + targetRole + '\'' +
+                ", eventSource='" + eventSource + '\'' +
+                ", aggregateId='" + aggregateId + '\'' +
+                ", eventTimestamp=" + eventTimestamp +
+                '}';
     }
 }
-kafka files
-1package com.fincore.ReportService.kafka;
+package com.fincore.ReportService.model;
 
-import com.fincore.ReportService.dto.ReportGenerationDTO;
-import com.fincore.ReportService.dto.ReportGenerationResponseDTO;
-import com.fincore.ReportService.service.KafkaService;
-import com.fincore.ReportService.util.Constants;
 
-import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
-import jakarta.validation.ConstraintViolationException;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import jakarta.persistence.*;
+import org.hibernate.annotations.CreationTimestamp;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Set;
-import java.util.stream.Collectors;
 
-import jakarta.validation.ConstraintViolation;
-import jakarta.validation.Validator;
+import lombok.Getter;
+import lombok.Setter;
 
-import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.messaging.handler.annotation.Payload;
-import org.springframework.stereotype.Service;
-import org.springframework.validation.annotation.Validated;
+@Entity
+@Table(name = "REPORT_TYPES")
+@Getter
+@Setter
+public class ReportType {
 
-// @Slf4j
-// @Service
-// @RequiredArgsConstructor
-// @Validated
-// public class ReportKafkaConsumer {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
 
-//     private final KafkaService kafkaService;
-//     private final ReportKafkaProducer producer;
+    @Column(name = "REPORT_NAME", nullable = false, unique = true)
+    private String reportName;
 
-//     @KafkaListener(topics = "report-generation-request", groupId = "Airflow_ETL", properties = {
-//             "spring.json.value.default.type=com.fincore.ReportService.dto.ReportGenerationDTO" })
-//     public void consume(@Valid ReportGenerationDTO request) {
+    @CreationTimestamp
+    @Column(name = "CREATED_AT", updatable = false)
+    private Instant createdAt;
 
-//         try {
-//             log.info("Report Generation Request Recieved:{} ", request);
-//             kafkaService.processReport(request);
+    @Column(name = "FILE_NAME")    
+    private String fileName;
 
-//         }
-//         catch (CallNotPermittedException e) {
-//             log.error("Circuit Breaker is OPEN. Skipping/Retrying later for RunId: {}", request.getRunId());
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "REPORT_ROLE_MAPPING",
+            joinColumns = @JoinColumn(name = "report_type_id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id")
+    )
+    private Set<Role> roles;
 
-//         }
-
-//         catch (ConstraintViolationException e) {
-//             log.info("Constraint Violation {}",e.getMessage());
-//             ReportGenerationResponseDTO response = new ReportGenerationResponseDTO();
-//             response.setRunId(request.getRunId());
-//             response.setProcessRunId(request.getProcessRunId());
-//             response.setStageId(request.getStageId());
-//             response.setStatus(Constants.FAILED);
-//             response.setRemark("Validation Failed " + e.getMessage());
-//             producer.sendResponse(response);
-//         }
-
-//     }
-// }
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class ReportKafkaConsumer {
-
-    private final KafkaService kafkaService;
-    private final ReportKafkaProducer producer;
-    private final Validator validator;
-
-    @KafkaListener(topics = "report-generation-request", groupId = "Airflow_ETL", properties = {
-            "spring.json.value.default.type=com.fincore.ReportService.dto.ReportGenerationDTO"
-    })
-    public void consume(ReportGenerationDTO request) {
-
-        log.info("Received Report Generation Request: {}", request);
-
-        ReportGenerationResponseDTO response = new ReportGenerationResponseDTO();
-
-        try {
-
-            Set<ConstraintViolation<ReportGenerationDTO>> violations = validator.validate(request);
-
-            if (!violations.isEmpty()) {
-
-                String errorMessage = violations.stream()
-                        .map(ConstraintViolation::getMessage)
-                        .collect(Collectors.joining(", "));
-
-                log.error("Validation Failed: {}", errorMessage);
-
-                response.setRunId(request.getRunId());
-                response.setProcessRunId(request.getProcessRunId());
-                response.setStageId(request.getStageId());
-                response.setStatus(Constants.FAILED);
-                response.setRemark("Validation Failed: " + errorMessage);
-                // response.setTimestamp(LocalDateTime.now());
-
-                producer.sendResponse(response);
-                return;
-            }
-
-            kafkaService.processReport(request);
-
-        } catch (RuntimeException e) {
-
-            log.error("Processing Failed for RunId {}: {}", request.getRunId(), e.getMessage(), e);
-
-            response.setRunId(request.getRunId());
-            response.setProcessRunId(request.getProcessRunId());
-            response.setStageId(request.getStageId());
-            response.setStatus(Constants.FAILED);
-            response.setRemark("Processing Failed: " + e.getMessage());
-            // response.setTimestamp(LocalDateTime.now());
-
-            producer.sendResponse(response);
-        }
-    }
+    @Column(name = "IS_BRANCH_LEVEL")    
+    private String isBranchLevel;
 }
-2package com.fincore.ReportService.kafka;
+package com.fincore.ReportService.model;
 
-import com.fincore.ReportService.dto.ReportGenerationResponseDTO;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.stereotype.Service;
+import java.util.Set;
 
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class ReportKafkaProducer {
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.Table;
+import lombok.Data;
 
-    private final KafkaTemplate<String, ReportGenerationResponseDTO> kafkaTemplate;
+@Entity
+@Data
+@Table(name = "ROLES")
+public class Role {
+    
+    @Id
+    @Column(name = "ROLE_ID" )
+    private Integer roleId;
 
-    private static final String RESPONSE_TOPIC = "report-generation-response";
+    @Column(name = "ROLE_NAME")
+    private String roleName;
 
-    public void sendResponse(ReportGenerationResponseDTO response) {
-         log.info("Report Generation Response Sent :{} ",response);
+    @Column(name = "DESCRIPTION")
+    private String description;
 
-        kafkaTemplate.send(RESPONSE_TOPIC, response);
-    }
+    @Column(name = "ROLE_STATUS")
+    private String role_status;
+
+    @ManyToMany(mappedBy = "roles")
+    private Set<ReportType> reportTypes;
+}
+repository files
+package com.fincore.ReportService.repository;
+
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.fincore.ReportService.model.AppConfig;
+
+public interface AppConfigRepository extends JpaRepository<AppConfig, Integer> {
+
+    Optional<AppConfig> findByConfigKey(String configKey);
+
+}
+package com.fincore.ReportService.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+import com.fincore.ReportService.model.AsciiConfig;
+
+
+
+@Repository
+public interface AsciiConfigRepository
+        extends JpaRepository<AsciiConfig, Long> {
+}
+package com.fincore.ReportService.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+import com.fincore.ReportService.model.AsciiConfigTb;
+
+
+
+@Repository
+public interface AsciiConfigTbRepository
+        extends JpaRepository<AsciiConfigTb, Long> {
+}
+package com.fincore.ReportService.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+import com.fincore.ReportService.model.AsciiMaster;
+
+
+
+@Repository
+public interface AsciiMasterRepository
+        extends JpaRepository<AsciiMaster, Long> {
+}
+package com.fincore.ReportService.repository;
+
+import com.fincore.ReportService.dto.DifferenceDTO;
+import com.fincore.ReportService.model.Difference;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+import java.time.LocalDate;
+
+@Repository
+public interface DifferenceRepository extends JpaRepository<Difference, Long> {
+
+    // 1. Keep the original 'Find All' for basic listing
+    @Query("""
+        SELECT new com.fincore.ReportService.dto.DifferenceDTO(
+            d.reconRunDate, d.branchCode, d.currency, d.cgl,
+            d.cbsBalance, d.glBalance, d.differenceAmount,
+            d.diffBwYesterday, d.type, d.head, d.FIRST_ERROR_DATE
+        )
+        FROM Difference d
+    """)
+    Page<DifferenceDTO> findAllAsDto(Pageable pageable);
+
+    /**
+     * 2. MASTER DYNAMIC FILTER
+     * Handles: Date Range, Optional Branch, Optional Currency, Optional CGL
+     */
+    @Query("""
+        SELECT new com.fincore.ReportService.dto.DifferenceDTO(
+            d.reconRunDate, d.branchCode, d.currency, d.cgl,
+            d.cbsBalance, d.glBalance, d.differenceAmount,
+            d.diffBwYesterday, d.type, d.head, d.FIRST_ERROR_DATE
+        )
+        FROM Difference d
+        WHERE (d.reconRunDate BETWEEN :fromDate AND :toDate)
+        AND (:branchCode IS NULL OR d.branchCode = :branchCode)
+        AND (:currency IS NULL OR d.currency = :currency)
+        AND (:cgl IS NULL OR d.cgl = :cgl)
+    """)
+    Page<DifferenceDTO> searchDifferencesDynamic(
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate,
+            @Param("branchCode") String branchCode,
+            @Param("currency") String currency,
+            @Param("cgl") String cgl,
+            Pageable pageable
+    );
+}
+package com.fincore.ReportService.repository;
+
+import com.fincore.ReportService.model.JasperReports;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface JasperReportTypeRepository extends JpaRepository<JasperReports,String> {
+    List<JasperReports> findAll();
+
+
+    JasperReports findByType(@NotNull(message = "Report Type Cannot be null") @NotBlank(message = "Report Type Cannot be blank") String reportType);
+}
+package com.fincore.ReportService.repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import com.fincore.ReportService.model.Notifications;
+
+import java.util.UUID;
+
+/**
+ * 
+ */
+@Repository
+public interface NotificationRepository extends JpaRepository<Notifications, UUID>{
+
+}
+package com.fincore.ReportService.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import com.fincore.ReportService.model.ReportType;
+
+@Repository
+public interface ReportTypeRepository extends JpaRepository<ReportType, Integer> {
+
+    /**
+     * Finds all report types and orders them by their REPORT_NAME for a better user experience.
+     * @return A list of ReportType entities.
+     */
+    // This method is still useful for admins or internal tools.
+    List<ReportType> findAllByOrderByReportNameAsc();
+
+    /**
+     * Finds all report types accessible by a specific role ID.
+     * This query joins ReportType with its roles and filters by the role's primary key.
+     * The result is ordered by the reportName to ensure a consistent and user-friendly order in the dropdown.
+     *
+     * @param roleId The primary key ID of the role.
+     * @return A list of accessible ReportType entities.
+     */
+    @Query("SELECT rt FROM ReportType rt JOIN rt.roles r WHERE r.roleId = :roleId ORDER BY rt.reportName ASC")
+    List<ReportType> findByRoleId(@Param("roleId") int roleId);
+
+    // Optional<ReportType> findByFileName(String fileName);
+
+//    Optional<ReportType> findByFileNameAndRoles_roleId(String fileName, int roleId);
+
+    Optional<ReportType> findByFileNameAndRoles_roleId(String fileName, int roleId);
+
+    @Query("SELECT rt FROM ReportType rt JOIN rt.roles r WHERE r.roleId = :roleId and rt.isBranchLevel='Y' ORDER BY rt.reportName ASC")
+    List<ReportType> findBranchWiseReports(@Param("roleId") int roleId );
+
 }
