@@ -1,370 +1,177 @@
-package com.tcs.fincore.AsciiGenerationService.Service;
-
-import com.tcs.fincore.AsciiGenerationService.DTO.FileJob;
-import com.tcs.fincore.AsciiGenerationService.Model.AsciiConfig;
-import com.tcs.fincore.AsciiGenerationService.Repository.AsciiConfigRepository;
-
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
-import org.apache.hadoop.fs.*;
-
-import java.io.*;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Pattern;
-
-@Service
-@Slf4j
-public class AsciiGenerationService {
-
-    @Autowired
-    private AsciiConfigRepository configRepo;
-
-    @Autowired
-    private JobQueueManager jobQueueManager;
-
-    @Autowired
-    private HdfsService hdfsService;
-
-    private static final Map<String, Pattern> INPUT_REGEX_CACHE = new ConcurrentHashMap<>();
-    private static final Map<String, BatchStats> batchTracker = new ConcurrentHashMap<>();
-
-    private static class BatchStats {
-        long startTime;
-        AtomicInteger remainingFiles;
-
-        BatchStats(int total) {
-            this.startTime = System.currentTimeMillis();
-            this.remainingFiles = new AtomicInteger(total);
-        }
-    }
-
-    // =====================================================
-    // 1. INITIATE BATCH (HDFS DISCOVERY)
-    // =====================================================
-    public String initiateBatch(Long configId) {
-        try {
-            AsciiConfig config = configRepo.findById(configId)
-                    .orElseThrow(() -> new RuntimeException("Config not found: " + configId));
-
-            String reportId = config.getReportId();
-            String keyword = reportId.contains("_") ? reportId.split("_")[0] : reportId;
-
-            FileSystem fs = hdfsService.getFs();
-            Path baseDir = new Path("/reports");
-
-            RemoteIterator<LocatedFileStatus> files = fs.listFiles(baseDir, true);
-
-            List<Path> foundFiles = new ArrayList<>();
-
-            while (files.hasNext()) {
-                LocatedFileStatus file = files.next();
-                String fileName = file.getPath().getName();
-
-                if (fileName.contains(keyword) && fileName.endsWith(".psv")) {
-                    foundFiles.add(file.getPath());
+} catch (IOException | JRException e) {
+                    log.error("Error generating {}: {}", reportName, e.getMessage());
+                    reportStat.put(reportName, "Failed: " + e.getMessage());
+                    // Don't stop the loop; try to generate other reports
                 }
             }
-
-            if (foundFiles.isEmpty()) {
-                return "No files found for: " + keyword;
-            }
-
-            String batchId = UUID.randomUUID().toString();
-            batchTracker.put(batchId, new BatchStats(foundFiles.size()));
-
-            log.info("Batch Started | ID: {} | Files: {}", batchId, foundFiles.size());
-
-            for (Path file : foundFiles) {
-                jobQueueManager.submitFileJob(new FileJob(configId, file, batchId));
-            }
-
-            return "Batch Started: " + batchId;
-
-        } catch (Exception e) {
-            log.error("Batch initiation failed", e);
-            throw new RuntimeException(e);
+        } catch (SQLException e) {
+            log.error("Unable to fetch records from db");
         }
+
+        sendProgress(taskId, userId, 100, "All reports generated.", "COMPLETED");
+        log.info("All reports generated.");
+        return reportStat;
     }
 
-    // =====================================================
-    // 2. PROCESS SINGLE FILE
-    // =====================================================
-    public void processSingleFile(FileJob job) {
+    // ----------------------------------------------------------------------------------
+    // DOWNLOAD REPORTS FOR TEMP-REPORTS PATH (/temp-reports/date/runId/)
+    // ----------------------------------------------------------------------------------
+    @Transactional
+    @Override
+    public ReportStreamResponse downloadTempReportStream(String fileName, LocalDate date, int userRoleId, String userId,
+                                                         String runId) throws IOException {
+ String reportDisplayName = fileName; // temporary display name
 
-        Path inputPath = job.getFilePath();
-        Long configId = job.getConfigId();
-        String batchId = job.getBatchId();
+        // Construct task id
+        String safeReportName = reportDisplayName.replaceAll("[^a-zA-Z0-9]", "_").toLowerCase().replaceAll("_", "_");
+        String safeDate = date.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        String taskId = String.format("%s_%s_%d", safeReportName, safeDate, System.currentTimeMillis());
 
-        try {
-            FileSystem fs = hdfsService.getFs();
-            AsciiConfig config = configRepo.findById(configId).orElseThrow();
+        // 2. Prepare Paths with the CORRECT format "dd-MM-yyyy"
+        String formattedDate = date.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String fileNamePrefix = fileName + "_" + date.format(DateTimeFormatter.ofPattern("ddMMyyyy"));
 
-            String fullPath = inputPath.toString();
-            String[] parts = fullPath.split("/");
+        Path searchDirectory;
+        searchDirectory = new Path(tempReportsBasepath, formattedDate + "/" + runId);
+        log.info("Searching HDFS directory {} for temp reports with prefix '{}'...", searchDirectory,
+                fileNamePrefix);
 
-            // works for both branch / non-branch
-            String date = parts[2];
+        // 3. Call the common stream Logic and return directly to the client
+        return streamReport(searchDirectory, taskId, userId, fileNamePrefix, reportDisplayName, date, fileName,
+                formattedDate);
+    }
 
-            String reportId = config.getReportId().toLowerCase();
-            String reportType = reportId.contains("_") ? reportId.split("_")[0] : reportId;
+    // ----------------------------------------------------------------------------------
+    // HELPER METHODS (Stream Logic + Redis)
+    // ----------------------------------------------------------------------------------
+    private ReportStreamResponse streamReport(Path searchDirectory, String taskId, String userId, String fileNamePrefix,
+                                              String reportDisplayName, LocalDate date, String fileName, String formattedDate) {
 
-            // ✅ FINAL OUTPUT PATH
-            Path outputDir = new Path("/reports/" + date + "/ascii_files/" + reportType + "/");
+        StreamingResponseBody streamingBody = outputStream -> {
+            try (ZipOutputStream zipOut = new ZipOutputStream(outputStream)) {
+                if (!hdfsFileSystem.exists(searchDirectory)) {
+                    log.info("Directory not found in HDFS: {}", searchDirectory);
+                    // Throw immediately so a proper HTTP 404 is sent to the client
+                    throw new ResourceNotFoundException("Reports directory not found: " + searchDirectory);
+                }
 
-            if (!fs.exists(outputDir)) {
-                fs.mkdirs(outputDir);
-            }
-
-            String outputFileName =
-                    "GENERATED_" + reportId + "_" +
-                    System.currentTimeMillis() + config.getFileType();
-
-            Path outputPath = new Path(outputDir, outputFileName);
-
-            log.info("INPUT: {}", inputPath);
-            log.info("OUTPUT: {}", outputPath);
-
-            BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(inputPath)));
-            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fs.create(outputPath)));
-
-            // ================= HEADER =================
-            HeaderInfo header = parseHeader(fs, inputPath);
-
-            String headerLine =
-                    config.getOutputFirstLine()
-                            + String.format("%5s", header.branchCode).replace(' ', '0')
-                            + header.reportDate
-                            + "F";
-
-            writer.write(headerLine);
-            writer.newLine();
-
-            // ================= BODY =================
-            List<String> buffer = new ArrayList<>();
-            int batchSize = config.getOutputPerLineHead();
-
-            String line;
-
-            while ((line = reader.readLine()) != null) {
-
-                String processed = transformLine(line, config);
-
-                if (processed != null) {
-                    buffer.add(processed);
-
-                    if (buffer.size() == batchSize) {
-                        writer.write(String.join("", buffer));
-                        writer.newLine();
-                        buffer.clear();
+                // 1. Calculate Total Size of all files to be downloaded
+                long calculatedTotalSize = 0;
+                for (FileStatus status : hdfsFileSystem.listStatus(searchDirectory)) {
+                    if (status.isFile() && status.getPath().getName().startsWith(fileNamePrefix)) {
+                        calculatedTotalSize += status.getLen();
                     }
                 }
-            }
+                final long finalTotalSize = calculatedTotalSize; // Needed for lambda
 
-            if (!buffer.isEmpty()) {
-                writer.write(String.join("", buffer));
-                writer.newLine();
-            }
+                // Atomic counter to track bytes read across multiple files (if multiple exist)
+                AtomicLong globalBytesRead = new AtomicLong(0);
 
-            // ================= FOOTER =================
-            if (config.getOutputEndLine() != null) {
-                writer.write(config.getOutputEndLine());
-            }
+                FileStatus[] fileStatuses = hdfsFileSystem.listStatus(searchDirectory);
+                boolean fileFound = false;
 
-            reader.close();
-            writer.close();
+                for (FileStatus status : fileStatuses) {
+                    if (!status.isFile())
+                        continue;
+                    String actualFileName = status.getPath().getName();
 
-            checkBatchCompletion(batchId);
+                    if (actualFileName.startsWith(fileNamePrefix)) {
+                        fileFound = true;
+                        sendProgress(taskId, userId, 0, "Starting download...", "PROCESSING");
+                        ZipEntry zipEntry = new ZipEntry(actualFileName);
+                        zipOut.putNextEntry(zipEntry);
 
-        } catch (Exception e) {
-            log.error("File processing failed: {}", inputPath, e);
-            checkBatchCompletion(batchId);
-        }
-    }
-
-    // =====================================================
-    // 3. TRANSFORMATION LOGIC (WORKING VERSION)
-    // =====================================================
-    private String transformLine(String line, AsciiConfig config) {
-
-        String[] cols = line.split("\\|", -1);
-
-        if (!isValidRow(cols, config)) return null;
-
-        List<ProcessingItem> items = extractAmountColumns(cols, config);
-
-        StringBuilder sb = new StringBuilder();
-        boolean valid = false;
-
-        for (ProcessingItem item : items) {
-            BigDecimal amt = item.amount;
-
-            if (amt != null) {
-                sb.append(amt.toPlainString());
-                valid = true;
-            }
-        }
-
-        if (valid) {
-            return items.get(0).head + sb.toString();
-        }
-
-        return null;
-    }
-
-    // =====================================================
-    // 4. COLUMN EXTRACTION (OLD LOGIC)
-    // =====================================================
-    private List<ProcessingItem> extractAmountColumns(String[] cols, AsciiConfig config) {
-
-        List<ProcessingItem> list = new ArrayList<>();
-
-        int headIdx = config.getInputHeadCol() - 1;
-        String head = (headIdx < cols.length) ? cols[headIdx].trim() : "";
-
-        String seq = config.getAmountColSeq();
-
-        if (seq.contains("else")) {
-            String[] parts = seq.split("else");
-            int primary = Integer.parseInt(parts[0].trim());
-
-            for (String p : parts) {
-                int idx = Integer.parseInt(p.trim()) - 1;
-                BigDecimal val = parseAmount(cols, idx);
-
-                if (val.compareTo(BigDecimal.ZERO) != 0) {
-                    list.add(new ProcessingItem(head, val, primary));
-                    return list;
+                        try (FSDataInputStream hdfsStream = hdfsFileSystem.open(status.getPath())) {
+                            // --- REPLACED StreamUtils.copy WITH MANUAL LOOP ---
+                            byte[] buffer = new byte[32 * 1024]; // 32KB buffer
+                            int bytesRead;
+                            int lastPercent = 0;
+                            while ((bytesRead = hdfsStream.read(buffer)) != -1) {
+                                zipOut.write(buffer, 0, bytesRead);
+                                // Update global counter
+                                long currentTotal = globalBytesRead.addAndGet(bytesRead);
+                                // Calculate Percentage
+                                int percent = (int) ((currentTotal * 100) / finalTotalSize);
+                                // Cap at 99% so 100% is only sent when fully done
+                                if (percent > 99)
+                                    percent = 99;
+                                // Throttle: Send update only if percent changed by 5%
+                                if (percent >= lastPercent + 5) {
+                                    sendProgress(taskId, userId, percent, "Downloading... " + percent + "%",
+                                            "PROCESSING");
+                                    lastPercent = percent;
+                                }
+                            }
+                        } finally {
+                            zipOut.closeEntry();
+                        }
+                        log.info("Streamed file {} into zip response.", actualFileName);
+                    }
                 }
+
+                if (!fileFound) {
+                    log.info("No report files found matching prefix: " + fileNamePrefix);
+                    // Throw immediately so a proper HTTP 404 is sent to the client
+                    throw new ResourceNotFoundException("No report files found matching prefix: " + fileNamePrefix);
+                }
+
+                // Notification is only sent AFTER all files are confirmed found and streamed
+                String successMsg = String.format("%s downloaded successfully.", reportDisplayName);
+
+                sendProgress(taskId, userId, 100, "Download Complete", "COMPLETED");
+
+                sendNotification(userId, successMsg, "/glif-reports", fileName + "_" + date);
+                // sendNotification(userId, "Report(s) downloaded successfully.",
+                // "/glif-reports", fileName + "_" + date);
+
+            } catch (ResourceNotFoundException e) {
+                // If a resource error happens before streaming starts, it's caught here
+                log.error("Resource not found error: {}", e.getMessage());
+                sendNotification(userId, reportDisplayName + " is not available.", "/glif-reports",
+                        fileName + "_" + date);
+                // Note: The controller must catch this exception to return a proper 404
+//                sendProgress(taskId, userId, 100, "Download Failed", "COMPLETED");
+            } catch (IOException e) {
+                // If an I/O error happens DURING streaming, the client will see a failed
+                // download
+                // Includes the internet/network-down , HDFS down and NameNode not reachable
+                // cases
+                log.error("Streaming I/O error for user {}: {}", userId, e.getMessage(), e);
+                sendNotification(userId,
+                        "Download failed due to a streaming or internet issue. Please check your connection and try again.",
+                        "/glif-reports", fileName + "_" + date);
             }
+        };
 
-            list.add(new ProcessingItem(head, BigDecimal.ZERO, primary));
-        }
-
-        else if (seq.contains("and")) {
-            for (String p : seq.split("and")) {
-                int idx = Integer.parseInt(p.trim()) - 1;
-                list.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
-            }
-        }
-
-        else {
-            int idx = Integer.parseInt(seq.trim()) - 1;
-            list.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
-        }
-
-        return list;
+        String downloadName = fileName + "_" + formattedDate + ".zip";
+        return new ReportStreamResponse(downloadName, streamingBody);
     }
-
-    // =====================================================
-    // 5. SAFE PARSE
-    // =====================================================
-    private BigDecimal parseAmount(String[] cols, int idx) {
-        if (idx >= cols.length) return BigDecimal.ZERO;
-        return parseAmount(cols[idx]);
-    }
-
-    private BigDecimal parseAmount(String val) {
+ private void sendProgress(String taskId, String userId, int percent, String msg, String status) {
         try {
-            if (val == null || val.trim().isEmpty()) return BigDecimal.ZERO;
-
-            String clean = val.trim().replace(",", "");
-
-            if (!clean.matches("-?\\d+(\\.\\d+)?")) {
-                return BigDecimal.ZERO;
-            }
-
-            return new BigDecimal(clean);
-
+            TaskProgressDto dto = TaskProgressDto.builder()
+                    .taskId(taskId)
+                    .userId(userId)
+                    .percentage(percent)
+                    .message(msg)
+                    .status(status)
+                    .build();
+            redisTemplate.convertAndSend(progressTopic, dto);
         } catch (Exception e) {
-            return BigDecimal.ZERO;
+            log.warn("Redis notification failed: {}", e.getMessage());
         }
     }
 
-    // =====================================================
-    // 6. VALIDATION
-    // =====================================================
-    private boolean isValidRow(String[] cols, AsciiConfig config) {
-
-        int idx = config.getInputHeadCol() - 1;
-        if (cols.length <= idx) return false;
-
-        String head = cols[idx].trim();
-
-        Pattern p = INPUT_REGEX_CACHE.computeIfAbsent(
-                config.getInputHeadRegex(), Pattern::compile);
-
-        return p.matcher(head).lookingAt();
-    }
-
-    // =====================================================
-    // 7. HEADER PARSER
-    // =====================================================
-    private HeaderInfo parseHeader(FileSystem fs, Path path) {
-
-        HeaderInfo info = new HeaderInfo();
-        info.branchCode = "00000";
-        info.reportDate = "01012026";
-
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(path)))) {
-
-            String line;
-            int count = 0;
-
-            while ((line = reader.readLine()) != null && count++ < 50) {
-
-                if (line.contains("BRANCH")) {
-                    info.branchCode = line.replaceAll("\\D+", "");
-                }
-
-                if (line.contains("DATE")) {
-                    info.reportDate = normalizeDate(line.replaceAll(".*::", "").trim());
-                }
-            }
-
-        } catch (Exception ignored) {}
-
-        return info;
-    }
-
-    private String normalizeDate(String d) {
+    private void sendNotification(String userId, String message, String url, String aggregateId) {
         try {
-            return LocalDate.parse(d, DateTimeFormatter.ofPattern("dd-MM-yyyy"))
-                    .format(DateTimeFormatter.ofPattern("ddMMyyyy"));
+            notificationWriterService.createNotification(userId, null, message, url, aggregateId, "ReportService");
         } catch (Exception e) {
-            return "01012026";
+            log.warn("Persistent notification failed: {}", e.getMessage());
         }
     }
 
-    private void checkBatchCompletion(String batchId) {
-        BatchStats stats = batchTracker.get(batchId);
-
-        if (stats != null && stats.remainingFiles.decrementAndGet() == 0) {
-            log.info("BATCH COMPLETED: {}", batchId);
-            batchTracker.remove(batchId);
-        }
+    private LocalDate getStartDateFromAppConfig() {
+        return appConfigRepository.findByConfigKey(REPORTS_START_DATE_KEY)
+                .map(AppConfig::getConfigValue)
+                .map(LocalDate::parse)
+                .orElseThrow(() -> new ResourceNotFoundException("Configuration missing: " + REPORTS_START_DATE_KEY));
     }
-
-    private static class ProcessingItem {
-        String head;
-        BigDecimal amount;
-        int colIndex;
-
-        ProcessingItem(String h, BigDecimal a, int c) {
-            head = h;
-            amount = a;
-            colIndex = c;
-        }
-    }
-
-    private static class HeaderInfo {
-        String branchCode;
-        String reportDate;
-    }
-}
