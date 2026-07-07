@@ -1,60 +1,350 @@
-try {
-                    java.nio.file.Path jasperPath = Paths.get(jasperFileDir, jasperFileName);
-                    if (!jasperPath.toFile().exists()) {
-                        throw new FileNotFoundException("Jasper file missing: " + jasperFileName);
-                    }
- 
-                    try (InputStream jasperStream = new FileInputStream(jasperPath.toString())) {
-                        Map<String, Object> reportParams = new HashMap<>();
-                        reportParams.put("imagePath", logoPath);
-                        reportParams.put("date", parameters.getDate());
- 
-                        JasperPrint jasperPrint = JasperFillManager.fillReport(jasperStream, reportParams, connection);
- 
-                        // --- PDF ---
-                        Path pdfPath = new Path(reportDir, reportName + "_" + datePrefix + ".pdf");
-                        try (FSDataOutputStream pdfOut = hdfsFileSystem.create(pdfPath, true)) {
-                            JasperExportManager.exportReportToPdfStream(jasperPrint, pdfOut);
-                            status.append("PDF generated");
-                        }
- 
-                        // --- EXCEL ---
-                        Path xlsxPath = new Path(reportDir, reportName + "_" + datePrefix + ".xlsx");
-                        try (FSDataOutputStream xlsxOut = hdfsFileSystem.create(xlsxPath, true)) {
-                            JRXlsxExporter xlsxExporter = new JRXlsxExporter();
-                            xlsxExporter.setExporterInput(new SimpleExporterInput(jasperPrint));
-                            xlsxExporter.setExporterOutput(new SimpleOutputStreamExporterOutput(xlsxOut));
-                            xlsxExporter.exportReport();
-                            status.append(", Excel generated");
-                        }
- 
-                        // --- PSV ---
-                        Path psvPath = new Path(reportDir, reportName + "_" + datePrefix + ".psv");
-                        try (FSDataOutputStream psvOut = hdfsFileSystem.create(psvPath, true)) {
-                            JRCsvExporter csvExporter = new JRCsvExporter();
-                            csvExporter.setExporterInput(new SimpleExporterInput(jasperPrint));
-                            csvExporter.setExporterOutput(new SimpleWriterExporterOutput(psvOut));
-                            SimpleCsvExporterConfiguration csvConfig = new SimpleCsvExporterConfiguration();
-                            csvConfig.setFieldDelimiter("|");
-                            csvExporter.setConfiguration(csvConfig);
-                            csvExporter.exportReport();
-                            status.append(", PSV generated");
-                        }
- 
-                        reportStat.put(reportName, status.toString());
-                    }
-                } catch (IOException | JRException e) {
-                    log.error("Error generating {}: {}", reportName, e.getMessage());
-                    reportStat.put(reportName, "Failed: " + e.getMessage());
-                    // Don't stop the loop; try to generate other reports
+public ReportGenerationResponseDTO generateReports(ReportGenerationDTO parameters) throws IOException {
+
+        ReportGenerationResponseDTO reportGenerationResponseDTO = new ReportGenerationResponseDTO();
+        reportGenerationResponseDTO.setProcessRunId(parameters.getProcessRunId());
+        reportGenerationResponseDTO.setRunId(parameters.getRunId());
+        reportGenerationResponseDTO.setStageId(parameters.getStageId());
+        LocalDate reportDate = parameters.getDate();
+
+        if (reportDate == null) {
+            reportDate = controlDateService.getEtlDate();
+        }
+
+        reportGenerationResponseDTO.setDate(reportDate);
+        String formattedDate = reportDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        String jasperFormattedDate = reportDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+        String datePrefix = reportDate.format(DateTimeFormatter.ofPattern("ddMMyyyy"));
+        String runId = String.valueOf(parameters.getRunId());
+        Path dateDir = new Path(tempReportsBasepath, formattedDate);
+        Path reportDir = new Path(dateDir, runId);
+//        Path mainReportDir = new Path(reportsBasePath, formattedDate,parameters.getReportType());
+        Path mainReportDir = new Path(new Path(reportsBasePath, formattedDate), parameters.getReportType());
+        try {
+            if (!hdfsFileSystem.exists(reportDir)) {
+                hdfsFileSystem.mkdirs(reportDir);
+            }if (!hdfsFileSystem.exists(mainReportDir)) {
+                hdfsFileSystem.mkdirs(mainReportDir);
+            }
+        } catch (IOException e) {
+
+            throw new IOException("Failed to Create Folder in HDFS "+e.getMessage());
+
+        }
+        // JasperReports reportDetails = jasperReportTypeRepository.findByType(parameters.getReportType());
+
+        String reportName = parameters.getReportType();
+        String jasperFileName = env.getProperty(reportName);
+
+        String logoPath = null;
+        try {
+            // logoPath = new
+            // ClassPathResource("images/logo.png").getFile().getAbsolutePath();
+            logoPath = extractLogoToTemp();
+        } catch (ResourceNotFoundException e) {
+            log.warn("Logo not found");
+        }
+
+        try (Connection connection = dataSource.getConnection()) {
+
+            // String reportName = reportDetails.getType();
+            // String jasperFileName = reportDetails.getFileName();
+
+            reportGenerationResponseDTO.setReportName(reportName);
+            reportGenerationResponseDTO.setRunId(parameters.getRunId());
+            reportGenerationResponseDTO.setExtensions(new ArrayList<>());
+
+            StringBuilder status = new StringBuilder();
+
+            String fileBaseName = reportName + "_" + datePrefix + "_" + "run" + "_" + runId;
+
+            String fileNamePrefix = reportName + "_" + datePrefix.formatted(DateTimeFormatter.ofPattern("ddMMyyyy"));
+
+            // String resourcePath = jasperFileResources + jasperFileName;
+            String resourcePath = "classpath:jasper/" + jasperFileName;
+            Resource resource = resourceLoader.getResource(resourcePath);
+            if (!resource.exists()) {
+                throw new FileNotFoundException("Jasper file missing: " + jasperFileName);
+            }
+            try (InputStream jasperStream = resource.getInputStream()) {
+                Map<String, Object> reportParams = new HashMap<>();
+                reportParams.put("imagePath", logoPath);
+                reportParams.put("date", jasperFormattedDate);
+                log.info("Started Filling Jasper for {} Report", parameters.getReportType());
+                JasperPrint jasperPrint = JasperFillManager.fillReport(jasperStream, reportParams, connection);
+                log.info("Completed Jasper Fill  for {} Report", parameters.getReportType());
+                Map<ReportFormat, FormatStatus> formatResults = new LinkedHashMap<>();
+                Map<ReportFormat, String> formatErrors = new HashMap<>();
+
+                generateReportFile(ReportFormat.PDF, jasperPrint, reportDir, fileBaseName, hdfsFileSystem,
+                        formatResults, formatErrors);
+                generateReportFile(ReportFormat.EXCEL, jasperPrint, reportDir, fileBaseName, hdfsFileSystem,
+                        formatResults, formatErrors);
+                generateReportFile(ReportFormat.PSV, jasperPrint, reportDir, fileBaseName, hdfsFileSystem,
+                        formatResults, formatErrors);
+
+                //saving reports parallely in "/reports/date" path
+                generateReportFile(ReportFormat.PDF, jasperPrint, mainReportDir, fileNamePrefix, hdfsFileSystem,
+                        formatResults, formatErrors);
+                generateReportFile(ReportFormat.EXCEL, jasperPrint, mainReportDir, fileNamePrefix, hdfsFileSystem,
+                        formatResults, formatErrors);
+                generateReportFile(ReportFormat.PSV, jasperPrint, mainReportDir, fileNamePrefix, hdfsFileSystem,
+                        formatResults, formatErrors);
+
+
+                long successCount = formatResults.values()
+                        .stream()
+                        .filter(v -> v == FormatStatus.GENERATED)
+                        .count();
+                String finalStatus;
+                String remark;
+                if (successCount == 0) {
+                    finalStatus = Constants.FAILED;
+                    remark = "Failed to generate all report formats.";
+                } else if (successCount == formatResults.size()) {
+                    finalStatus = Constants.SUCCESS;
+                    remark = "All formats generated successfully.";
+                } else {
+                    finalStatus = Constants.PARTIAL_SUCCESS;
+                    remark = "Generated: " +
+                            formatResults.entrySet().stream()
+                                    .filter(e -> e.getValue() == FormatStatus.GENERATED)
+                                    .map(e -> e.getKey().name())
+                                    .toList()
+                            + ", Failed: " +
+                            formatErrors.keySet();
+                }
+
+                reportGenerationResponseDTO.setStatus(finalStatus);
+                reportGenerationResponseDTO.setRemark(remark);
+                reportGenerationResponseDTO.setFormatErrors(formatErrors);
+                reportGenerationResponseDTO.setFormatResults(formatResults);
+
+            }
+
+            catch (IOException | JRException e) {
+                log.error("Error generating {}: {}", reportName, e.getMessage());
+
+            }
+
+        } catch (SQLException | FileNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+        return reportGenerationResponseDTO;
+
+    }
+
+    public void generateReportFile(
+            ReportFormat format,
+            JasperPrint jasperPrint,
+            Path reportDir,
+            String fileBaseName,
+            FileSystem hdfsFileSystem,
+            Map<ReportFormat, FormatStatus> formatResults,
+            Map<ReportFormat, String> formatErrors
+
+    ) throws IOException {
+        log.info("Generating File {} with extension {} to place at {} ", fileBaseName, format,reportDir);
+        Path outputPath = new Path(reportDir, fileBaseName + format.ext());
+        try (FSDataOutputStream out = hdfsFileSystem.create(outputPath, true)) {
+            switch (format) {
+                case PDF -> {
+                    JasperExportManager
+                            .exportReportToPdfStream(jasperPrint, out);
+                }
+                case EXCEL -> {
+                    JRXlsxExporter exporter = new JRXlsxExporter();
+                    exporter.setExporterInput(
+                            new SimpleExporterInput(jasperPrint));
+                    exporter.setExporterOutput(
+                            new SimpleOutputStreamExporterOutput(out));
+                    exporter.exportReport();
+
+                }
+                case PSV -> {
+                    JRCsvExporter exporter = new JRCsvExporter();
+                    exporter.setExporterInput(
+                            new SimpleExporterInput(jasperPrint));
+                    exporter.setExporterOutput(
+                            new SimpleWriterExporterOutput(out));
+                    SimpleCsvExporterConfiguration config = new SimpleCsvExporterConfiguration();
+                    config.setFieldDelimiter("|");
+                    exporter.setConfiguration(config);
+                    exporter.exportReport();
+
                 }
             }
-        } catch (SQLException e) {
-            log.error("Unable to fetch records from db");
+            formatResults.put(format, FormatStatus.GENERATED);
         }
- 
-        sendProgress(taskId, userId, 100, "All reports generated.", "COMPLETED");
-        log.info("All reports generated.");
-        return reportStat;
+
+        catch (IOException | JRException e) {
+            formatResults.put(format, FormatStatus.FAILED);
+            formatErrors.put(format, e.getMessage());
+        }
+
     }
- 
+
+    private String extractLogoToTemp() {
+        try {
+            Resource resource = resourceLoader.getResource("classpath:/images/logo.png");
+            if (!resource.exists()) {
+                log.warn("Logo not found in classpath");
+                return null;
+            }
+            File tempFile = File.createTempFile("jasper-logo-", ".png");
+            tempFile.deleteOnExit();
+            try (InputStream in = resource.getInputStream();
+                 OutputStream out = new FileOutputStream(tempFile)) {
+                FileCopyUtils.copy(in, out);
+            }
+            return tempFile.getAbsolutePath();
+        } catch (ResourceNotFoundException | IOException e) {
+            log.error("Failed to extract logo", e);
+            return null;
+        }
+    }
+
+    public ReportBase64ResponseDTO generateReportBase64(
+            ReportBase64RequestDTO request) throws IOException {
+
+        ReportBase64ResponseDTO response = new ReportBase64ResponseDTO();
+
+        try {
+
+            if (request.getReportType() == null || request.getReportType().isBlank()) {
+                throw new IllegalArgumentException("Report type is mandatory");
+            }
+
+            LocalDate reportDate = request.getDate();
+
+            if (reportDate == null) {
+                reportDate = controlDateService.getEtlDate();
+            }
+
+            // JasperReports reportDetails = jasperReportTypeRepository.findByType(request.getReportType());
+
+            String reportName = request.getReportType();
+
+            if (reportName != null) {
+                response.setReportName(reportName);
+            }
+            response.setReportDate(reportDate);
+
+            JasperPrint jasperPrint = fillJasperReport(
+                    request.getReportType(),
+                    reportDate,
+                    request.getInputParams());
+
+            ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
+
+            JasperExportManager.exportReportToPdfStream(
+                    jasperPrint,
+                    pdfStream);
+
+            response.setPdfBase64(
+                    Base64.getEncoder().encodeToString(pdfStream.toByteArray()));
+
+            ByteArrayOutputStream excelStream = new ByteArrayOutputStream();
+
+            JRXlsxExporter exporter = new JRXlsxExporter();
+
+            exporter.setExporterInput(new SimpleExporterInput(jasperPrint));
+            exporter.setExporterOutput(new SimpleOutputStreamExporterOutput(excelStream));
+
+            exporter.exportReport();
+
+            response.setExcelBase64(
+                    Base64.getEncoder().encodeToString(excelStream.toByteArray()));
+
+            response.setStatus(Constants.SUCCESS);
+            response.setRemark("Report generated successfully");
+
+        } catch (JRException e) {
+
+            log.error("Jasper report generation error: {}", e.getMessage());
+
+            response.setStatus(Constants.FAILED);
+            response.setRemark("Error while generating report");
+
+        } catch (Exception e) {
+
+            log.error("Unexpected error during report generation", e);
+
+            response.setStatus(Constants.FAILED);
+            response.setRemark("Unexpected error occurred");
+        }
+
+        return response;
+    }
+
+    private JasperPrint fillJasperReport(
+            String reportType,
+            LocalDate reportDate,
+            Map<String, Object> inputParams) throws IOException {
+
+        // JasperReports reportDetails = jasperReportTypeRepository.findByType(reportType);
+
+        String jasperFileName = env.getProperty(reportType);
+
+        if (jasperFileName == null) {
+            throw new ResourceNotFoundException(
+                    "Invalid report type: " + reportType);
+        }
+        String logoPath = null;
+        try {
+            logoPath = extractLogoToTemp();
+        } catch (ResourceNotFoundException e) {
+            log.warn("Logo not found");
+        }
+
+        // String jasperFileName = reportDetails.getFileName();
+
+        String resourcePath = "classpath:jasper/" + jasperFileName;
+
+        Resource resource = resourceLoader.getResource(resourcePath);
+
+        if (!resource.exists()) {
+            throw new FileNotFoundException(
+                    "Jasper file missing: " + jasperFileName);
+        }
+
+        String formattedDate = reportDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+
+        try (Connection connection = dataSource.getConnection();
+             InputStream jasperStream = resource.getInputStream()) {
+
+            Map<String, Object> reportParams = new HashMap<>();
+            log.info("Formatted Date :{}",formattedDate);
+            reportParams.put("date", formattedDate);
+            reportParams.put("imagePath",logoPath);
+
+            if (inputParams != null) {
+                reportParams.putAll(inputParams);
+            }
+
+            log.info("Started Filling Jasper for {} Report", reportType);
+
+            JasperPrint jasperPrint = JasperFillManager.fillReport(
+                    jasperStream,
+                    reportParams,
+                    connection);
+
+            log.info("Completed Jasper Fill for {} Report", reportType);
+
+            return jasperPrint;
+
+        } catch (JRException e) {
+
+            log.error("Error filling Jasper report {}", reportType, e);
+
+            throw new RuntimeException(
+                    "Failed to generate report for type: " + reportType, e);
+        } catch (SQLException e) {
+
+            log.error("Database error while generating report {}", reportType, e);
+
+            throw new RuntimeException(
+                    "Database error during report generation", e);
+        }
+    }
+
+}
