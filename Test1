@@ -1,75 +1,89 @@
-package com.tcs.fincore.CommonMasterService.service;
- 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
+@RestController
+@RequestMapping("/api/reports")
+public class ReportController {
 
-// import com.tcs.fincore.CommonMasterService.dto.ApiResponse;
-// import com.tcs.fincore.CommonMasterService.dto.ApiResponse;
-import com.tcs.fincore.CommonMasterService.dto.ReportClientServiceDTO;
- 
-@Service
-public class ReportClientServiceImpl implements ReportClientService {
- 
-    @Autowired
-    private RestTemplate restTemplate;
- 
-    @Value("${report.service.url}")
-    private String reportServiceUrl;
- 
-    @Value("${internal.service.key}")
-    private String internalServiceKey;
- 
-    @Override
-    public String callReportHello() {
- 
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("X-Service-Key", internalServiceKey);
-        headers.set("X-Service-Name", "COMMON_MASTER");
- 
-        HttpEntity<String> entity = new HttpEntity<>(headers);
- 
-        ResponseEntity<ReportClientServiceDTO> response =
-                restTemplate.exchange(
-                        reportServiceUrl + "/api/reports/hello",
-                        HttpMethod.GET,
-                        entity,
-                        ReportClientServiceDTO.class
-                );
-                ReportClientServiceDTO reportClientServiceDTO=response.getBody();
-        return reportClientServiceDTO.getData().toString();
-    }
-}
+        private final ReportService reportService;
+        private final JwtUtil jwtUtil; // Declare an instance field
 
+        public ReportController(ReportService reportService, JwtUtil jwtUtil) {
+                this.reportService = reportService;
+                this.jwtUtil = jwtUtil;
+        }
 
+        @PostMapping("/types")
+        public List<ReportTypeDto> getReportTypes(@RequestHeader("Authorization") String token,
+                        @RequestBody ReportTypesRequest request) {
+                log.info("Received request to fetch all available report types for" +
+                                "module: {} for role: {}", request.getModuleType(),
+                                jwtUtil.getUserRoleFromToken(token));
+                return reportService.getReportTypes(jwtUtil.getUserRoleFromToken(token), request.getModuleType());
+        }
 
+        @PostMapping("/download")
+        public ResponseEntity<StreamingResponseBody> downloadReport(
+                        @RequestHeader("Authorization") String token,
+                        @RequestBody ReportDownloadRequest request) throws IOException {
 
+                log.info("Received request to download report from HDFS for this criteria: {}", request);
 
+                ReportStreamResponse response = reportService.downloadReportStream(
+                                request.getFileName(),
+                                request.getDate(),
+                                jwtUtil.getUserRoleFromToken(token),
+                                jwtUtil.getUserIdFromToken(token),
+                                request.getBranchCode());
 
+                return ResponseEntity.ok()
+                                // This header tells the browser "This is a file download"
+                                .header(HttpHeaders.CONTENT_DISPOSITION,
+                                                "attachment; filename=\"" + response.getDownloadFileName() + "\"")
+                                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                                .body(response.getStreamBody());
+        }
 
+        @PostMapping("/create-reports")
+        public Map<String, String> createReports(@RequestHeader("Authorization") String token,
+                        @RequestBody ReportCreationDto requestBody) throws IOException {
+                // EXTRACT USER ID FROM TOKEN
+                String userId = jwtUtil.getUserIdFromToken(token);
+                return reportService.createReports(requestBody, userId);
+        }
 
+        @PostMapping("/generate-reports")
+        public ReportGenerationResponseDTO generateReports(@RequestBody ReportGenerationDTO requestBody)
+                        throws IOException {
 
+                return reportService.generateReports(requestBody);
+        }
 
+        @PostMapping("/download-temp-reports")
+        public ResponseEntity<StreamingResponseBody> downloadTemporaryReports(
+                        @RequestHeader("Authorization") String token,
+                        @RequestBody ReportDownloadRequest request) throws IOException {
 
+                log.info("Received request to download temp report from HDFS for this criteria: {}", request);
 
+                ReportStreamResponse response = reportService.downloadTempReportStream(
+                                request.getFileName(),
+                                request.getDate(),
+                                jwtUtil.getUserRoleFromToken(token),
+                                jwtUtil.getUserIdFromToken(token),
+                                request.getRunId());
 
+                return ResponseEntity.ok()
+                                // This header tells the browser "This is a file download"
+                                .header(HttpHeaders.CONTENT_DISPOSITION,
+                                                "attachment; filename=\"" + response.getDownloadFileName() + "\"")
+                                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                                .body(response.getStreamBody());
+        }
 
+        @PostMapping("/generate/base64")
+        public ResponseEntity<ReportBase64ResponseDTO> generateReportBase64(
+                        @RequestBody ReportBase64RequestDTO request) throws IOException {
 
+                ReportBase64ResponseDTO response = reportService.generateReportBase64(request);
 
-
-
-
-package com.tcs.fincore.CommonMasterService.dto;
-
-import lombok.Data;
-
-@Data
-public class ReportClientServiceDTO {
-    
-    private boolean success;
-    private String message;
-    private Object data;
-    private String timestamp;
+                return ResponseEntity.ok(response);
+        }
 }
