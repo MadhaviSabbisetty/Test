@@ -1,1 +1,121 @@
-Detail-oriented Frontend Developer with hands-on experience in React and Redux, specializing in authentication workflows, token management, and real-time event handling. Exposure to Kafka-based messaging and backend API integration. Skilled in debugging complex issues, refining validations, and enhancing user experience. Demonstrates strong analytical thinking and a commitment to improving application performance and reliability.
+
+controller files
+1.package com.fincore.ReportService.controller;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+
+import com.fincore.ReportService.dto.*;
+import com.fincore.commonutilities.jwt.JwtUtil;
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+
+import com.fincore.ReportService.service.AsciiFileService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/ascii")
+@RequiredArgsConstructor
+public class AsciiFileController {
+
+    private final AsciiFileService asciiFileService;
+
+    // To get all types of ASCII files 
+    @GetMapping("/file-types")
+    public ResponseEntity<ApiResponse<List<AsciiTypeResponse>>> getAsciiTypes(){
+    
+        List<AsciiTypeResponse> response=asciiFileService.getAsciiTypes();
+        return ResponseEntity.ok(
+            ApiResponse.success(response,"ASCII file types fetched successfully")
+        );
+    }
+
+    // To view the files
+    @PostMapping("/view")
+    public ResponseEntity<ApiResponse<AsciiFileResponse>> viewAscii(
+            @RequestBody AsciiFileRequest request) {
+
+        AsciiFileResponse response =
+                asciiFileService.viewAscii(request);     
+
+        return ResponseEntity.ok(
+                ApiResponse.success(response,"ASCII file fetched successfully")
+        );
+    }
+
+    //To donwload the files
+    @PostMapping("/download")
+    public ResponseEntity<byte[]> downloadAscii(
+            @RequestBody AsciiFileRequest request) {
+            
+        return asciiFileService.downloadAscii(request);
+    }
+
+
+    
+}
+2.package com.fincore.ReportService.controller;
+
+import com.fincore.ReportService.dto.DifferenceDTO;
+import com.fincore.ReportService.dto.DifferenceSearchDto;
+import com.fincore.ReportService.service.DifferenceService;
+import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/differences")
+public class DifferenceController {
+
+    @Autowired
+    private DifferenceService service;
+
+    // Basic Get All
+    @GetMapping
+    public ResponseEntity<Page<DifferenceDTO>> getDifferences(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size
+    ) {
+        return ResponseEntity.ok(service.getAllDifferences(page, size));
+    }
+
+    /**
+     * MASTER SEARCH ENDPOINT
+     * Handles: Date Range, Branch, Currency, CGL in any combination.
+     */
+    @PostMapping("/search")
+    public ResponseEntity<Page<DifferenceDTO>> searchDifferences(
+            @Valid @RequestBody DifferenceSearchDto criteria,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size
+    ) {
+        // Validation: Date is mandatory
+        if (criteria.getFromDate() == null) {
+            throw new IllegalArgumentException("fromDate is required");
+        }
+
+        Page<DifferenceDTO> result = service.searchDifferences(criteria, page, size);
+
+        if (result.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(result);
+    }
+
+
+}
