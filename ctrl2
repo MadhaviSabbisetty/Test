@@ -1,428 +1,256 @@
-DTO
-dimensionConfig
-package com.fincore.analyticsservice.dto;
+Exception files
+1.package com.fincore.ReportService.exception;
 
-public record DimensionConfig(String physicalSql, boolean isExpression) {
-}
-
-
-drilldowndtos
-package com.fincore.analyticsservice.dto;
-
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
-
-import java.util.List;
-import java.util.Map;
-
-public class DrillDownDtos {
-
-    // --- REQUEST DTOs ---
-}
-
-drilldownrequest
-package com.fincore.analyticsservice.dto;
-
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
-
-import java.util.List;
-
-public record DrillDownRequest(
-        @NotBlank(message = "viewCode is required to route the request securely")
-        @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "Invalid viewCode format")
-        String viewCode,
-
-        @NotEmpty(message = "At least one logical dimension is required")
-        List<@Pattern(regexp = "^[a-zA-Z0-9_]+$") String> dimensions,
-
-        @NotEmpty(message = "At least one logical metric is required")
-        List<@Pattern(regexp = "^[a-zA-Z0-9_]+$") String> metrics,
-
-        @NotNull(message = "Filters array cannot be null")
-        List<FilterDto> filters
-) {}
-
-drilldownresponse
-package com.fincore.analyticsservice.dto;
-
-import java.util.List;
-import java.util.Map;
-
-public record DrillDownResponse(
-        Meta meta,
-        List<Map<String, Object>> data
-) {}
-
-
-filterdto
-package com.fincore.analyticsservice.dto;
-
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-
-public record FilterDto(
-        @NotBlank String logicalField, // e.g., "Branch"
-        @NotBlank String operator,
-        @NotNull Object value
-) {}
-
-meta
-package com.fincore.analyticsservice.dto;
-
-public record Meta(
-        String status,
-        String level,
-        int rowCount,
-        long executionTimeMs
-) {
-}
-metricconfig
-
-package com.fincore.analyticsservice.dto;
-
-import lombok.Data;
-
-public record MetricConfig(
-        String logicalName,  // What the frontend sends (e.g., "TotalAmount")
-        String displayName   // What the frontend renders (e.g., "Total Local Currency")
-) {
-}
-reportConfigResponse
-package com.fincore.analyticsservice.dto;
-
-import java.util.List;
-
-public record ReportConfigResponse(
-        String reportCode,
-        String displayName,
-        List<ViewConfig> views
-) {
-}
-viewconfig
-package com.fincore.analyticsservice.dto;
-
-import java.util.List;
-
-public record ViewConfig(
-        String viewCode,
-        String displayName,
-        List<String> hierarchy, // e.g., ["Branch", "GeneralLedger", "Account"]
-        List<MetricConfig> availableMetrics
-) {
-}
-
-viewmetadatacontext
-package com.fincore.analyticsservice.dto;
-
-import java.util.List;
-import java.util.Map;
-
-public record ViewMetadataContext(
-        String viewCode,
-        String physicalDruidTable,
-        String requiredRoleIds,
-        List<String> logicalHierarchyOrdered, // ["Branch", "GeneralLedger", "Account"]
-        Map<String, DimensionConfig> dimensionMap,  // "Branch" -> "BRANCH_CODE"
-        Map<String, String> metricMap         // "TotalAmount" -> "SUM_LCY"
-) {
-}
-
-exception
-
-globalExceptionhandler
-package com.fincore.analyticsservice.exception;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fincore.ReportService.dto.ApiResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.client.RestClientResponseException;
-import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.context.request.WebRequest;
 
-import java.net.URI;
+import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
 
-@RestControllerAdvice
+@ControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    // 1. DTO Validation Failures (SQL Injection Regex blocks, empty lists)
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Object>> handleResourceNotFoundException(ResourceNotFoundException ex, WebRequest request) {
+        log.error("Report not found: {}", ex.getMessage());
+        return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler({JsonProcessingException.class, HttpMessageNotReadableException.class})
+    public ResponseEntity<ApiResponse<Object>> handleJsonProcessingException(Exception ex, WebRequest request) {
+        log.error("Error processing JSON payload: {}", ex.getMessage());
+        return new ResponseEntity<>(ApiResponse.error("Invalid request payload format. Please check the JSON structure and data types."), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Object>> handleDataIntegrityViolationException(DataIntegrityViolationException ex, WebRequest request) {
+        log.error("Data integrity violation: {}", ex.getMessage());
+        if (ex.getMostSpecificCause().getMessage().contains("already exists")) {
+            return new ResponseEntity<>(ApiResponse.error("A resource with the provided identifier already exists."), HttpStatus.CONFLICT);
+        }
+        return new ResponseEntity<>(ApiResponse.error("Database constraint violation. A required field may be missing or a value is invalid."), HttpStatus.CONFLICT);
+    }
+
+    // This ALREADY handles IllegalArgumentException, so we don't need a new one
+    @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
+    public ResponseEntity<ApiResponse<Object>> handleArgumentAndStateExceptions(RuntimeException ex, WebRequest request) {
+        log.error("Illegal argument or state: {}", ex.getMessage());
+        return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.BAD_REQUEST);
+    }
+
+    // This ALREADY handles global Exception, so we don't need a new one
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Object>> handleGlobalException(Exception ex, WebRequest request) {
+        log.error("An unexpected error occurred: {}", ex.getMessage(), ex);
+        return new ResponseEntity<>(ApiResponse.error("An internal server error occurred."), HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+
+    /**
+     * Handles exceptions thrown when @Valid validation fails on a request body.
+     * Returns a 400 Bad Request with a list of validation errors.
+     */
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ProblemDetail handleValidationExceptions(MethodArgumentNotValidException ex) {
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ResponseEntity<ApiResponse<Object>> handleValidationExceptions(MethodArgumentNotValidException ex) {
         String errors = ex.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
-                .collect(Collectors.joining("; "));
+                .collect(Collectors.joining(", "));
 
-        log.warn("Payload validation failed: {}", errors);
-
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, errors);
-        problemDetail.setTitle("Invalid Request Payload");
-        problemDetail.setType(URI.create("https://api.yourdomain.com/errors/invalid-request"));
-        return problemDetail;
+        log.warn("Validation failed for incoming request: {}", errors);
+        return new ResponseEntity<>(ApiResponse.error("Validation Failed: " + errors), HttpStatus.BAD_REQUEST);
     }
 
-    // 2. Business/Logic Exceptions
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ProblemDetail handleIllegalArgument(IllegalArgumentException ex) {
-        log.warn("Invalid business argument provided: {}", ex.getMessage());
-        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    /**
+     * Handles exceptions thrown by the Jakarta Validator, for example,
+     * when we manually trigger validation in our strategies.
+     */
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ResponseEntity<ApiResponse<Object>> handleConstraintViolationException(ConstraintViolationException ex) {
+        String errors = ex.getConstraintViolations().stream()
+                .map(cv -> cv.getPropertyPath() + ": " + cv.getMessage())
+                .collect(Collectors.joining(", "));
+
+        log.warn("Constraint violation during processing: {}", errors);
+        return new ResponseEntity<>(ApiResponse.error("Validation Failed: " + errors), HttpStatus.BAD_REQUEST);
     }
 
-    // 3. Druid Engine HTTP Errors (Bad SQL query, Engine timeouts)
-    @ExceptionHandler(RestClientResponseException.class)
-    public ProblemDetail handleDruidHttpErrors(RestClientResponseException ex) {
-        log.error("Druid API Error - Status: {}, Body: {}", ex.getStatusCode(), ex.getResponseBodyAsString());
-
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY,
-                "The Analytics engine encountered an error while processing the query.");
-        problemDetail.setTitle("Analytics Query Failed");
-        return problemDetail;
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Object>> handleAccessDeniedException(AccessDeniedException ex, WebRequest request) {
+        log.error("Access Denied: {}", ex.getMessage());
+        return new ResponseEntity<>(ApiResponse.error("Report Not Found or You are not authorized to perform this action."), HttpStatus.NOT_FOUND);
     }
 
-    // 4. Druid Network Unreachable
-    @ExceptionHandler(ResourceAccessException.class)
-    public ProblemDetail handleDruidNetworkIssues(ResourceAccessException ex) {
-        log.error("Network error reaching Druid cluster: {}", ex.getMessage());
-
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
-                "The Analytics engine is currently unreachable. Please try again later.");
-        problemDetail.setTitle("Analytics Engine Unreachable");
-        return problemDetail;
-    }
-
-    // 5. Generic Fallback
-    @ExceptionHandler(Exception.class)
-    public ProblemDetail handleGenericException(Exception ex) {
-        log.error("Unhandled Exception occurred: ", ex);
-
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
-                "An unexpected server error occurred.");
-        problemDetail.setTitle("Internal Server Error");
-        return problemDetail;
-    }
-}
-
-
-Model
-DrDataSource
-package com.fincore.analyticsservice.model;
-
-import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
-
-@Entity
-@Table(name = "DR_DATASOURCE")
-@Getter
-@Setter
-public class DrDatasource {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(name = "DATASOURCE_CODE", nullable = false, unique = true)
-    private String datasourceCode;
-
-    @Column(name = "DRUID_TABLE_NAME", nullable = false)
-    private String druidTableName;
-
-    @Column(name = "CLUSTER_URL", nullable = false)
-    private String clusterUrl;
 
 }
-drreport
-package com.fincore.analyticsservice.model;
+2.package com.fincore.ReportService.exception;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
-import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
+@ResponseStatus(HttpStatus.NOT_FOUND)
+public class ResourceNotFoundException extends RuntimeException {
+    public ResourceNotFoundException(String message) {
+        super(message);
+    }
+}
+kafka files
+1package com.fincore.ReportService.kafka;
 
+import com.fincore.ReportService.dto.ReportGenerationDTO;
+import com.fincore.ReportService.dto.ReportGenerationResponseDTO;
+import com.fincore.ReportService.service.KafkaService;
+import com.fincore.ReportService.util.Constants;
+
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import java.time.LocalDateTime;
 import java.util.Set;
+import java.util.stream.Collectors;
 
-@Entity
-@Table(name = "DR_REPORT")
-@Getter
-@Setter
-public class DrReport {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 
-    @Column(name = "REPORT_CODE", unique = true, nullable = false)
-    private String reportCode;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.stereotype.Service;
+import org.springframework.validation.annotation.Validated;
 
-    @Column(name = "DISPLAY_NAME", nullable = false)
-    private String displayName;
+// @Slf4j
+// @Service
+// @RequiredArgsConstructor
+// @Validated
+// public class ReportKafkaConsumer {
 
-    @Column(name = "IS_ACTIVE")
-    private boolean active;
+//     private final KafkaService kafkaService;
+//     private final ReportKafkaProducer producer;
 
-    // Using Set instead of List to avoid Hibernate's MultipleBagFetchException during JOIN FETCH
-    @OneToMany(mappedBy = "report", fetch = FetchType.LAZY)
-    private Set<DrReportView> views;
+//     @KafkaListener(topics = "report-generation-request", groupId = "Airflow_ETL", properties = {
+//             "spring.json.value.default.type=com.fincore.ReportService.dto.ReportGenerationDTO" })
+//     public void consume(@Valid ReportGenerationDTO request) {
+
+//         try {
+//             log.info("Report Generation Request Recieved:{} ", request);
+//             kafkaService.processReport(request);
+
+//         }
+//         catch (CallNotPermittedException e) {
+//             log.error("Circuit Breaker is OPEN. Skipping/Retrying later for RunId: {}", request.getRunId());
+
+//         }
+
+//         catch (ConstraintViolationException e) {
+//             log.info("Constraint Violation {}",e.getMessage());
+//             ReportGenerationResponseDTO response = new ReportGenerationResponseDTO();
+//             response.setRunId(request.getRunId());
+//             response.setProcessRunId(request.getProcessRunId());
+//             response.setStageId(request.getStageId());
+//             response.setStatus(Constants.FAILED);
+//             response.setRemark("Validation Failed " + e.getMessage());
+//             producer.sendResponse(response);
+//         }
+
+//     }
+// }
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ReportKafkaConsumer {
+
+    private final KafkaService kafkaService;
+    private final ReportKafkaProducer producer;
+    private final Validator validator;
+
+    @KafkaListener(topics = "report-generation-request", groupId = "Airflow_ETL", properties = {
+            "spring.json.value.default.type=com.fincore.ReportService.dto.ReportGenerationDTO"
+    })
+    public void consume(ReportGenerationDTO request) {
+
+        log.info("Received Report Generation Request: {}", request);
+
+        ReportGenerationResponseDTO response = new ReportGenerationResponseDTO();
+
+        try {
+
+            Set<ConstraintViolation<ReportGenerationDTO>> violations = validator.validate(request);
+
+            if (!violations.isEmpty()) {
+
+                String errorMessage = violations.stream()
+                        .map(ConstraintViolation::getMessage)
+                        .collect(Collectors.joining(", "));
+
+                log.error("Validation Failed: {}", errorMessage);
+
+                response.setRunId(request.getRunId());
+                response.setProcessRunId(request.getProcessRunId());
+                response.setStageId(request.getStageId());
+                response.setStatus(Constants.FAILED);
+                response.setRemark("Validation Failed: " + errorMessage);
+                // response.setTimestamp(LocalDateTime.now());
+
+                producer.sendResponse(response);
+                return;
+            }
+
+            kafkaService.processReport(request);
+
+        } catch (RuntimeException e) {
+
+            log.error("Processing Failed for RunId {}: {}", request.getRunId(), e.getMessage(), e);
+
+            response.setRunId(request.getRunId());
+            response.setProcessRunId(request.getProcessRunId());
+            response.setStageId(request.getStageId());
+            response.setStatus(Constants.FAILED);
+            response.setRemark("Processing Failed: " + e.getMessage());
+            // response.setTimestamp(LocalDateTime.now());
+
+            producer.sendResponse(response);
+        }
+    }
 }
+2package com.fincore.ReportService.kafka;
 
-drreportview
-package com.fincore.analyticsservice.model;
+import com.fincore.ReportService.dto.ReportGenerationResponseDTO;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Service;
 
-import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ReportKafkaProducer {
 
-import java.util.List;
+    private final KafkaTemplate<String, ReportGenerationResponseDTO> kafkaTemplate;
 
-@Entity
-@Table(name = "DR_REPORT_VIEW")
-@Getter
-@Setter
-public class DrReportView {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private static final String RESPONSE_TOPIC = "report-generation-response";
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "REPORT_ID", nullable = false)
-    private DrReport report;
+    public void sendResponse(ReportGenerationResponseDTO response) {
+         log.info("Report Generation Response Sent :{} ",response);
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "DATASOURCE_ID", nullable = false)
-    private DrDatasource datasource;
-
-    @Column(name = "VIEW_CODE", unique = true, nullable = false)
-    private String viewCode;
-
-    @Column(name = "REQUIRED_ROLE_IDS")
-    private String requiredRoleIds;
-
-    @Column(name = "IS_ACTIVE")
-    private boolean active;
-
-    @OneToMany(mappedBy = "reportView", fetch = FetchType.LAZY)
-    @OrderBy("drillLevel ASC")
-    private List<DrViewDimension> dimensions;
-
-    @OneToMany(mappedBy = "reportView", fetch = FetchType.LAZY)
-    private List<DrViewMetric> metrics;
-}
-
-drviewdimension
-package com.fincore.analyticsservice.model;
-
-import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
-
-@Entity
-@Getter
-@Setter
-@Table(name = "DR_VIEW_DIMENSION")
-public class DrViewDimension {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "VIEW_ID", nullable = false)
-    private DrReportView reportView;
-
-    @Column(name = "LOGICAL_NAME", nullable = false)
-    private String logicalName;
-
-    @Column(name = "PHYSICAL_COLUMN", nullable = false)
-    private String physicalColumn;
-
-    @Column(name = "DRILL_LEVEL", nullable = false)
-    private Integer drillLevel;
-
-    @Column(name = "IS_EXPRESSION", nullable = false)
-    private boolean expression;
-}
-
-drviewmetric
-package com.fincore.analyticsservice.model;
-
-import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
-
-@Entity
-@Table(name = "DR_VIEW_METRIC")
-@Getter
-@Setter
-public class DrViewMetric {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "VIEW_ID", nullable = false)
-    private DrReportView reportView;
-
-    @Column(name = "LOGICAL_NAME", nullable = false)
-    private String logicalName;
-
-    @Column(name = "DISPLAY_NAME", nullable = false)
-    private String displayName;
-
-    @Column(name = "SQL_EXPRESSION", nullable = false)
-    private String sqlExpression;
-}
-
-repository
-drreportrepository
-package com.fincore.analyticsservice.repository;
-
-import com.fincore.analyticsservice.model.DrReport;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.stereotype.Repository;
-
-import java.util.List;
-
-@Repository
-public interface DrReportRepository extends JpaRepository<DrReport, Long> {
-
-    /**
-     * Enterprise Optimization:
-     * We use JOIN FETCH to load the Parent (Report) and Child (Views) in a single DB trip.
-     * The dimensions and metrics will be lazy-loaded in the service layer, but because
-     * this method is cached in Redis, the DB is only hit once globally.
-     */
-    @Query("SELECT DISTINCT r FROM DrReport r JOIN FETCH r.views v WHERE r.active = true AND v.active = true")
-    List<DrReport> findAllActiveReportsWithViews();
-}
-drreporviewrepository
-package com.fincore.analyticsservice.repository;
-
-import com.fincore.analyticsservice.model.DrReportView;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-
-import java.util.Optional;
-
-@Repository
-public interface DrReportViewRepository extends JpaRepository<DrReportView, Long> {
-
-    /**
-     * Fetches the View configuration and its mapped physical Druid datasource.
-     * Dimensions and metrics collections are fetched sequentially in the transactional
-     * service layer to avoid Cartesian product generation (MultipleBagFetchException).
-     */
-    @Query("""
-                SELECT v FROM DrReportView v
-                JOIN FETCH v.datasource
-                WHERE v.viewCode = :viewCode AND v.active = true
-            """)
-    Optional<DrReportView> findByViewCodeActive(@Param("viewCode") String viewCode);
+        kafkaTemplate.send(RESPONSE_TOPIC, response);
+    }
 }
