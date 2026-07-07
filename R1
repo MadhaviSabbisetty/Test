@@ -1,0 +1,252 @@
+wrapper file
+package com.fincore.ReportService.advice;
+
+import org.springframework.core.MethodParameter;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.server.ServerHttpRequest;
+import org.springframework.http.server.ServerHttpResponse;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
+import com.fincore.ReportService.dto.ApiResponse;
+
+
+/**
+ * This ControllerAdvice intercepts successful responses from any @RestController
+ * and wraps them in a standard ApiResponse format.
+ */
+@ControllerAdvice
+public class ApiResponseWrapper implements ResponseBodyAdvice<Object> {
+
+    @Override
+    public boolean supports(MethodParameter returnType, Class<? extends HttpMessageConverter<?>> converterType) {
+        // This advice applies to any method in a class annotated with @RestController
+        // that is not already returning a ResponseEntity (which gives manual control).
+        return AnnotatedElementUtils.hasAnnotation(returnType.getContainingClass(), RestController.class) &&
+                !returnType.getParameterType().equals(ResponseEntity.class);
+    }
+
+
+    @Override
+    public Object beforeBodyWrite(Object body, MethodParameter returnType, MediaType selectedContentType,
+                                     Class<? extends HttpMessageConverter<?>> selectedConverterType,
+                                  ServerHttpRequest request, ServerHttpResponse response) {
+
+        // If the controller has already manually wrapped the response, do nothing.
+        if (body instanceof ApiResponse<?>) {
+
+            return body;
+
+        }
+
+        // Wrap the successful response body in the standard ApiResponse structure.
+
+        return ApiResponse.success(body);
+
+    }
+
+}
+config files
+1.
+package com.fincore.ReportService.config;
+
+import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.fs.FileSystem;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+
+@Configuration
+@Slf4j
+public class HadoopConfig {
+    @Value("${hadoop.fs.uri}")
+    private String hadoopFsUri;
+    @Value("${hadoop.fs.user}")
+    private String hadoopUser;
+
+    @Bean
+    public FileSystem fileSystem() {
+
+        log.info("Initializing HDFS connection to: {} as user: {}", hadoopFsUri, hadoopUser);
+        org.apache.hadoop.conf.Configuration config = new org.apache.hadoop.conf.Configuration();
+
+        // 1. Set the default FileSystem URI
+        config.set("fs.defaultFS", hadoopFsUri);
+
+        // 2. OPTIMIZATION: Disable client-side permission checking.
+        // This relies on the server to check permissions, preventing local OS user mismatch errors.
+//        config.set("dfs.client.use.datanode.hostname", "true");
+
+        // 3. ROBUSTNESS: Set timeouts (default is often too high or infinite)
+        config.set("ipc.client.connect.timeout", "5000"); // 5 seconds
+        config.set("ipc.client.rpc-timeout.ms", "30000"); // 30 seconds
+
+        // 4. Replication adjustment (optional, prevents warnings in single-node dev setups)
+        // config.set("dfs.replication", "1");
+        try {
+            // Returns a FileSystem instance. The FileSystem class handles caching internally.
+            // Spring will manage the lifecycle (closing it on shutdown).
+            return FileSystem.get(new URI(hadoopFsUri), config, hadoopUser);
+
+        } catch (IOException | InterruptedException | URISyntaxException e) {
+
+            log.error("CRITICAL: Failed to connect to HDFS at {}", hadoopFsUri, e);
+            throw new RuntimeException("Could not initialize Hadoop FileSystem", e);
+        }
+    }
+}
+2.package com.fincore.ReportService.config;
+
+import com.fincore.commonutilities.buisnessobject.ControlDateService;
+import com.fincore.commonutilities.config.CommonSecurityConfig;
+import com.fincore.commonutilities.config.RedisConfig;
+import com.fincore.commonutilities.config.ResilienceConfig;
+import com.fincore.commonutilities.jwt.JwtUtil;
+import com.fincore.commonutilities.logging.MdcLoggingFilter;
+import com.fincore.commonutilities.security.ContextRbacFilter;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import jakarta.servlet.DispatcherType; // Import this is CRITICAL
+import com.fincore.commonutilities.security.DecryptRequestBodyAdvice;
+import com.fincore.commonutilities.util.AesEncryptionUtil;
+
+/**
+ * Common Security Configuration.
+ * * Aligned with the "Distributed Gateway" architecture.
+ * It uses the ContextRbacFilter from Common Utilities to enforce:
+ * 1. Token Validity
+ * 2. Single Session (Redis check)
+ * 3. RBAC Permissions
+ * Enforces Centralised Mdc Logging Filter, RESILIENCE4J Retry and Circuit
+ * Breaker
+ */
+@Configuration
+@EnableWebSecurity
+@Import({
+        RedisConfig.class,
+        JwtUtil.class,
+        CommonSecurityConfig.class,
+        ResilienceConfig.class, ControlDateService.class,
+        AesEncryptionUtil.class,
+        DecryptRequestBodyAdvice.class
+})
+public class SecurityConfig {
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @Autowired
+    private CommonSecurityConfig commonSecurityConfig;
+
+    // --- 1. Define Filters as Beans (Explicitly) ---
+    @Bean
+    public MdcLoggingFilter mdcLoggingFilter() {
+        return new MdcLoggingFilter(jwtUtil);
+    }
+
+    @Bean
+    public ContextRbacFilter contextRbacFilter() {
+        return new ContextRbacFilter(redisTemplate, jwtUtil);
+    }
+
+    // --- 2. Prevent Global Registration ---
+    // This stops "The Filter class ... does not have a registered order" error
+
+    @Bean
+    public FilterRegistrationBean<MdcLoggingFilter> mdcFilterRegistration(MdcLoggingFilter filter) {
+        FilterRegistrationBean<MdcLoggingFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false); // Disable global chain
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<ContextRbacFilter> rbacFilterRegistration(ContextRbacFilter filter) {
+        FilterRegistrationBean<ContextRbacFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false); // Disable global chain
+        return registration;
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.configurationSource(commonSecurityConfig.corsConfigurationSource()))
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authz -> authz
+                        // Allow Async Dispatches (StreamingResponseBody) to proceed without re-auth
+                        // checks
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
+                        .requestMatchers("/actuator/**", "/api/auth/**", "/error").permitAll()
+                        .anyRequest().authenticated())
+                // Add Filters using the BEAN references (methods above)
+                .addFilterBefore(mdcLoggingFilter(), UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(contextRbacFilter(), MdcLoggingFilter.class);
+
+        return http.build();
+    }
+
+    /**
+     * Explicitly indicate that local user lookup is not supported
+     * Authentication is handled via JWT in ContextRbacFilter
+     */
+    @Bean
+    public UserDetailsService userDetailsService() {
+        return username -> {
+            throw new UsernameNotFoundException("UserDetailsService is disabled. Use JWT authentication.");
+        };
+    }
+}
+3.
+package com.fincore.ReportService.config;
+
+import com.fincore.ReportService.dto.TaskProgressDto;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
+
+/**
+ * Configuration for the RedisTemplate used to publish TaskProgressDto.
+ * Uses JSON serialization for values so the Notification Service can read them.
+ */
+@Configuration
+public class TaskRedisConfig {
+
+    @Bean(name = "progressRedisTemplate")
+    public RedisTemplate<String, TaskProgressDto> progressRedisTemplate(RedisConnectionFactory connectionFactory) {
+        RedisTemplate<String, TaskProgressDto> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+
+        // Keys are Strings (the topic name)
+        template.setKeySerializer(new StringRedisSerializer());
+
+        // Values are JSON (the DTO)
+        Jackson2JsonRedisSerializer<TaskProgressDto> serializer = new Jackson2JsonRedisSerializer<>(TaskProgressDto.class);
+        template.setValueSerializer(serializer);
+
+        return template;
+    }
+}
