@@ -1,83 +1,150 @@
-reportcontroller.java
+
+Generic Communication Event Producer :
+
+Objective
+Produce GenericCommunicationEvent to Kafka for EOD Summary Reports and future communications.
+
+Kafka Topic
+fincore.communication.generic
+
+Responsibilities
+1. Create GenericCommunicationEvent DTO.
+2. Publish events to Kafka.
+3. Populate only business information.
+4. Never resolve users or generate communication content.
 
 
-@RestController
-@RequestMapping("/api/reports")
-public class ReportController {
+Sample Event
+===================================================================================
 
-    private final ReportService reportService;
-    private final JwtUtil jwtUtil; // Declare an instance field
-
-    public ReportController(ReportService reportService, JwtUtil jwtUtil) {
-        this.reportService = reportService;
-        this.jwtUtil = jwtUtil;
-    }
-
-    @PostMapping("/types")
-    public List<ReportTypeDto> getReportTypes(@RequestHeader("Authorization") String token,
-            @RequestBody ReportTypesRequest request) {
-        log.info("Received request to fetch all available report types for" +
-                "module: {} for role: {}", request.getModuleType(), jwtUtil.getUserRoleFromToken(token));
-        return reportService.getReportTypes(jwtUtil.getUserRoleFromToken(token), request.getModuleType());
-    }
-
-    @PostMapping("/download")
-    public ResponseEntity<StreamingResponseBody> downloadReport(
-            @RequestHeader("Authorization") String token,
-            @RequestBody ReportDownloadRequest request) throws IOException {
-
-        log.info("Received request to download report from HDFS for this criteria: {}", request);
-
-        ReportStreamResponse response = reportService.downloadReportStream(
-                request.getFileName(),
-                request.getDate(),
-                jwtUtil.getUserRoleFromToken(token),
-                jwtUtil.getUserIdFromToken(token),
-                request.getBranchCode());
-
-        return ResponseEntity.ok()
-                // This header tells the browser "This is a file download"
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + response.getDownloadFileName() + "\"")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .body(response.getStreamBody());
-    }
-
-    @PostMapping("/create-reports")
-    public Map<String, String> createReports(@RequestHeader("Authorization") String token,
-            @RequestBody ReportCreationDto requestBody) throws IOException {
-        // EXTRACT USER ID FROM TOKEN
-        String userId = jwtUtil.getUserIdFromToken(token);
-        return reportService.createReports(requestBody, userId);
-    }
-
-    @PostMapping("/generate-reports")
-    public ReportGenerationResponseDTO generateReports(@RequestBody ReportGenerationDTO requestBody) throws IOException  {
-
-        return reportService.generateReports(requestBody);
-    }
+{
+"eventId": "evt-77a8b912-4c2d-48ef-a123-56789abcdef0",
+"traceId": "trc-88223344-aabb-ccdd-eeff-112233445566",
+"correlationId": "corr-eod-20260708-batch-01",
+"producerService": "PROCESS_STATUS_SERVICE",
+"eventType": "EOD_SUMMARY_REPORT",
+"priority": "NORMAL",
+"channels": [
+  "EMAIL"
+],
+"recipients": {
+  "userIds": ["v1018405"],
+  "roles": ["BRANCH_MANAGER"],
+  "emails": [],
+  "mobiles": []
+},
+"templateId": "REPORT_EOD_SUMMARY_V1",
+"payload": {
+  "processDate": "2026-07-08",
+  "totalTransactions": "45,230",
+  "branchCode": "12345",
+  "status": "COMPLETED"
+},
+"attachments": [
+  {
+    "attachmentId": "rpt-88392-summary",
+    "attachmentType": "EOD_SUMMARY",
+    "fileName": "EOD_Summary_20260708.pdf"
+  },
+  {
+    "attachmentId": "rpt-88393-journal",
+    "attachmentType": "EOD_JOURNAL",
+    "fileName": "EOD_Journal_20260708.pdf"
+  }
+],
+"deepLinks": [
+  {
+    "module": "REPORTS",
+    "entityId": "batch-01",
+    "action": "VIEW_DASHBOARD"
+  }
+],
+"metadata": {
+  "batchId": "BATCH-001"
+}
+}
 
 
+Please use the GenericCommunicationEvent DTO.
+===================================================================================
 
-    @PostMapping("/download-temp-reports")
-    public ResponseEntity<StreamingResponseBody> downloadTemporaryReports(
-            @RequestHeader("Authorization") String token,
-            @RequestBody ReportDownloadRequest request) throws IOException {
 
-        log.info("Received request to download temp report from HDFS for this criteria: {}", request);
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import java.util.List;
+import java.util.Map;
 
-        ReportStreamResponse response = reportService.downloadTempReportStream(
-                request.getFileName(),
-                request.getDate(),
-                jwtUtil.getUserRoleFromToken(token),
-                jwtUtil.getUserIdFromToken(token),
-                request.getRunId());
+/**
+* DTO for all non-OTP Generic Communications.
+* Producers construct this and push it to 'fincore.communication.generic'.
+*/
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_EMPTY) // Strips out nulls and empty lists for a lightweight payload
+@JsonIgnoreProperties(ignoreUnknown = true) // Forward-compatibility if producers add new fields
+public class GenericCommunicationEvent {
 
-        return ResponseEntity.ok()
-                // This header tells the browser "This is a file download"
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + response.getDownloadFileName() + "\"")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .body(response.getStreamBody());
-    }
+  // --- Traceability ---
+  private String eventId;
+  private String traceId;
+  private String correlationId;
+  private String producerService;
+  private String eventType;
+  private String priority; // e.g., HIGH, NORMAL, LOW
 
+  // --- Routing Instructions ---
+  private List<String> channels; // e.g., ["EMAIL", "SMS"]
+  private Recipients recipients;
+
+  // --- Content ---
+  private String templateId;
+  private Map<String, Object> payload; // Dynamic FreeMarker variables mapped directly to the template
+
+  // --- Enclosures ---
+  private List<AttachmentRef> attachments;
+  private List<DeepLinkRef> deepLinks;
+
+  // --- Extra Context ---
+  private Map<String, String> metadata; // purely for business logic tracking (e.g., batchId), NOT delivery instructions
+
+
+  @Data
+  @Builder
+  @NoArgsConstructor
+  @AllArgsConstructor
+  @JsonInclude(JsonInclude.Include.NON_EMPTY)
+  public static class Recipients {
+      private List<String> userIds;
+      private List<String> roles;
+      private List<String> emails;
+      private List<String> mobiles;
+  }
+
+
+  @Data
+  @Builder
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class AttachmentRef {
+      private String attachmentId;   // Passed to RestClient to download the report from the source
+      private String attachmentType; // e.g., EOD_SUMMARY, STATEMENT, IMAGE
+      private String fileName;       // The name shown to the user in the email
+  }
+
+
+  @Data
+  @Builder
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class DeepLinkRef {
+      private String module;         // e.g., REPORTS, APPROVALS
+      private String entityId;       // The business ID for dynamic URL generation
+      private String action;         // e.g., VIEW_DASHBOARD, APPROVE_TRANSACTION
+  }
+}
