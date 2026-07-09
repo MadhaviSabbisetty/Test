@@ -1,108 +1,88 @@
-package com.fincore.ReportService.service;
+# ===================================================================
+# SPRING DATASOURCE (ORACLE)
+# ===================================================================
+spring.datasource.url=jdbc:oracle:thin:@10.177.103.192:1523/fincorepdb1
+spring.datasource.username=fincore
+spring.datasource.password=Password#1234
 
-import com.fincore.ReportService.dto.AttachmentDownloadRequest;
-import com.fincore.ReportService.dto.AttachmentDownloadResponse;
-import lombok.RequiredArgsConstructor;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.springframework.stereotype.Service;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.util.Base64;
+## ========================== actuator =============================
+#management.endpoints.web.exposure.include=*
+## Always show full details on the health endpoint (e.g., database connection status)
+#management.endpoint.health.show-details=always
+#
+## Add some custom info to the /info endpoint
+#info.app.name=ReportService
+#info.app.description=Service to manage and retrieve different reports
+#info.app.version=1.0.0
 
-@Service
-@RequiredArgsConstructor
-public class AttachmentServiceImpl implements AttachmentService {
+# ===================================================================
+# JPA / HIBERNATE CONFIGURATION
+# ===================================================================
+spring.jpa.database-platform=org.hibernate.dialect.OracleDialect
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.show-sql=false
+spring.jpa.properties.hibernate.format_sql=false
+logging.level.org.hibernate.SQL=OFF
+logging.level.org.hibernate.orm.jdbc.bind=OFF
 
-    private final FileSystem hdfsFileSystem;
 
-    @Override
-    public AttachmentDownloadResponse downloadAttachments(
-            AttachmentDownloadRequest request) {
+## ===================================================================
+## HADOOP / HDFS CONFIGURATION
+## ===================================================================
+#hadoop.fs.uri=hdfs://fincoredev
+#hadoop.fs.user=root
+#glif.reports.base-path=/reports
+#glif.branch-reports.base-path=/branch_reports
+#
 
-        try {
+# ===================================================================
+# HADOOP / HDFS HA CONFIGURATION
+# ===================================================================
+# The logical name of the cluster (Nameservice ID)
+hadoop.fs.nameservice=fincoredev
+hadoop.fs.user=root
+hadoop.fs.uri=hdfs://10.177.103.199:8022
+glif.reports.base-path=/reports
+glif.branch-reports.base-path=/branch_reports
+glif.temp-reports.base-path=/temp-reports
 
-            Path filePath = new Path(request.getFilePath());
+#Local Fix
 
-            if (!hdfsFileSystem.exists(filePath)) {
-                throw new RuntimeException(
-                        "Attachment not found : " + request.getFilePath());
-            }
+# HA NameNode Details
+hadoop.fs.ha.namenodes=nn1,nn2,nn3
+hadoop.fs.ha.nn1.rpc=10.177.103.199:8022
+hadoop.fs.ha.nn2.rpc=10.177.103.192:8022
+hadoop.fs.ha.nn3.rpc=10.177.103.196:8022
 
-            FileStatus status = hdfsFileSystem.getFileStatus(filePath);
 
-            byte[] fileBytes;
 
-            try (FSDataInputStream inputStream =
-                         hdfsFileSystem.open(filePath);
-                 ByteArrayOutputStream outputStream =
-                         new ByteArrayOutputStream()) {
+# --- Redis Configuration ---
+spring.data.redis.host=10.0.17.242
+spring.data.redis.port=6379
+spring.cache.type=redis
 
-                byte[] buffer = new byte[8192];
-                int bytesRead;
 
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    outputStream.write(buffer, 0, bytesRead);
-                }
+# =========================
+# KAFKA BASIC CONFIG
+# =========================
 
-                fileBytes = outputStream.toByteArray();
-            }
+spring.kafka.bootstrap-servers=localhost:9092
 
-            AttachmentDownloadResponse response =
-                    new AttachmentDownloadResponse();
+# =========================
+# CONSUMER CONFIG
+# =========================
 
-            response.setFileName(filePath.getName());
+spring.kafka.consumer.group-id=Airflow_ETL
+spring.kafka.consumer.auto-offset-reset=earliest
+spring.kafka.consumer.key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
+spring.kafka.consumer.value-deserializer=org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+spring.kafka.consumer.properties.spring.deserializer.value.delegate.class=org.springframework.kafka.support.serializer.JsonDeserializer
+spring.kafka.consumer.properties.spring.json.trusted.packages=*
 
-            response.setContentType(getContentType(filePath.getName()));
+# =========================
+# PRODUCER CONFIG
+# =========================
 
-            response.setFileSize(status.getLen());
-
-            response.setBase64(
-                    Base64.getEncoder().encodeToString(fileBytes));
-
-            return response;
-
-        } catch (IOException ex) {
-
-            throw new RuntimeException(
-                    "Unable to download attachment", ex);
-        }
-    }
-
-    /**
-     * Returns MIME type based on extension.
-     */
-    private String getContentType(String fileName) {
-
-        String lower = fileName.toLowerCase();
-
-        if (lower.endsWith(".pdf")) {
-            return "application/pdf";
-        }
-
-        if (lower.endsWith(".xlsx")) {
-            return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-        }
-
-        if (lower.endsWith(".xls")) {
-            return "application/vnd.ms-excel";
-        }
-
-        if (lower.endsWith(".csv")) {
-            return "text/csv";
-        }
-
-        if (lower.endsWith(".psv")) {
-            return "text/plain";
-        }
-
-        if (lower.endsWith(".zip")) {
-            return "application/zip";
-        }
-
-        return "application/octet-stream";
-    }
-}
+spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer
+spring.kafka.producer.value-serializer=org.springframework.kafka.support.serializer.JsonSerializer
