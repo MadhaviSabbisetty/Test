@@ -1,309 +1,244 @@
-working one
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xmlns="http://maven.apache.org/POM/4.0.0"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
-    <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.0</version>
-        <relativePath/>
-    </parent>
-    <groupId>com.fincore</groupId>
-    <artifactId>ReportService</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-    <packaging>jar</packaging>
-    <name>report-service</name>
-    <description>Service to manage and retrieve different reports</description>
-    <properties>
-        <java.version>22</java.version>
-        <lombok.version>1.18.38</lombok.version>
-    </properties>
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-devtools</artifactId>
-            <scope>runtime</scope>
-            <optional>true</optional>
-        </dependency>
+package com.fincore.CommunicationService.dto.attachment;
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
+import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+import java.io.File;
+import java.util.List;
 
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <optional>true</optional>
-        </dependency>
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class PreparedAttachmentResponse{
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
+    private List<File> files;
 
-        <dependency>
-            <groupId>net.sf.jasperreports</groupId>
-            <artifactId>jasperreports</artifactId>
-            <version>7.0.3</version>
-        </dependency>
+    private boolean zip;
+
+    private long totalSize;
+
+    private int attachmentCount;
+}package com.fincore.CommunicationService.dto.attachment;
+
+import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class DownloadedAttachment{
+
+    private String fileName;
+
+    private String contentType;
+
+    private String base64;
+
+    private long fileSize;
 
 
-        <dependency>
-            <groupId>com.oracle.database.jdbc</groupId>
-            <artifactId>ojdbc11</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.json</groupId>
-            <artifactId>json</artifactId>
-            <version>20240303</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
+}package com.fincore.CommunicationService.dto.attachment;
 
-         <!-- health metrics -->
-        <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-registry-prometheus</artifactId>
-        </dependency>
+import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+import java.util.List;
 
-        <dependency>
-            <groupId>com.ibm.icu</groupId>
-            <artifactId>icu4j</artifactId>
-            <version>75.1</version>
-        </dependency>
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class AttachmentDownloadRequest{
 
+    private List<AttachmentReference> attachments;
 
-        <dependency>
-            <groupId>org.jetbrains</groupId>
-            <artifactId>annotations</artifactId>
-            <version>25.0.0</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>jakarta.validation</groupId>
-            <artifactId>jakarta.validation-api</artifactId>
-        </dependency>
+}package com.fincore.CommunicationService.dto.attachment;
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
+import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+import java.util.List;
 
-        <dependency>
-            <groupId>com.fincore</groupId>
-            <artifactId>common-utilities</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
-        </dependency>
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class AttachmentDownloadResponse{
 
-        <dependency>
-            <groupId>org.apache.hadoop</groupId>
-            <artifactId>hadoop-client</artifactId>
-            <version>3.3.6</version> <exclusions>
-            <exclusion>
-                <groupId>org.slf4j</groupId>
-                <artifactId>slf4j-reload4j</artifactId>
-            </exclusion>
-            <exclusion>
-                <groupId>org.slf4j</groupId>
-                <artifactId>slf4j-log4j12</artifactId>
-            </exclusion>
-            <exclusion>
-                <groupId>log4j</groupId>
-                <artifactId>log4j</artifactId>
-            </exclusion>
-            <exclusion>
-                <groupId>ch.qos.logback</groupId>
-                <artifactId>logback-classic</artifactId>
-            </exclusion>
-        </exclusions>
-        </dependency>
+    private List<DownloadedAttachment> attachments;
+}package com.fincore.CommunicationService.dto.attachment;
 
-        <dependency>
-            <groupId>net.sf.jasperreports</groupId>
-            <artifactId>jasperreports</artifactId>
-            <version>6.21.3</version> <!-- Use a recent version -->
-        </dependency>
+import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 
-        <!-- JSch for SFTP Support -->
-        <dependency>
-            <groupId>com.jcraft</groupId>
-            <artifactId>jsch</artifactId>
-            <version>0.1.55</version>
-        </dependency>
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class AttachmentReference{
+    
+    private String reportName;
 
-        <dependency>
-            <groupId>net.logstash.logback</groupId>
-            <artifactId>logstash-logback-encoder</artifactId>
-            <version>7.4</version>
-        </dependency>
+    private Long reportId;
 
-        <!-- health metrics -->
-        <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-registry-prometheus</artifactId>
-        </dependency>
+    private String storageType;
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
-        <dependency>
-        <groupId>org.springframework.kafka</groupId>
-        <artifactId>spring-kafka</artifactId>
-        </dependency>   
-        <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-validation</artifactId>
-        </dependency> 
+    private String path;
+}package com.fincore.CommunicationService.service;
 
+import com.fincore.CommunicationService.exception.CommunicationExceptions.*;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import com.fincore.CommunicationService.cache.ExternalApiConfigProvider;
+import com.fincore.CommunicationService.client.EmailGatewayClient;
+import com.fincore.CommunicationService.dto.EmailResponse;
+import com.fincore.CommunicationService.dto.attachment.AttachmentReference;
+import com.fincore.CommunicationService.dto.attachment.PreparedAttachmentResponse;
+import com.fincore.CommunicationService.attachment.AttachmentPreparationService;
+import com.fincore.CommunicationService.model.FincoreSettings;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+/**
+ * <p>Handles the functionality for sending emails through a primary provider,
+ * incorporating a circuit breaker pattern to ensure system resilience.</p>
+ *
+ * <p>This class is designed to support a fallback mechanism for future upgrades.
+ * Currently, failed messages are routed to a Dead Letter Queue (DLQ) as the fallback strategy.</p>
+ *
+ * <p>In the event of any errors during processing, a {@link VendorDeliveryException} is thrown.
+ * This exception is intended to be caught and handled by the OTP consumer.</p>
+ *
+ * @author SHUBHANKAR (v1018405)
+ * @contributor [Add contributor names/IDs here]
+ * @version 1.0
+ * @since 2026-06-22
+ * @see VendorDeliveryException
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class EmailServiceImpl implements EmailService {
 
-    </dependencies>
+	@Value("${app.preIpString:UAT}")
+	private String environment;
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                        </path>
-                    </annotationProcessorPaths>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <excludes>
-                        <exclude>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                        </exclude>
-                    </excludes>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
+	private final ExternalApiConfigProvider configProvider;
+	private final TemplateEngineService templateService; // L1 (Caffeine) Cache Service
+	private final AttachmentPreparationService attachmentPreparationService;
+	private static final String FUNCTIONALITY_EMAIL = "EMAIL";
 
-</project>
+	// Constants mapping to EmailGatewayClient
+	private static final String URL = "url";
+	private static final String API_KEY = "api_key";
+	private static final String SENDER_ID = "senderId";
+	private static final String TO_EMAIL = "toEmail";
+	private static final String EMAIL_BODY = "emailBody";
+	private static final String SUBJECT = "subject";
+
+	/**
+	 * Attempts to send via the single Bank API provider (only primary). Retries
+	 * automatically via Resilience4j.
+	 */
+	@Override
+	@Retry(name = "bankApiRetry", fallbackMethod = "handleTotalApiFailure")
+	@CircuitBreaker(name = "bankApiCircuit", fallbackMethod = "handleTotalApiFailure")
+	public EmailResponse sendEmail(String templateId, String toEmail, Map<String, Object> templateData, List<AttachmentReference> attachments) {
+		log.info("Reached send Email service file with template id : {}, templateData : {}", templateId, templateData);
+
+		// 1. Fetch Oracle L1 Cached Template & Compile FreeMarker
+		String emailBody = templateService.renderTemplate(templateId, "EMAIL", "EN", templateData);
+		String subject = templateService.getTemplateSubject(templateId, "EMAIL", "EN");
+
+		// 2. Fetch API Credentials from Fincore Settings
+		FincoreSettings config = configProvider.getConfig(FUNCTIONALITY_EMAIL, environment);
+
+		// 3. Prepare Payload for EmailUtil
+		Map<String, Object> emailRequestBody = new HashMap<>();
+		emailRequestBody.put(URL, config.getUrl());
+		emailRequestBody.put(API_KEY, config.getApiKey());
+		emailRequestBody.put(SENDER_ID, config.getSenderId());
+		emailRequestBody.put(TO_EMAIL, toEmail);
+		emailRequestBody.put(SUBJECT, subject);
+		emailRequestBody.put(EMAIL_BODY, emailBody);
+
+		PreparedAttachmentResponse preparedAttachmentResponse = null;
+
+		if(attachments != null && !attachments.isEmpty()){
+			preparedAttachments= attachmentPreparationService.preparedAttachments(attachments);
+
+			log.info("Prepared {} attachment(s). ZIP : {}",
+			preparedAttachments.getAttachmentCount(),preparedAttachments.isZip());
+		}
 
 
-not working onw
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
-    <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.13</version>
-        <relativePath/> <!-- lookup parent from repository -->
-    </parent>
-    <groupId>com.tcs.fincore</groupId>
-    <artifactId>analytics-service</artifactId>
-    <version>0.0.1</version>
-    <name>AnalyticsService</name>
-    <description>Service to handle drill down report from druid</description>
-    <url/>
-    <licenses>
-        <license/>
-    </licenses>
-    <developers>
-        <developer/>
-    </developers>
-    <scm>
-        <connection/>
-        <developerConnection/>
-        <tag/>
-        <url/>
-    </scm>
-    <properties>
-        <java.version>21</java.version>
-    </properties>
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
+		log.info("Dispatching Email via Primary Provider to {}", maskEmail(toEmail));
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-devtools</artifactId>
-            <scope>runtime</scope>
-            <optional>true</optional>
-        </dependency>
+		emailRequestBody.put("attachments", preparedAttachments);
 
-        <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-registry-prometheus</artifactId>
-            <scope>runtime</scope>
-        </dependency>
+		int responseCode = EmailGatewayClient.sendEmail(emailRequestBody);
+        log.info("responseCode : {}", responseCode);
 
-        <dependency>
-            <groupId>com.fincore</groupId>
-            <artifactId>common-utilities</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
-        </dependency>
+		EmailResponse responseDto = new EmailResponse();
+		responseDto.setStatus(responseCode);
+		if (responseCode == 202) {
+			responseDto.setMessage("Email Sent Successfully");
+		} else if (responseCode < 200 || responseCode >= 300) {
+			responseDto.setMessage("Email Sending Failed");
+			throw new VendorDeliveryException("Email Provider rejected request. HTTP " + responseCode, null);
+		}
+		return responseDto;
+	}
 
-        <!-- Spring Boot Validation for secure DTOs (Regex validation) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-validation</artifactId>
-        </dependency>
+	/**
+	 * THE DLQ HOOK. Invoked automatically if all retries fail, or if the Circuit
+	 * Breaker is OPEN.
+	 */
+	public EmailResponse handleTotalApiFailure(String templateId, String toEmail, Map<String, Object> templateData,
+			Throwable ex) {
+		log.error("CRITICAL: Bank Email API is completely down or unreachable for {}. Error: {}", maskEmail(toEmail),
+				ex.getMessage());
 
-        <!-- Redis Caching -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-redis</artifactId>
-        </dependency>
+        if (ex instanceof TemplateNotFoundException) {
+            throw (TemplateNotFoundException) ex;
+        } else if (ex instanceof TemplateProcessingException) {
+            throw (TemplateProcessingException) ex;
+        }
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-cache</artifactId>
-        </dependency>
+		throw new VendorDeliveryException("Total Bank API Infrastructure Failure", ex);
+	}
 
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <optional>true</optional>
-        </dependency>
+    /**
+     * Mask the email to satisfy PII Data masking.
+     * @param email Recipients email
+     * @return Masked email
+     */
+	private String maskEmail(String email) {
+		if (email == null || !email.contains("@"))
+			return email;
+		String[] p = email.split("@");
+		return (p[0].length() <= 2 ? "**" : p[0].charAt(0) + "***" + p[0].charAt(p[0].length() - 1)) + "@" + p[1];
+	}
+}package com.fincore.CommunicationService.service;
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
+import java.util.Map;
+import java.util.List;
 
-        <dependency>
-            <groupId>com.oracle.database.jdbc</groupId>
-            <artifactId>ojdbc11</artifactId>
-            <scope>runtime</scope>
-        </dependency>
+import com.fincore.CommunicationService.dto.attachment.AttachmentReference;
+import com.fincore.CommunicationService.dto.EmailResponse;
 
-    </dependencies>
+public interface EmailService {
 
-    <build>
-        <finalName>${project.artifactId}</finalName>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
+	/**
+	 * Returns EmailResponse to handle the REST Endpoint Path.
+     * Kafka path does not expect anything in return response. Acknowledgement is sent directly to login service
+	 * as we don't want user to wait for email delivery, if email delivery failed
+	 * due to the banks api down, we store the failed event in DB comm_audit_log table.
+	 */
+	EmailResponse sendEmail(String templateId, String toEmail, Map<String, Object> templateData,List<AttachmentReference> attachments);
 
-</project>
+}
