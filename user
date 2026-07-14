@@ -1,138 +1,116 @@
-package com.fincore.CommunicationService.attachment;
+package com.fincore.CommunicationService.dto;
 
-import com.fincore.CommunicationService.client.ReportServiceClient;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
-import com.fincore.CommunicationService.dto.attachment.PreparedAttachmentResponse;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class AttachmentPreparationService {
+/**
+ * Generic communication event consumed by the Communication Service.
+ *
+ * Producer services publish this event to the
+ * 'fincore.communication.generic' Kafka topic.
+ *
+ * The Communication Service is responsible for resolving recipients,
+ * generating communication content, downloading attachments and
+ * dispatching notifications through the requested channels.
+ *
+ * @author SHUBHANKAR
+ * @since 2026-07
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class GenericCommunicationEvent {
 
-    private final ReportServiceClient reportServiceClient;
+    private String eventId;
 
-    private final ZipService zipService;
+    private String traceId;
 
-    @Value("${attachment.max.count:10}")
-    private int maxAttachmentCount;
+    private String correlationId;
 
-    @Value("${attachment.max.size.mb:20}")
-    private long maxAttachmentSizeMb;
+    private String producerService;
 
-    public PreparedAttachmentResponse prepareAttachments(
-            AttachmentDownloadRequest request) throws IOException {
+    private String eventType;
 
-        log.info("Preparing attachments");
+    private String priority;
 
-        AttachmentDownloadResponse downloadResponse =
-                reportServiceClient.downloadAttachments(request);
+    private List<String> channels;
 
-        List<File> preparedFiles = new ArrayList<>();
+    private Recipients recipients;
 
-        long totalSize = 0;
+    private String templateId;
 
-        int attachmentCount = 0;
+    private Map<String, Object> payload;
 
-        if (downloadResponse == null
-                || downloadResponse.getAttachments() == null
-                || downloadResponse.getAttachments().isEmpty()) {
+    private List<AttachmentRef> attachments;
 
-            return new PreparedAttachmentResponse(
-                    preparedFiles,
-                    false,
-                    0,
-                    0
-            );
-        }
+    private List<DeepLinkRef> deepLinks;
 
-        for (DownloadedAttachment attachment :
-                downloadResponse.getAttachments()) {
+    private Map<String, String> metadata;
 
-            byte[] fileBytes =
-                    Base64.getDecoder().decode(attachment.getBase64());
+    /**
+     * Recipient details supplied by the producer service.
+     * Communication Service resolves UserIds and Roles into
+     * Email and Mobile recipients.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public static class Recipients {
 
-            File tempFile = File.createTempFile(
-                    "attachment_",
-                    "_" + attachment.getFileName());
+        private List<String> userIds;
 
-            try (FileOutputStream fos = new FileOutputStream(tempFile)) {
-                fos.write(fileBytes);
-            }
+        private List<String> roles;
 
-            preparedFiles.add(tempFile);
+        private List<String> emails;
 
-            totalSize += tempFile.length();
-
-            attachmentCount++;
-        }
-
-        boolean zipRequired =
-                attachmentCount > maxAttachmentCount
-                        || totalSize > (maxAttachmentSizeMb * 1024 * 1024);
-
-        if (zipRequired) {
-
-            File zipFile = zipService.createZip(preparedFiles);
-
-            preparedFiles.clear();
-
-            preparedFiles.add(zipFile);
-
-            totalSize = zipFile.length();
-        }
-
-        PreparedAttachmentResponse response =
-                new PreparedAttachmentResponse();
-
-        response.setFiles(preparedFiles);
-
-        response.setZip(zipRequired);
-
-        response.setTotalSize(totalSize);
-
-        response.setAttachmentCount(attachmentCount);
-
-        return response;
+        private List<String> mobiles;
     }
 
-    public void deleteTemporaryFiles(List<File> files) {
+    /**
+     * Reference to an attachment.
+     *
+     * Files are never sent through Kafka. The AttachmentService
+     * downloads the file using this information.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AttachmentRef {
 
-        if (files == null || files.isEmpty()) {
-            return;
-        }
+        private String attachmentId;
 
-        for (File file : files) {
+        private String attachmentType;
 
-            try {
+        private String fileName;
+    }
 
-                if (file.exists()) {
+    /**
+     * Reference used by the DeepLinkGenerator to create
+     * application-specific URLs.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DeepLinkRef {
 
-                    boolean deleted = file.delete();
+        private String module;
 
-                    log.info("Deleted temp file : {} Result : {}",
-                            file.getName(),
-                            deleted);
-                }
+        private String entityId;
 
-            } catch (Exception ex) {
-
-                log.error("Unable to delete temp file {}",
-                        file.getAbsolutePath(),
-                        ex);
-            }
-        }
+        private String action;
     }
 }
