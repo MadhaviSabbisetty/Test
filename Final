@@ -1,244 +1,389 @@
-package com.fincore.CommunicationService.dto.attachment;
+package com.fincore.CommunicationService.attachment;
 
-import lombok.Data;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
-import java.io.File;
-import java.util.List;
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class PreparedAttachmentResponse{
-
-    private List<File> files;
-
-    private boolean zip;
-
-    private long totalSize;
-
-    private int attachmentCount;
-}package com.fincore.CommunicationService.dto.attachment;
-
-import lombok.Data;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class DownloadedAttachment{
-
-    private String fileName;
-
-    private String contentType;
-
-    private String base64;
-
-    private long fileSize;
-
-
-}package com.fincore.CommunicationService.dto.attachment;
-
-import lombok.Data;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
-import java.util.List;
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class AttachmentDownloadRequest{
-
-    private List<AttachmentReference> attachments;
-
-}package com.fincore.CommunicationService.dto.attachment;
-
-import lombok.Data;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
-import java.util.List;
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class AttachmentDownloadResponse{
-
-    private List<DownloadedAttachment> attachments;
-}package com.fincore.CommunicationService.dto.attachment;
-
-import lombok.Data;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class AttachmentReference{
-    
-    private String reportName;
-
-    private Long reportId;
-
-    private String storageType;
-
-    private String path;
-}package com.fincore.CommunicationService.service;
-
-import com.fincore.CommunicationService.exception.CommunicationExceptions.*;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.retry.annotation.Retry;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import com.fincore.CommunicationService.cache.ExternalApiConfigProvider;
-import com.fincore.CommunicationService.client.EmailGatewayClient;
-import com.fincore.CommunicationService.dto.EmailResponse;
-import com.fincore.CommunicationService.dto.attachment.AttachmentReference;
+import com.fincore.CommunicationService.client.ReportServiceClient;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
+import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
 import com.fincore.CommunicationService.dto.attachment.PreparedAttachmentResponse;
-import com.fincore.CommunicationService.attachment.AttachmentPreparationService;
-import com.fincore.CommunicationService.model.FincoreSettings;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
 
-/**
- * <p>Handles the functionality for sending emails through a primary provider,
- * incorporating a circuit breaker pattern to ensure system resilience.</p>
- *
- * <p>This class is designed to support a fallback mechanism for future upgrades.
- * Currently, failed messages are routed to a Dead Letter Queue (DLQ) as the fallback strategy.</p>
- *
- * <p>In the event of any errors during processing, a {@link VendorDeliveryException} is thrown.
- * This exception is intended to be caught and handled by the OTP consumer.</p>
- *
- * @author SHUBHANKAR (v1018405)
- * @contributor [Add contributor names/IDs here]
- * @version 1.0
- * @since 2026-06-22
- * @see VendorDeliveryException
- */
-@Service
-@RequiredArgsConstructor
-@Slf4j
-public class EmailServiceImpl implements EmailService {
-
-	@Value("${app.preIpString:UAT}")
-	private String environment;
-
-	private final ExternalApiConfigProvider configProvider;
-	private final TemplateEngineService templateService; // L1 (Caffeine) Cache Service
-	private final AttachmentPreparationService attachmentPreparationService;
-	private static final String FUNCTIONALITY_EMAIL = "EMAIL";
-
-	// Constants mapping to EmailGatewayClient
-	private static final String URL = "url";
-	private static final String API_KEY = "api_key";
-	private static final String SENDER_ID = "senderId";
-	private static final String TO_EMAIL = "toEmail";
-	private static final String EMAIL_BODY = "emailBody";
-	private static final String SUBJECT = "subject";
-
-	/**
-	 * Attempts to send via the single Bank API provider (only primary). Retries
-	 * automatically via Resilience4j.
-	 */
-	@Override
-	@Retry(name = "bankApiRetry", fallbackMethod = "handleTotalApiFailure")
-	@CircuitBreaker(name = "bankApiCircuit", fallbackMethod = "handleTotalApiFailure")
-	public EmailResponse sendEmail(String templateId, String toEmail, Map<String, Object> templateData, List<AttachmentReference> attachments) {
-		log.info("Reached send Email service file with template id : {}, templateData : {}", templateId, templateData);
-
-		// 1. Fetch Oracle L1 Cached Template & Compile FreeMarker
-		String emailBody = templateService.renderTemplate(templateId, "EMAIL", "EN", templateData);
-		String subject = templateService.getTemplateSubject(templateId, "EMAIL", "EN");
-
-		// 2. Fetch API Credentials from Fincore Settings
-		FincoreSettings config = configProvider.getConfig(FUNCTIONALITY_EMAIL, environment);
-
-		// 3. Prepare Payload for EmailUtil
-		Map<String, Object> emailRequestBody = new HashMap<>();
-		emailRequestBody.put(URL, config.getUrl());
-		emailRequestBody.put(API_KEY, config.getApiKey());
-		emailRequestBody.put(SENDER_ID, config.getSenderId());
-		emailRequestBody.put(TO_EMAIL, toEmail);
-		emailRequestBody.put(SUBJECT, subject);
-		emailRequestBody.put(EMAIL_BODY, emailBody);
-
-		PreparedAttachmentResponse preparedAttachmentResponse = null;
-
-		if(attachments != null && !attachments.isEmpty()){
-			preparedAttachments= attachmentPreparationService.preparedAttachments(attachments);
-
-			log.info("Prepared {} attachment(s). ZIP : {}",
-			preparedAttachments.getAttachmentCount(),preparedAttachments.isZip());
-		}
-
-
-		log.info("Dispatching Email via Primary Provider to {}", maskEmail(toEmail));
-
-		emailRequestBody.put("attachments", preparedAttachments);
-
-		int responseCode = EmailGatewayClient.sendEmail(emailRequestBody);
-        log.info("responseCode : {}", responseCode);
-
-		EmailResponse responseDto = new EmailResponse();
-		responseDto.setStatus(responseCode);
-		if (responseCode == 202) {
-			responseDto.setMessage("Email Sent Successfully");
-		} else if (responseCode < 200 || responseCode >= 300) {
-			responseDto.setMessage("Email Sending Failed");
-			throw new VendorDeliveryException("Email Provider rejected request. HTTP " + responseCode, null);
-		}
-		return responseDto;
-	}
-
-	/**
-	 * THE DLQ HOOK. Invoked automatically if all retries fail, or if the Circuit
-	 * Breaker is OPEN.
-	 */
-	public EmailResponse handleTotalApiFailure(String templateId, String toEmail, Map<String, Object> templateData,
-			Throwable ex) {
-		log.error("CRITICAL: Bank Email API is completely down or unreachable for {}. Error: {}", maskEmail(toEmail),
-				ex.getMessage());
-
-        if (ex instanceof TemplateNotFoundException) {
-            throw (TemplateNotFoundException) ex;
-        } else if (ex instanceof TemplateProcessingException) {
-            throw (TemplateProcessingException) ex;
-        }
-
-		throw new VendorDeliveryException("Total Bank API Infrastructure Failure", ex);
-	}
-
-    /**
-     * Mask the email to satisfy PII Data masking.
-     * @param email Recipients email
-     * @return Masked email
-     */
-	private String maskEmail(String email) {
-		if (email == null || !email.contains("@"))
-			return email;
-		String[] p = email.split("@");
-		return (p[0].length() <= 2 ? "**" : p[0].charAt(0) + "***" + p[0].charAt(p[0].length() - 1)) + "@" + p[1];
-	}
-}package com.fincore.CommunicationService.service;
-
-import java.util.Map;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
-import com.fincore.CommunicationService.dto.attachment.AttachmentReference;
-import com.fincore.CommunicationService.dto.EmailResponse;
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class AttachmentPreparationService {
 
-public interface EmailService {
+    private final ReportServiceClient reportServiceClient;
 
-	/**
-	 * Returns EmailResponse to handle the REST Endpoint Path.
-     * Kafka path does not expect anything in return response. Acknowledgement is sent directly to login service
-	 * as we don't want user to wait for email delivery, if email delivery failed
-	 * due to the banks api down, we store the failed event in DB comm_audit_log table.
-	 */
-	EmailResponse sendEmail(String templateId, String toEmail, Map<String, Object> templateData,List<AttachmentReference> attachments);
+    private final ZipService zipService;
+
+    @Value("${attachment.max.count:10}")
+    private int maxAttachmentCount;
+
+    @Value("${attachment.max.size.mb:20}")
+    private long maxAttachmentSizeMb;
+
+    public PreparedAttachmentResponse preparedAttachments(
+            AttachmentDownloadRequest request) throws IOException {
+
+        log.info("Preparing attachments");
+
+        AttachmentDownloadResponse downloadResponse =
+                reportServiceClient.downloadedAttachments(request);
+
+        List<File> preparedFiles = new ArrayList<>();
+
+        long totalSize = 0;
+
+        int attachmentCount = 0;
+
+        if (downloadResponse == null
+                || downloadResponse.getAttachments() == null
+                || downloadResponse.getAttachments().isEmpty()) {
+
+            return new PreparedAttachmentResponse(
+                    preparedFiles,
+                    false,
+                    0,
+                    0
+            );
+        }
+
+        for (DownloadedAttachment attachment :
+                downloadResponse.getAttachments()) {
+
+            byte[] fileBytes =
+                    Base64.getDecoder().decode(attachment.getBase64());
+
+            File tempFile = File.createTempFile(
+                    "attachment_",
+                    "_" + attachment.getFileName());
+
+            try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+                fos.write(fileBytes);
+            }
+
+            preparedFiles.add(tempFile);
+
+            totalSize += attachment.getFileSize();
+
+            attachmentCount++;
+        }
+
+        boolean zipRequired =
+                attachmentCount > maxAttachmentCount
+                        || totalSize > (maxAttachmentSizeMb * 1024 * 1024);
+
+        if (zipRequired) {
+
+            File zipFile = zipService.createZip(preparedFiles);
+
+            preparedFiles.clear();
+
+            preparedFiles.add(zipFile);
+
+            totalSize = zipFile.length();
+        }
+
+        PreparedAttachmentResponse response =
+                new PreparedAttachmentResponse();
+
+        response.setFiles(preparedFiles);
+
+        response.setZip(zipRequired);
+
+        response.setTotalSize(totalSize);
+
+        response.setAttachmentCount(attachmentCount);
+
+        return response;
+    }
+
+    public void deleteTemporaryFiles(List<File> files) {
+
+        if (files == null || files.isEmpty()) {
+            return;
+        }
+
+        for (File file : files) {
+
+            try {
+
+                if (file.exists()) {
+
+                    boolean deleted = file.delete();
+
+                    log.info("Deleted temp file : {} Result : {}",
+                            file.getName(),
+                            deleted);
+                }
+
+            } catch (Exception ex) {
+
+                log.error("Unable to delete temp file {}",
+                        file.getAbsolutePath(),
+                        ex);
+            }
+        }
+    }
+}package com.fincore.CommunicationService.consumer;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fincore.CommunicationService.dto.KafkaEvent;
+import com.fincore.CommunicationService.exception.CommunicationExceptions.DecryptionFailureException;
+import com.fincore.CommunicationService.exception.CommunicationExceptions.InvalidPayloadException;
+import com.fincore.CommunicationService.exception.CommunicationExceptions.TemplateNotFoundException;
+import com.fincore.CommunicationService.exception.CommunicationExceptions.VendorDeliveryException;
+import com.fincore.CommunicationService.service.CommunicationAuditService;
+import com.fincore.CommunicationService.service.EmailService;
+import com.fincore.CommunicationService.service.SmsService;
+import com.fincore.commonutilities.util.AesEncryptionUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.kafka.annotation.DltHandler;
+import org.springframework.kafka.annotation.EnableKafka;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.annotation.RetryableTopic;
+import org.springframework.kafka.retrytopic.TopicSuffixingStrategy;
+import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.stereotype.Component;
+
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import java.security.GeneralSecurityException;
+import java.time.Duration;
+import java.util.Map;
+
+
+/**
+ * <p>A non-blocking Kafka consumer responsible for processing high-priority OTP events.
+ * This component handles decryption, validation, and dispatching of OTPs via SMS or Email.</p>
+ *
+ * <p><strong>Retry Architecture:</strong></p>
+ * <ul>
+ *   <li><strong>Attempts:</strong> 4 total (1 initial + 3 retries).</li>
+ *   <li><strong>Backoff Strategy:</strong> Exponential delay (2s, 4s, 8s).</li>
+ *   <li><strong>Retryable Exceptions:</strong> Transient errors like {@link VendorDeliveryException} (e.g., API timeouts).</li>
+ *   <li><strong>Non-Retryable Exceptions:</strong> Deterministic errors such as {@link DecryptionFailureException},
+ *       {@link InvalidPayloadException}, and {@link TemplateNotFoundException} bypass retries and go straight to the DLQ.</li>
+ * </ul>
+ *
+ * <p>Failed messages are routed to a Dead Letter Queue (DLQ) for manual inspection or further automated processing.</p>
+ *
+ * @author SHUBHANKAR (v1018405)
+ * @see RetryableTopic
+ * @see DltHandler
+ * @since 2026-06-22
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+@EnableKafka
+public class PriorityOtpConsumer {
+
+    private final ObjectMapper mapper;
+    private final AesEncryptionUtil aesUtil;
+    private final StringRedisTemplate redisTemplate;
+    private final CommunicationAuditService auditService;
+    private final SmsService smsService;
+    private final EmailService emailService;
+
+    @Value("${security.internal.kafka-aes-key}")
+    private String internalAesKey;
+
+    /**
+     * <p>Consumes OTP events from the priority Kafka topic.</p>
+     *
+     * <p>This method orchestrates the following steps:</p>
+     * <ol>
+     *   <li>Deserializes the incoming message.</li>
+     *   <li>Decrypts sensitive payload data using the configured AES key.</li>
+     *   <li>Maintain the channel Idempotency [SMS, EMAIL using redis idempotencyKe]</li>
+     *   <li>Dispatches the OTP via the appropriate channel (SMS/Email).</li>
+     *   <li>Audits the transaction status.</li>
+     * </ol>
+     *
+     * <p>Transient failures (e.g., vendor timeouts) trigger the configured retry mechanism.
+     * Permanent failures (e.g., decryption errors) immediately route the message to the DLQ.</p>
+     *
+     * @param message        The raw JSON payload from the Kafka topic.
+     * @param acknowledgment The Kafka acknowledgment handle to commit offsets upon successful processing.
+     * @throws JsonProcessingException    if the message cannot be deserialized.
+     * @throws VendorDeliveryException    if the external vendor API fails (triggers retry).
+     * @throws DecryptionFailureException if payload decryption fails (triggers DLQ).
+     * @throws InvalidPayloadException    if the message structure is invalid (triggers DLQ).
+     * @throws TemplateNotFoundException  if the required OTP template is missing (triggers DLQ).
+     */
+    @RetryableTopic(
+            attempts = "4",
+            backoff = @Backoff(delay = 2000, multiplier = 2.0),
+            topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE,
+            dltTopicSuffix = "-dlq",
+            exclude = {
+                    DecryptionFailureException.class,
+                    InvalidPayloadException.class,
+                    TemplateNotFoundException.class
+            }
+    )
+    @KafkaListener(
+            topics = "fincore.auth.otp.priority",
+            groupId = "communication-login-otp-group-v7",
+            containerFactory = "priorityOtpContainerFactory"
+    )
+    public void consumeOtpEvent(@Payload String message, Acknowledgment acknowledgment) throws JsonProcessingException {
+
+        log.info("Received raw Kafka message: {}", message);
+        String txId = "UNKNOWN";
+
+        String eventId = "UNKNOWN";
+
+        try {
+            // 1. DESERIALIZATION
+            KafkaEvent event;
+            try {
+                event = mapper.readValue(message, KafkaEvent.class);
+                txId = event.getTxId();
+                eventId = event.getEventId();
+            } catch (Exception e) {
+                throw new InvalidPayloadException("Malformed JSON Payload: " + e.getMessage());
+            }
+
+            if (txId == null || eventId == null || event.getPayload() == null) {
+                throw new InvalidPayloadException("Missing txId or eventId or encrypted payload");
+            }
+
+            // 2. DECRYPTION of personal data using aes key synced with login service
+            String decryptedJson;
+            try {
+                decryptedJson = aesUtil.decrypt(event.getPayload(), internalAesKey);
+            } catch (BadPaddingException | IllegalBlockSizeException e) {
+                log.error("SECURITY ALERT: Decryption failed for eventId={}. Data tampered or key mismatch.", eventId, e);
+                throw new DecryptionFailureException("AES Decryption Failed: Invalid Padding", e);
+            } catch (GeneralSecurityException e) {
+                throw new DecryptionFailureException("AES Decryption Failed", e);
+            }
+
+            // Map decrypted JSON into a generic map to pass to TemplateService
+            Map<String, Object> templateDataMap = mapper.readValue(decryptedJson, new TypeReference<>() {
+            });
+
+            // Log process start event
+            auditService.logAttempt(event.getEventId(), txId, event.getTemplateId(), event.getChannel(), event.getRecipient());
+
+            // Track partial failures to trigger Spring Kafka Retry
+            boolean requiresRetry = false;
+
+            // 3. CHANNEL ROUTING & IDEMPOTENCY (for sms and email - if one fail only that needs to be retried not the both)
+            for (String channel : event.getChannel()) {
+                String idempotencyKey = "COMM_IDEMP:" + eventId + ":" + channel.toUpperCase();
+
+                Boolean alreadyProcessed = redisTemplate.opsForValue().setIfAbsent(idempotencyKey, "PROCESSED", Duration.ofMinutes(15));
+                log.info("Already processed value : {}", alreadyProcessed);
+                if (Boolean.FALSE.equals(alreadyProcessed)) {
+                    log.info("Idempotency hit: Already processed {} for eventId={}. Skipping.", channel, eventId);
+                    continue;
+                }
+
+                try {
+                    if ("SMS".equalsIgnoreCase(channel)) {
+                        smsService.sendSms(event.getTemplateId(), event.getRecipient().getMobile(), templateDataMap);
+                    } else if ("EMAIL".equalsIgnoreCase(channel)) {
+                        emailService.sendEmail(event.getTemplateId(), event.getRecipient().getEmail(), templateDataMap,null);
+                    }
+                } catch (Exception e) {
+                    // If a channel fails, we must remove the idempotency key so it can be retried
+                    Boolean deleted = redisTemplate.delete(idempotencyKey);
+                    log.error(
+                            "Deleted key={} result={}",
+                            idempotencyKey,
+                            deleted
+                    );
+                    log.error("Vendor dispatch failed for eventId={} channel={}. Exception: {}", eventId, channel, e.getMessage());
+                    requiresRetry = true;
+                }
+            }
+
+            // 4. RESOLUTION
+            if (requiresRetry) {
+                // By throwing this, Spring Kafka routes the message to the Retry Topic
+                throw new VendorDeliveryException("One or more channels failed to deliver.", null);
+            }
+
+            // Only acknowledge and log success if all channels succeeded or were skipped idempotently.
+            auditService.logSuccess(event.getEventId());
+            acknowledgment.acknowledge();
+            log.info("Successfully processed Tier-0 OTP Event for txId={}", txId);
+
+        } catch (DecryptionFailureException | InvalidPayloadException | TemplateNotFoundException e) {
+            log.error("Fatal deterministic error processing txId={}. Routing to DLQ. Reason: {}", txId, e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("Unexpected error processing Kafka message", e);
+            throw e;
+        }
+    }
+
+
+    /**
+     * <p>Handles messages that have failed processing and been routed to the Dead Letter Queue (DLQ).</p>
+     *
+     * <p>This method is automatically invoked by Spring Kafka when:</p>
+     * <ol>
+     *   <li>All 4 retry attempts for retryable exceptions (e.g., {@link VendorDeliveryException}) are exhausted.</li>
+     *   <li>A non-retryable exception (e.g., {@link DecryptionFailureException}) is thrown during processing.</li>
+     * </ol>
+     *
+     * <p>Typical actions include logging the failure details, auditing the error.</p>
+     * <p>
+     * {@code @todo} implement potential alert functionality.
+     *
+     * @param message          The original Kafka message payload that failed processing.
+     * @param headerTopic      The name of the original topic from which the message was consumed.
+     * @param exceptionMessage The message of the final exception that caused the DLQ routing.
+     */
+    @DltHandler
+    public void handleDltPayment(
+            String message,
+            @Header(KafkaHeaders.ORIGINAL_TOPIC) String headerTopic,
+            @Header(KafkaHeaders.EXCEPTION_MESSAGE) String exceptionMessage) {
+
+        log.error("=====================================================");
+        log.error("DLQ ALERT: OTP Delivery Permanently Failed!");
+        log.error("Original Topic: {}", headerTopic);
+        log.error("Failure Reason: {}", exceptionMessage);
+        log.error("Failed Message Payload: {}", message);
+        log.error("=====================================================");
+
+        // Extract txId and eventId from the raw string manually for the audit
+        String txId = "UNKNOWN";
+        String eventId = "UNKNOWN";
+        try {
+            KafkaEvent failedEvent = mapper.readValue(message, KafkaEvent.class);
+            txId = failedEvent.getTxId();
+            eventId = failedEvent.getEventId();
+        } catch (Exception ignored) {
+            // doing nothing if any exception is there.
+        }
+
+        // Log the failure
+        auditService.logFailure(eventId, txId, exceptionMessage);
+    }
 
 }
