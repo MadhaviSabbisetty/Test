@@ -1,150 +1,454 @@
 
-Generic Communication Event Producer :
+@Slf4j
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api/attachment")
+public class AttachmentController{
+    private final AttachmentService attachmentService;
+    
+    @PostMapping("/download")
+    public AttachmentDownloadResponse downloadAttachment(@RequestBody AttachmentDownloadRequest request){
+        log.info("Download request received");
+        
+        // log.info("Received attachment download request");
+        return attachmentService.downloadAttachments(request);
 
-Objective
-Produce GenericCommunicationEvent to Kafka for EOD Summary Reports and future communications.
-
-Kafka Topic
-fincore.communication.generic
-
-Responsibilities
-1. Create GenericCommunicationEvent DTO.
-2. Publish events to Kafka.
-3. Populate only business information.
-4. Never resolve users or generate communication content.
-
-
-Sample Event
-===================================================================================
-
-{
-"eventId": "evt-77a8b912-4c2d-48ef-a123-56789abcdef0",
-"traceId": "trc-88223344-aabb-ccdd-eeff-112233445566",
-"correlationId": "corr-eod-20260708-batch-01",
-"producerService": "PROCESS_STATUS_SERVICE",
-"eventType": "EOD_SUMMARY_REPORT",
-"priority": "NORMAL",
-"channels": [
-  "EMAIL"
-],
-"recipients": {
-  "userIds": ["v1018405"],
-  "roles": ["BRANCH_MANAGER"],
-  "emails": [],
-  "mobiles": []
-},
-"templateId": "REPORT_EOD_SUMMARY_V1",
-"payload": {
-  "processDate": "2026-07-08",
-  "totalTransactions": "45,230",
-  "branchCode": "12345",
-  "status": "COMPLETED"
-},
-"attachments": [
-  {
-    "attachmentId": "rpt-88392-summary",
-    "attachmentType": "EOD_SUMMARY",
-    "fileName": "EOD_Summary_20260708.pdf"
-  },
-  {
-    "attachmentId": "rpt-88393-journal",
-    "attachmentType": "EOD_JOURNAL",
-    "fileName": "EOD_Journal_20260708.pdf"
-  }
-],
-"deepLinks": [
-  {
-    "module": "REPORTS",
-    "entityId": "batch-01",
-    "action": "VIEW_DASHBOARD"
-  }
-],
-"metadata": {
-  "batchId": "BATCH-001"
+    }
 }
+ */
+@Slf4j
+@RestController
+@RequestMapping("/api/reports")
+public class ReportController {
+
+        private final ReportService reportService;
+        private final JwtUtil jwtUtil; // Declare an instance field
+
+        public ReportController(ReportService reportService, JwtUtil jwtUtil) {
+                this.reportService = reportService;
+                this.jwtUtil = jwtUtil;
+        }
+
+        @PostMapping("/types")
+        public List<ReportTypeDto> getReportTypes(@RequestHeader("Authorization") String token,
+                        @RequestBody ReportTypesRequest request) {
+                log.info("Received request to fetch all available report types for" +
+                                "module: {} for role: {}", request.getModuleType(),
+                                jwtUtil.getUserRoleFromToken(token));
+                return reportService.getReportTypes(jwtUtil.getUserRoleFromToken(token), request.getModuleType());
+        }
+
+        @PostMapping("/download")
+        public ResponseEntity<StreamingResponseBody> downloadReport(
+                        @RequestHeader("Authorization") String token,
+                        @RequestBody ReportDownloadRequest request) throws IOException {
+
+                log.info("Received request to download report from HDFS for this criteria: {}", request);
+
+                ReportStreamResponse response = reportService.downloadReportStream(
+                                request.getFileName(),
+                                request.getDate(),
+                                jwtUtil.getUserRoleFromToken(token),
+                                jwtUtil.getUserIdFromToken(token),
+                                request.getBranchCode());
+
+                return ResponseEntity.ok()
+                                // This header tells the browser "This is a file download"
+                                .header(HttpHeaders.CONTENT_DISPOSITION,
+                                                "attachment; filename=\"" + response.getDownloadFileName() + "\"")
+                                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                                .body(response.getStreamBody());
+        }
+
+        @PostMapping("/create-reports")
+        public Map<String, String> createReports(@RequestHeader("Authorization") String token,
+                        @RequestBody ReportCreationDto requestBody) throws IOException {
+                // EXTRACT USER ID FROM TOKEN
+                String userId = jwtUtil.getUserIdFromToken(token);
+                return reportService.createReports(requestBody, userId);
+        }
+
+        @PostMapping("/generate-reports")
+        public ReportGenerationResponseDTO generateReports(@RequestBody ReportGenerationDTO requestBody)
+                        throws IOException {
+
+                return reportService.generateReports(requestBody);
+        }
+
+        @PostMapping("/download-temp-reports")
+        public ResponseEntity<StreamingResponseBody> downloadTemporaryReports(
+                        @RequestHeader("Authorization") String token,
+                        @RequestBody ReportDownloadRequest request) throws IOException {
+
+                log.info("Received request to download temp report from HDFS for this criteria: {}", request);
+
+                ReportStreamResponse response = reportService.downloadTempReportStream(
+                                request.getFileName(),
+                                request.getDate(),
+                                jwtUtil.getUserRoleFromToken(token),
+                                jwtUtil.getUserIdFromToken(token),
+                                request.getRunId());
+
+                return ResponseEntity.ok()
+                                // This header tells the browser "This is a file download"
+                                .header(HttpHeaders.CONTENT_DISPOSITION,
+                                                "attachment; filename=\"" + response.getDownloadFileName() + "\"")
+                                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                                .body(response.getStreamBody());
+        }
+
+        @PostMapping("/generate/base64")
+        public ResponseEntity<ReportBase64ResponseDTO> generateReportBase64(
+                        @RequestBody ReportBase64RequestDTO request) throws IOException {
+
+                ReportBase64ResponseDTO response = reportService.generateReportBase64(request);
+
+                return ResponseEntity.ok(response);
+        }
 }
-
-
-Please use the GenericCommunicationEvent DTO.
-===================================================================================
-
-
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import java.util.List;
-import java.util.Map;
-
-/**
-* DTO for all non-OTP Generic Communications.
-* Producers construct this and push it to 'fincore.communication.generic'.
-*/
 @Data
-@Builder
-@NoArgsConstructor
 @AllArgsConstructor
-@JsonInclude(JsonInclude.Include.NON_EMPTY) // Strips out nulls and empty lists for a lightweight payload
-@JsonIgnoreProperties(ignoreUnknown = true) // Forward-compatibility if producers add new fields
-public class GenericCommunicationEvent {
+@NoArgsConstructor
 
-  // --- Traceability ---
-  private String eventId;
-  private String traceId;
-  private String correlationId;
-  private String producerService;
-  private String eventType;
-  private String priority; // e.g., HIGH, NORMAL, LOW
-
-  // --- Routing Instructions ---
-  private List<String> channels; // e.g., ["EMAIL", "SMS"]
-  private Recipients recipients;
-
-  // --- Content ---
-  private String templateId;
-  private Map<String, Object> payload; // Dynamic FreeMarker variables mapped directly to the template
-
-  // --- Enclosures ---
-  private List<AttachmentRef> attachments;
-  private List<DeepLinkRef> deepLinks;
-
-  // --- Extra Context ---
-  private Map<String, String> metadata; // purely for business logic tracking (e.g., batchId), NOT delivery instructions
-
-
-  @Data
-  @Builder
-  @NoArgsConstructor
-  @AllArgsConstructor
-  @JsonInclude(JsonInclude.Include.NON_EMPTY)
-  public static class Recipients {
-      private List<String> userIds;
-      private List<String> roles;
-      private List<String> emails;
-      private List<String> mobiles;
-  }
-
-
-  @Data
-  @Builder
-  @NoArgsConstructor
-  @AllArgsConstructor
-  public static class AttachmentRef {
-      private String attachmentId;   // Passed to RestClient to download the report from the source
-      private String attachmentType; // e.g., EOD_SUMMARY, STATEMENT, IMAGE
-      private String fileName;       // The name shown to the user in the email
-  }
-
-
-  @Data
-  @Builder
-  @NoArgsConstructor
-  @AllArgsConstructor
-  public static class DeepLinkRef {
-      private String module;         // e.g., REPORTS, APPROVALS
-      private String entityId;       // The business ID for dynamic URL generation
-      private String action;         // e.g., VIEW_DASHBOARD, APPROVE_TRANSACTION
-  }
+public class AttachmentDownloadRequest{
+    
+    private List<AttachmentRef> attachments;
+    
 }
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class AttachmentDownloadResponse{
+
+    private List<DownloadedAttachment> attachments;
+}
+
+
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class AttachmentRef{
+
+    private String attachmentId;
+
+    private String attachmentType;
+
+    private String fileName;
+}package com.fincore.ReportService.service;
+
+import com.fincore.ReportService.dto.AttachmentDownloadRequest;
+import com.fincore.ReportService.dto.AttachmentDownloadResponse;
+import com.fincore.ReportService.dto.AttachmentRef;
+import com.fincore.ReportService.dto.DownloadedAttachment;
+import lombok.RequiredArgsConstructor;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.springframework.stereotype.Service;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.Base64;
+import java.util.List;
+import java.util.ArrayList;
+import lombok.extern.slf4j.Slf4j;
+
+
+import org.springframework.beans.factory.annotation.Value;
+import com.fincore.ReportService.service.HdfsService;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class AttachmentServiceImpl implements AttachmentService {
+        
+    private final FileSystem hdfsFileSystem;
+
+    @Value("${glif.reports.base-path}")
+    private String reportBasePath;
+
+    @Override
+    public AttachmentDownloadResponse downloadAttachments(
+            AttachmentDownloadRequest request) {
+                log.info("inside download service");
+    
+        try {
+    
+            if (request.getAttachments() == null
+                    || request.getAttachments().isEmpty()) {
+    
+                throw new RuntimeException("No attachments received.");
+            }
+    
+            List<DownloadedAttachment> downloadedFiles =
+                    new ArrayList<>();
+    
+            for (AttachmentRef attachment :
+                    request.getAttachments()) {
+    
+                // Path filePath = new Path(attachment.getPath());
+                String attachmentId = attachment.getAttachmentId();
+                String fileName=attachment.getFileName();
+                String date=attachmentId.substring(attachmentId.lastIndexOf("_")+1);
+                String folderDate=date.substring(4,8)+"-"+date.substring(2,4)+"-"+date.substring(0,2);
+
+                String hdfsPath=reportBasePath+"/"+folderDate+"/"+fileName+"/"+attachmentId+".xlsx";
+                Path filePath=new Path(hdfsPath);
+                log.info("Reading file from HDFS: {}",filePath);
+    
+                if (!hdfsFileSystem.exists(filePath)) {
+    
+                    throw new RuntimeException(
+                            "Attachment not found : "
+                                    + filePath);
+                }
+    
+                if (!filePath.getName().toLowerCase().endsWith(".xlsx")) {
+    
+                    throw new RuntimeException(
+                            "Only xlsx files are supported.");
+                }
+    
+                FileStatus status =
+                        hdfsFileSystem.getFileStatus(filePath);
+
+                log.info("File size: {}",status.getLen());
+    
+                byte[] fileBytes;
+    
+                try (FSDataInputStream inputStream =
+                            hdfsFileSystem.open(filePath);
+
+                    ByteArrayOutputStream outputStream =
+                            new ByteArrayOutputStream()) {
+                                log.info("Opening HDFS file .............");
+    
+                    byte[] buffer = new byte[8192];
+    
+                    int bytesRead;
+    
+                    while ((bytesRead =
+                            inputStream.read(buffer)) != -1) {
+    
+                        outputStream.write(
+                                buffer,
+                                0,
+                                bytesRead);
+                    }
+    
+                    fileBytes = outputStream.toByteArray();
+                    log.info("Read {} bytes",fileBytes.length);
+                }
+    
+                DownloadedAttachment downloaded =
+                        new DownloadedAttachment();
+    
+                downloaded.setFileName(filePath.getName());
+    
+                downloaded.setContentType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    
+                downloaded.setFileSize(status.getLen());
+    
+                downloaded.setBase64(
+                        Base64.getEncoder()
+                                .encodeToString(fileBytes));
+    
+                downloadedFiles.add(downloaded);
+            }
+    
+            AttachmentDownloadResponse response =
+                    new AttachmentDownloadResponse();
+    
+            response.setAttachments(downloadedFiles);
+    
+            return response;
+    
+        } catch (IOException ex) {
+                log.info("IOException while reading HDFS file",ex);
+            throw new RuntimeException(
+                    "Unable to download attachments.",
+                    ex);
+        }
+    }
+}
+
+
+    
+    // @Override
+    // public AttachmentDownloadResponse downloadAttachments(
+    //         AttachmentDownloadRequest request) {
+
+    //     try {
+
+    //         Path filePath = new Path(request.getFilePath());
+
+    //         if (!hdfsFileSystem.exists(filePath)) {
+    //             throw new RuntimeException(
+    //                     "Attachment not found : " + request.getFilePath());
+    //         }
+
+    //         FileStatus status = hdfsFileSystem.getFileStatus(filePath);
+
+    //         byte[] fileBytes;
+
+    //         try (FSDataInputStream inputStream =
+    //                      hdfsFileSystem.open(filePath);
+    //              ByteArrayOutputStream outputStream =
+    //                      new ByteArrayOutputStream()) {
+
+    //             byte[] buffer = new byte[8192];
+    //             int bytesRead;
+
+    //             while ((bytesRead = inputStream.read(buffer)) != -1) {
+    //                 outputStream.write(buffer, 0, bytesRead);
+    //             }
+
+    //             fileBytes = outputStream.toByteArray();
+    //         }
+
+    //         AttachmentDownloadResponse response =
+    //                 new AttachmentDownloadResponse();
+
+    //         response.setFileName(filePath.getName());
+
+    //         response.setContentType(getContentType(filePath.getName()));
+
+    //         response.setFileSize(status.getLen());
+
+    //         response.setBase64(
+    //                 Base64.getEncoder().encodeToString(fileBytes));
+
+    //         return response;
+
+    //     } catch (IOException ex) {
+
+    //         throw new RuntimeException(
+    //                 "Unable to download attachment", ex);
+    //     }
+    // }
+
+    /**
+     * Returns MIME type based on extension.
+     */
+    // private String getContentType(String fileName) {
+
+    //     String lower = fileName.toLowerCase();
+
+    //     if (lower.endsWith(".pdf")) {
+    //         return "application/pdf";
+    //     }
+
+    //     if (lower.endsWith(".xlsx")) {
+    //         return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    //     }
+
+    //     if (lower.endsWith(".xls")) {
+    //         return "application/vnd.ms-excel";
+    //     }
+
+    //     if (lower.endsWith(".csv")) {
+    //         return "text/csv";
+    //     }
+
+    //     if (lower.endsWith(".psv")) {
+    //         return "text/plain";
+    //     }
+
+    //     if (lower.endsWith(".zip")) {
+    //         return "application/zip";
+    //     }
+
+    //     return "application/octet-stream";
+    // }
+# ===================================================================
+# SPRING DATASOURCE (ORACLE)
+# ===================================================================
+spring.datasource.url=jdbc:oracle:thin:@10.177.103.192:1523/fincorepdb1
+spring.datasource.username=fincore
+spring.datasource.password=Password#1234
+
+
+## ========================== actuator =============================
+#management.endpoints.web.exposure.include=*
+## Always show full details on the health endpoint (e.g., database connection status)
+#management.endpoint.health.show-details=always
+#
+## Add some custom info to the /info endpoint
+#info.app.name=ReportService
+#info.app.description=Service to manage and retrieve different reports
+#info.app.version=1.0.0
+
+# ===================================================================
+# JPA / HIBERNATE CONFIGURATION
+# ===================================================================
+spring.jpa.database-platform=org.hibernate.dialect.OracleDialect
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.show-sql=false
+spring.jpa.properties.hibernate.format_sql=false
+logging.level.org.hibernate.SQL=OFF
+logging.level.org.hibernate.orm.jdbc.bind=OFF
+
+
+## ===================================================================
+## HADOOP / HDFS CONFIGURATION
+## ===================================================================
+#hadoop.fs.uri=hdfs://fincoredev
+#hadoop.fs.user=root
+#glif.reports.base-path=/reports
+#glif.branch-reports.base-path=/branch_reports
+#
+
+# ===================================================================
+# HADOOP / HDFS HA CONFIGURATION
+# ===================================================================
+# The logical name of the cluster (Nameservice ID)
+hadoop.fs.nameservice=fincoredev
+hadoop.fs.user=root
+hadoop.fs.uri=hdfs://10.177.103.199:8022
+glif.reports.base-path=/reports
+glif.branch-reports.base-path=/branch_reports
+glif.temp-reports.base-path=/temp-reports
+
+#Local Fix
+
+# HA NameNode Details
+hadoop.fs.ha.namenodes=nn1,nn2,nn3
+hadoop.fs.ha.nn1.rpc=10.177.103.199:8022
+hadoop.fs.ha.nn2.rpc=10.177.103.192:8022
+hadoop.fs.ha.nn3.rpc=10.177.103.196:8022
+
+
+
+# --- Redis Configuration ---
+spring.data.redis.host=10.0.17.242
+spring.data.redis.port=6379
+spring.cache.type=redis
+
+
+# =========================
+# KAFKA BASIC CONFIG
+# =========================
+
+spring.kafka.bootstrap-servers=10.0.17.242:9092
+
+# =========================
+# CONSUMER CONFIG
+# =========================
+
+spring.kafka.consumer.group-id=Airflow_ETL
+spring.kafka.consumer.auto-offset-reset=earliest
+spring.kafka.consumer.key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
+spring.kafka.consumer.value-deserializer=org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+spring.kafka.consumer.properties.spring.deserializer.value.delegate.class=org.springframework.kafka.support.serializer.JsonDeserializer
+spring.kafka.consumer.properties.spring.json.trusted.packages=*
+
+# =========================
+# PRODUCER CONFIG
+# =========================
+
+spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer
+spring.kafka.producer.value-serializer=org.springframework.kafka.support.serializer.JsonSerializer
