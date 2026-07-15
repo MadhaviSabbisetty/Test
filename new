@@ -1,40 +1,293 @@
-package com.fincore.CommunicationService.client;
+package com.fincore.ReportService.dto;
 
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.MediaType;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
-import lombok.extern.slf4j.Slf4j;
+import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+import java.util.List;
 
-@Slf4j
-@Component
-@RequiredArgsConstructor
-public class ReportServiceClient{
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class AttachmentDownloadResponse{
 
-    private final RestClient restClient;
-
-    @Value("${report.service.url}")
-    private String reportServiceUrl;
-    
-    public AttachmentDownloadResponse 
-        downloadAttachments(AttachmentDownloadRequest request,String token){
-
-            String response= restClient.post()
-                .uri(reportServiceUrl + "/api/attachment/download")
-                .header("Authorization",token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .body(String.class);
-            log.info("Raw Response:{}",response);
-            return response;
-            // log.info("Attachment Count:{}",response.getAttachments().size());
-    }
-
+    private List<DownloadedAttachment> attachments;
 }
 
+
+
+package com.fincore.ReportService.service;
+
+import com.fincore.ReportService.dto.AttachmentDownloadRequest;
+import com.fincore.ReportService.dto.AttachmentDownloadResponse;
+import com.fincore.ReportService.dto.AttachmentRef;
+import com.fincore.ReportService.dto.DownloadedAttachment;
+import lombok.RequiredArgsConstructor;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.springframework.stereotype.Service;
+
+import org.springframework.core.io.ClassPathResource;
+import java.io.InputStream;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.Base64;
+import java.util.List;
+import java.util.ArrayList;
+import lombok.extern.slf4j.Slf4j;
+
+
+import org.springframework.beans.factory.annotation.Value;
+import com.fincore.ReportService.service.HdfsService;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class AttachmentServiceImpl implements AttachmentService {
+        
+    private final FileSystem hdfsFileSystem;
+
+    @Value("${glif.reports.base-path}")
+    private String reportBasePath;
+
+    @Override
+    public AttachmentDownloadResponse downloadAttachments(
+            AttachmentDownloadRequest request) {
+                log.info("inside download service");
+    
+        try {
+    
+            if (request.getAttachments() == null
+                    || request.getAttachments().isEmpty()) {
+    
+                throw new RuntimeException("No attachments received.");
+            }
+    
+            List<DownloadedAttachment> downloadedFiles =
+                    new ArrayList<>();
+    
+            for (AttachmentRef attachment :
+                    request.getAttachments()) {
+    
+                // Path filePath = new Path(attachment.getPath());
+
+                // String attachmentId = attachment.getAttachmentId();
+                // String fileName=attachment.getFileName();
+                // String date=attachmentId.substring(attachmentId.lastIndexOf("_")+1);
+                // String folderDate=date.substring(4,8)+"-"+date.substring(2,4)+"-"+date.substring(0,2);
+
+                // String hdfsPath=reportBasePath+"/"+folderDate+"/"+fileName+"/"+attachmentId+".xlsx";
+                // Path filePath=new Path(hdfsPath);
+                // log.info("Reading file from HDFS: {}",filePath);
+    
+                // if (!hdfsFileSystem.exists(filePath)) {
+    
+                //     throw new RuntimeException(
+                //             "Attachment not found : "
+                //                     + filePath);
+                // }
+    
+                // if (!filePath.getName().toLowerCase().endsWith(".xlsx")) {
+    
+                //     throw new RuntimeException(
+                //             "Only xlsx files are supported.");
+                // }
+    
+                // FileStatus status =
+                //         hdfsFileSystem.getFileStatus(filePath);
+
+                String attachmentId=attachment.getAttachmentId();
+                String fileName=attachmentId+".xlsx";
+                String path="reports/"+fileName;
+                ClassPathResource resource=new ClassPathResource(path);
+                log.info("Path of the file: {}",path);
+                if(!resource.exists()){
+                        throw new RuntimeException("Attachment not found");
+                }
+                // InputStream inputStream=resource.getInputStream();
+
+                // log.info("File size: {}",status.getLen());
+    
+                byte[] fileBytes;
+    
+                try (InputStream inputStream=resource.getInputStream();
+                        // FSDataInputStream inputStream =
+                        //     hdfsFileSystem.open(filePath);
+
+                    ByteArrayOutputStream outputStream =
+                            new ByteArrayOutputStream()) {
+                                log.info("Opening HDFS file .............");
+    
+                    byte[] buffer = new byte[8192];
+    
+                    int bytesRead;
+    
+                    while ((bytesRead =
+                            inputStream.read(buffer)) != -1) {
+    
+                        outputStream.write(
+                                buffer,
+                                0,
+                                bytesRead);
+                    }
+    
+                    fileBytes = outputStream.toByteArray();
+                    log.info("Read {} bytes",fileBytes.length);
+                }
+    
+                DownloadedAttachment downloaded =
+                        new DownloadedAttachment();
+    
+                // downloaded.setFileName(filePath.getName());
+                downloaded.setFileName(fileName);
+                downloaded.setContentType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    
+                // downloaded.setFileSize(status.getLen());
+                downloaded.setFileSize(resource.contentLength());
+    
+                downloaded.setBase64(
+                        Base64.getEncoder()
+                                .encodeToString(fileBytes));
+    
+                downloadedFiles.add(downloaded);
+            }
+    
+            AttachmentDownloadResponse response =
+                    new AttachmentDownloadResponse();
+    
+            response.setAttachments(downloadedFiles);
+    
+            return response;
+    
+        } catch (IOException ex) {
+                log.info("IOException while reading HDFS file",ex);
+            throw new RuntimeException(
+                    "Unable to download attachments.",
+                    ex);
+        }
+    }
+}
+
+
+    
+    // @Override
+    // public AttachmentDownloadResponse downloadAttachments(
+    //         AttachmentDownloadRequest request) {
+
+    //     try {
+
+    //         Path filePath = new Path(request.getFilePath());
+
+    //         if (!hdfsFileSystem.exists(filePath)) {
+    //             throw new RuntimeException(
+    //                     "Attachment not found : " + request.getFilePath());
+    //         }
+
+    //         FileStatus status = hdfsFileSystem.getFileStatus(filePath);
+
+    //         byte[] fileBytes;
+
+    //         try (FSDataInputStream inputStream =
+    //                      hdfsFileSystem.open(filePath);
+    //              ByteArrayOutputStream outputStream =
+    //                      new ByteArrayOutputStream()) {
+
+    //             byte[] buffer = new byte[8192];
+    //             int bytesRead;
+
+    //             while ((bytesRead = inputStream.read(buffer)) != -1) {
+    //                 outputStream.write(buffer, 0, bytesRead);
+    //             }
+
+    //             fileBytes = outputStream.toByteArray();
+    //         }
+
+    //         AttachmentDownloadResponse response =
+    //                 new AttachmentDownloadResponse();
+
+    //         response.setFileName(filePath.getName());
+
+    //         response.setContentType(getContentType(filePath.getName()));
+
+    //         response.setFileSize(status.getLen());
+
+    //         response.setBase64(
+    //                 Base64.getEncoder().encodeToString(fileBytes));
+
+    //         return response;
+
+    //     } catch (IOException ex) {
+
+    //         throw new RuntimeException(
+    //                 "Unable to download attachment", ex);
+    //     }
+    // }
+
+    /**
+     * Returns MIME type based on extension.
+     */
+    // private String getContentType(String fileName) {
+
+    //     String lower = fileName.toLowerCase();
+
+    //     if (lower.endsWith(".pdf")) {
+    //         return "application/pdf";
+    //     }
+
+    //     if (lower.endsWith(".xlsx")) {
+    //         return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    //     }
+
+    //     if (lower.endsWith(".xls")) {
+    //         return "application/vnd.ms-excel";
+    //     }
+
+    //     if (lower.endsWith(".csv")) {
+    //         return "text/csv";
+    //     }
+
+    //     if (lower.endsWith(".psv")) {
+    //         return "text/plain";
+    //     }
+
+    //     if (lower.endsWith(".zip")) {
+    //         return "application/zip";
+    //     }
+
+    //     return "application/octet-stream";
+    // }
+package com.fincore.ReportService.dto;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import java.util.List;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+
+public class AttachmentDownloadRequest{
+    
+    private List<AttachmentRef> attachments;
+    
+}
+package com.fincore.ReportService.dto;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class AttachmentRef{
+
+    private String attachmentId;
+
+    private String attachmentType;
+
+    private String fileName;
+}
