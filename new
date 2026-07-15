@@ -1,18 +1,19 @@
-@Bean("genericCommunicationContainerFactory")
-public ConcurrentKafkaListenerContainerFactory<String, String> genericCommunicationContainerFactory() {
-
-    ConcurrentKafkaListenerContainerFactory<String, String> factory =
-            new ConcurrentKafkaListenerContainerFactory<>();
-
-    factory.setConsumerFactory(stringConsumerFactory());
-
-    factory.setConcurrency(3);
-
-    factory.getContainerProperties()
-            .setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
-
-    factory.getContainerProperties()
-            .setPollTimeout(3000);
-
-    return factory;
-}
+.hadoop.ipc.Client","message":"Retrying connect to server: 10.177.103.199/10.177.103.199:8022. Already tried 42 time(s); maxRetries=45","stack_trace":""}
+2026-07-15 11:54:01.317 INFO  [http-nio-9005-exec-2] o.a.h.i.Client$Connection: Retrying connect to server: 10.177.103.199/10.177.103.199:8022. Already tried 43 time(s); maxRetries=45 
+{"@timestamp":"2026-07-15T11:54:01.3170593+05:30","level":"INFO","service":"ReportService","traceId":"82621483-69b0-4d10-9b23-cfed4e1c84c4","userId":"1023044","clientIp":"","apiPath":"/api/ascii/view","class":"org.apache.hadoop.ipc.Client","message":"Retrying connect to server: 10.177.103.199/10.177.103.199:8022. Already tried 43 time(s); maxRetries=45","stack_trace":""}
+2026-07-15 11:54:01.669 INFO  [http-nio-9005-exec-5] c.f.R.c.AttachmentController: Download request received 
+{"@timestamp":"2026-07-15T11:54:01.6693409+05:30","level":"INFO","service":"ReportService","traceId":"bf5293ab-f041-4b40-b308-08221cb05f99","userId":"2488766","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/attachment/download","class":"c.f.R.controller.AttachmentController","message":"Download request received","stack_trace":""}
+2026-07-15 11:54:01.671 INFO  [http-nio-9005-exec-5] c.f.R.s.AttachmentServiceImpl: inside download service 
+{"@timestamp":"2026-07-15T11:54:01.6713411+05:30","level":"INFO","service":"ReportService","traceId":"bf5293ab-f041-4b40-b308-08221cb05f99","userId":"2488766","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/attachment/download","class":"c.f.R.service.AttachmentServiceImpl","message":"inside download service","stack_trace":""}
+2026-07-15 11:54:01.675 INFO  [http-nio-9005-exec-5] c.f.R.s.AttachmentServiceImpl: Reading file from HDFS: /reports/2026-03-31/balance_compare_report/balance_compare_report_31032026.xlsx 
+{"@timestamp":"2026-07-15T11:54:01.6754626+05:30","level":"INFO","service":"ReportService","traceId":"bf5293ab-f041-4b40-b308-08221cb05f99","userId":"2488766","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/attachment/download","class":"c.f.R.service.AttachmentServiceImpl","message":"Reading file from HDFS: /reports/2026-03-31/balance_compare_report/balance_compare_report_31032026.xlsx","stack_trace":""}
+2026-07-15 11:54:06.333 INFO  [http-nio-9005-exec-2] o.a.h.i.Client$Connection: Retrying connect to server: 10.177.103.199/10.177.103.199:8022. Already tried 44 time(s); maxRetries=45 
+{"@timestamp":"2026-07-15T11:54:06.3338796+05:30","level":"INFO","service":"ReportService","traceId":"82621483-69b0-4d10-9b23-cfed4e1c84c4","userId":"1023044","clientIp":"","apiPath":"/api/ascii/view","class":"org.apache.hadoop.ipc.Client","message":"Retrying connect to server: 10.177.103.199/10.177.103.199:8022. Already tried 44 time(s); maxRetries=45","stack_trace":""}
+2026-07-15 11:54:11.373 ERROR [http-nio-9005-exec-2] c.f.R.s.AsciiFileServiceImpl: Error while viewing ascii file 
+org.apache.hadoop.net.ConnectTimeoutException: Call From GCBTCS5D1934/10.0.19.34 to 10.177.103.199:8022 failed on socket timeout exception: org.apache.hadoop.net.ConnectTimeoutException: 5000 millis timeout while waiting for channel to be ready for connect. ch : java.nio.channels.SocketChannel[connection-pending remote=10.177.103.199/10.177.103.199:8022]; For more details see:  http://wiki.apache.org/hadoop/SocketTimeout
+        at java.base/jdk.internal.reflect.DirectConstructorHandleAccessor.newInstance(DirectConstructorHandleAccessor.java:62)
+        at java.base/java.lang.reflect.Constructor.newInstanceWithCaller(Constructor.java:502)
+        at java.base/java.lang.reflect.Constructor.newInstance(Constructor.java:486)
+        at org.apache.hadoop.net.NetUtils.wrapWithMessage(NetUtils.java:930)
+        at org.apache.hadoop.net.NetUtils.wrapException(NetUtils.java:865)
+        at org.apache.hadoop.ipc.Client.getRpcResponse(Client.java:1571)
