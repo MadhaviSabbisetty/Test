@@ -1,46 +1,163 @@
-package com.fincore.CommunicationService.client;
 
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
-import com.fincore.CommunicationService.dto.ApiResponse;
-import org.springframework.core.ParameterizedTypeReference;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.MediaType;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
-import lombok.extern.slf4j.Slf4j;
+    @Override
+    public AttachmentDownloadResponse downloadAttachments(
+            AttachmentDownloadRequest request,
+            int userRoleId,
+            String userId) throws IOException {
 
-@Slf4j
-@Component
-@RequiredArgsConstructor
-public class ReportServiceClient{
 
-    private final RestClient restClient;
+        log.info("Inside the report service download method");
+        
+        List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
 
-    @Value("${report.service.url}")
-    private String reportServiceUrl;
-    
-    public AttachmentDownloadResponse 
-        downloadAttachments(AttachmentDownloadRequest request,String token){
+        for (AttachmentRef attachment : request.getAttachments()) {
 
-            ApiResponse<AttachmentDownloadResponse> response= restClient.post()
-                .uri(reportServiceUrl + "/api/reports/attachment/download")
-                .header("Authorization",token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .body(new ParameterizedTypeReference<ApiResponse
-                <AttachmentDownloadResponse>>(){});
-            // log.info("Raw Response:{}",response);
-            if(response!=null){
-                // log.info("Attachments: {}",response.getAttachments());
+            String attachmentId = attachment.getAttachmentId();
+            String reportFolder = attachment.getFileName();
+
+            // Extract date from attachmentId
+            // Example : balance_compare_report_31032026
+            String date = attachmentId.substring(attachmentId.lastIndexOf("_") + 1);
+
+            String folderDate =
+                    date.substring(4, 8) + "-"
+                + date.substring(2, 4) + "-"
+                + date.substring(0, 2);
+
+            byte[] fileBytes;
+            long fileSize;
+            String actualFileName = attachmentId + ".xlsx";
+
+            // =====================================================
+            // LOCAL FILE (CURRENTLY ACTIVE)
+            // =====================================================
+
+            String localPath = "reports/" + actualFileName;
+
+            ClassPathResource resource = new ClassPathResource(localPath);
+
+            log.info("Reading Local File : {}", localPath);
+
+            if (!resource.exists()) {
+                throw new ResourceNotFoundException(
+                        "Attachment not found : " + localPath);
             }
-            return response.getData();
-            // log.info("Attachment Count:{}",response.getAttachments().size());
+
+            try (InputStream inputStream = resource.getInputStream();
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+
+                fileBytes = outputStream.toByteArray();
+            }
+
+            fileSize = resource.contentLength();
+
+            // =====================================================
+            // HDFS CODE (UNCOMMENT WHEN HDFS IS READY)
+            // =====================================================
+
+            /*
+            String hdfsPath =
+                    reportsBasePath + "/"
+                + folderDate + "/"
+                + reportFolder + "/"
+                + actualFileName;
+
+            Path filePath = new Path(hdfsPath);
+
+            log.info("Reading HDFS File : {}", filePath);
+
+            if (!hdfsFileSystem.exists(filePath)) {
+                throw new ResourceNotFoundException(
+                        "Attachment not found : " + filePath);
+            }
+
+            FileStatus status = hdfsFileSystem.getFileStatus(filePath);
+
+            try (FSDataInputStream inputStream = hdfsFileSystem.open(filePath);
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+
+                fileBytes = outputStream.toByteArray();
+            }
+
+            fileSize = status.getLen();
+            */
+
+            DownloadedAttachment downloaded = new DownloadedAttachment();
+
+            downloaded.setFileName(actualFileName);
+            downloaded.setContentType(
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            downloaded.setFileSize(fileSize);
+            downloaded.setBase64(Base64.getEncoder().encodeToString(fileBytes));
+
+            downloadedFiles.add(downloaded);
+        }
+
+        AttachmentDownloadResponse response = new AttachmentDownloadResponse();
+        response.setAttachments(downloadedFiles);
+
+        return response;
+    }
+  
+package com.fincore.CommunicationService.dto;
+import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class ApiResponse<T>{package com.fincore.ReportService.dto;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.Getter;
+
+import java.time.Instant;
+
+@Getter
+@JsonInclude(JsonInclude.Include.NON_NULL) // Don't include null fields in the JSON response
+public class ApiResponse<T> {
+
+    private final boolean success;
+    private final String message;
+    private final T data;
+    private final Instant timestamp;
+
+    private ApiResponse(boolean success, String message, T data) {
+        this.success = success;
+        this.message = message;
+        this.data = data;
+        this.timestamp = Instant.now();
     }
 
+    public static <T> ApiResponse<T> success(T data, String message) {
+        return new ApiResponse<>(true, message, data);
+    }
+
+    public static <T> ApiResponse<T> success(T data) {
+        return new ApiResponse<>(true, "Operation completed successfully.", data);
+    }
+
+    public static <T> ApiResponse<T> error(String message) {
+        return new ApiResponse<>(false, message, null);
+    }
 }
 
+    private boolean success;
+    private String message;
+    private T data;
+}
