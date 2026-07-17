@@ -1,249 +1,110 @@
-package com.fincore.ReportService.service;
+@Override
+public AttachmentDownloadResponse downloadAttachments(
+        AttachmentDownloadRequest request,
+        int userRoleId,
+        String userId) throws IOException {
 
-import com.fincore.ReportService.dto.AttachmentDownloadRequest;
-import com.fincore.ReportService.dto.AttachmentDownloadResponse;
-import com.fincore.ReportService.dto.AttachmentRef;
-import com.fincore.ReportService.dto.DownloadedAttachment;
-import lombok.RequiredArgsConstructor;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.springframework.stereotype.Service;
+    List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
 
-import org.springframework.core.io.ClassPathResource;
-import java.io.InputStream;
+    for (AttachmentRef attachment : request.getAttachments()) {
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.util.Base64;
-import java.util.List;
-import java.util.ArrayList;
-import lombok.extern.slf4j.Slf4j;
+        String attachmentId = attachment.getAttachmentId();
+        String reportFolder = attachment.getFileName();
 
+        // Extract date from attachmentId
+        // Example : balance_compare_report_31032026
+        String date = attachmentId.substring(attachmentId.lastIndexOf("_") + 1);
 
-import org.springframework.beans.factory.annotation.Value;
-import com.fincore.ReportService.service.HdfsService;
+        String folderDate =
+                date.substring(4, 8) + "-"
+              + date.substring(2, 4) + "-"
+              + date.substring(0, 2);
 
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class AttachmentServiceImpl1 implements AttachmentService1 {
-        
-    private final FileSystem hdfsFileSystem;
+        byte[] fileBytes;
+        long fileSize;
+        String actualFileName = attachmentId + ".xlsx";
 
-    @Value("${glif.reports.base-path}")
-    private String reportBasePath;
+        // =====================================================
+        // LOCAL FILE (CURRENTLY ACTIVE)
+        // =====================================================
 
-    @Override
-    public AttachmentDownloadResponse downloadAttachments(
-            AttachmentDownloadRequest request) {
-                log.info("inside download service");
-    
-        try {
-    
-            if (request.getAttachments() == null
-                    || request.getAttachments().isEmpty()) {
-    
-                throw new RuntimeException("No attachments received.");
-            }
-    
-            List<DownloadedAttachment> downloadedFiles =
-                    new ArrayList<>();
-    
-            for (AttachmentRef attachment :
-                    request.getAttachments()) {
-    
-                // Path filePath = new Path(attachment.getPath());
+        String localPath = "reports/" + actualFileName;
 
-                // String attachmentId = attachment.getAttachmentId();
-                // String fileName=attachment.getFileName();
-                // String date=attachmentId.substring(attachmentId.lastIndexOf("_")+1);
-                // String folderDate=date.substring(4,8)+"-"+date.substring(2,4)+"-"+date.substring(0,2);
+        ClassPathResource resource = new ClassPathResource(localPath);
 
-                // String hdfsPath=reportBasePath+"/"+folderDate+"/"+fileName+"/"+attachmentId+".xlsx";
-                // Path filePath=new Path(hdfsPath);
-                // log.info("Reading file from HDFS: {}",filePath);
-    
-                // if (!hdfsFileSystem.exists(filePath)) {
-    
-                //     throw new RuntimeException(
-                //             "Attachment not found : "
-                //                     + filePath);
-                // }
-    
-                // if (!filePath.getName().toLowerCase().endsWith(".xlsx")) {
-    
-                //     throw new RuntimeException(
-                //             "Only xlsx files are supported.");
-                // }
-    
-                // FileStatus status =
-                //         hdfsFileSystem.getFileStatus(filePath);
+        log.info("Reading Local File : {}", localPath);
 
-                String attachmentId=attachment.getAttachmentId();
-                String fileName=attachmentId+".xlsx";
-                String path="reports/"+fileName;
-                ClassPathResource resource=new ClassPathResource(path);
-                log.info("Path of the file: {}",path);
-                if(!resource.exists()){
-                        throw new RuntimeException("Attachment not found");
-                }
-                // InputStream inputStream=resource.getInputStream();
-
-                // log.info("File size: {}",status.getLen());
-    
-                byte[] fileBytes;
-    
-                try (InputStream inputStream=resource.getInputStream();
-                        // FSDataInputStream inputStream =
-                        //     hdfsFileSystem.open(filePath);
-
-                    ByteArrayOutputStream outputStream =
-                            new ByteArrayOutputStream()) {
-                                log.info("Opening HDFS file .............");
-    
-                    byte[] buffer = new byte[8192];
-    
-                    int bytesRead;
-    
-                    while ((bytesRead =
-                            inputStream.read(buffer)) != -1) {
-    
-                        outputStream.write(
-                                buffer,
-                                0,
-                                bytesRead);
-                    }
-    
-                    fileBytes = outputStream.toByteArray();
-                    log.info("Read {} bytes",fileBytes.length);
-                }
-    
-                DownloadedAttachment downloaded =
-                        new DownloadedAttachment();
-    
-                // downloaded.setFileName(filePath.getName());
-                downloaded.setFileName(fileName);
-                downloaded.setContentType(
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    
-                // downloaded.setFileSize(status.getLen());
-                downloaded.setFileSize(resource.contentLength());
-    
-                downloaded.setBase64(
-                        Base64.getEncoder()
-                                .encodeToString(fileBytes));
-    
-                downloadedFiles.add(downloaded);
-                log.info("Downloaded file size: {}",downloadedFiles.size());
-            }
-    
-            AttachmentDownloadResponse response =
-                    new AttachmentDownloadResponse();
-    
-            response.setAttachments(downloadedFiles);
-
-        //     log.info("Returning response: {}",response);
-        //     log.info("Returning attachments: {}",response.getAttachments());
-            log.info("response size : {}",response.getAttachments().size());
-    
-            return response;
-    
-        } catch (IOException ex) {
-                log.info("IOException while reading HDFS file",ex);
-            throw new RuntimeException(
-                    "Unable to download attachments.",
-                    ex);
+        if (!resource.exists()) {
+            throw new ResourceNotFoundException(
+                    "Attachment not found : " + localPath);
         }
+
+        try (InputStream inputStream = resource.getInputStream();
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+
+            fileBytes = outputStream.toByteArray();
+        }
+
+        fileSize = resource.contentLength();
+
+        // =====================================================
+        // HDFS CODE (UNCOMMENT WHEN HDFS IS READY)
+        // =====================================================
+
+        /*
+        String hdfsPath =
+                reportsBasePath + "/"
+              + folderDate + "/"
+              + reportFolder + "/"
+              + actualFileName;
+
+        Path filePath = new Path(hdfsPath);
+
+        log.info("Reading HDFS File : {}", filePath);
+
+        if (!hdfsFileSystem.exists(filePath)) {
+            throw new ResourceNotFoundException(
+                    "Attachment not found : " + filePath);
+        }
+
+        FileStatus status = hdfsFileSystem.getFileStatus(filePath);
+
+        try (FSDataInputStream inputStream = hdfsFileSystem.open(filePath);
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+
+            fileBytes = outputStream.toByteArray();
+        }
+
+        fileSize = status.getLen();
+        */
+
+        DownloadedAttachment downloaded = new DownloadedAttachment();
+
+        downloaded.setFileName(actualFileName);
+        downloaded.setContentType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        downloaded.setFileSize(fileSize);
+        downloaded.setBase64(Base64.getEncoder().encodeToString(fileBytes));
+
+        downloadedFiles.add(downloaded);
     }
+
+    AttachmentDownloadResponse response = new AttachmentDownloadResponse();
+    response.setAttachments(downloadedFiles);
+
+    return response;
 }
-
-
-    
-    // @Override
-    // public AttachmentDownloadResponse downloadAttachments(
-    //         AttachmentDownloadRequest request) {
-
-    //     try {
-
-    //         Path filePath = new Path(request.getFilePath());
-
-    //         if (!hdfsFileSystem.exists(filePath)) {
-    //             throw new RuntimeException(
-    //                     "Attachment not found : " + request.getFilePath());
-    //         }
-
-    //         FileStatus status = hdfsFileSystem.getFileStatus(filePath);
-
-    //         byte[] fileBytes;
-
-    //         try (FSDataInputStream inputStream =
-    //                      hdfsFileSystem.open(filePath);
-    //              ByteArrayOutputStream outputStream =
-    //                      new ByteArrayOutputStream()) {
-
-    //             byte[] buffer = new byte[8192];
-    //             int bytesRead;
-
-    //             while ((bytesRead = inputStream.read(buffer)) != -1) {
-    //                 outputStream.write(buffer, 0, bytesRead);
-    //             }
-
-    //             fileBytes = outputStream.toByteArray();
-    //         }
-
-    //         AttachmentDownloadResponse response =
-    //                 new AttachmentDownloadResponse();
-
-    //         response.setFileName(filePath.getName());
-
-    //         response.setContentType(getContentType(filePath.getName()));
-
-    //         response.setFileSize(status.getLen());
-
-    //         response.setBase64(
-    //                 Base64.getEncoder().encodeToString(fileBytes));
-
-    //         return response;
-
-    //     } catch (IOException ex) {
-
-    //         throw new RuntimeException(
-    //                 "Unable to download attachment", ex);
-    //     }
-    // }
-
-    /**
-     * Returns MIME type based on extension.
-     */
-    // private String getContentType(String fileName) {
-
-    //     String lower = fileName.toLowerCase();
-
-    //     if (lower.endsWith(".pdf")) {
-    //         return "application/pdf";
-    //     }
-
-    //     if (lower.endsWith(".xlsx")) {
-    //         return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    //     }
-
-    //     if (lower.endsWith(".xls")) {
-    //         return "application/vnd.ms-excel";
-    //     }
-
-    //     if (lower.endsWith(".csv")) {
-    //         return "text/csv";
-    //     }
-
-    //     if (lower.endsWith(".psv")) {
-    //         return "text/plain";
-    //     }
-
-    //     if (lower.endsWith(".zip")) {
-    //         return "application/zip";
-    //     }
-
-    //     return "application/octet-stream";
-    // }
