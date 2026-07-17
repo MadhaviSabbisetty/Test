@@ -1,125 +1,27 @@
- @PostMapping("/attachment/download")
-        public ResponseEntity<AttachmentDownloadResponse> downloadAttachments(@RequestHeader("Authorization") String token, 
-                        @RequestBody AttachmentDownloadRequest request)throws IOException{
-                                log.info("inside reportcontroller attachment endpoint");
-                                AttachmentDownloadResponse response=reportService.downloadAttachments(request, jwtUtil.getUserRoleFromToken(token),
-                                jwtUtil.getUserIdFromToken(token));
-                                return ResponseEntity.ok(response);
+catch (IOException ex) {
 
-        }
+    log.error("Attachment download failed due to IOException", ex);
 
+    throw new RuntimeException(
+            "Unable to download attachments.",
+            ex);
+}
 
 
-@Override
-    public AttachmentDownloadResponse downloadAttachments(
-            AttachmentDownloadRequest request,
-            int userRoleId,
-            String userId) throws IOException {
 
 
-        log.info("Inside the report service download method");
-        
-        List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
+log.info("------------------------------------------------------------");
+log.info("Attachment Download Completed Successfully");
+log.info("Total Reports Downloaded : {}", downloadedFiles.size());
 
-        for (AttachmentRef attachment : request.getAttachments()) {
 
-            String attachmentId = attachment.getAttachmentId();
-            String reportFolder = attachment.getFileName();
 
-            // Extract date from attachmentId
-            // Example : balance_compare_report_31032026
-            String date = attachmentId.substring(attachmentId.lastIndexOf("_") + 1);
 
-            String folderDate =
-                    date.substring(4, 8) + "-"
-                + date.substring(2, 4) + "-"
-                + date.substring(0, 2);
 
-            byte[] fileBytes;
-            long fileSize;
-            String actualFileName = attachmentId + ".xlsx";
 
-            // =====================================================
-            // LOCAL FILE (CURRENTLY ACTIVE)
-            // =====================================================
-
-            String localPath = "reports/" + actualFileName;
-
-            ClassPathResource resource = new ClassPathResource(localPath);
-
-            log.info("Reading Local File : {}", localPath);
-
-            if (!resource.exists()) {
-                throw new ResourceNotFoundException(
-                        "Attachment not found : " + localPath);
-            }
-
-            try (InputStream inputStream = resource.getInputStream();
-                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    outputStream.write(buffer, 0, bytesRead);
-                }
-
-                fileBytes = outputStream.toByteArray();
-            }
-
-            fileSize = resource.contentLength();
-
-            // =====================================================
-            // HDFS CODE (UNCOMMENT WHEN HDFS IS READY)
-            // =====================================================
-
-            /*
-            String hdfsPath =
-                    reportsBasePath + "/"
-                + folderDate + "/"
-                + reportFolder + "/"
-                + actualFileName;
-
-            Path filePath = new Path(hdfsPath);
-
-            log.info("Reading HDFS File : {}", filePath);
-
-            if (!hdfsFileSystem.exists(filePath)) {
-                throw new ResourceNotFoundException(
-                        "Attachment not found : " + filePath);
-            }
-
-            FileStatus status = hdfsFileSystem.getFileStatus(filePath);
-
-            try (FSDataInputStream inputStream = hdfsFileSystem.open(filePath);
-                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    outputStream.write(buffer, 0, bytesRead);
-                }
-
-                fileBytes = outputStream.toByteArray();
-            }
-
-            fileSize = status.getLen();
-            */
-
-            DownloadedAttachment downloaded = new DownloadedAttachment();
-
-            downloaded.setFileName(actualFileName);
-            downloaded.setContentType(
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            downloaded.setFileSize(fileSize);
-            downloaded.setBase64(Base64.getEncoder().encodeToString(fileBytes));
-
-            downloadedFiles.add(downloaded);
-        }
-
-        AttachmentDownloadResponse response = new AttachmentDownloadResponse();
-        response.setAttachments(downloadedFiles);
-
-        return response;
-    }
+log.info("REPORT DOWNLOADED SUCCESSFULLY");
+log.info("Attachment Id   : {}", attachment.getAttachmentId());
+log.info("Report Name     : {}", downloaded.getFileName());
+log.info("Attachment Type : {}", attachment.getAttachmentType());
+log.info("Content Type    : {}", downloaded.getContentType());
+log.info("File Size       : {} bytes", downloaded.getFileSize());
