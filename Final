@@ -1,48 +1,68 @@
-package com.fincore.ReportService.dto;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import java.util.List;
+@Override
+public AttachmentDownloadResponse downloadAttachments(
+        AttachmentDownloadRequest request,
+        int userRoleId,
+        String userId) throws IOException {
 
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
+    List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
 
-public class AttachmentDownloadRequest{
-    
-    private List<AttachmentRef> attachments;
-    
-}
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class AttachmentDownloadResponse{
+    for (AttachmentRef ref : request.getAttachments()) {
 
-    private List<DownloadedAttachment> attachments;
-}
+        String attachmentId = ref.getAttachmentId();
 
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class AttachmentRef{
+        String reportFolder = ref.getFileName();
 
-    private String attachmentId;
+        // Extract date from attachmentId
+        // Example:
+        // balance_compare_report_31032026
 
-    private String attachmentType;
+        String datePart =
+                attachmentId.substring(attachmentId.lastIndexOf("_") + 1);
 
-    private String fileName;
-}
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class DownloadedAttachment{
+        LocalDate reportDate =
+                LocalDate.parse(
+                        datePart,
+                        DateTimeFormatter.ofPattern("ddMMyyyy"));
 
-    private String fileName;
+        String formattedDate =
+                reportDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
 
-    private String contentType;
+        Path searchDirectory =
+                new Path(
+                        new Path(reportsBasePath, formattedDate),
+                        reportFolder);
 
-    private String base64;
+        Path filePath =
+                new Path(searchDirectory, attachmentId + ".xlsx");
 
-    private long fileSize;
+        if (!hdfsFileSystem.exists(filePath)) {
+            throw new ResourceNotFoundException(
+                    "File not found : " + filePath);
+        }
 
+        byte[] bytes;
+
+        try (FSDataInputStream input =
+                     hdfsFileSystem.open(filePath)) {
+
+            bytes = input.readAllBytes();
+        }
+
+        DownloadedAttachment attachment =
+                new DownloadedAttachment();
+
+        attachment.setFileName(filePath.getName());
+
+        attachment.setContentType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+        attachment.setBase64(
+                Base64.getEncoder().encodeToString(bytes));
+
+        attachment.setFileSize(bytes.length);
+
+        downloadedFiles.add(attachment);
+    }
+
+    return new AttachmentDownloadResponse(downloadedFiles);
 }
