@@ -1,410 +1,125 @@
+ @PostMapping("/attachment/download")
+        public ResponseEntity<AttachmentDownloadResponse> downloadAttachments(@RequestHeader("Authorization") String token, 
+                        @RequestBody AttachmentDownloadRequest request)throws IOException{
+                                log.info("inside reportcontroller attachment endpoint");
+                                AttachmentDownloadResponse response=reportService.downloadAttachments(request, jwtUtil.getUserRoleFromToken(token),
+                                jwtUtil.getUserIdFromToken(token));
+                                return ResponseEntity.ok(response);
 
-@Slf4j
-@RestController
-@RequiredArgsConstructor
-@RequestMapping("/api/reports")
-public class AttachmentController{
-    private final AttachmentPreparationService attachmentPreparationService;
-    
-    @PostMapping("/attachment/download")
-    public AttachmentDownloadResponse download(@RequestBody AttachmentDownloadRequest request,@RequestHeader("Authorization") String token)throws IOException{
-        log.info("Download request received");
+        }
+
+
+
+@Override
+    public AttachmentDownloadResponse downloadAttachments(
+            AttachmentDownloadRequest request,
+            int userRoleId,
+            String userId) throws IOException {
+
+
+        log.info("Inside the report service download method");
         
-        // log.info("Received attachment download request");
-        return attachmentPreparationService.prepareAttachments(request,token);
+        List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
 
-    }
-}
+        for (AttachmentRef attachment : request.getAttachments()) {
 
+            String attachmentId = attachment.getAttachmentId();
+            String reportFolder = attachment.getFileName();
 
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class AttachmentPreparationService {
-    private final ReportServiceClient reportServiceClient;
+            // Extract date from attachmentId
+            // Example : balance_compare_report_31032026
+            String date = attachmentId.substring(attachmentId.lastIndexOf("_") + 1);
 
-    private final ZipService zipService;
+            String folderDate =
+                    date.substring(4, 8) + "-"
+                + date.substring(2, 4) + "-"
+                + date.substring(0, 2);
 
-    @Value("${attachment.max.count:10}")
-    private int maxAttachmentCount;
+            byte[] fileBytes;
+            long fileSize;
+            String actualFileName = attachmentId + ".xlsx";
 
-    @Value("${attachment.max.size.mb:20}")
-    private long maxAttachmentSizeMb;
+            // =====================================================
+            // LOCAL FILE (CURRENTLY ACTIVE)
+            // =====================================================
 
+            String localPath = "reports/" + actualFileName;
 
-    public AttachmentDownloadResponse prepareAttachments(
-            AttachmentDownloadRequest request,String token) throws IOException {
+            ClassPathResource resource = new ClassPathResource(localPath);
 
-        log.info("Preparing attachments");
-        log.info("Count :{}",request.getAttachments().size());
+            log.info("Reading Local File : {}", localPath);
 
-        AttachmentDownloadResponse downloadResponse =
-                reportServiceClient.downloadAttachments(request,token);
-        log.info("Downloadedresponse: {}",downloadResponse);
-        if(downloadResponse.getAttachments() !=null){
-            log.info("Attachments Count: {}",downloadResponse.getAttachments().size());
-        }
+            if (!resource.exists()) {
+                throw new ResourceNotFoundException(
+                        "Attachment not found : " + localPath);
+            }
 
+            try (InputStream inputStream = resource.getInputStream();
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
 
-        List<File> preparedFiles = new ArrayList<>();
+                byte[] buffer = new byte[8192];
+                int bytesRead;
 
-        long totalSize = 0;
-
-        int attachmentCount = 0;
-
-        if (downloadResponse == null
-                || downloadResponse.getAttachments() == null
-                || downloadResponse.getAttachments().isEmpty()) {
-
-            // return new PreparedAttachmentResponse(
-            //         preparedFiles,
-            //         false,
-            //         0,
-            //         0
-            // );
-            return new AttachmentDownloadResponse();
-            
-        }
-        return downloadResponse;
-
-        // for (DownloadedAttachment attachment :
-        //         downloadResponse.getAttachments()) {
-
-        //     byte[] fileBytes =
-        //             Base64.getDecoder().decode(attachment.getBase64());
-
-        //     File tempFile = File.createTempFile(
-        //             "attachment_",
-        //             "_" + attachment.getFileName());
-
-        //     try (FileOutputStream fos = new FileOutputStream(tempFile)) {
-        //         fos.write(fileBytes);
-        //     }
-
-        //     preparedFiles.add(tempFile);
-
-        //     totalSize += attachment.getFileSize();
-
-        //     attachmentCount++;
-        // }
-
-        // boolean zipRequired =
-        //         attachmentCount > maxAttachmentCount
-        //                 || totalSize > (maxAttachmentSizeMb * 1024 * 1024);
-
-        // if (zipRequired) {
-
-        //     File zipFile = zipService.createZip(preparedFiles);
-
-        //     preparedFiles.clear();
-
-        //     preparedFiles.add(zipFile);
-
-        //     totalSize = zipFile.length();
-        // }
-
-        // PreparedAttachmentResponse response =
-        //         new PreparedAttachmentResponse();
-
-        // response.setFiles(preparedFiles);
-
-        // response.setZip(zipRequired);
-
-        // response.setTotalSize(totalSize);
-
-        // response.setAttachmentCount(attachmentCount);
-
-       
-
-        // return response;
-    }
-
-    public void deleteTemporaryFiles(List<File> files) {
-
-        if (files == null || files.isEmpty()) {
-            return;
-        }
-
-        for (File file : files) {
-
-            try {
-
-                if (file.exists()) {
-
-                    boolean deleted = file.delete();
-
-                    log.info("Deleted temp file : {} Result : {}",
-                            file.getName(),
-                            deleted);
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
                 }
 
-            } catch (Exception ex) {
-
-                log.error("Unable to delete temp file {}",
-                        file.getAbsolutePath(),
-                        ex);
+                fileBytes = outputStream.toByteArray();
             }
+
+            fileSize = resource.contentLength();
+
+            // =====================================================
+            // HDFS CODE (UNCOMMENT WHEN HDFS IS READY)
+            // =====================================================
+
+            /*
+            String hdfsPath =
+                    reportsBasePath + "/"
+                + folderDate + "/"
+                + reportFolder + "/"
+                + actualFileName;
+
+            Path filePath = new Path(hdfsPath);
+
+            log.info("Reading HDFS File : {}", filePath);
+
+            if (!hdfsFileSystem.exists(filePath)) {
+                throw new ResourceNotFoundException(
+                        "Attachment not found : " + filePath);
+            }
+
+            FileStatus status = hdfsFileSystem.getFileStatus(filePath);
+
+            try (FSDataInputStream inputStream = hdfsFileSystem.open(filePath);
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+
+                fileBytes = outputStream.toByteArray();
+            }
+
+            fileSize = status.getLen();
+            */
+
+            DownloadedAttachment downloaded = new DownloadedAttachment();
+
+            downloaded.setFileName(actualFileName);
+            downloaded.setContentType(
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            downloaded.setFileSize(fileSize);
+            downloaded.setBase64(Base64.getEncoder().encodeToString(fileBytes));
+
+            downloadedFiles.add(downloaded);
         }
+
+        AttachmentDownloadResponse response = new AttachmentDownloadResponse();
+        response.setAttachments(downloadedFiles);
+
+        return response;
     }
-
-
-}
-
-
-
-@Slf4j
-@Component
-@RequiredArgsConstructor
-public class ReportServiceClient{
-
-    private final RestClient restClient;
-
-    @Value("${report.service.url}")
-    private String reportServiceUrl;
-    
-    public AttachmentDownloadResponse 
-        downloadAttachments(AttachmentDownloadRequest request,String token){
-            try{
-                log.info("Calling URL: {}",reportServiceUrl+"/api/reports/attachment/download");
-            ApiResponse<AttachmentDownloadResponse> response= restClient.post()
-                .uri(reportServiceUrl + "/api/reports/attachment/download")
-                .header("Authorization",token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .body(new ParameterizedTypeReference<ApiResponse
-                <AttachmentDownloadResponse>>(){});
-            log.info("Raw Response:{}",response);
-            if(response==null){
-              throw new RuntimeException("response is null");
-            }
-            log.info("Response data: {}",response.getData());
-            return response.getData();
-            }
-            catch(Exception e){
-                log.error("Exception while calling report service",e);
-                throw e;
-            }
-            // log.info("Attachment Count:{}",response.getAttachments().size());
-    }
-
-}
-
-
-API Execution Completed - Method: POST | URL: http://localhost:8001/api/reports/attachment/download | Status: 401
-2026-07-17T15:22:58.593+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.controller.AttachmentController    : Download request received
-2026-07-17T15:22:58.593+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.a.AttachmentPreparationService     : Preparing attachments
-2026-07-17T15:22:58.593+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.a.AttachmentPreparationService     : Count :1
-2026-07-17T15:22:58.593+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.client.ReportServiceClient         : Calling URL: http://localhost:9005/api/reports/attachment/download
-2026-07-17T15:22:58.827+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.client.ReportServiceClient         : Raw Response:ApiResponse(success=false, message=null, data=null)
-2026-07-17T15:22:58.828+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.client.ReportServiceClient         : Response data: null
-2026-07-17T15:22:58.828+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.a.AttachmentPreparationService     : Downloadedresponse: null
-2026-07-17T15:22:59.329+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.a.AttachmentPreparationService     : Preparing attachments
-2026-07-17T15:22:59.329+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.a.AttachmentPreparationService     : Count :1
-2026-07-17T15:22:59.330+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.client.ReportServiceClient         : Calling URL: http://localhost:9005/api/reports/attachment/download
-2026-07-17T15:22:59.545+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.client.ReportServiceClient         : Raw Response:ApiResponse(success=false, message=null, data=null)
-2026-07-17T15:22:59.545+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.client.ReportServiceClient         : Response data: null
-2026-07-17T15:22:59.545+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.a.AttachmentPreparationService     : Downloadedresponse: null
-2026-07-17T15:23:00.047+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.a.AttachmentPreparationService     : Preparing attachments
-2026-07-17T15:23:00.047+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.a.AttachmentPreparationService     : Count :1
-2026-07-17T15:23:00.048+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.client.ReportServiceClient         : Calling URL: http://localhost:9005/api/reports/attachment/download
-2026-07-17T15:23:00.309+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.client.ReportServiceClient         : Raw Response:ApiResponse(success=false, message=null, data=null)
-2026-07-17T15:23:00.310+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.client.ReportServiceClient         : Response data: null
-2026-07-17T15:23:00.310+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.C.a.AttachmentPreparationService     : Downloadedresponse: null
-2026-07-17T15:23:00.311+05:30  INFO 31476 --- [CommunicationService] [nio-8001-exec-2] c.f.c.logging.MdcLoggingFilter           : API Execution Completed - Method: POST | URL: http://localhost:8001/api/reports/attachment/download | Status: 200
-2026-07-17T15:23:00.311+05:30 ERROR 31476 --- [CommunicationService] [nio-8001-exec-2] o.a.c.c.C.[.[.[/].[dispatcherServlet]    : Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception [Request processing failed: java.lang.NullPointerException: Cannot invoke "com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse.getAttachments()" because "downloadResponse" is null] with root cause
-
-java.lang.NullPointerException: Cannot invoke "com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse.getAttachments()" because "downloadResponse" is null
-        at com.fincore.CommunicationService.attachment.AttachmentPreparationService.prepareAttachments(AttachmentPreparationService.java:45) ~[classes/:na]
-        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
-        at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
-        at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:354) ~[spring-aop-6.1.8.jar:6.1.8]
-        at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:196) ~[spring-aop-6.1.8.jar:6.1.8]
-        at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:163) ~[spring-aop-6.1.8.jar:6.1.8]
-        at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:768) ~[spring-aop-6.1.8.jar:6.1.8]
-        at org.springframework.aop.interceptor.ExposeInvocationInterceptor.invoke(ExposeInvocationInterceptor.java:97) ~[spring-aop-6.1.8.jar:6.1.8]
-        at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184) ~[spring-aop-6.1.8.jar:6.1.8]
-        at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:768) ~[spring-aop-6.1.8.jar:6.1.8]
-        at org.springframework.aop.aspectj.MethodInvocationProceedingJoinPoint.proceed(MethodInvocationProceedingJoinPoint.java:89) ~[spring-aop-6.1.8.jar:6.1.8]
-        at com.fincore.commonutilities.aspect.GlobalResilienceAspect.lambda$applyResilience$0(GlobalResilienceAspect.java:56) ~[common-utilities-0.0.1-SNAPSHOT.jar:0.0.1-SNAPSHOT]
-        at io.github.resilience4j.retry.Retry.lambda$decorateSupplier$5(Retry.java:301) ~[resilience4j-retry-2.3.0.jar:2.3.0]
-        at io.github.resilience4j.circuitbreaker.CircuitBreaker.lambda$decorateSupplier$5(CircuitBreaker.java:194) ~[resilience4j-circuitbreaker-2.3.0.jar:2.3.0]
-        at com.fincore.commonutilities.aspect.GlobalResilienceAspect.applyResilience(GlobalResilienceAspect.java:75) ~[common-utilities-0.0.1-SNAPSHOT.jar:0.0.1-SNAPSHOT]
-        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
-        at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
-        at org.springframework.aop.aspectj.AbstractAspectJAdvice.invokeAdviceMethodWithGivenArgs(AbstractAspectJAdvice.java:637) ~[spring-aop-6.1.8.jar:6.1.8]
-        at org.springframework.aop.aspectj.AbstractAspectJAdvice.invokeAdviceMethod(AbstractAspectJAdvice.java:627) ~[spring-aop-6.1.8.jar:6.1.8]
-        at org.springframework.aop.aspectj.AspectJAroundAdvice.invoke(AspectJAroundAdvice.java:71) ~[spring-aop-6.1.8.jar:6.1.8]
-        at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184) ~[spring-aop-6.1.8.jar:6.1.8]
-        at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:768) ~[spring-aop-6.1.8.jar:6.1.8]
-        at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:720) ~[spring-aop-6.1.8.jar:6.1.8]
-        at com.fincore.CommunicationService.attachment.AttachmentPreparationService$$SpringCGLIB$$0.prepareAttachments(<generated>) ~[classes/:na]
-        at com.fincore.CommunicationService.controller.AttachmentController.download(AttachmentController.java:24) ~[classes/:na]
-        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
-        at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
-        at org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:255) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:188) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:118) ~[spring-webmvc-6.1.8.jar:6.1.8]
-        at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:926) ~[spring-webmvc-6.1.8.jar:6.1.8]
-        at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.handleInternal(RequestMappingHandlerAdapter.java:831) ~[spring-webmvc-6.1.8.jar:6.1.8]
-        at org.springframework.web.servlet.mvc.method.AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:87) ~[spring-webmvc-6.1.8.jar:6.1.8]
-        at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089) ~[spring-webmvc-6.1.8.jar:6.1.8]
-        at org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:979) ~[spring-webmvc-6.1.8.jar:6.1.8]
-        at org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1014) ~[spring-webmvc-6.1.8.jar:6.1.8]
-        at org.springframework.web.servlet.FrameworkServlet.doPost(FrameworkServlet.java:914) ~[spring-webmvc-6.1.8.jar:6.1.8]
-        at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:590) ~[tomcat-embed-core-10.1.24.jar:6.0]
-        at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:885) ~[spring-webmvc-6.1.8.jar:6.1.8]
-        at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:658) ~[tomcat-embed-core-10.1.24.jar:6.0]
-        at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:195) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:51) ~[tomcat-embed-websocket-10.1.24.jar:10.1.24]
-        at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:108) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.security.web.FilterChainProxy.lambda$doFilterInternal$3(FilterChainProxy.java:231) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$FilterObservation$SimpleFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:479) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:340) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator.lambda$wrapSecured$0(ObservationFilterChainDecorator.java:82) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:128) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.access.intercept.AuthorizationFilter.doFilter(AuthorizationFilter.java:100) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:131) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:85) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.authentication.AnonymousAuthenticationFilter.doFilter(AnonymousAuthenticationFilter.java:100) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter.doFilter(SecurityContextHolderAwareRequestFilter.java:179) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.savedrequest.RequestCacheAwareFilter.doFilter(RequestCacheAwareFilter.java:63) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at com.fincore.commonutilities.security.ContextRbacFilter.doFilterInternal(ContextRbacFilter.java:145) ~[common-utilities-0.0.1-SNAPSHOT.jar:0.0.1-SNAPSHOT]
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at com.fincore.commonutilities.logging.MdcLoggingFilter.doFilterInternal(MdcLoggingFilter.java:80) ~[common-utilities-0.0.1-SNAPSHOT.jar:0.0.1-SNAPSHOT]
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:107) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:93) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.web.filter.CorsFilter.doFilterInternal(CorsFilter.java:91) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.header.HeaderWriterFilter.doHeadersAfter(HeaderWriterFilter.java:90) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.header.HeaderWriterFilter.doFilterInternal(HeaderWriterFilter.java:75) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:82) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:69) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter.doFilterInternal(WebAsyncManagerIntegrationFilter.java:62) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.session.DisableEncodeUrlFilter.doFilterInternal(DisableEncodeUrlFilter.java:42) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$0(ObservationFilterChainDecorator.java:323) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:224) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.FilterChainProxy.doFilterInternal(FilterChainProxy.java:233) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.security.web.FilterChainProxy.doFilter(FilterChainProxy.java:191) ~[spring-security-web-6.3.0.jar:6.3.0]
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.web.servlet.handler.HandlerMappingIntrospector.lambda$createCacheFilter$3(HandlerMappingIntrospector.java:195) ~[spring-webmvc-6.1.8.jar:6.1.8]
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.web.filter.CompositeFilter.doFilter(CompositeFilter.java:74) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.security.config.annotation.web.configuration.WebMvcSecurityConfiguration$CompositeFilterChainProxy.doFilter(WebMvcSecurityConfiguration.java:230) ~[spring-security-config-6.3.0.jar:6.3.0]
-        at org.springframework.web.filter.DelegatingFilterProxy.invokeDelegate(DelegatingFilterProxy.java:352) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.web.filter.DelegatingFilterProxy.doFilter(DelegatingFilterProxy.java:268) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.springframework.web.filter.RequestContextFilter.doFilterInternal(RequestContextFilter.java:100) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.springframework.web.filter.FormContentFilter.doFilterInternal(FormContentFilter.java:93) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.springframework.web.filter.ServerHttpObservationFilter.doFilterInternal(ServerHttpObservationFilter.java:109) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.springframework.web.filter.CharacterEncodingFilter.doFilterInternal(CharacterEncodingFilter.java:201) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.8.jar:6.1.8]
-        at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:167) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:90) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:482) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:115) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:93) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:74) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:344) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:389) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:63) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:896) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1741) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:52) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1190) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:659) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63) ~[tomcat-embed-core-10.1.24.jar:10.1.24]
-        at java.base/java.lang.Thread.run(Thread.java:1570) ~[na:na]
-
-
-
-
-
-inside reportcontroller attachment endpoint 
-{"@timestamp":"2026-07-17T15:22:58.6052575+05:30","level":"INFO","service":"ReportService","traceId":"24b03786-b1c8-478f-8765-4471a885adc8","userId":"1023044","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.controller.ReportController","message":"inside reportcontroller attachment endpoint","stack_trace":""}
-2026-07-17 15:22:58.606 INFO  [http-nio-9005-exec-2] c.f.R.s.ReportServiceImpl: Inside the report service download method 
-{"@timestamp":"2026-07-17T15:22:58.6062494+05:30","level":"INFO","service":"ReportService","traceId":"24b03786-b1c8-478f-8765-4471a885adc8","userId":"1023044","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Inside the report service download method","stack_trace":""}
-2026-07-17 15:22:58.607 INFO  [http-nio-9005-exec-2] c.f.R.s.ReportServiceImpl: Reading Local File : reports/balance_compare_report_31032026.xlsx 
-{"@timestamp":"2026-07-17T15:22:58.6072492+05:30","level":"INFO","service":"ReportService","traceId":"24b03786-b1c8-478f-8765-4471a885adc8","userId":"1023044","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Reading Local File : reports/balance_compare_report_31032026.xlsx","stack_trace":""}
-2026-07-17 15:22:58.824 INFO  [http-nio-9005-exec-2] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://localhost:9005/api/reports/attachment/download | Status: 200 
-{"@timestamp":"2026-07-17T15:22:58.8243089+05:30","level":"INFO","service":"ReportService","traceId":"24b03786-b1c8-478f-8765-4471a885adc8","userId":"1023044","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://localhost:9005/api/reports/attachment/download | Status: 200","stack_trace":""}
-2026-07-17 15:22:59.366 INFO  [http-nio-9005-exec-3] c.f.R.c.ReportController: inside reportcontroller attachment endpoint 
-{"@timestamp":"2026-07-17T15:22:59.3661693+05:30","level":"INFO","service":"ReportService","traceId":"101c252d-a25e-4044-af7f-ee23866a5211","userId":"1023044","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.controller.ReportController","message":"inside reportcontroller attachment endpoint","stack_trace":""}
-2026-07-17 15:22:59.368 INFO  [http-nio-9005-exec-3] c.f.R.s.ReportServiceImpl: Inside the report service download method 
-{"@timestamp":"2026-07-17T15:22:59.3681001+05:30","level":"INFO","service":"ReportService","traceId":"101c252d-a25e-4044-af7f-ee23866a5211","userId":"1023044","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Inside the report service download method","stack_trace":""}
-2026-07-17 15:22:59.369 INFO  [http-nio-9005-exec-3] c.f.R.s.ReportServiceImpl: Reading Local File : reports/balance_compare_report_31032026.xlsx 
-{"@timestamp":"2026-07-17T15:22:59.3691138+05:30","level":"INFO","service":"ReportService","traceId":"101c252d-a25e-4044-af7f-ee23866a5211","userId":"1023044","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Reading Local File : reports/balance_compare_report_31032026.xlsx","stack_trace":""}
-2026-07-17 15:22:59.543 INFO  [http-nio-9005-exec-3] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://localhost:9005/api/reports/attachment/download | Status: 200 
-{"@timestamp":"2026-07-17T15:22:59.5437245+05:30","level":"INFO","service":"ReportService","traceId":"101c252d-a25e-4044-af7f-ee23866a5211","userId":"1023044","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://localhost:9005/api/reports/attachment/download | Status: 200","stack_trace":""}
-2026-07-17 15:23:00.090 INFO  [http-nio-9005-exec-4] c.f.R.c.ReportController: inside reportcontroller attachment endpoint 
-{"@timestamp":"2026-07-17T15:23:00.0907225+05:30","level":"INFO","service":"ReportService","traceId":"9aa7c2c9-8baf-4bbf-becc-77eaeb1930c1","userId":"1023044","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.controller.ReportController","message":"inside reportcontroller attachment endpoint","stack_trace":""}
-2026-07-17 15:23:00.097 INFO  [http-nio-9005-exec-4] c.f.R.s.ReportServiceImpl: Inside the report service download method 
-{"@timestamp":"2026-07-17T15:23:00.0977235+05:30","level":"INFO","service":"ReportService","traceId":"9aa7c2c9-8baf-4bbf-becc-77eaeb1930c1","userId":"1023044","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Inside the report service download method","stack_trace":""}
-2026-07-17 15:23:00.098 INFO  [http-nio-9005-exec-4] c.f.R.s.ReportServiceImpl: Reading Local File : reports/balance_compare_report_31032026.xlsx 
-{"@timestamp":"2026-07-17T15:23:00.0987236+05:30","level":"INFO","service":"ReportService","traceId":"9aa7c2c9-8baf-4bbf-becc-77eaeb1930c1","userId":"1023044","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Reading Local File : reports/balance_compare_report_31032026.xlsx","stack_trace":""}
-2026-07-17 15:23:00.308 INFO  [http-nio-9005-exec-4] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://localhost:9005/api/reports/attachment/download | Status: 200 
-{"@timestamp":"2026-07-17T15:23:00.3088979+05:30","level":"INFO","service":"ReportService","traceId":"9aa7c2c9-8baf-4bbf-becc-77eaeb1930c1","userId":"1023044","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://localhost:9005/api/reports/attachment/download | Status: 200","stack_trace":""}
-
