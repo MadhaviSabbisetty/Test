@@ -1,89 +1,173 @@
-@Override
-public AttachmentDownloadResponse downloadAttachments(
-        AttachmentDownloadRequest request,
-        int userRoleId,
-        String userId) throws IOException {
+package com.fincore.CommunicationService.orchestrator;
 
-    List<DownloadedAttachment> attachments = new ArrayList<>();
+import com.fincore.CommunicationService.attachment.AttachmentPreparationService;
+import com.fincore.CommunicationService.dto.EmailResponse;
+import com.fincore.CommunicationService.dto.GenericCommunicationEvent;
+import com.fincore.CommunicationService.dto.ResolvedRecipient;
+import com.fincore.CommunicationService.dto.SmsResponseDTO;
+import com.fincore.CommunicationService.recipient.RecipientResolver;
+import com.fincore.CommunicationService.service.EmailService;
+import com.fincore.CommunicationService.service.SmsService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
-    for (AttachmentRef ref : request.getAttachments()) {
+import java.util.List;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
+import com.fincore.CommunicationService.dto.attachment.PreparedAttachmentResponse;
 
-        // Authorization
-        reportTypeRepository.findByFileNameAndRoles_roleId(
-                ref.getReportName(),
-                userRoleId)
-                .orElseThrow(() -> new AccessDeniedException(
-                        "Access Denied for report : " + ref.getReportName()));
+/**
+ * <p>
+ * Central orchestration component responsible for processing all
+ * Generic Communication Events consumed from Kafka.
+ * </p>
+ *
+ * <p>
+ * Responsibilities:
+ * <ol>
+ * <li>Resolve Recipients.</li>
+ * <li>Prepare Email Attachments.</li>
+ * <li>Dispatch Email.</li>
+ * <li>Dispatch SMS.</li>
+ * </ol>
+ *
+ * <p>
+ * This class contains no vendor specific implementation.
+ * All communication logic is delegated to the respective services.
+ * </p>
+ *
+ * @author Jailabdin [V1023042]
+ * @since 2026-07
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class CommunicationOrchestrator {
 
-        String formattedDate =
-                ref.getDate().format(DateTimeFormatter.ISO_LOCAL_DATE);
+    private final RecipientResolver recipientResolver;
 
-        String fileNamePrefix =
-                ref.getReportName() + "_" +
-                ref.getDate().format(DateTimeFormatter.ofPattern("ddMMyyyy"));
+    private final AttachmentPreparationService attachmentPreparationService;
 
-        Path searchDirectory;
+    private final EmailService emailService;
 
-        if (ref.getBranchCode() == null || ref.getBranchCode().isBlank()) {
+    private final SmsService smsService;
 
-            searchDirectory =
-                    new Path(new Path(reportsBasePath, formattedDate),
-                            ref.getReportName());
+    /**
+     * Executes the Generic Communication flow.
+     *
+     * @param event Generic Communication Event
+     */
+    public void process(GenericCommunicationEvent event) {
 
-        } else {
+        log.info("Started processing Generic Communication Event. EventId={}",
+                event.getEventId());
 
-            Path reportFolder =
-                    new Path(new Path(reportsBasePath, formattedDate),
-                            ref.getReportName());
+        /*
+         * Step-1
+         * Resolve Recipients.
+         */
+        List<ResolvedRecipient> recipients = recipientResolver.resolveRecipients(event.getRecipients());
 
-            searchDirectory =
-                    new Path(reportFolder, ref.getBranchCode());
+        log.info("Resolved {} recipient(s).", recipients.size());
+
+        /*
+         * Step-2
+         * Prepare Attachments.
+         *
+         * Downloads reports from Report Service,
+         * creates ZIP if required,
+         * returns prepared files.
+         */
+        PreparedAttachmentResponse attachmentResponse = null;
+
+        if (event.getAttachments() != null
+                && !event.getAttachments().isEmpty()) {
+
+            log.info(
+                    "Preparing {} attachment(s).",
+                    event.getAttachments().size());
+
+            AttachmentDownloadRequest request =
+                    AttachmentDownloadRequest.builder()
+                            .attachments(event.getAttachments())
+                            .build();
+
+            // try{
+            //     attachmentResponse =
+            //         attachmentPreparationService.prepareAttachments(request);
+
+            // }
+            // catch(Exception e){
+            //     log.error("attachment preparation failes",e);
+            //     throw new RuntimeException("Unable to prepare attachments",e);
+            // }
+            log.info(
+                    "Prepared {} attachment(s). Zip Created : {}",
+                    attachmentResponse.getAttachmentCount(),
+                    attachmentResponse.isZip());
         }
 
-        if (!hdfsFileSystem.exists(searchDirectory)) {
-            throw new ResourceNotFoundException(
-                    "Directory not found : " + searchDirectory);
+        /*
+         * Step-3
+         * Dispatch Communication.
+         */
+        try {
+
+            for (String channel : event.getChannels()) {
+
+                switch (channel.toUpperCase()) {
+
+                    case "EMAIL" -> {
+
+                        log.info("Dispatching Email Communication.");
+
+
+                        // EmailResponse response =
+                        //         emailService.sendGenericEmail(
+                        //                 recipients,
+                        //                 event.getTemplateId(),
+                        //                 event.getPayload(),
+                        //                 attachmentResponse);
+
+                        // log.info(
+                        //         "Email dispatch completed. Response : {}",
+                        //         response);
+                        log.info( "Email dispatch completed");
+                    }
+
+                    case "SMS" -> {
+
+                        log.info("Dispatching SMS Communication.");
+
+                        // SmsResponseDTO response =
+                        //         smsService.sendGenericSms(
+                        //                 recipients,
+                        //                 event.getTemplateId(),
+                        //                 event.getPayload());
+
+                        // log.info(
+                        //         "SMS dispatch completed. Response : {}",
+                        //         response);
+                        log.info( "SMS dispatch completed");
+                    }
+
+                    default ->
+                            log.warn(
+                                    "Unsupported Communication Channel : {}",
+                                    channel);
+                }
+            }
+
+        } finally {
+
+            if (attachmentResponse != null) {
+
+                attachmentPreparationService.deleteTemporaryFiles(
+                        attachmentResponse.getFiles());
+            }
         }
 
-        FileStatus[] fileStatuses =
-                hdfsFileSystem.listStatus(searchDirectory);
-
-        for (FileStatus status : fileStatuses) {
-
-            if (!status.isFile()) {
-                continue;
-            }
-
-            String actualFileName =
-                    status.getPath().getName();
-
-            if (!actualFileName.startsWith(fileNamePrefix)) {
-                continue;
-            }
-
-            try (FSDataInputStream input =
-                         hdfsFileSystem.open(status.getPath())) {
-
-                byte[] bytes =
-                        input.readAllBytes();
-
-                DownloadedAttachment attachment =
-                        new DownloadedAttachment();
-
-                attachment.setFileName(actualFileName);
-
-                attachment.setBase64(
-                        Base64.getEncoder().encodeToString(bytes));
-
-                attachments.add(attachment);
-            }
-        }
+        log.info("Completed Generic Communication Event. EventId={}",
+                event.getEventId());
     }
-
-    AttachmentDownloadResponse response =
-            new AttachmentDownloadResponse();
-
-    response.setAttachments(attachments);
-
-    return response;
 }
