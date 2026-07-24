@@ -1,152 +1,25 @@
-package com.fincore.CommunicationService.attachment;
-
-
-import com.fincore.CommunicationService.client.ReportServiceClient;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
-import com.fincore.CommunicationService.dto.attachment.PreparedAttachmentResponse;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
-
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class AttachmentPreparationService {
-    private final ReportServiceClient reportServiceClient;
-
-    private final ZipService zipService;
-
-    @Value("${attachment.max.count:10}")
-    private int maxAttachmentCount;
-
-    @Value("${attachment.max.size.mb:20}")
-    private long maxAttachmentSizeMb;
-
-
-    public AttachmentDownloadResponse prepareAttachments(
-            AttachmentDownloadRequest request,String token) throws IOException {
-
-        log.info("Preparing attachments");
-        log.info("Count :{}",request.getAttachments().size());
-
-        AttachmentDownloadResponse downloadResponse =
-                reportServiceClient.downloadAttachments(request,token);
-        // log.info("Downloadedresponse: {}",downloadResponse);
-        if(downloadResponse.getAttachments() !=null){
-            log.info("Attachments Count: {}",downloadResponse.getAttachments().size());
-        }
-
-
-        List<File> preparedFiles = new ArrayList<>();
-
-        long totalSize = 0;
-
-        int attachmentCount = 0;
-
-        if (downloadResponse == null
-                || downloadResponse.getAttachments() == null
-                || downloadResponse.getAttachments().isEmpty()) {
-
-            // return new PreparedAttachmentResponse(
-            //         preparedFiles,
-            //         false,
-            //         0,
-            //         0
-            // );
-            return new AttachmentDownloadResponse();
-            
-        }
-        // return downloadResponse;
-
-        for (DownloadedAttachment attachment :
-                downloadResponse.getAttachments()) {
-
-            byte[] fileBytes =
-                    Base64.getDecoder().decode(attachment.getBase64());
-
-            File tempFile = File.createTempFile(
-                    "attachment_",
-                    "_" + attachment.getFileName());
-
-            try (FileOutputStream fos = new FileOutputStream(tempFile)) {
-                fos.write(fileBytes);
-            }
-
-            preparedFiles.add(tempFile);
-
-            totalSize += attachment.getFileSize();
-
-            attachmentCount++;
-        }
-
-        boolean zipRequired =
-                attachmentCount > maxAttachmentCount
-                        || totalSize > (maxAttachmentSizeMb * 1024 * 1024);
-
-        if (zipRequired) {
-
-            File zipFile = zipService.createZip(preparedFiles);
-
-            preparedFiles.clear();
-
-            preparedFiles.add(zipFile);
-
-            totalSize = zipFile.length();
-        }
-
-        PreparedAttachmentResponse response =
-                new PreparedAttachmentResponse();
-
-        response.setFiles(preparedFiles);
-
-        response.setZip(zipRequired);
-
-        response.setTotalSize(totalSize);
-
-        response.setAttachmentCount(attachmentCount);
-
-       
-
-        return response;
-    }
-
-    public void deleteTemporaryFiles(List<File> files) {
-
-        if (files == null || files.isEmpty()) {
-            return;
-        }
-
-        for (File file : files) {
-
-            try {
-
-                if (file.exists()) {
-
-                    boolean deleted = file.delete();
-
-                    log.info("Deleted temp file : {} Result : {}",
-                            file.getName(),
-                            deleted);
-                }
-
-            } catch (Exception ex) {
-
-                log.error("Unable to delete temp file {}",
-                        file.getAbsolutePath(),
-                        ex);
-            }
-        }
-    }
-
-
-}
+ BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  6.068 s
+[INFO] Finished at: 2026-07-24T13:04:54+05:30
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.13.0:compile (default-compile) on project CommunicationService: Compilation failure: Compilation failure: 
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationService.java:[110,17] cannot find symbol
+[ERROR]   symbol:   method setFiles(java.util.List<java.io.File>)
+[ERROR]   location: variable response of type com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationService.java:[112,17] cannot find symbol
+[ERROR]   symbol:   method setZip(boolean)
+[ERROR]   location: variable response of type com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationService.java:[114,17] cannot find symbol
+[ERROR]   symbol:   method setTotalSize(long)
+[ERROR]   location: variable response of type com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationService.java:[116,17] cannot find symbol
+[ERROR]   symbol:   method setAttachmentCount(int)
+[ERROR]   location: variable response of type com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
