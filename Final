@@ -1,293 +1,294 @@
- @Override
-    public AttachmentDownloadResponse downloadAttachments(
-            AttachmentDownloadRequest request,
-            int userRoleId,
-            String userId) throws IOException {
+package com.fincore.CommunicationService.orchestrator;
 
-
-        log.info("Inside the report service download method");
-
-        List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
-
-        for (AttachmentRef attachment : request.getAttachments()) {
-
-            log.info("-------------------------------------------------------------------");
-            log.info("Attachment Download Request Received");
-            log.info("Attachment Id: {}",attachment.getAttachmentId());
-            log.info("Report Name: {}",attachment.getFileName());
-            log.info("Attachment Type: {}",attachment.getAttachmentType());
-
-            String attachmentId = attachment.getAttachmentId();
-            String reportFolder = attachment.getFileName();
-
-            // Extract date from attachmentId
-            // Example : balance_compare_report_31032026
-            String date = attachmentId.substring(attachmentId.lastIndexOf("_") + 1);
-
-            String folderDate =
-                    date.substring(4, 8) + "-"
-                + date.substring(2, 4) + "-"
-                + date.substring(0, 2);
-
-            byte[] fileBytes;
-            long fileSize;
-            String actualFileName = attachmentId + ".xlsx";
-
-            // =====================================================
-            // LOCAL FILE (CURRENTLY ACTIVE)
-            // =====================================================
-
-            // String localPath = "reports/" + actualFileName;
-
-            // ClassPathResource resource = new ClassPathResource(localPath);
-
-            // log.info("Reading Local File : {}", localPath);
-
-            // if (!resource.exists()) {
-
-            //     log.error("REPORT NOT FOUND");
-            //     log.error("Attachment Id: {}",attachment.getAttachmentId());
-            //     log.error("Report Name: {}",attachment.getFileName());
-            //     log.error("Attachment Type: {}",attachment.getAttachmentType());
-            //     // log.error("Location Tried: {}",localPath);
-
-            //     throw new ResourceNotFoundException(
-            //             "Attachment not found");
-            // }
-
-            // try (InputStream inputStream = resource.getInputStream();
-            //     ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-
-            //     byte[] buffer = new byte[8192];
-            //     int bytesRead;
-
-            //     while ((bytesRead = inputStream.read(buffer)) != -1) {
-            //         outputStream.write(buffer, 0, bytesRead);
-            //     }
-
-            //     fileBytes = outputStream.toByteArray();
-            // }
-
-            // fileSize = resource.contentLength();
-
-            // =====================================================
-            // HDFS CODE (UNCOMMENT WHEN HDFS IS READY)
-            // =====================================================
-
-            
-            String hdfsPath =
-                    reportsBasePath + "/"
-                + folderDate + "/"
-                + reportFolder + "/"
-                + actualFileName;
-
-            Path filePath = new Path(hdfsPath);
-
-            log.info("Reading HDFS File : {}", filePath);
-
-            if (!hdfsFileSystem.exists(filePath)) {
-                throw new ResourceNotFoundException(
-                        "Attachment not found : " + filePath);
-            }
-
-            FileStatus status = hdfsFileSystem.getFileStatus(filePath);
-
-            try (FSDataInputStream inputStream = hdfsFileSystem.open(filePath);
-                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    outputStream.write(buffer, 0, bytesRead);
-                }
-
-                fileBytes = outputStream.toByteArray();
-            }
-
-            fileSize = status.getLen();
-            
-
-            DownloadedAttachment downloaded = new DownloadedAttachment();
-
-            downloaded.setFileName(actualFileName);
-            downloaded.setContentType(
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            downloaded.setFileSize(fileSize);
-            downloaded.setBase64(Base64.getEncoder().encodeToString(fileBytes));
-
-            downloadedFiles.add(downloaded);
-
-            
-            log.info("REPORT DOWNLOADED SUCCESSFULLY");
-            log.info("Attachment Id   : {}", attachment.getAttachmentId());
-            log.info("Report Name     : {}", downloaded.getFileName());
-            log.info("Attachment Type : {}", attachment.getAttachmentType());
-            log.info("Content Type    : {}", downloaded.getContentType());
-            log.info("File Size       : {} bytes", downloaded.getFileSize());
-        }
-
-        AttachmentDownloadResponse response = new AttachmentDownloadResponse();
-        response.setAttachments(downloadedFiles);
-
-        
-        log.info("------------------------------------------------------------");
-        log.info("Attachment Download Completed Successfully");
-        log.info("Total Reports Downloaded : {}", downloadedFiles.size());
-
-        return response;
-    }
-  
-
-package com.fincore.CommunicationService.attachment;
-
-
-import com.fincore.CommunicationService.client.ReportServiceClient;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
-import com.fincore.CommunicationService.dto.attachment.PreparedAttachmentResponse;
+import com.fincore.CommunicationService.dto.GenericCommunicationEvent;
+import com.fincore.CommunicationService.dto.ResolvedRecipient;
+import com.fincore.CommunicationService.exception.CommunicationExceptions.VendorDeliveryException;
+import com.fincore.CommunicationService.recipient.RecipientResolver;
+import com.fincore.CommunicationService.service.CommunicationAuditService;
+import com.fincore.CommunicationService.service.EmailService;
+import com.fincore.CommunicationService.service.SmsService;
+import com.fincore.CommunicationService.service.TemplateEngineService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Base64;
+<<<<<<< HEAD
 import java.util.List;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
+import com.fincore.CommunicationService.dto.attachment.PreparedAttachmentResponse;
+=======
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+>>>>>>> 8ef3a88f6ca4e86eebbe9f1bfd17c7f6cbb1412e
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AttachmentPreparationService {
-    private final ReportServiceClient reportServiceClient;
+public class CommunicationOrchestrator {
 
-    private final ZipService zipService;
+    private final RecipientResolver recipientResolver;
+    private final CommunicationAuditService auditService;
+    private final EmailService emailService;
+    private final SmsService smsService;
+    private final StringRedisTemplate redisTemplate;
 
-    @Value("${attachment.max.count:10}")
-    private int maxAttachmentCount;
+    // todo Future integration for Madhavi
+    // private final AttachmentPreparationService attachmentService;
 
-    @Value("${attachment.max.size.mb:20}")
-    private long maxAttachmentSizeMb;
+    @Value("${communication.chunk.size:500}")
+    private int chunkSize;
 
+    // Create a Semaphore limiting max concurrent HTTP/DB calls to 50
+    private final Semaphore vendorRateLimiter = new Semaphore(50);
 
-    public AttachmentDownloadResponse prepareAttachments(
-            AttachmentDownloadRequest request,String token) throws IOException {
+    /**
+     * The main entry point called by the GenericCommunicationConsumer.
+     */
+    public void process(GenericCommunicationEvent event) {
+        String eventId = event.getEventId();
+        log.info("Orchestrator started processing Event: {}", eventId);
 
-        log.info("Preparing attachments");
-        log.info("Count :{}",request.getAttachments().size());
+        // 1. Resolve Recipients
+        List<ResolvedRecipient> recipients = recipientResolver.resolveRecipients(event.getRecipients());
+<<<<<<< HEAD
 
-        AttachmentDownloadResponse downloadResponse =
-                reportServiceClient.downloadAttachments(request,token);
-        // log.info("Downloadedresponse: {}",downloadResponse);
-        if(downloadResponse.getAttachments() !=null){
-            log.info("Attachments Count: {}",downloadResponse.getAttachments().size());
+        log.info("Resolved {} recipient(s).", recipients.size());
+
+        /*
+         * Step-2
+         * Prepare Attachments.
+         *
+         * Downloads reports from Report Service,
+         * creates ZIP if required,
+         * returns prepared files.
+         */
+        PreparedAttachmentResponse attachmentResponse = null;
+
+        if (event.getAttachments() != null
+                && !event.getAttachments().isEmpty()) {
+
+            log.info(
+                    "Preparing {} attachment(s).",
+                    event.getAttachments().size());
+
+            AttachmentDownloadRequest request =
+                    AttachmentDownloadRequest.builder()
+                            .attachments(event.getAttachments())
+                            .build();
+
+            // try{
+            //     attachmentResponse =
+            //         attachmentPreparationService.prepareAttachments(request);
+
+            // }
+            // catch(Exception e){
+            //     log.error("attachment preparation failes",e);
+            //     throw new RuntimeException("Unable to prepare attachments",e);
+            // }
+            log.info(
+                    "Prepared {} attachment(s). Zip Created : {}",
+                    attachmentResponse.getAttachmentCount(),
+                    attachmentResponse.isZip());
         }
 
+        /*
+         * Step-3
+         * Dispatch Communication.
+         */
+        try {
 
-        List<File> preparedFiles = new ArrayList<>();
+            for (String channel : event.getChannels()) {
 
-        long totalSize = 0;
+                switch (channel.toUpperCase()) {
 
-        int attachmentCount = 0;
+                    case "EMAIL" -> {
 
-        if (downloadResponse == null
-                || downloadResponse.getAttachments() == null
-                || downloadResponse.getAttachments().isEmpty()) {
+                        log.info("Dispatching Email Communication.");
+             
 
-            return new PreparedAttachmentResponse(
-                    preparedFiles,
-                    false,
-                    0,
-                    0
-            );
-            return new AttachmentDownloadResponse();
-            
-        }
-        return downloadResponse;
+                        // EmailResponse response =
+                        //         emailService.sendGenericEmail(
+                        //                 recipients,
+                        //                 event.getTemplateId(),
+                        //                 event.getPayload(),
+                        //                 attachmentResponse);
 
-        // for (DownloadedAttachment attachment :
-        //         downloadResponse.getAttachments()) {
+                        // log.info(
+                        //         "Email dispatch completed. Response : {}",
+                        //         response);
+                        log.info( "Email dispatch completed");
+                    }
 
-        //     byte[] fileBytes =
-        //             Base64.getDecoder().decode(attachment.getBase64());
+                    case "SMS" -> {
 
-        //     File tempFile = File.createTempFile(
-        //             "attachment_",
-        //             "_" + attachment.getFileName());
+                        log.info("Dispatching SMS Communication.");
 
-        //     try (FileOutputStream fos = new FileOutputStream(tempFile)) {
-        //         fos.write(fileBytes);
-        //     }
+                        // SmsResponseDTO response =
+                        //         smsService.sendGenericSms(
+                        //                 recipients,
+                        //                 event.getTemplateId(),
+                        //                 event.getPayload());
 
-        //     preparedFiles.add(tempFile);
+                        // log.info(
+                        //         "SMS dispatch completed. Response : {}",
+                        //         response);
+                        log.info( "SMS dispatch completed");
+                    }
 
-        //     totalSize += attachment.getFileSize();
+                    default ->
+                            log.warn(
+                                    "Unsupported Communication Channel : {}",
+                                    channel);
+                }
+            }
 
-        //     attachmentCount++;
-        // }
+        } finally {
 
-        // boolean zipRequired =
-        //         attachmentCount > maxAttachmentCount
-        //                 || totalSize > (maxAttachmentSizeMb * 1024 * 1024);
+            if (attachmentResponse != null) {
 
-        // if (zipRequired) {
-
-        //     File zipFile = zipService.createZip(preparedFiles);
-
-        //     preparedFiles.clear();
-
-        //     preparedFiles.add(zipFile);
-
-        //     totalSize = zipFile.length();
-        // }
-
-        // PreparedAttachmentResponse response =
-        //         new PreparedAttachmentResponse();
-
-        // response.setFiles(preparedFiles);
-
-        // response.setZip(zipRequired);
-
-        // response.setTotalSize(totalSize);
-
-        // response.setAttachmentCount(attachmentCount);
-
-       
-
-        // return response;
-    }
-
-    public void deleteTemporaryFiles(List<File> files) {
-
-        if (files == null || files.isEmpty()) {
+                attachmentPreparationService.deleteTemporaryFiles(
+                        attachmentResponse.getFiles());
+=======
+        if (recipients.isEmpty()) {
+            log.warn("No active recipients resolved for Event: {}. Terminating process gracefully.", eventId);
             return;
         }
 
-        for (File file : files) {
+        // 2. Prepare Attachments
+        // Object preparedAttachments = attachmentService.prepare(event.getAttachments());
 
-            try {
+        // 3. Chunk the recipients to avoid massive JVM memory spikes
+        List<List<ResolvedRecipient>> chunks = partitionList(recipients, chunkSize);
+        log.info("Partitioned {} total recipients into {} chunks of max size {}", recipients.size(), chunks.size(), chunkSize);
 
-                if (file.exists()) {
+        AtomicInteger failureCount = new AtomicInteger(0);
 
-                    boolean deleted = file.delete();
+        // 4. Process Chunks Concurrently using Virtual Threads
+        try (ExecutorService virtualExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Callable<Void>> tasks = new ArrayList<>();
 
-                    log.info("Deleted temp file : {} Result : {}",
-                            file.getName(),
-                            deleted);
-                }
-
-            } catch (Exception ex) {
-
-                log.error("Unable to delete temp file {}",
-                        file.getAbsolutePath(),
-                        ex);
+            for (List<ResolvedRecipient> chunk : chunks) {
+                tasks.add(() -> {
+                    processChunk(chunk, event, failureCount);
+                    return null;
+                });
+>>>>>>> 8ef3a88f6ca4e86eebbe9f1bfd17c7f6cbb1412e
             }
+
+            // invokeAll blocks until ALL virtual threads (all chunks) finish execution
+            List<Future<Void>> futures = virtualExecutor.invokeAll(tasks);
+
+            // Check for critical thread interruptions
+            for (Future<Void> future : futures) {
+                future.get();
+            }
+
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Critical threading error during bulk dispatch for Event: {}", eventId, e);
+            throw new VendorDeliveryException("Threading error during parallel chunk dispatch", e);
+        }
+
+        // 5. Aggregate Failures and trigger Kafka Retry if needed
+        if (failureCount.get() > 0) {
+            log.error("Event {} completed with {} failed dispatches. Throwing exception to trigger Kafka Retry.", eventId, failureCount.get());
+            // Throwing this exception causes the Consumer to NACK the message, routing it to the retry topic.
+            // On retry, the Idempotency checks will skip the successful ones.
+            throw new VendorDeliveryException(failureCount.get() + " recipients failed delivery. Check logs.", null);
+        }
+
+        log.info("Orchestrator successfully processed Event: {} for all {} recipients.", eventId, recipients.size());
+    }
+
+    private void processChunk(List<ResolvedRecipient> chunk, GenericCommunicationEvent event, AtomicInteger failureCount) {
+
+        // Even within a chunk, we fire a Virtual Thread per recipient to maximize HTTP I/O throughput
+        try (ExecutorService ioExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Callable<Void>> dispatchTasks = new ArrayList<>();
+
+            for (ResolvedRecipient recipient : chunk) {
+                for (String channel : event.getChannels()) {
+                    dispatchTasks.add(() -> {
+                        dispatchToChannel(recipient, channel, event, failureCount);
+                        return null;
+                    });
+                }
+            }
+            // Execute all HTTP I/O concurrently
+            ioExecutor.invokeAll(dispatchTasks);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("Chunk processing interrupted", e);
         }
     }
 
+    private void dispatchToChannel(ResolvedRecipient recipient, String channel, GenericCommunicationEvent event, AtomicInteger failureCount) {
 
+        // E.g., evt-123_EMAIL_abc@sbi.com
+        String recipientIdentifier = "EMAIL".equalsIgnoreCase(channel) ? recipient.getEmail() : recipient.getMobile();
+
+        // Check If they requested SMS but the user has no mobile, skip silently.
+        if (recipientIdentifier == null || recipientIdentifier.isBlank()) {
+            log.debug("Skipping {} for User {} (No contact info)", channel, recipient.getUserId());
+            return;
+        }
+
+        String auditId = event.getEventId() + "_" + channel + "_" + Math.abs(recipientIdentifier.hashCode());
+        String idempotencyKey = "COMM_IDEMP:" + auditId + ":" + channel + ":" + recipientIdentifier;
+
+        // 1. Check Idempotency
+        // Setting TTL to 24 hours for generic events to prevent accidental blasts
+        Boolean isNew = redisTemplate.opsForValue().setIfAbsent(idempotencyKey, "PROCESSING", Duration.ofHours(24));
+        if (Boolean.FALSE.equals(isNew)) {
+            log.debug("Idempotency Hit: Already processed {} for {}. Skipping.", channel, recipientIdentifier);
+            return;
+        }
+
+        // 2. Audit Initialization
+        auditService.logAttempt(auditId, event.getEventId(), event.getTraceId(), event.getTemplateId(), channel, recipientIdentifier);
+
+        try {
+            // 3. Dispatch
+            if ("EMAIL".equalsIgnoreCase(channel)) {
+                emailService.sendEmail(event.getTemplateId(), recipient.getEmail(), event.getPayload());
+                // Madhavi Note: Once AttachmentService is ready, pass prepared attachments here!
+                // emailService.sendEmail(event.getTemplateId(), recipient.getEmail(), event.getPayload(), preparedAttachments);
+            } else if ("SMS".equalsIgnoreCase(channel)) {
+                smsService.sendSms(event.getTemplateId(), recipient.getMobile(), event.getPayload());
+            }
+
+            // 4. Audit Success
+            auditService.logSuccess(auditId);
+
+            // Mark idempotency as permanently successful
+            redisTemplate.opsForValue().set(idempotencyKey, "SUCCESS", Duration.ofHours(24));
+
+        } catch (Exception e) {
+            log.error("Failed to send {} to {} for Event {}", channel, recipientIdentifier, event.getEventId(), e);
+
+            // 5. Audit Failure
+            auditService.logFailure(auditId, e.getMessage());
+
+            // Delete idempotency key so Kafka can retry this specific user
+            redisTemplate.delete(idempotencyKey);
+
+            // Increment partial failure tracker
+            failureCount.incrementAndGet();
+        }
+    }
+    private <T> List<List<T>> partitionList(List<T> list, int size) {
+        List<List<T>> partitions = new ArrayList<>();
+        if (list == null || list.isEmpty()) return partitions;
+
+        for (int i = 0; i < list.size(); i += size) {
+            partitions.add(new ArrayList<>(
+                    list.subList(i, Math.min(i + size, list.size())))
+            );
+        }
+        return partitions;
+    }
 }
