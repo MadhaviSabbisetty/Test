@@ -1,28 +1,158 @@
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-@Builder
-public class AttachmentDownloadRequest{
+package com.fincore.CommunicationService.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Generic communication event consumed by the Communication Service.
+ *
+ * Producer services publish this event to the
+ *  <code>fincore.communication.generic</code> Kafka topic.
+ *
+ * The Communication Service is responsible for resolving recipients,
+ * generating communication content, downloading attachments and
+ * dispatching notifications through the requested channels.
+ *
+ * @author SHUBHANKAR
+ * @since 2026-07
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class GenericCommunicationEvent {
+
+    /**
+     * Unique identifier for this specific event instance.
+     * Used as the primary correlation key across Kafka, Redis, and Oracle.
+     */
+    private String eventId;
+
+    /**
+     * Distributed tracing ID (e.g., from Jaeger/Zipkin).
+     * Vital for cross-microservice observability.
+     */
+    private String traceId;
+
+    private String correlationId;
+
+    private String producerService;
+
+    /**
+     * The business context of the event (e.g., 'EOD_REPORT', 'BALANCE_ALERT').
+     */
+    private String eventType;
+
+    /**
+     * FLAG: Determines the routing pipeline.
+     * If true, routes via Virtual Threads for 1-by-1 personalized vendor dispatch.
+     * If false, routes via Redis Pipelining and Vendor BCC arrays for massive scale.
+     * Defaults to true to ensure backward compatibility for legacy producers.
+     */
+    @JsonProperty("isPersonalized")
+    private boolean isPersonalized = true;
+
+    /**
+     * Defines SLA priority. E.g., 'HIGH', 'NORMAL'.
+     */
+    private String priority;
+
+    /**
+     * The communication channels requested (e.g., ["EMAIL", "SMS"]).
+     */
+    @JsonProperty("channels")
+    private List<String> channels;
+
+    /**
+     * Dynamic recipient resolution matrix. Producers can supply Roles, UserIds, or raw Emails/Mobiles.
+     */
+    @JsonProperty("recipients")
+    private Recipients recipients;
+
+    /**
+     * The exact template ID to fetch from the L1 Caffeine Cache / Oracle COMM_TEMPLATE_MASTER.
+     */
+    private String templateId;
+
+    /**
+     * The dynamic FreeMarker variable bindings (e.g., Names, Account Balances).
+     */
+    private Map<String, Object> payload;
+
+    /**
+     * List of attachments required (HDFS paths).
+     * Parsed by the AttachmentPreparationService in Phase 5.
+     */
     private List<AttachmentRef> attachments;
 
-}
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class AttachmentDownloadResponse{
+    private List<DeepLinkRef> deepLinks;
 
-    private List<DownloadedAttachment> attachments;
-}
+    private Map<String, String> metadata;
 
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class AttachmentReference{
-    
-    private String attachmentId;
+    /**
+     * Recipient details supplied by the producer service.
+     * Communication Service resolves UserIds and Roles into
+     * Email and Mobile recipients.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public static class Recipients {
 
-    private String attachmentType;
+        private List<String> userIds;
 
-    private String fileName;
+        private List<String> roles;
+
+        private List<String> emails;
+
+        private List<String> mobiles;
+    }
+
+    /**
+     * Reference to an attachment.
+     *
+     * Files are never sent through Kafka. The AttachmentService
+     * downloads the file using this information.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AttachmentRef {
+
+        private String attachmentId;
+
+        private String attachmentType;
+
+        private String fileName;
+    }
+
+    /**
+     * Reference used by the DeepLinkGenerator to create
+     * application-specific URLs.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DeepLinkRef {
+
+        private String module;
+
+        private String entityId;
+
+        private String action;
+    }
 }
