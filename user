@@ -1,59 +1,28 @@
-package com.fincore.CommunicationService.client;
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+public class AttachmentDownloadRequest{
 
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-// import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
-import com.fincore.CommunicationService.dto.ApiResponse;
-import org.springframework.core.ParameterizedTypeReference;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.MediaType;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
-import lombok.extern.slf4j.Slf4j;
-
-@Slf4j
-@Component
-@RequiredArgsConstructor
-public class ReportServiceClient{
-
-    private final RestClient restClient;
-
-    @Value("${report.service.url}")
-    private String reportServiceUrl;
-    
-    public AttachmentDownloadResponse 
-        downloadAttachments(AttachmentDownloadRequest request){
-            try{
-                log.info("Calling URL: {}",reportServiceUrl+"/api/reports/attachment/download");
-            ApiResponse<AttachmentDownloadResponse> response= restClient.post()
-                .uri(reportServiceUrl + "/api/reports/attachment/download")
-                // .header("Authorization",token)
-                // .contentType(MediaType.APPLICATION_JSON)
-                // .accept(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .body(new ParameterizedTypeReference<ApiResponse
-                <AttachmentDownloadResponse>>(){});
-                    
-            //     if(response==null){
-            //     throw new RuntimeException("response is null");
-            //     }
-
-            // return response.getData();
-            // }
-
-            // catch(Exception e){
-            //     log.error("Exception while calling report service",e);
-            //     throw e;
-            // }
-
-            if(!response.isSuccess()){
-                throw new RuntimeException(response.getMessage());
-            }
-            log.info("Report service returned {} attachments",response.getData().getAttachments().size());
-            return response.getData();
-    }
+    private List<AttachmentRef> attachments;
 
 }
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class AttachmentDownloadResponse{
 
+    private List<DownloadedAttachment> attachments;
+}
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class AttachmentReference{
+    
+    private String attachmentId;
+
+    private String attachmentType;
+
+    private String fileName;
+}
