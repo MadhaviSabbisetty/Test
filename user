@@ -1,8 +1,25 @@
+package com.fincore.CommunicationService.attachment;
+
+import com.fincore.CommunicationService.client.ReportServiceClient;
+import com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
+import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AttachmentPreparationService {
+public class AttachmentPreparationServiceImpl
+        implements AttachmentPreparationService {
+
     private final ReportServiceClient reportServiceClient;
 
     private final ZipService zipService;
@@ -13,506 +30,73 @@ public class AttachmentPreparationService {
     @Value("${attachment.max.size.mb:20}")
     private long maxAttachmentSizeMb;
 
-
-    public PreparedAttachmentResponse prepareAttachments(
-            AttachmentDownloadRequest request) throws IOException {
+    @Override
+    public AttachmentDownloadResponse prepareAttachments(
+            List<AttachmentRef> attachments)
+            throws IOException {
 
         log.info("Preparing attachments");
 
-        AttachmentDownloadResponse downloadResponse =
+        if (attachments == null || attachments.isEmpty()) {
+            log.info("No attachments received.");
+            return new AttachmentDownloadResponse();
+        }
+
+        AttachmentDownloadRequest request =
+                AttachmentDownloadRequest.builder()
+                        .attachments(attachments)
+                        .build();
+
+        /*
+         * Call Report Service.
+         */
+        AttachmentDownloadResponse response =
                 reportServiceClient.downloadAttachments(request);
 
-        List<File> preparedFiles = new ArrayList<>();
+        if (response == null
+                || response.getAttachments() == null
+                || response.getAttachments().isEmpty()) {
 
+            log.info("No attachments downloaded.");
+            return new AttachmentDownloadResponse();
+        }
+
+        /*
+         * Calculate total size.
+         */
         long totalSize = 0;
 
-        int attachmentCount = 0;
-
-        if (downloadResponse == null
-                || downloadResponse.getAttachments() == null
-                || downloadResponse.getAttachments().isEmpty()) {
-
-            return new PreparedAttachmentResponse(
-                    preparedFiles,
-                    false,
-                    0,
-                    0
-            );
-        }
-
         for (DownloadedAttachment attachment :
-                downloadResponse.getAttachments()) {
-
-            byte[] fileBytes =
-                    Base64.getDecoder().decode(attachment.getBase64());
-
-            File tempFile = File.createTempFile(
-                    "attachment_",
-                    "_" + attachment.getFileName());
-
-            try (FileOutputStream fos = new FileOutputStream(tempFile)) {
-                fos.write(fileBytes);
-            }
-
-            preparedFiles.add(tempFile);
+                response.getAttachments()) {
 
             totalSize += attachment.getFileSize();
-
-            attachmentCount++;
         }
 
+        log.info("Downloaded {} attachment(s).",
+                response.getAttachments().size());
+
+        log.info("Total Size : {} bytes", totalSize);
+
+        /*
+         * ZIP decision.
+         */
         boolean zipRequired =
-                attachmentCount > maxAttachmentCount
-                        || totalSize > (maxAttachmentSizeMb * 1024 * 1024);
+                response.getAttachments().size() > maxAttachmentCount
+                        ||
+                totalSize > (maxAttachmentSizeMb * 1024 * 1024);
 
         if (zipRequired) {
 
-            File zipFile = zipService.createZip(preparedFiles);
+            log.info("Attachments exceeded configured limit.");
 
-            preparedFiles.clear();
+            log.info("ZIP generation required.");
 
-            preparedFiles.add(zipFile);
-
-            totalSize = zipFile.length();
+            /*
+             * ZIP generation will be added here later.
+             */
         }
-
-        PreparedAttachmentResponse response =
-                new PreparedAttachmentResponse();
-
-        response.setFiles(preparedFiles);
-
-        response.setZip(zipRequired);
-
-        response.setTotalSize(totalSize);
-
-        response.setAttachmentCount(attachmentCount);
 
         return response;
     }
 
-    public void deleteTemporaryFiles(List<File> files) {
-
-        if (files == null || files.isEmpty()) {
-            return;
-        }
-
-        for (File file : files) {
-
-            try {
-
-                if (file.exists()) {
-
-                    boolean deleted = file.delete();
-
-                    log.info("Deleted temp file : {} Result : {}",
-                            file.getName(),
-                            deleted);
-                }
-
-            } catch (Exception ex) {
-
-                log.error("Unable to delete temp file {}",
-                        file.getAbsolutePath(),
-                        ex);
-            }
-        }
-    }
-
-
-}
-@Slf4j
-@Service
-public class ZipService{
-    public File createZip(List<File> files)throws IOException{
-        File zipFile = File.createTempFile("attachments_",".zip")   ;
-        try(ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipFile))){
-            for(File file : files){
-                try(FileInputStream fis = new FileInputStream(file)){
-                    ZipEntry entry = new ZipEntry(file.getName());
-                    zos.putNextEntry(entry);
-                    byte[] buffer = new byte[8192];
-                    int length;
-                    while((length = fis.read(buffer))> 0){
-                        zos.write(buffer,0,length);
-                    }
-                    zos.closeEntry();
-                }
-            }
-        }
-        log.info("ZIP created successfully : {}", zipFile.getAbsolutePath());
-        return zipFile;
-    }
-}
-
-@Component
-@RequiredArgsConstructor
-public class ReportServiceClient{
-
-    private final RestClient restClient;
-
-    @Value("${report.service.url}")
-    private String reportServiceUrl;
-    
-    public AttachmentDownloadResponse 
-        downloadAttachments(AttachmentDownloadRequest request){
-
-            return restClient.post()
-                .uri(reportServiceUrl + "/api/attachment/download")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .body(AttachmentDownloadResponse.class);
-    }
-
-}
-
-
-@EnableKafka
-@Configuration
-public class KafkaConsumerConfig {
-
-    @Value("${spring.kafka.bootstrap-servers}")
-    private String bootstrapServers;
-
-    @Bean
-    public DefaultKafkaConsumerFactory<String, String> stringConsumerFactory() {
-        Map<String, Object> props = new HashMap<>();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        // Force reading from the beginning
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-
-        // ABSOLUTE MANDATE: Ignore properties files and custom libraries. Force String.
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-
-        return new DefaultKafkaConsumerFactory<>(props);
-    }
-
-    /**
-     * THE BULKHEAD: Dedicated Thread Pool for Tier-0 OTPs.
-     * Prevents End-of-Day PDF emails from starving the OTP pipeline.
-     */
-    @Bean("priorityOtpContainerFactory")
-    public ConcurrentKafkaListenerContainerFactory<String, String> priorityOtpContainerFactory() {
-
-        ConcurrentKafkaListenerContainerFactory<String, String> factory = new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(stringConsumerFactory());
-        // Match this concurrency to the number of partitions on 'fincore.auth.otp.priority' (e.g., 10-20)
-        factory.setConcurrency(10);
-        // Strict Manual Acknowledgment. We only ACK when the SMS/Email is securely handed to the Vendor.
-        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
-        // We set the poll interval high enough to outlast the Resilience4j max timeout.
-        factory.getContainerProperties().setPollTimeout(3000);
-
-        return factory;
-    }
-}
-
-@Configuration
-public class RestClientConfig{
-
-    @Bean
-    public RestClient restClient(RestClient.Builder builder){
-        return builder.build();
-    }
-}
-/**
- * <p>
- * Non-blocking Kafka Consumer responsible for processing all Generic
- * Communication Events.
- * </p>
- *
- * <p>
- * This consumer handles only the Kafka infrastructure concerns.
- * Business logic is delegated to {@link CommunicationOrchestrator}.
- * </p>
- *
- * <p>
- * Responsibilities:
- * </p>
- * <ol>
- * <li>Consume Generic Communication Event.</li>
- * <li>Deserialize incoming JSON.</li>
- * <li>Validate mandatory fields.</li>
- * <li>Delegate processing to CommunicationOrchestrator.</li>
- * <li>Manually acknowledge Kafka offset.</li>
- * </ol>
- *
- * <p>
- * Retry Architecture:
- * </p>
- * <ul>
- * <li>4 Attempts (1 Initial + 3 Retries).</li>
- * <li>Exponential Backoff (2s → 4s → 8s).</li>
- * <li>Vendor failures are retried.</li>
- * <li>Invalid payloads are sent directly to DLQ.</li>
- * </ul>
- *
- * <p>
- * This consumer intentionally contains no recipient resolution,
- * attachment handling, template processing or vendor specific logic.
- * Those responsibilities belong to the CommunicationOrchestrator.
- * </p>
- *
- * @author Jailabdin [V1023042]
- * @since 2026-07
- */
-@Slf4j
-@Component
-@EnableKafka
-@RequiredArgsConstructor
-public class GenericCommunicationConsumer {
-
-    private final ObjectMapper mapper;
-
-    private final CommunicationOrchestrator communicationOrchestrator;
-
-    /**
-     * <p>
-     * Consumes Generic Communication Events from Kafka.
-     * </p>
-     *
-     * <p>
-     * Processing Flow:
-     * </p>
-     *
-     * <pre>
-     * Kafka
-     *   │
-     * Deserialize JSON
-     *   │
-     * Validate Event
-     *   │
-     * Communication Orchestrator
-     *   │
-     * Manual ACK
-     * </pre>
-     *
-     * @param message        Raw Kafka Message
-     * @param acknowledgment Kafka Acknowledgment
-     * @throws InvalidPayloadException if the message structure is invalid (triggers
-     *                                 DLQ).
-     * @throws VendorDeliveryException if the external vendor API fails (triggers
-     *                                 retry).
-     * @throws JsonProcessingException if JSON cannot be parsed.
-     */
-    @RetryableTopic(attempts = "4", backoff = @Backoff(delay = 2000, multiplier = 2.0), topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE, dltTopicSuffix = "-dlq", exclude = {
-            InvalidPayloadException.class
-    })
-    @KafkaListener(topics = "fincore.communication.generic", groupId = "communication-generic-group-v1", containerFactory = "genericCommunicationContainerFactory")
-    public void consumeGenericCommunication(
-            @Payload String message,
-            Acknowledgment acknowledgment)
-            throws JsonProcessingException {
-
-        log.info("Received Generic Communication Event : {}", message);
-
-        String eventId = "UNKNOWN";
-
-        try {
-
-            /*
-             * ---------------------------------------------------------
-             * STEP-1
-             * Deserialize Kafka Payload
-             * ---------------------------------------------------------
-             */
-            GenericCommunicationEvent event;
-
-            try {
-
-                event = mapper.readValue(
-                        message,
-                        GenericCommunicationEvent.class);
-
-                eventId = event.getEventId();
-
-            } catch (Exception ex) {
-
-                throw new InvalidPayloadException(
-                        "Malformed Generic Communication Event : "
-                                + ex.getMessage());
-            }
-
-            /*
-             * ---------------------------------------------------------
-             * STEP-2
-             * Validate Mandatory Fields
-             * ---------------------------------------------------------
-             */
-            validateEvent(event);
-
-            log.info(
-                    "Validated Generic Communication Event : {}",
-                    event.getEventId());
-
-            /*
-             * ---------------------------------------------------------
-             * STEP-3
-             * Delegate complete processing to Orchestrator.
-             * ---------------------------------------------------------
-             */
-            communicationOrchestrator.process(event);
-
-            /*
-             * ---------------------------------------------------------
-             * STEP-4
-             * Acknowledge Kafka Offset only after
-             * successful completion.
-             * ---------------------------------------------------------
-             */
-            acknowledgment.acknowledge();
-
-            log.info(
-                    "Successfully processed Generic Communication Event : {}",
-                    event.getEventId());
-
-        }
-
-        catch (InvalidPayloadException ex) {
-
-            log.error(
-                    "Invalid Generic Communication Event. EventId={} Reason={}",
-                    eventId,
-                    ex.getMessage());
-
-            throw ex;
-        }
-
-        catch (Exception ex) {
-
-            log.error(
-                    "Generic Communication processing failed for EventId={}",
-                    eventId,
-                    ex);
-
-            /*
-             * Throwing VendorDeliveryException triggers
-             * Spring Kafka Retry mechanism.
-             */
-            throw new VendorDeliveryException(
-                    "Generic Communication Processing Failed",
-                    ex);
-        }
-    }
-
-    /**
-     * <p>
-     * Handles Generic Communication Events that have been routed
-     * to the Dead Letter Queue (DLQ).
-     * </p>
-     *
-     * <p>
-     * This method is invoked automatically by Spring Kafka when:
-     * </p>
-     * <ol>
-     * <li>All retry attempts are exhausted.</li>
-     * <li>A non-retryable exception is thrown.</li>
-     * </ol>
-     *
-     * <p>
-     * Current Responsibility:
-     * </p>
-     * <ul>
-     * <li>Log the failure.</li>
-     * </ul>
-     *
-     * <p>
-     * Future Responsibility:
-     * </p>
-     * <ul>
-     * <li>Persist Audit Record.</li>
-     * <li>Trigger Alerts.</li>
-     * <li>Notify Monitoring Systems.</li>
-     * </ul>
-     *
-     * @param message          Original Kafka Message
-     * @param originalTopic    Original Kafka Topic
-     * @param exceptionMessage Exception responsible for DLQ
-     */
-    @DltHandler
-    public void handleGenericCommunicationDlt(
-            String message,
-            @Header(KafkaHeaders.ORIGINAL_TOPIC) String originalTopic,
-            @Header(KafkaHeaders.EXCEPTION_MESSAGE) String exceptionMessage) {
-
-        log.error("=====================================================");
-        log.error("DLQ ALERT : Generic Communication Processing Failed");
-        log.error("Original Topic : {}", originalTopic);
-        log.error("Failure Reason : {}", exceptionMessage);
-        log.error("Failed Payload : {}", message);
-        log.error("=====================================================");
-
-        /*
-         * TODO
-         * CommunicationAuditService.logFailure(...)
-         *
-         * Audit implementation will be added
-         * once Generic Communication Audit
-         * module is completed.
-         */
-    }
-
-    /**
-     * Validates mandatory fields required for Generic Communication.
-     *
-     * @param event Generic Communication Event
-     */
-    private void validateEvent(GenericCommunicationEvent event) {
-
-        if (event == null) {
-            throw new InvalidPayloadException(
-                    "Generic Communication Event is null.");
-        }
-
-        if (event.getEventId() == null
-                || event.getEventId().isBlank()) {
-
-            throw new InvalidPayloadException(
-                    "Missing Event Id.");
-        }
-
-        if (event.getTemplateId() == null
-                || event.getTemplateId().isBlank()) {
-
-            throw new InvalidPayloadException(
-                    "Missing Template Id.");
-        }
-
-        if (event.getChannels() == null
-                || event.getChannels().isEmpty()) {
-
-            throw new InvalidPayloadException(
-                    "No Communication Channel supplied.");
-        }
-
-        if (event.getRecipients() == null) {
-
-            throw new InvalidPayloadException(
-                    "Recipients object is missing.");
-        }
-
-        /*
-         * At least one recipient must be present.
-         */
-        GenericCommunicationEvent.Recipients recipients = event.getRecipients();
-
-        boolean recipientExists = (recipients.getUserIds() != null && !recipients.getUserIds().isEmpty())
-                || (recipients.getRoles() != null && !recipients.getRoles().isEmpty())
-                || (recipients.getEmails() != null && !recipients.getEmails().isEmpty())
-                || (recipients.getMobiles() != null && !recipients.getMobiles().isEmpty());
-
-        if (!recipientExists) {
-
-            throw new InvalidPayloadException(
-                    "No Recipient supplied.");
-        }
-
-        if (event.getPayload() == null) {
-
-            throw new InvalidPayloadException(
-                    "Payload is missing.");
-        }
-    }
 }
