@@ -1,102 +1,22 @@
-package com.fincore.CommunicationService.attachment;
+log.info("ZIP required for attachments.");
 
-import com.fincore.CommunicationService.client.ReportServiceClient;
-import com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+File zipFile = zipService.createZip(response.getAttachments());
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+DownloadedAttachment zipAttachment = new DownloadedAttachment();
 
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class AttachmentPreparationServiceImpl
-        implements AttachmentPreparationService {
+zipAttachment.setFileName("attachments.zip");
+zipAttachment.setContentType("application/zip");
+zipAttachment.setFileSize(zipFile.length());
 
-    private final ReportServiceClient reportServiceClient;
+byte[] zipBytes = Files.readAllBytes(zipFile.toPath());
 
-    private final ZipService zipService;
+zipAttachment.setBase64(
+        Base64.getEncoder().encodeToString(zipBytes));
 
-    @Value("${attachment.max.count:10}")
-    private int maxAttachmentCount;
+AttachmentDownloadResponse zipResponse =
+        new AttachmentDownloadResponse();
 
-    @Value("${attachment.max.size.mb:20}")
-    private long maxAttachmentSizeMb;
+zipResponse.setAttachments(
+        Collections.singletonList(zipAttachment));
 
-    @Override
-    public AttachmentDownloadResponse prepareAttachments(
-            List<AttachmentRef> attachments)
-            throws IOException {
-
-        log.info("Preparing attachments");
-
-        if (attachments == null || attachments.isEmpty()) {
-            log.info("No attachments received.");
-            return new AttachmentDownloadResponse();
-        }
-
-        AttachmentDownloadRequest request =
-                AttachmentDownloadRequest.builder()
-                        .attachments(attachments)
-                        .build();
-
-        /*
-         * Call Report Service.
-         */
-        AttachmentDownloadResponse response =
-                reportServiceClient.downloadAttachments(request);
-
-        if (response == null
-                || response.getAttachments() == null
-                || response.getAttachments().isEmpty()) {
-
-            log.info("No attachments downloaded.");
-            return new AttachmentDownloadResponse();
-        }
-
-        /*
-         * Calculate total size.
-         */
-        long totalSize = 0;
-
-        for (DownloadedAttachment attachment :
-                response.getAttachments()) {
-
-            totalSize += attachment.getFileSize();
-        }
-
-        log.info("Downloaded {} attachment(s).",
-                response.getAttachments().size());
-
-        log.info("Total Size : {} bytes", totalSize);
-
-        /*
-         * ZIP decision.
-         */
-        boolean zipRequired =
-                response.getAttachments().size() > maxAttachmentCount
-                        ||
-                totalSize > (maxAttachmentSizeMb * 1024 * 1024);
-
-        if (zipRequired) {
-
-            log.info("Attachments exceeded configured limit.");
-
-            log.info("ZIP generation required.");
-
-            /*
-             * ZIP generation will be added here later.
-             */
-        }
-
-        return response;
-    }
-
-}
+return zipResponse;
