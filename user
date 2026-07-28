@@ -1,59 +1,355 @@
-package com.fincore.CommunicationService.client;
+package com.fincore.CommunicationService.attachment;
 
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-// import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
-import com.fincore.CommunicationService.dto.ApiResponse;
-import org.springframework.core.ParameterizedTypeReference;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.MediaType;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+import java.util.List;
 
 @Slf4j
-@Component
-@RequiredArgsConstructor
-public class ReportServiceClient{
-
-    private final RestClient restClient;
-
-    @Value("${report.service.url}")
-    private String reportServiceUrl;
-    
-    public AttachmentDownloadResponse 
-        downloadAttachments(AttachmentDownloadRequest request){
-            try{
-                log.info("Calling URL: {}",reportServiceUrl+"/api/reports/attachment/download");
-            ApiResponse<AttachmentDownloadResponse> response= restClient.post()
-                .uri(reportServiceUrl + "/api/reports/attachment/download")
-                // .header("Authorization",token)
-                // .contentType(MediaType.APPLICATION_JSON)
-                // .accept(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .body(new ParameterizedTypeReference<ApiResponse
-                <AttachmentDownloadResponse>>(){});
-                    
-            //     if(response==null){
-            //     throw new RuntimeException("response is null");
-            //     }
-
-            // return response.getData();
-            // }
-
-            // catch(Exception e){
-            //     log.error("Exception while calling report service",e);
-            //     throw e;
-            // }
-
-            if(!response.isSuccess()){
-                throw new RuntimeException(response.getMessage());
+@Service
+public class ZipService{
+    public File createZip(List<File> files)throws IOException{
+        File zipFile = File.createTempFile("attachments_",".zip");
+        try(ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipFile))){
+            for(File file : files){
+                try(FileInputStream fis = new FileInputStream(file)){
+                    ZipEntry entry = new ZipEntry(file.getName());
+                    zos.putNextEntry(entry);
+                    byte[] buffer = new byte[8192]; 
+                    int length;
+                    while((length = fis.read(buffer))> 0){
+                        zos.write(buffer,0,length);
+                    }
+                    zos.closeEntry();
+                }
             }
-            log.info("Report service returned {} attachments",response.getData().getAttachments().size());
-            return response.getData();
+        }
+        log.info("ZIP created successfully : {}", zipFile.getAbsolutePath());
+        return zipFile;
+    }
+}
+// package com.fincore.CommunicationService.attachment;
+
+
+// import com.fincore.CommunicationService.client.ReportServiceClient;
+// import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
+// import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
+// import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
+// import com.fincore.CommunicationService.dto.attachment.PreparedAttachmentResponse;
+// import lombok.RequiredArgsConstructor;
+// import lombok.extern.slf4j.Slf4j;
+// import org.springframework.beans.factory.annotation.Value;
+// import org.springframework.stereotype.Service;
+
+// import java.io.File;
+// import java.io.FileOutputStream;
+// import java.io.IOException;
+// import java.util.ArrayList;
+// import java.util.Base64;
+// import java.util.List;
+
+// @Slf4j
+// @Service
+// @RequiredArgsConstructor
+// public class AttachmentPreparationServiceImpl implements AttachmentPreparationService{
+//     private final ReportServiceClient reportServiceClient;
+
+//     private final ZipService zipService;
+
+//     @Value("${attachment.max.count:10}")
+//     private int maxAttachmentCount;
+
+//     @Value("${attachment.max.size.mb:20}")
+//     private long maxAttachmentSizeMb;
+
+
+//     public AttachmentDownloadResponse prepareAttachments(
+//           //  AttachmentDownloadRequest request,String token) throws IOException {
+//           List<AttachmentRef> attachments)throws IOException{
+
+//         log.info("Preparing attachments");
+//         // log.info("Count :{}",request.getAttachments().size());
+
+//         // AttachmentDownloadResponse downloadResponse =
+//         //         reportServiceClient.downloadAttachments(request,token);
+//         // if(downloadResponse.getAttachments() !=null){
+//         //     log.info("Attachments Count: {}",downloadResponse.getAttachments().size());
+//         // }
+
+//         if(attachments == null || attachments.isEmpty()){
+//             log.info()
+//         }
+
+
+//         List<File> preparedFiles = new ArrayList<>();
+
+//         long totalSize = 0;
+
+//         int attachmentCount = 0;
+
+//         if (downloadResponse == null
+//                 || downloadResponse.getAttachments() == null
+//                 || downloadResponse.getAttachments().isEmpty()) {
+
+//             // return new PreparedAttachmentResponse(
+//             //         preparedFiles,
+//             //         false,
+//             //         0,
+//             //         0
+//             // );
+//             return new AttachmentDownloadResponse();
+            
+//         }
+
+//         for (DownloadedAttachment attachment :
+//                 downloadResponse.getAttachments()) {
+
+//             byte[] fileBytes =
+//                     Base64.getDecoder().decode(attachment.getBase64());
+
+//             File tempFile = File.createTempFile(
+//                     "attachment_",
+//                     "_" + attachment.getFileName());
+
+//             try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+//                 fos.write(fileBytes);
+//             }
+
+//             preparedFiles.add(tempFile);
+
+//             totalSize += attachment.getFileSize();
+
+//             attachmentCount++;
+//         }
+
+//         boolean zipRequired =
+//                 attachmentCount > maxAttachmentCount
+//                         || totalSize > (maxAttachmentSizeMb * 1024 * 1024);
+
+//         if (zipRequired) {
+
+//             File zipFile = zipService.createZip(preparedFiles);
+
+//             preparedFiles.clear();
+
+//             preparedFiles.add(zipFile);
+
+//             totalSize = zipFile.length();
+//         }
+
+//         AttachmentDownloadResponse response =
+//                 new AttachmentDownloadResponse();
+
+//         // response.setFiles(preparedFiles);
+
+//         // response.setZip(zipRequired);
+
+//         // response.setTotalSize(totalSize);
+
+//         // response.setAttachmentCount(attachmentCount);
+        
+//         return downloadResponse;
+//     }
+
+//     public void deleteTemporaryFiles(List<File> files) {
+
+//         if (files == null || files.isEmpty()) {
+//             return;
+//         }
+
+//         for (File file : files) {
+
+//             try {
+
+//                 if (file.exists()) {
+
+//                     boolean deleted = file.delete();
+
+//                     log.info("Deleted temp file : {} Result : {}",
+//                             file.getName(),
+//                             deleted);
+//                 }
+
+//             } catch (Exception ex) {
+
+//                 log.error("Unable to delete temp file {}",
+//                         file.getAbsolutePath(),
+//                         ex);
+//             }
+//         }
+//     }
+
+
+// }
+
+
+
+package com.fincore.CommunicationService.attachment;
+
+import com.fincore.CommunicationService.client.ReportServiceClient;
+import com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
+import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.io.File;
+import java.nio.file.File;
+import java.util.Base64;
+import java.util.Collections;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class AttachmentPreparationServiceImpl
+        implements AttachmentPreparationService {
+
+    private final ReportServiceClient reportServiceClient;
+
+    private final ZipService zipService;
+
+    @Value("${attachment.max.count:10}")
+    private int maxAttachmentCount;
+
+    @Value("${attachment.max.size.mb:20}")
+    private long maxAttachmentSizeMb;
+
+    @Override
+    public AttachmentDownloadResponse prepareAttachments(
+            List<AttachmentRef> attachments)
+            throws IOException {
+
+        log.info("Preparing attachments");
+
+        if (attachments == null || attachments.isEmpty()) {
+            log.info("No attachments received.");
+            return new AttachmentDownloadResponse();
+        }
+
+        AttachmentDownloadRequest request =
+                AttachmentDownloadRequest.builder()
+                        .attachments(attachments)
+                        .build();
+
+        /*
+         * Call Report Service.
+         */
+        AttachmentDownloadResponse response =
+                reportServiceClient.downloadAttachments(request);
+
+        if (response == null
+                || response.getAttachments() == null
+                || response.getAttachments().isEmpty()) {
+
+            log.info("No attachments downloaded.");
+            return new AttachmentDownloadResponse();
+        }
+
+        List<File> files = new ArrayList<>();
+         
+        for (DownloadedAttachment attachment :
+                response.getAttachments()) {
+
+            byte[] bytes =
+                    Base64.getDecoder().decode(attachment.getBase64());
+
+            File tempFile = File.createTempFile(
+                    "attachment_",
+                    "_" + attachment.getFileName());
+
+            // try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+            //     fos.write(fileBytes);
+            // }
+            Files.write(tempFile.toPath(),bytes);
+
+            files.add(tempFile);
+
+            totalSize += attachment.getFileSize();
+
+            // attachmentCount++;
+        }
+
+        /*
+         * Calculate total size.
+         */
+        long totalSize = 0;
+
+        // for (DownloadedAttachment attachment :
+        //         response.getAttachments()) {
+
+        //     totalSize += attachment.getFileSize();
+        // }
+
+        // log.info("Downloaded {} attachment(s).",
+        //         response.getAttachments().size());
+
+        // log.info("Total Size : {} bytes", totalSize);
+
+        /*
+         * ZIP decision.
+         */
+        boolean zipRequired =
+                response.getAttachments().size() > maxAttachmentCount
+                        ||
+                totalSize > (maxAttachmentSizeMb * 1024 * 1024);
+
+        if (!zipRequired) {
+
+            log.info("ZIP not required");
+            return response;
+            deleteTemporaryFiles(files);
+            }
+
+
+            log.info("Attachments exceeded configured limit.");
+
+            log.info("ZIP generation required.");
+
+            log.info("ZIP required for attachments.");
+
+            File zipFile = zipService.createZip(List<File> files);
+
+            deleteTemporaryFiles(files);
+
+            DownloadedAttachment zipAttachment = new DownloadedAttachment();
+
+            zipAttachment.setFileName("attachments.zip");
+            zipAttachment.setContentType("application/zip");
+            zipAttachment.setFileSize(zipFile.length());
+
+            byte[] zipBytes = Files.readAllBytes(zipFile.toPath());
+
+            zipFile.delete();
+
+            zipAttachment.setBase64(
+                    Base64.getEncoder().encodeToString(zipBytes));
+
+            AttachmentDownloadResponse zipResponse =
+                    new AttachmentDownloadResponse();
+
+            zipResponse.setAttachments(
+                    Collections.singletonList(zipAttachment));
+
+            return zipResponse;
+
+            /*
+             * ZIP generation will be added here later.
+             */
+        
+
+        // return response;
     }
 
 }
-
