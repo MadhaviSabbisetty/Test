@@ -1,11 +1,480 @@
-package com.fincore.CommunicationService.attachment;
-import com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
+package com.fincore.CommunicationService.dto;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
-import java.io.IOException;
+import java.util.Map;
 
-public interface AttachmentPreparationService {
+/**
+ * Generic communication event consumed by the Communication Service.
+ *
+ * Producer services publish this event to the
+ *  <code>fincore.communication.generic</code> Kafka topic.
+ *
+ * The Communication Service is responsible for resolving recipients,
+ * generating communication content, downloading attachments and
+ * dispatching notifications through the requested channels.
+ *
+ * @author SHUBHANKAR
+ * @since 2026-07
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class GenericCommunicationEvent {
 
-    AttachmentDownloadResponse prepareAttachments( List<AttachmentRef> attachments, String token)throws IOException;
+    /**
+     * Unique identifier for this specific event instance.
+     * Used as the primary correlation key across Kafka, Redis, and Oracle.
+     */
+    private String eventId;
+
+    /**
+     * Distributed tracing ID (e.g., from Jaeger/Zipkin).
+     * Vital for cross-microservice observability.
+     */
+    private String traceId;
+
+    private String correlationId;
+
+    private String producerService;
+
+    /**
+     * The business context of the event (e.g., 'EOD_REPORT', 'BALANCE_ALERT').
+     */
+    private String eventType;
+
+    /**
+     * FLAG: Determines the routing pipeline.
+     * If true, routes via Virtual Threads for 1-by-1 personalized vendor dispatch.
+     * If false, routes via Redis Pipelining and Vendor BCC arrays for massive scale.
+     * Defaults to true to ensure backward compatibility for legacy producers.
+     */
+    @JsonProperty("isPersonalized")
+    private boolean isPersonalized = true;
+
+    /**
+     * Defines SLA priority. E.g., 'HIGH', 'NORMAL'.
+     */
+    private String priority;
+
+    /**
+     * The communication channels requested (e.g., ["EMAIL", "SMS"]).
+     */
+    @JsonProperty("channels")
+    private List<String> channels;
+
+    /**
+     * Dynamic recipient resolution matrix. Producers can supply Roles, UserIds, or raw Emails/Mobiles.
+     */
+    @JsonProperty("recipients")
+    private Recipients recipients;
+
+    /**
+     * The exact template ID to fetch from the L1 Caffeine Cache / Oracle COMM_TEMPLATE_MASTER.
+     */
+    private String templateId;
+
+    /**
+     * The dynamic FreeMarker variable bindings (e.g., Names, Account Balances).
+     */
+    private Map<String, Object> payload;
+
+    /**
+     * List of attachments required (HDFS paths).
+     * Parsed by the AttachmentPreparationService in Phase 5.
+     */
+    private List<AttachmentRef> attachments;
+
+    private List<DeepLinkRef> deepLinks;
+
+    private Map<String, String> metadata;
+
+    /**
+     * Recipient details supplied by the producer service.
+     * Communication Service resolves UserIds and Roles into
+     * Email and Mobile recipients.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public static class Recipients {
+
+        private List<String> userIds;
+
+        private List<String> roles;
+
+        private List<String> emails;
+
+        private List<String> mobiles;
+    }
+
+    /**
+     * Reference to an attachment.
+     *
+     * Files are never sent through Kafka. The AttachmentService
+     * downloads the file using this information.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AttachmentRef {
+
+        private String attachmentId;
+
+        private String attachmentType;
+
+        private String fileName;
+    }
+
+    /**
+     * Reference used by the DeepLinkGenerator to create
+     * application-specific URLs.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DeepLinkRef {
+
+        private String module;
+
+        private String entityId;
+
+        private String action;
+    }
+}
+package com.fincore.CommunicationService.consumer;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fincore.CommunicationService.dto.GenericCommunicationEvent;
+import java.lang.String;
+import com.fincore.CommunicationService.exception.CommunicationExceptions.InvalidPayloadException;
+import com.fincore.CommunicationService.exception.CommunicationExceptions.VendorDeliveryException;
+import com.fincore.CommunicationService.orchestrator.CommunicationOrchestrator;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.annotation.DltHandler;
+import org.springframework.kafka.annotation.EnableKafka;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.annotation.RetryableTopic;
+import org.springframework.kafka.retrytopic.TopicSuffixingStrategy;
+import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.stereotype.Component;
+import org.springframework.retry.annotation.Backoff;
+
+/**
+ * <p>
+ * Non-blocking Kafka Consumer responsible for processing all Generic
+ * Communication Events.
+ * </p>
+ *
+ * <p>
+ * This consumer handles only the Kafka infrastructure concerns.
+ * Business logic is delegated to {@link CommunicationOrchestrator}.
+ * </p>
+ *
+ * <p>
+ * Responsibilities:
+ * </p>
+ * <ol>
+ * <li>Consume Generic Communication Event.</li>
+ * <li>Deserialize incoming JSON.</li>
+ * <li>Validate mandatory fields.</li>
+ * <li>Delegate processing to CommunicationOrchestrator.</li>
+ * <li>Manually acknowledge Kafka offset.</li>
+ * </ol>
+ *
+ * <p>
+ * Retry Architecture:
+ * </p>
+ * <ul>
+ * <li>4 Attempts (1 Initial + 3 Retries).</li>
+ * <li>Exponential Backoff (2s → 4s → 8s).</li>
+ * <li>Vendor failures are retried.</li>
+ * <li>Invalid payloads are sent directly to DLQ.</li>
+ * </ul>
+ *
+ * <p>
+ * This consumer intentionally contains no recipient resolution,
+ * attachment handling, template processing or vendor specific logic.
+ * Those responsibilities belong to the CommunicationOrchestrator.
+ * </p>
+ *
+ * @author Jailabdin [V1023042]
+ * @since 2026-07
+ */
+@Slf4j
+@Component
+@EnableKafka
+@RequiredArgsConstructor
+public class GenericCommunicationConsumer {
+
+    private final ObjectMapper mapper;
+
+    private final CommunicationOrchestrator communicationOrchestrator;
+
+    /**
+     * <p>
+     * Consumes Generic Communication Events from Kafka.
+     * </p>
+     *
+     * <p>
+     * Processing Flow:
+     * </p>
+     *
+     * <pre>
+     * Kafka
+     *   │
+     * Deserialize JSON
+     *   │
+     * Validate Event
+     *   │
+     * Communication Orchestrator
+     *   │
+     * Manual ACK
+     * </pre>
+     *
+     * @param message        Raw Kafka Message
+     * @param acknowledgment Kafka Acknowledgment
+     * @throws InvalidPayloadException if the message structure is invalid (triggers
+     *                                 DLQ).
+     * @throws VendorDeliveryException if the external vendor API fails (triggers
+     *                                 retry).
+     * @throws JsonProcessingException if JSON cannot be parsed.
+     */
+    @RetryableTopic(attempts = "4", backoff = @Backoff(delay = 2000, multiplier = 2.0), topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE, dltTopicSuffix = "-dlq", exclude = {
+            InvalidPayloadException.class
+    })
+    @KafkaListener(topics = "fincore.communication.generic", groupId = "communication-generic-group-v1", containerFactory = "genericCommunicationContainerFactory")
+    public void consumeGenericCommunication(
+            @Payload String message,
+            Acknowledgment acknowledgment , String token)
+            throws JsonProcessingException {
+
+        log.info("Received Generic Communication Event : {}", message);
+
+        String eventId = "UNKNOWN";
+
+        try {
+
+            /*
+             * ---------------------------------------------------------
+             * STEP-1
+             * Deserialize Kafka Payload
+             * ---------------------------------------------------------
+             */
+            GenericCommunicationEvent event;
+
+            try {
+
+                event = mapper.readValue(
+                        message,
+                        GenericCommunicationEvent.class);
+
+                eventId = event.getEventId();
+
+            } catch (Exception ex) {
+
+                throw new InvalidPayloadException(
+                        "Malformed Generic Communication Event : "
+                                + ex.getMessage());
+            }
+
+            /*
+             * ---------------------------------------------------------
+             * STEP-2
+             * Validate Mandatory Fields
+             * ---------------------------------------------------------
+             */
+            validateEvent(event);
+
+            log.info(
+                    "Validated Generic Communication Event : {}",
+                    event.getEventId());
+
+            /*
+             * ---------------------------------------------------------
+             * STEP-3
+             * Delegate complete processing to Orchestrator.
+             * ---------------------------------------------------------
+             */
+            communicationOrchestrator.process(event,token);
+
+            /*
+             * ---------------------------------------------------------
+             * STEP-4
+             * Acknowledge Kafka Offset only after
+             * successful completion.
+             * ---------------------------------------------------------
+             */
+            acknowledgment.acknowledge();
+
+            log.info(
+                    "Successfully processed Generic Communication Event : {}",
+                    event.getEventId());
+
+        }
+
+        catch (InvalidPayloadException ex) {
+
+            log.error(
+                    "Invalid Generic Communication Event. EventId={} Reason={}",
+                    eventId,
+                    ex.getMessage());
+
+            throw ex;
+        }
+
+        catch (Exception ex) {
+
+            log.error(
+                    "Generic Communication processing failed for EventId={}",
+                    eventId,
+                    ex);
+
+            /*
+             * Throwing VendorDeliveryException triggers
+             * Spring Kafka Retry mechanism.
+             */
+            throw new VendorDeliveryException(
+                    "Generic Communication Processing Failed",
+                    ex);
+        }
+    }
+
+    /**
+     * <p>
+     * Handles Generic Communication Events that have been routed
+     * to the Dead Letter Queue (DLQ).
+     * </p>
+     *
+     * <p>
+     * This method is invoked automatically by Spring Kafka when:
+     * </p>
+     * <ol>
+     * <li>All retry attempts are exhausted.</li>
+     * <li>A non-retryable exception is thrown.</li>
+     * </ol>
+     *
+     * <p>
+     * Current Responsibility:
+     * </p>
+     * <ul>
+     * <li>Log the failure.</li>
+     * </ul>
+     *
+     * <p>
+     * Future Responsibility:
+     * </p>
+     * <ul>
+     * <li>Persist Audit Record.</li>
+     * <li>Trigger Alerts.</li>
+     * <li>Notify Monitoring Systems.</li>
+     * </ul>
+     *
+     * @param message          Original Kafka Message
+     * @param originalTopic    Original Kafka Topic
+     * @param exceptionMessage Exception responsible for DLQ
+     */
+    @DltHandler
+    public void handleGenericCommunicationDlt(
+            String message,
+            @Header(KafkaHeaders.ORIGINAL_TOPIC) String originalTopic,
+            @Header(KafkaHeaders.EXCEPTION_MESSAGE) String exceptionMessage) {
+
+        log.error("=====================================================");
+        log.error("DLQ ALERT : Generic Communication Processing Failed");
+        log.error("Original Topic : {}", originalTopic);
+        log.error("Failure Reason : {}", exceptionMessage);
+        log.error("Failed Payload : {}", message);
+        log.error("=====================================================");
+
+        /*
+         * TODO
+         * CommunicationAuditService.logFailure(...)
+         *
+         * Audit implementation will be added
+         * once Generic Communication Audit
+         * module is completed.
+         */
+    }
+
+    /**
+     * Validates mandatory fields required for Generic Communication.
+     *
+     * @param event Generic Communication Event
+     */
+    private void validateEvent(GenericCommunicationEvent event) {
+
+        if (event == null) {
+            throw new InvalidPayloadException(
+                    "Generic Communication Event is null.");
+        }
+
+        if (event.getEventId() == null
+                || event.getEventId().isBlank()) {
+
+            throw new InvalidPayloadException(
+                    "Missing Event Id.");
+        }
+
+        if (event.getTemplateId() == null
+                || event.getTemplateId().isBlank()) {
+
+            throw new InvalidPayloadException(
+                    "Missing Template Id.");
+        }
+
+        if (event.getChannels() == null
+                || event.getChannels().isEmpty()) {
+
+            throw new InvalidPayloadException(
+                    "No Communication Channel supplied.");
+        }
+
+        if (event.getRecipients() == null) {
+
+            throw new InvalidPayloadException(
+                    "Recipients object is missing.");
+        }
+
+        /*
+         * At least one recipient must be present.
+         */
+        GenericCommunicationEvent.Recipients recipients = event.getRecipients();
+
+        boolean recipientExists = (recipients.getUserIds() != null && !recipients.getUserIds().isEmpty())
+                || (recipients.getRoles() != null && !recipients.getRoles().isEmpty())
+                || (recipients.getEmails() != null && !recipients.getEmails().isEmpty())
+                || (recipients.getMobiles() != null && !recipients.getMobiles().isEmpty());
+
+        if (!recipientExists) {
+
+            throw new InvalidPayloadException(
+                    "No Recipient supplied.");
+        }
+
+        if (event.getPayload() == null) {
+
+            throw new InvalidPayloadException(
+                    "Payload is missing.");
+        }
+    }
 }
