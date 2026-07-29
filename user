@@ -1,323 +1,127 @@
- -------------------------------------------------------------
-[INFO] ------------------------------------------------------------------------
-[INFO] BUILD FAILURE
-[INFO] ------------------------------------------------------------------------
-[INFO] Total time:  10.532 s
-[INFO] Finished at: 2026-07-29T11:51:40+05:30
-[INFO] ------------------------------------------------------------------------
-[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.13.0:compile (default-compile) on project CommunicationService: Compilation failure: Compilation failure: 
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/dto/attachment/AttachmentDownloadRequest.java:[22,8] class AttachmentDownloadResponse is public, should be declared in a file named AttachmentDownloadResponse.java
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/dto/attachment/AttachmentDownloadRequest.java:[30,8] class AttachmentReference is public, should be declared in a file named AttachmentReference.java
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/dto/attachment/AttachmentDownloadResponse.java:[11,8] duplicate class: com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/dto/attachment/AttachmentReference.java:[10,8] duplicate class: com.fincore.CommunicationService.dto.attachment.AttachmentReference
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[368,9] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.attachment.AttachmentPreparationServiceImpl
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[371,13] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.attachment.AttachmentPreparationServiceImpl
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[376,42] cannot find symbol
-[ERROR]   symbol:   method builder()
-[ERROR]   location: class com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[384,28] cannot find symbol
-[ERROR]   symbol:   method getAttachments()
-[ERROR]   location: variable response of type com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[385,28] cannot find symbol
-[ERROR]   symbol:   method getAttachments()
-[ERROR]   location: variable response of type com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[387,13] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.attachment.AttachmentPreparationServiceImpl
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[394,25] cannot find symbol
-[ERROR]   symbol:   method getAttachments()
-[ERROR]   location: variable response of type com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[396,36] cannot find symbol
-[ERROR]   symbol:   method getFileSize()
-[ERROR]   location: variable attachment of type com.fincore.CommunicationService.dto.attachment.DownloadedAttachment
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[400,25] cannot find symbol
-[ERROR]   symbol:   method getAttachments()
-[ERROR]   location: variable response of type com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[406,13] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.attachment.AttachmentPreparationServiceImpl
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[411,9] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.attachment.AttachmentPreparationServiceImpl
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[416,25] cannot find symbol
-[ERROR]   symbol:   method getAttachments()
-[ERROR]   location: variable response of type com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[420,39] cannot find symbol
-[ERROR]   symbol:   method getBase64()
-[ERROR]   location: variable attachment of type com.fincore.CommunicationService.dto.attachment.DownloadedAttachment
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[425,45] cannot find symbol
-[ERROR]   symbol:   method getFileName()
-[ERROR]   location: variable attachment of type com.fincore.CommunicationService.dto.attachment.DownloadedAttachment
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[444,22] cannot find symbol
-[ERROR]   symbol:   method setFileName(java.lang.String)
-[ERROR]   location: variable zipAttachment of type com.fincore.CommunicationService.dto.attachment.DownloadedAttachment
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[446,22] cannot find symbol
-[ERROR]   symbol:   method setContentType(java.lang.String)
-[ERROR]   location: variable zipAttachment of type com.fincore.CommunicationService.dto.attachment.DownloadedAttachment
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[448,22] cannot find symbol
-[ERROR]   symbol:   method setFileSize(int)
-[ERROR]   location: variable zipAttachment of type com.fincore.CommunicationService.dto.attachment.DownloadedAttachment
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[450,22] cannot find symbol
-[ERROR]   symbol:   method setBase64(java.lang.String)
-[ERROR]   location: variable zipAttachment of type com.fincore.CommunicationService.dto.attachment.DownloadedAttachment
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[457,20] cannot find symbol
-[ERROR]   symbol:   method setAttachments(java.util.List<com.fincore.CommunicationService.dto.attachment.DownloadedAttachment>)
-[ERROR]   location: variable zipResponse of type com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[477,21] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.attachment.AttachmentPreparationServiceImpl
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[484,17] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.attachment.AttachmentPreparationServiceImpl
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/ReportServiceClient.java:[93,13] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.ReportServiceClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/ReportServiceClient.java:[107,26] cannot find symbol
-[ERROR]   symbol:   method isSuccess()
-[ERROR]   location: variable response of type com.fincore.CommunicationService.dto.ApiResponse<com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse>
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/ReportServiceClient.java:[108,52] cannot find symbol
-[ERROR]   symbol:   method getMessage()
-[ERROR]   location: variable response of type com.fincore.CommunicationService.dto.ApiResponse<com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse>
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/ReportServiceClient.java:[111,25] cannot find symbol
-[ERROR]   symbol:   method getData()
-[ERROR]   location: variable response of type com.fincore.CommunicationService.dto.ApiResponse<com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse>
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/ReportServiceClient.java:[115,13] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.ReportServiceClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/ReportServiceClient.java:[116,29] cannot find symbol
-[ERROR]   symbol:   method getData()
-[ERROR]   location: variable response of type com.fincore.CommunicationService.dto.ApiResponse<com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse>
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/ReportServiceClient.java:[118,28] cannot find symbol
-[ERROR]   symbol:   method getData()
-[ERROR]   location: variable response of type com.fincore.CommunicationService.dto.ApiResponse<com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse>
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/ReportServiceClient.java:[122,13] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.ReportServiceClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/ZipService.java:[88,9] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.attachment.ZipService
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[46,17] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.EmailGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[65,25] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.EmailGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[94,41] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.EmailGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[105,25] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.EmailGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[160,25] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.EmailGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[170,77] cannot find symbol
-[ERROR]   symbol:   method getFiles()
-[ERROR]   location: variable preparedAttachments of type com.fincore.CommunicationService.dto.attachment.PreparedAttachmentResponse
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[170,119] cannot find symbol
-[ERROR]   symbol:   method getFiles()
-[ERROR]   location: variable preparedAttachments of type com.fincore.CommunicationService.dto.attachment.PreparedAttachmentResponse
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[174,68] cannot find symbol
-[ERROR]   symbol:   method getFiles()
-[ERROR]   location: variable preparedAttachments of type com.fincore.CommunicationService.dto.attachment.PreparedAttachmentResponse
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[187,25] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.EmailGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[190,25] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.EmailGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[194,33] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.EmailGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[198,25] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.EmailGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[214,41] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.EmailGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[217,33] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.EmailGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[220,77] cannot find symbol
-[ERROR]   symbol:   method getFiles()
-[ERROR]   location: variable preparedAttachments of type com.fincore.CommunicationService.dto.attachment.PreparedAttachmentResponse
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[221,68] cannot find symbol
-[ERROR]   symbol:   method getFiles()
-[ERROR]   location: variable preparedAttachments of type com.fincore.CommunicationService.dto.attachment.PreparedAttachmentResponse
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[226,49] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.EmailGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/EmailGatewayClient.java:[235,17] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.EmailGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/SmsGatewayClient.java:[36,37] cannot find symbol
-[ERROR]   symbol:   method getUrl()
-[ERROR]   location: variable config of type com.fincore.CommunicationService.model.FincoreSettings
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/SmsGatewayClient.java:[91,21] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.SmsGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/SmsGatewayClient.java:[98,23] cannot find symbol
-[ERROR]   symbol:   method getUsername()
-[ERROR]   location: variable config of type com.fincore.CommunicationService.model.FincoreSettings
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/SmsGatewayClient.java:[99,30] cannot find symbol
-[ERROR]   symbol:   method getPassword()
-[ERROR]   location: variable config of type com.fincore.CommunicationService.model.FincoreSettings
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/SmsGatewayClient.java:[101,37] cannot find symbol
-[ERROR]   symbol:   method getUsername()
-[ERROR]   location: variable config of type com.fincore.CommunicationService.model.FincoreSettings
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/SmsGatewayClient.java:[103,33] cannot find symbol
-[ERROR]   symbol:   method getPassword()
-[ERROR]   location: variable config of type com.fincore.CommunicationService.model.FincoreSettings
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/SmsGatewayClient.java:[125,29] cannot find symbol
-[ERROR]   symbol:   method getSenderId()
-[ERROR]   location: variable config of type com.fincore.CommunicationService.model.FincoreSettings
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/SmsGatewayClient.java:[135,13] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.SmsGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/SmsGatewayClient.java:[158,13] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.SmsGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/SmsGatewayClient.java:[162,13] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.SmsGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/SmsGatewayClient.java:[170,34] cannot find symbol
-[ERROR]   symbol:   method builder()
-[ERROR]   location: class com.fincore.CommunicationService.dto.SmsResponseDTO
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/SmsGatewayClient.java:[181,13] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.client.SmsGatewayClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/SmsGatewayClient.java:[185,34] cannot find symbol
-[ERROR]   symbol:   method builder()
-[ERROR]   location: class com.fincore.CommunicationService.dto.SmsResponseDTO
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/config/AsyncAuditConfig.java:[23,9] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.config.AsyncAuditConfig
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[112,9] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.consumer.GenericCommunicationConsumer
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[132,32] cannot find symbol
-[ERROR]   symbol:   method getEventId()
-[ERROR]   location: variable event of type com.fincore.CommunicationService.dto.GenericCommunicationEvent
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[149,13] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.consumer.GenericCommunicationConsumer
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[151,26] cannot find symbol
-[ERROR]   symbol:   method getEventId()
-[ERROR]   location: variable event of type com.fincore.CommunicationService.dto.GenericCommunicationEvent
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[170,13] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.consumer.GenericCommunicationConsumer
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[172,26] cannot find symbol
-[ERROR]   symbol:   method getEventId()
-[ERROR]   location: variable event of type com.fincore.CommunicationService.dto.GenericCommunicationEvent
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[178,13] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.consumer.GenericCommunicationConsumer
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[188,13] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.consumer.GenericCommunicationConsumer
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[243,9] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.consumer.GenericCommunicationConsumer
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[244,9] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.consumer.GenericCommunicationConsumer
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[245,9] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.consumer.GenericCommunicationConsumer
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[246,9] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.consumer.GenericCommunicationConsumer
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[247,9] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.consumer.GenericCommunicationConsumer
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[248,9] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.consumer.GenericCommunicationConsumer
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[272,18] cannot find symbol
-[ERROR]   symbol:   method getEventId()
-[ERROR]   location: variable event of type com.fincore.CommunicationService.dto.GenericCommunicationEvent
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[273,25] cannot find symbol
-[ERROR]   symbol:   method getEventId()
-[ERROR]   location: variable event of type com.fincore.CommunicationService.dto.GenericCommunicationEvent
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[279,18] cannot find symbol
-[ERROR]   symbol:   method getTemplateId()
-[ERROR]   location: variable event of type com.fincore.CommunicationService.dto.GenericCommunicationEvent
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[280,25] cannot find symbol
-[ERROR]   symbol:   method getTemplateId()
-[ERROR]   location: variable event of type com.fincore.CommunicationService.dto.GenericCommunicationEvent
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[286,18] cannot find symbol
-[ERROR]   symbol:   method getChannels()
-[ERROR]   location: variable event of type com.fincore.CommunicationService.dto.GenericCommunicationEvent
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[287,25] cannot find symbol
-[ERROR]   symbol:   method getChannels()
-[ERROR]   location: variable event of type com.fincore.CommunicationService.dto.GenericCommunicationEvent
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[293,18] cannot find symbol
-[ERROR]   symbol:   method getRecipients()
-[ERROR]   location: variable event of type com.fincore.CommunicationService.dto.GenericCommunicationEvent
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[302,64] cannot find symbol
-[ERROR]   symbol:   method getRecipients()
-[ERROR]   location: variable event of type com.fincore.CommunicationService.dto.GenericCommunicationEvent
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[304,46] cannot find symbol
-[ERROR]   symbol:   method getUserIds()
-[ERROR]   location: variable recipients of type com.fincore.CommunicationService.dto.GenericCommunicationEvent.Recipients
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[304,82] cannot find symbol
-[ERROR]   symbol:   method getUserIds()
-[ERROR]   location: variable recipients of type com.fincore.CommunicationService.dto.GenericCommunicationEvent.Recipients
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[305,31] cannot find symbol
-[ERROR]   symbol:   method getRoles()
-[ERROR]   location: variable recipients of type com.fincore.CommunicationService.dto.GenericCommunicationEvent.Recipients
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[305,65] cannot find symbol
-[ERROR]   symbol:   method getRoles()
-[ERROR]   location: variable recipients of type com.fincore.CommunicationService.dto.GenericCommunicationEvent.Recipients
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[306,31] cannot find symbol
-[ERROR]   symbol:   method getEmails()
-[ERROR]   location: variable recipients of type com.fincore.CommunicationService.dto.GenericCommunicationEvent.Recipients
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[306,66] cannot find symbol
-[ERROR]   symbol:   method getEmails()
-[ERROR]   location: variable recipients of type com.fincore.CommunicationService.dto.GenericCommunicationEvent.Recipients
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[307,31] cannot find symbol
-[ERROR]   symbol:   method getMobiles()
-[ERROR]   location: variable recipients of type com.fincore.CommunicationService.dto.GenericCommunicationEvent.Recipients
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[307,67] cannot find symbol
-[ERROR]   symbol:   method getMobiles()
-[ERROR]   location: variable recipients of type com.fincore.CommunicationService.dto.GenericCommunicationEvent.Recipients
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/consumer/GenericCommunicationConsumer.java:[315,18] cannot find symbol
-[ERROR]   symbol:   method getPayload()
-[ERROR]   location: variable event of type com.fincore.CommunicationService.dto.GenericCommunicationEvent
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/orchestrator/CommunicationOrchestrator.java:[74,31] cannot find symbol
-[ERROR]   symbol:   method getEventId()
-[ERROR]   location: variable event of type com.fincore.CommunicationService.dto.GenericCommunicationEvent
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/orchestrator/CommunicationOrchestrator.java:[75,9] cannot find symbol
-[ERROR]   symbol:   variable log
-[ERROR]   location: class com.fincore.CommunicationService.orchestrator.CommunicationOrchestrator
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/orchestrator/CommunicationOrchestrator.java:[78,87] cannot find symbol
-[ERROR]   symbol:   method getRecipients()
-[ERROR]   location: variable event of type com.fincore.CommunicationService.dto.GenericCommunicationEvent
-[ERROR] -> [Help 1]
-[ERROR] 
-[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
-[ERROR] Re-run Maven using the -X switch to enable full debug logging.
-[ERROR] 
-[ERROR] For more information about the errors and possible solutions, please read the following articles:
-[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+// package com.fincore.CommunicationService.client;
 
-D:\Workspace\Git\Fincore\Backend\fincore_communication_service>
+// import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
+// import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
+// // import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
+// import com.fincore.CommunicationService.dto.ApiResponse;
+// import org.springframework.core.ParameterizedTypeReference;
+// import lombok.RequiredArgsConstructor;
+// import org.springframework.beans.factory.annotation.Value;
+// import org.springframework.http.MediaType;
+// import org.springframework.stereotype.Component;
+// import org.springframework.web.client.RestClient;
+// import lombok.extern.slf4j.Slf4j;
+
+// @Slf4j
+// @Component
+// @RequiredArgsConstructor
+// public class ReportServiceClient{
+
+//     private final RestClient restClient;
+
+//     @Value("${report.service.url}")
+//     private String reportServiceUrl;
+    
+//     public AttachmentDownloadResponse 
+//         downloadAttachments(AttachmentDownloadRequest request){
+//             // try{
+//                 log.info("Calling URL: {}",reportServiceUrl+"/api/reports/attachment/download");
+//             ApiResponse<AttachmentDownloadResponse> response= restClient.post()
+//                 .uri(reportServiceUrl + "/api/reports/attachment/download")
+//                 // .header("Authorization",token)
+//                 // .contentType(MediaType.APPLICATION_JSON)
+//                 // .accept(MediaType.APPLICATION_JSON)
+//                 .body(request)
+//                 .retrieve()
+//                 .body(new ParameterizedTypeReference<ApiResponse
+//                 <AttachmentDownloadResponse>>(){});
+                    
+//             //     if(response==null){
+//             //     throw new RuntimeException("response is null");
+//             //     }
+
+//             // return response.getData();
+//             // }
+
+//             // catch(Exception e){
+//             //     log.error("Exception while calling report service",e);
+//             //     throw e;
+//             // }
+
+//             if(response == null){
+//                 throw new RuntimeException("No response received from eport Service");
+//             }
+
+//             if(!response.isSuccess()){
+//                 throw new RuntimeException(response.getMessage());
+//             }
+//             log.info("Report service returned {} attachments",response.getData().getAttachments().size());
+//             return response.getData();
+//     }
+
+// }
 
 
 
+package com.fincore.CommunicationService.client;
 
+import com.fincore.CommunicationService.dto.ApiResponse;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
 
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class ReportServiceClient {
 
+    private final RestClient restClient;
 
+    @Value("${report.service.url}")
+    private String reportServiceUrl;
 
+    public AttachmentDownloadResponse downloadAttachments(
+            AttachmentDownloadRequest request) {
 
+        try {
 
+            log.info("Calling Report Service : {}",
+                    reportServiceUrl + "/api/reports/attachment/download");
 
+            ApiResponse<AttachmentDownloadResponse> response =
+                    restClient.post()
+                            .uri(reportServiceUrl + "/api/reports/attachment/download")
+                            .body(request)
+                            .retrieve()
+                            .body(new ParameterizedTypeReference<ApiResponse<AttachmentDownloadResponse>>() {});
 
+            if (response == null) {
+                throw new RuntimeException("No response received from Report Service");
+            }
 
+            if (!response.isSuccess()) {
+                throw new RuntimeException(response.getMessage());
+            }
 
+            if (response.getData() == null) {
+                throw new RuntimeException("Attachment response is empty");
+            }
+
+            log.info("Report Service returned {} attachment(s)",
+                    response.getData().getAttachments().size());
+
+            return response.getData();
+
+        } catch (Exception ex) {
+
+            log.error("Error while downloading attachments from Report Service", ex);
+
+            throw ex;
+        }
+    }
+}              
