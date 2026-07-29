@@ -1,62 +1,233 @@
-package com.fincore.CommunicationService.client;
+package com.fincore.CommunicationService.orchestrator;
 
-import com.fincore.CommunicationService.dto.ApiResponse;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
+import com.fincore.CommunicationService.dto.GenericCommunicationEvent;
+import com.fincore.CommunicationService.dto.ResolvedRecipient;
+// import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
 import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
+import com.fincore.CommunicationService.attachment.AttachmentPreparationService;
+import com.fincore.CommunicationService.exception.CommunicationExceptions.VendorDeliveryException;
+import com.fincore.CommunicationService.recipient.RecipientResolver;
+import com.fincore.CommunicationService.service.CommunicationAuditService;
+import com.fincore.CommunicationService.service.EmailService;
+import com.fincore.CommunicationService.service.SmsService;
+import com.fincore.CommunicationService.service.TemplateEngineService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
-@Component
+@Service
 @RequiredArgsConstructor
-public class ReportServiceClient {
+public class CommunicationOrchestrator {
 
-    private final RestClient restClient;
+    private final RecipientResolver recipientResolver;
+    private final CommunicationAuditService auditService;
+    private final EmailService emailService;
+    private final SmsService smsService;
+    private final StringRedisTemplate redisTemplate;
+    private final AttachmentPreparationService attachmentPreparationService;
 
-    @Value("${report.service.url}")
-    private String reportServiceUrl;
+    // private String token;
 
-    public AttachmentDownloadResponse downloadAttachments(
-            AttachmentDownloadRequest request) {
+
+    @Value("${communication.chunk.size:500}")
+    private int chunkSize;
+
+    // Create a Semaphore limiting max concurrent HTTP/DB calls to 50
+    private final Semaphore vendorRateLimiter = new Semaphore(50);
+
+    /**
+     * The main entry point called by the GenericCommunicationConsumer.
+     */
+    public void process(GenericCommunicationEvent event) {
+        String eventId = event.getEventId();
+        log.info("Orchestrator started processing Event: {}", eventId);
+
+        // 1. Resolve Recipients
+        List<ResolvedRecipient> recipients = recipientResolver.resolveRecipients(event.getRecipients());
+        if (recipients.isEmpty()) {
+            log.warn("No active recipients resolved for Event: {}. Terminating process gracefully.", eventId);
+            return;
+        }
+
+        // 2. Prepare Attachments
+
+        AttachmentDownloadResponse attachmentResponse = null;
+
+        if (event.getAttachments() != null
+                && !event.getAttachments().isEmpty()) {
+
+            log.info(
+                    "Preparing {} attachment(s).",
+                    event.getAttachments().size());
+
+            // AttachmentDownloadRequest request =
+            //         AttachmentDownloadRequest.builder()
+            //                 .attachments(event.getAttachments())
+            //                 .build();
+
+            try{
+                attachmentResponse =
+                    attachmentPreparationService.prepareAttachments(event.getAttachments());
+                    log.info("Downloaded {} attachments",attachmentResponse.getAttachments().size());
+
+            }
+            catch(Exception e){
+                log.error("attachment preparation failes",e);
+                throw new RuntimeException("Unable to prepare attachments",e);
+            }
+            // log.info(
+            //         "Prepared {} attachment(s). Zip Created : {}",
+            //         attachmentResponse.getAttachmentCount(),
+            //         attachmentResponse.isZip());
+        }
+
+
+        // 3. Chunk the recipients to avoid massive JVM memory spikes
+        List<List<ResolvedRecipient>> chunks = partitionList(recipients, chunkSize);
+        log.info("Partitioned {} total recipients into {} chunks of max size {}", recipients.size(), chunks.size(), chunkSize);
+
+        AtomicInteger failureCount = new AtomicInteger(0);
+
+        // 4. Process Chunks Concurrently using Virtual Threads
+        try (ExecutorService virtualExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Callable<Void>> tasks = new ArrayList<>();
+
+            for (List<ResolvedRecipient> chunk : chunks) {
+                tasks.add(() -> {
+                    processChunk(chunk, event, failureCount);
+                    return null;
+                });
+            }
+
+            // invokeAll blocks until ALL virtual threads (all chunks) finish execution
+            List<Future<Void>> futures = virtualExecutor.invokeAll(tasks);
+
+            // Check for critical thread interruptions
+            for (Future<Void> future : futures) {
+                future.get();
+            }
+
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Critical threading error during bulk dispatch for Event: {}", eventId, e);
+            throw new VendorDeliveryException("Threading error during parallel chunk dispatch", e);
+        }
+
+        // 5. Aggregate Failures and trigger Kafka Retry if needed
+        if (failureCount.get() > 0) {
+            log.error("Event {} completed with {} failed dispatches. Throwing exception to trigger Kafka Retry.", eventId, failureCount.get());
+            // Throwing this exception causes the Consumer to NACK the message, routing it to the retry topic.
+            // On retry, the Idempotency checks will skip the successful ones.
+            throw new VendorDeliveryException(failureCount.get() + " recipients failed delivery. Check logs.", null);
+        }
+
+        log.info("Orchestrator successfully processed Event: {} for all {} recipients.", eventId, recipients.size());
+    }
+
+    /**
+     * Processes a single chunk of recipients concurrently.
+     */
+    private void processChunk(List<ResolvedRecipient> chunk, GenericCommunicationEvent event, AtomicInteger failureCount) {
+
+        // Even within a chunk, we fire a Virtual Thread per recipient to maximize HTTP I/O throughput
+        try (ExecutorService ioExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Callable<Void>> dispatchTasks = new ArrayList<>();
+
+            for (ResolvedRecipient recipient : chunk) {
+                for (String channel : event.getChannels()) {
+                    dispatchTasks.add(() -> {
+                        dispatchToChannel(recipient, channel, event, failureCount);
+                        return null;
+                    });
+                }
+            }
+            // Execute all HTTP I/O concurrently
+            ioExecutor.invokeAll(dispatchTasks);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("Chunk processing interrupted", e);
+        }
+    }
+
+    /**
+     * Handles Idempotency, Auditing, and Vendor Dispatch for a single recipient + channel combination.
+     */
+    private void dispatchToChannel(ResolvedRecipient recipient, String channel, GenericCommunicationEvent event, AtomicInteger failureCount) {
+
+        // E.g., evt-123_EMAIL_abc@sbi.com
+        String recipientIdentifier = "EMAIL".equalsIgnoreCase(channel) ? recipient.getEmail() : recipient.getMobile();
+
+        // Check If they requested SMS but the user has no mobile, skip silently.
+        if (recipientIdentifier == null || recipientIdentifier.isBlank()) {
+            log.debug("Skipping {} for User {} (No contact info)", channel, recipient.getUserId());
+            return;
+        }
+
+        String auditId = event.getEventId() + "_" + channel + "_" + Math.abs(recipientIdentifier.hashCode());
+        String idempotencyKey = "COMM_IDEMP:" + auditId + ":" + channel + ":" + recipientIdentifier;
+
+        // 1. Check Idempotency
+        // Setting TTL to 24 hours for generic events to prevent accidental blasts
+        Boolean isNew = redisTemplate.opsForValue().setIfAbsent(idempotencyKey, "PROCESSING", Duration.ofHours(24));
+        if (Boolean.FALSE.equals(isNew)) {
+            log.debug("Idempotency Hit: Already processed {} for {}. Skipping.", channel, recipientIdentifier);
+            return;
+        }
+
+        // 2. Audit Initialization
+        auditService.logAttempt(auditId, event.getEventId(), event.getTraceId(), event.getTemplateId(), channel, recipientIdentifier);
 
         try {
-
-            log.info("Calling Report Service : {}",
-                    reportServiceUrl + "/api/reports/attachment/download");
-
-            ApiResponse<AttachmentDownloadResponse> response =
-                    restClient.post()
-                            .uri(reportServiceUrl + "/api/reports/attachment/download")
-                            .body(request)
-                            .retrieve()
-                            .body(new ParameterizedTypeReference<ApiResponse<AttachmentDownloadResponse>>() {});
-
-            if (response == null) {
-                throw new RuntimeException("No response received from Report Service");
+            // 3. Dispatch
+            if ("EMAIL".equalsIgnoreCase(channel)) {
+                emailService.sendEmail(event.getTemplateId(), recipient.getEmail(), event.getPayload());
+                // Madhavi Note: Once AttachmentService is ready, pass prepared attachments here!
+                // emailService.sendEmail(event.getTemplateId(), recipient.getEmail(), event.getPayload(), preparedAttachments);
+            } else if ("SMS".equalsIgnoreCase(channel)) {
+                smsService.sendSms(event.getTemplateId(), recipient.getMobile(), event.getPayload());
             }
 
-            if (!response.isSuccess()) {
-                throw new RuntimeException(response.getMessage());
-            }
+            // 4. Audit Success
+            auditService.logSuccess(auditId);
 
-            if (response.getData() == null) {
-                throw new RuntimeException("Attachment response is empty");
-            }
+            // Mark idempotency as permanently successful
+            redisTemplate.opsForValue().set(idempotencyKey, "SUCCESS", Duration.ofHours(24));
 
-            log.info("Report Service returned {} attachment(s)",
-                    response.getData().getAttachments().size());
+        } catch (Exception e) {
+            log.error("Failed to send {} to {} for Event {}", channel, recipientIdentifier, event.getEventId(), e);
 
-            return response.getData();
+            // 5. Audit Failure
+            auditService.logFailure(auditId, e.getMessage());
 
-        } catch (Exception ex) {
+            // Delete idempotency key so Kafka can retry this specific user
+            redisTemplate.delete(idempotencyKey);
 
-            log.error("Error while downloading attachments from Report Service", ex);
-
-            throw ex;
+            // Increment partial failure tracker
+            failureCount.incrementAndGet();
         }
+    }
+
+    /**
+     * Utility method to safely partition a large list into smaller chunks.
+     * Replaces the need for massive external libraries like Guava.
+     */
+    private <T> List<List<T>> partitionList(List<T> list, int size) {
+        List<List<T>> partitions = new ArrayList<>();
+        if (list == null || list.isEmpty()) return partitions;
+
+        for (int i = 0; i < list.size(); i += size) {
+            partitions.add(new ArrayList<>(
+                    list.subList(i, Math.min(i + size, list.size())))
+            );
+        }
+        return partitions;
     }
 }
