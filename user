@@ -1,127 +1,245 @@
-// package com.fincore.CommunicationService.client;
+  AttachmentDownloadResponse downloadAttachments(AttachmentDownloadRequest request, int userRoleId, String userId) throws IOException;
+in service file
 
-// import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-// import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-// // import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
-// import com.fincore.CommunicationService.dto.ApiResponse;
-// import org.springframework.core.ParameterizedTypeReference;
-// import lombok.RequiredArgsConstructor;
-// import org.springframework.beans.factory.annotation.Value;
-// import org.springframework.http.MediaType;
-// import org.springframework.stereotype.Component;
-// import org.springframework.web.client.RestClient;
-// import lombok.extern.slf4j.Slf4j;
+package com.fincore.ReportService.config;
 
-// @Slf4j
-// @Component
-// @RequiredArgsConstructor
-// public class ReportServiceClient{
+import com.fincore.commonutilities.buisnessobject.ControlDateService;
+import com.fincore.commonutilities.config.CommonSecurityConfig;
+import com.fincore.commonutilities.config.RedisConfig;
+import com.fincore.commonutilities.config.ResilienceConfig;
+import com.fincore.commonutilities.jwt.JwtUtil;
+import com.fincore.commonutilities.logging.MdcLoggingFilter;
+import com.fincore.commonutilities.security.ContextRbacFilter;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import jakarta.servlet.DispatcherType; // Import this is CRITICAL
+import com.fincore.commonutilities.security.DecryptRequestBodyAdvice;
+import com.fincore.commonutilities.util.AesEncryptionUtil;
 
-//     private final RestClient restClient;
+/**
+ * Common Security Configuration.
+ * * Aligned with the "Distributed Gateway" architecture.
+ * It uses the ContextRbacFilter from Common Utilities to enforce:
+ * 1. Token Validity
+ * 2. Single Session (Redis check)
+ * 3. RBAC Permissions
+ * Enforces Centralised Mdc Logging Filter, RESILIENCE4J Retry and Circuit
+ * Breaker
+ */
+@Configuration
+@EnableWebSecurity
+@Import({
+        RedisConfig.class,
+        JwtUtil.class,
+        CommonSecurityConfig.class,
+        ResilienceConfig.class, ControlDateService.class,
+        AesEncryptionUtil.class,
+        DecryptRequestBodyAdvice.class
+})
+public class SecurityConfig {
 
-//     @Value("${report.service.url}")
-//     private String reportServiceUrl;
-    
-//     public AttachmentDownloadResponse 
-//         downloadAttachments(AttachmentDownloadRequest request){
-//             // try{
-//                 log.info("Calling URL: {}",reportServiceUrl+"/api/reports/attachment/download");
-//             ApiResponse<AttachmentDownloadResponse> response= restClient.post()
-//                 .uri(reportServiceUrl + "/api/reports/attachment/download")
-//                 // .header("Authorization",token)
-//                 // .contentType(MediaType.APPLICATION_JSON)
-//                 // .accept(MediaType.APPLICATION_JSON)
-//                 .body(request)
-//                 .retrieve()
-//                 .body(new ParameterizedTypeReference<ApiResponse
-//                 <AttachmentDownloadResponse>>(){});
-                    
-//             //     if(response==null){
-//             //     throw new RuntimeException("response is null");
-//             //     }
+    @Autowired
+    private StringRedisTemplate redisTemplate;
 
-//             // return response.getData();
-//             // }
+    @Autowired
+    private JwtUtil jwtUtil;
 
-//             // catch(Exception e){
-//             //     log.error("Exception while calling report service",e);
-//             //     throw e;
-//             // }
+    @Autowired
+    private CommonSecurityConfig commonSecurityConfig;
 
-//             if(response == null){
-//                 throw new RuntimeException("No response received from eport Service");
-//             }
-
-//             if(!response.isSuccess()){
-//                 throw new RuntimeException(response.getMessage());
-//             }
-//             log.info("Report service returned {} attachments",response.getData().getAttachments().size());
-//             return response.getData();
-//     }
-
-// }
-
-
-
-package com.fincore.CommunicationService.client;
-
-import com.fincore.CommunicationService.dto.ApiResponse;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
-
-@Slf4j
-@Component
-@RequiredArgsConstructor
-public class ReportServiceClient {
-
-    private final RestClient restClient;
-
-    @Value("${report.service.url}")
-    private String reportServiceUrl;
-
-    public AttachmentDownloadResponse downloadAttachments(
-            AttachmentDownloadRequest request) {
-
-        try {
-
-            log.info("Calling Report Service : {}",
-                    reportServiceUrl + "/api/reports/attachment/download");
-
-            ApiResponse<AttachmentDownloadResponse> response =
-                    restClient.post()
-                            .uri(reportServiceUrl + "/api/reports/attachment/download")
-                            .body(request)
-                            .retrieve()
-                            .body(new ParameterizedTypeReference<ApiResponse<AttachmentDownloadResponse>>() {});
-
-            if (response == null) {
-                throw new RuntimeException("No response received from Report Service");
-            }
-
-            if (!response.isSuccess()) {
-                throw new RuntimeException(response.getMessage());
-            }
-
-            if (response.getData() == null) {
-                throw new RuntimeException("Attachment response is empty");
-            }
-
-            log.info("Report Service returned {} attachment(s)",
-                    response.getData().getAttachments().size());
-
-            return response.getData();
-
-        } catch (Exception ex) {
-
-            log.error("Error while downloading attachments from Report Service", ex);
-
-            throw ex;
-        }
+    // --- 1. Define Filters as Beans (Explicitly) ---
+    @Bean
+    public MdcLoggingFilter mdcLoggingFilter() {
+        return new MdcLoggingFilter(jwtUtil);
     }
-}              
+
+    @Bean
+    public ContextRbacFilter contextRbacFilter() {
+        return new ContextRbacFilter(redisTemplate, jwtUtil);
+    }
+
+    // --- 2. Prevent Global Registration ---
+    // This stops "The Filter class ... does not have a registered order" error
+
+    @Bean
+    public FilterRegistrationBean<MdcLoggingFilter> mdcFilterRegistration(MdcLoggingFilter filter) {
+        FilterRegistrationBean<MdcLoggingFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false); // Disable global chain
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<ContextRbacFilter> rbacFilterRegistration(ContextRbacFilter filter) {
+        FilterRegistrationBean<ContextRbacFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false); // Disable global chain
+        return registration;
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.configurationSource(commonSecurityConfig.corsConfigurationSource()))
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authz -> authz
+                        // Allow Async Dispatches (StreamingResponseBody) to proceed without re-auth
+                        // checks
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
+                        .requestMatchers("/actuator/**", "/api/auth/**", "/error").permitAll()
+                        .anyRequest().authenticated())
+                // Add Filters using the BEAN references (methods above)
+                .addFilterBefore(mdcLoggingFilter(), UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(contextRbacFilter(), MdcLoggingFilter.class);
+
+        return http.build();
+    }
+
+    /**
+     * Explicitly indicate that local user lookup is not supported
+     * Authentication is handled via JWT in ContextRbacFilter
+     */
+    @Bean
+    public UserDetailsService userDetailsService() {
+        return username -> {
+            throw new UsernameNotFoundException("UserDetailsService is disabled. Use JWT authentication.");
+        };
+    }
+}
+
+
+
+        @PostMapping("/attachment/download")
+        public ResponseEntity<ApiResponse<AttachmentDownloadResponse>> downloadAttachments(@RequestHeader("Authorization") String token, 
+                        @RequestBody AttachmentDownloadRequest request)throws IOException{
+                              
+                               try{
+                                        log.info("inside reportcontroller attachment endpoint");
+                                        AttachmentDownloadResponse response=reportService.downloadAttachments(request, jwtUtil.getUserRoleFromToken(token),
+                                        jwtUtil.getUserIdFromToken(token));
+                                        return ResponseEntity.ok(ApiResponse.success(response,"Attachment downloaded successfully"));
+                               }
+                               catch(Exception e){
+                                        log.error("Attachment download failed",e); 
+                                        return ResponseEntity.ok(
+                                                ApiResponse.error(e.getMessage() == null ?"Attachment download failed.":e.getMessage())
+                                );
+                               }
+
+        }
+controller 
+
+
+    @Override
+    public AttachmentDownloadResponse downloadAttachments(
+            AttachmentDownloadRequest request,
+            int userRoleId,
+            String userId) throws IOException {
+
+
+        log.info("Inside the report service download method");
+
+        List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
+
+        for (AttachmentRef attachment : request.getAttachments()) {
+
+            log.info("-------------------------------------------------------------------");
+            log.info("Attachment Download Request Received");
+            log.info("Attachment Id: {}",attachment.getAttachmentId());
+            log.info("Report Name: {}",attachment.getFileName());
+            log.info("Attachment Type: {}",attachment.getAttachmentType());
+
+            String attachmentId = attachment.getAttachmentId();
+            String reportFolder = attachment.getFileName();
+
+            // Extracting date from attachmentId
+            // Example : balance_compare_report_31032026
+            String date = attachmentId.substring(attachmentId.lastIndexOf("_") + 1);
+
+            String folderDate =
+                    date.substring(4, 8) + "-"
+                + date.substring(2, 4) + "-"
+                + date.substring(0, 2);
+
+            byte[] fileBytes;
+            long fileSize;
+            String actualFileName = attachmentId + ".xlsx";
+            
+            String hdfsPath =
+                    reportsBasePath + "/"
+                + folderDate + "/"
+                + reportFolder + "/"
+                + actualFileName;
+
+            Path filePath = new Path(hdfsPath);
+
+            log.info("Reading HDFS File : {}", filePath);
+
+            if (!hdfsFileSystem.exists(filePath)) {
+                log.info("Attachment not found");
+                throw new ResourceNotFoundException(
+                        "Attachment not found : " + filePath);
+            }
+
+            FileStatus status = hdfsFileSystem.getFileStatus(filePath);
+
+            try (FSDataInputStream inputStream = hdfsFileSystem.open(filePath);
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+
+                fileBytes = outputStream.toByteArray();
+            }catch(IOException e){
+                log.error("Unable to read HDFS file {}",filePath,e);
+                throw new ResourceNotFoundException(
+                    "Unable to read attachment from HDFS:"+actualFileName);
+            }
+
+            fileSize = status.getLen();
+            
+
+            DownloadedAttachment downloaded = new DownloadedAttachment();
+
+            downloaded.setFileName(actualFileName);
+            downloaded.setContentType(
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            downloaded.setFileSize(fileSize);
+            downloaded.setBase64(Base64.getEncoder().encodeToString(fileBytes));
+
+            downloadedFiles.add(downloaded);
+
+            
+            log.info("REPORT DOWNLOADED SUCCESSFULLY");
+            log.info("Attachment Id   : {}", attachment.getAttachmentId());
+            log.info("Report Name     : {}", downloaded.getFileName());
+            log.info("Attachment Type : {}", attachment.getAttachmentType());
+            log.info("Content Type    : {}", downloaded.getContentType());
+            log.info("File Size       : {} bytes", downloaded.getFileSize());
+        }
+
+        AttachmentDownloadResponse response = new AttachmentDownloadResponse();
+        response.setAttachments(downloadedFiles);
+
+        
+        log.info("------------------------------------------------------------");
+        log.info("Attachment Download Completed Successfully");
+        log.info("Total Reports Downloaded : {}", downloadedFiles.size());
+
+        return response;
+    }
+method in serviceimpl
