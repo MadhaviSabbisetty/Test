@@ -1,42 +1,11 @@
-Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.13.0:compile (default-compile) on project CommunicationService: Compilation failure: Compilation failure: 
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[350,8] com.fincore.CommunicationService.attachment.AttachmentPreparationServiceImpl is not abstract and does not override abstract method prepareAttachments(java.util.List<com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef>,java.lang.String) in com.fincore.CommunicationService.attachment.AttachmentPreparationService
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[363,5] method does not override or implement a method from a supertype
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/attachment/AttachmentPreparationServiceImpl.java:[381,65] cannot find symbol
-[ERROR]   symbol:   variable token
-[ERROR]   location: class com.fincore.CommunicationService.attachment.AttachmentPreparationServiceImpl
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/client/ReportServiceClient.java:[99,53] cannot find symbol
-[ERROR]   symbol:   variable token
-[ERROR]   location: class com.fincore.CommunicationService.client.ReportServiceClient
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/orchestrator/CommunicationOrchestrator.java:[102,49] method prepareAttachments in interface com.fincore.CommunicationService.attachment.AttachmentPreparationService cannot be applied to given types;
-[ERROR]   required: java.util.List<com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef>,java.lang.String
-[ERROR]   found:    java.util.List<com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef>
-[ERROR]   reason: actual and formal argument lists differ in length
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_communication_service/src/main/java/com/fincore/CommunicationService/controller/AttachmentController.java:[24,44] method prepareAttachments in interface com.fincore.CommunicationService.attachment.AttachmentPreparationService cannot be applied to given types;
-[ERROR]   required: java.util.List<com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef>,java.lang.String
-[ERROR]   found:    java.util.List<com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef>
-[ERROR]   reason: actual and formal argument lists differ in length
-[ERROR] -> [Help 1]
-[ERROR] 
-[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
-[ERROR] Re-run Maven using the -X switch to enable full debug logging.
-[ERROR] 
-[ERROR] For more information about the errors and possible solutions, please read the following articles:
-[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+package com.fincore.CommunicationService.attachment;
+import com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
 
-D:\Workspace\Git\Fincore\Backend\fincore_communication_service>
+import java.util.List;
+import java.io.IOException;
 
+public interface AttachmentPreparationService {
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    AttachmentDownloadResponse prepareAttachments( List<AttachmentRef> attachments, String token)throws IOException;
+}
