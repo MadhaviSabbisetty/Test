@@ -1,50 +1,34 @@
-{
-eventId : "evt-2134-45465-464645",
-"traceId" : "trc-1288-78754-7541545", 
-"correlationId" : "batch-31-03-26",
-"producerService": "PROCESS_STATUS",
-"eventType" : "EOD_EVENT",
-"priority" : "NORMAL",
-"channels" : [SMS,EMAIL],
-"recipients" : {
- "roles" : [12,45,95]
-},
-"templateId" : "SUCCESS_EOD_TEMPLATE",
-"payload" : 
-{
-"processDate" : "31-03-26",
-"title" : {
-"balanceCompareTitle" : "Balance Compare",
-"cibaTitle" : "CIBA",
-"suspenseTitle" : "Suspense"
-}
-"balanceCompareHeaders" : ["HEAD","Total_no_of_entries","new_entry"]
-"balanceCompareRows" : [
-{"HEAD":"CASH","Total_no_of_entries":11869,"new_entry":11869},
-{"HEAD":"CTA","Total_no_of_entries":3629,"new_entry":3629}
-]
-"cibaHeaders" : ["cgl","currency","amount"]
-"cibaRows" -> [{"cgl":"1106505001","currency":"INR","amount":-118133641491.3400000000},
-{"cgl":"1106505001","currency":"USD","amount":1524575.2800000000}]
-"suspenseHeaders" : ["cgl","currency","count"]
-"suspenseRows" : [{"cgl":"1111111111","currency":"INR","count":387.0000000000},{"cgl":"1260505001","currency":"INR","count":4141.0000000000}]
-"startTime" : 27-03-26
-"endTime" : 27-03-26
-"timeTaken" : "20:49:43"
-"STATUS" : "SUCCESS"
-},
-"attachments" :[
-{ "attachmentId" : "balance_compare_report_31032026",
-"attachmentType" : "BAL_COMP_SUMMARY",
-"fileName" : "balance_compare_report"
-},
-{ "attachmentId" : "intr_report_31032023",
-"attachmentType" : "INTR_SUMMARY",
-"fileName" : "intr_report"
-},
-{ "attachmentId" : "cntr_report_31032026",
-"attachmentType" : "CNTR_SUMMARY",
-"fileName" : "cntr_report"
-}
-]
-}
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Failed to configure a DataSource: 'url' attribute is not specified and no embedded datasource could be configured.
+
+Reason: Failed to determine suitable jdbc url
+
+
+Action:
+
+Consider the following:
+        If you want an embedded database (H2, HSQL or Derby), please put it on the classpath.
+        If you have database settings to be loaded from a particular profile you may need to activate it (the profiles local are currently active).
+ 
+{"@timestamp":"2026-07-30T17:15:10.0729666+05:30","level":"ERROR","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.b.d.LoggingFailureAnalysisReporter","message":"\r\n\r\n***************************\r\nAPPLICATION FAILED TO START\r\n***************************\r\n\r\nDescription:\r\n\r\nFailed to configure a DataSource: 'url' attribute is not specified and no embedded datasource could be configured.\r\n\r\nReason: Failed to determine suitable jdbc url\r\n\r\n\r\nAction:\r\n\r\nConsider the following:\r\n\tIf you want an embedded database (H2, HSQL or Derby), please put it on the classpath.\r\n\tIf you have database settings to be loaded from a particular profile you may need to activate it (the profiles local are currently active).\r\n","stack_trace":""}
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  18.102 s
+[INFO] Finished at: 2026-07-30T17:15:11+05:30
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.springframework.boot:spring-boot-maven-plugin:4.1.0:run (default-cli) on project ReportService: Process terminated with exit code: 1 -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
+
+D:\Workspace\Git\Fincore\Backend\fincore_report_service>
