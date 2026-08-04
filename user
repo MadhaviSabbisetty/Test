@@ -1,34 +1,126 @@
 
-***************************
-APPLICATION FAILED TO START
-***************************
-
-Description:
-
-Failed to configure a DataSource: 'url' attribute is not specified and no embedded datasource could be configured.
-
-Reason: Failed to determine suitable jdbc url
+    @Override
+    public AttachmentDownloadResponse downloadAttachments(
+            AttachmentDownloadRequest request,
+            int userRoleId,
+            String userId) throws IOException {
 
 
-Action:
+        log.info("Inside the report service download method");
 
-Consider the following:
-        If you want an embedded database (H2, HSQL or Derby), please put it on the classpath.
-        If you have database settings to be loaded from a particular profile you may need to activate it (the profiles local are currently active).
- 
-{"@timestamp":"2026-07-30T17:15:10.0729666+05:30","level":"ERROR","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.b.d.LoggingFailureAnalysisReporter","message":"\r\n\r\n***************************\r\nAPPLICATION FAILED TO START\r\n***************************\r\n\r\nDescription:\r\n\r\nFailed to configure a DataSource: 'url' attribute is not specified and no embedded datasource could be configured.\r\n\r\nReason: Failed to determine suitable jdbc url\r\n\r\n\r\nAction:\r\n\r\nConsider the following:\r\n\tIf you want an embedded database (H2, HSQL or Derby), please put it on the classpath.\r\n\tIf you have database settings to be loaded from a particular profile you may need to activate it (the profiles local are currently active).\r\n","stack_trace":""}
-[INFO] ------------------------------------------------------------------------
-[INFO] BUILD FAILURE
-[INFO] ------------------------------------------------------------------------
-[INFO] Total time:  18.102 s
-[INFO] Finished at: 2026-07-30T17:15:11+05:30
-[INFO] ------------------------------------------------------------------------
-[ERROR] Failed to execute goal org.springframework.boot:spring-boot-maven-plugin:4.1.0:run (default-cli) on project ReportService: Process terminated with exit code: 1 -> [Help 1]
-[ERROR] 
-[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
-[ERROR] Re-run Maven using the -X switch to enable full debug logging.
-[ERROR] 
-[ERROR] For more information about the errors and possible solutions, please read the following articles:
-[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
+        List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
 
-D:\Workspace\Git\Fincore\Backend\fincore_report_service>
+        //Process each requested attachment individually
+
+        for (AttachmentRef attachment : request.getAttachments()) {
+
+            log.info("-------------------------------------------------------------------");
+            log.info("Attachment Download Request Received");
+            log.info("Attachment Id: {}",attachment.getAttachmentId());
+            log.info("Report Name: {}",attachment.getFileName());
+            log.info("Attachment Type: {}",attachment.getAttachmentType());
+
+            //Extract report details from attachment reference
+
+            String attachmentId = attachment.getAttachmentId();
+
+            private static final Pattern ATTACHMENT_PATTERN=Pattern.compile("^[A_Za-z0-9_-]{1,100}$");
+            if(attachmentid == null || !ATTACHMNMET_PATTERN.matcher(attachmentId).matches()){
+                log.info("Invalid attachment Id");
+                throw new IllegalArgumentException("Invalid attachment Id");
+            }
+            String reportFolder = attachment.getFileName();
+
+            // Extracting date from attachmentId
+            // Example : balance_compare_report_31032026
+            String date = attachmentId.substring(attachmentId.lastIndexOf("_") + 1);
+
+            String folderDate =
+                    date.substring(4, 8) + "-"
+                + date.substring(2, 4) + "-"
+                + date.substring(0, 2);
+
+            byte[] fileBytes;
+            long fileSize;
+            String actualFileName = attachmentId + ".xlsx";
+
+            //Construct HDFS file path based on report date and folder
+            
+            // String hdfsPath =
+            //         reportsBasePath + "/"
+            //     + folderDate + "/"
+            //     // + reportFolder + "/"
+            //     + actualFileName;
+
+            // Path filePath = new Path(hdfsPath);
+
+            Path base=new Path(reportsBasePath);
+            Path datePath=new Path(base,folderDate);
+            Path filePath= new Path(datePath,actualFileName);
+
+            log.info("Reading HDFS File : {}", filePath);
+
+            //validate report existence in HDFS
+
+            if (!hdfsFileSystem.exists(filePath)) {
+                log.info("Attachment not found");
+                throw new ResourceNotFoundException(
+                        "Attachment not found : " + filePath);
+            }
+
+            FileStatus status = hdfsFileSystem.getFileStatus(filePath);
+
+            //Read report content from HDFS
+
+            try (FSDataInputStream inputStream = hdfsFileSystem.open(filePath);
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+
+                fileBytes = outputStream.toByteArray();
+            }catch(IOException e){
+                log.error("Unable to read HDFS file {}",filePath,e);
+                throw new ResourceNotFoundException(
+                    "Unable to read attachment from HDFS:"+actualFileName);
+            }
+
+            fileSize = status.getLen();
+            
+
+            DownloadedAttachment downloaded = new DownloadedAttachment();
+
+            downloaded.setFileName(actualFileName);
+            downloaded.setContentType(
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            downloaded.setFileSize(fileSize);
+            //Encode report content into Base64 for REST response
+            downloaded.setBase64(Base64.getEncoder().encodeToString(fileBytes));
+
+            downloadedFiles.add(downloaded);
+
+            
+            log.info("REPORT DOWNLOADED SUCCESSFULLY");
+            log.info("Attachment Id   : {}", attachment.getAttachmentId());
+            log.info("Report Name     : {}", downloaded.getFileName());
+            log.info("Attachment Type : {}", attachment.getAttachmentType());
+            log.info("Content Type    : {}", downloaded.getContentType());
+            log.info("File Size       : {} bytes", downloaded.getFileSize());
+        }
+
+        AttachmentDownloadResponse response = new AttachmentDownloadResponse();
+        //Prepare final response containing all downloaded attachments
+        response.setAttachments(downloadedFiles);
+
+        
+        log.info("------------------------------------------------------------");
+        log.info("Attachment Download Completed Successfully");
+        log.info("Total Reports Downloaded : {}", downloadedFiles.size());
+
+        return response;
+    }
+    
