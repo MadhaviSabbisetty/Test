@@ -1,1 +1,67 @@
 
+if (request.getReportDate() == null
+        || !request.getReportDate().matches("\\d{2}-\\d{2}-\\d{4}")) {
+
+    throw new IllegalArgumentException("Invalid report date");
+}
+
+if (rawLocation.contains("..")) {
+    throw new SecurityException("Invalid report location");
+}
+
+
+if (!fileName.matches("[A-Za-z0-9._-]+")) {
+    throw new SecurityException("Invalid file name");
+}
+
+
+
+Path hdfsPath = new Path("/" + safeLocation, fileName);
+
+String finalPath = hdfsPath.toString();
+
+
+
+
+Path normalized = Path.getPathWithoutSchemeAndAuthority(new Path(finalPath));
+
+if (!normalized.toString().equals(finalPath)) {
+    throw new SecurityException("Invalid normalized path");
+}
+
+
+
+catch (Exception e) {
+
+    log.error("Error while viewing ASCII file", e);
+
+    throw new IllegalArgumentException(
+            "Unable to view ASCII file.");
+}
+
+
+
+
+catch (IllegalArgumentException | IOException e) {
+
+    log.error("Error while downloading ASCII file", e);
+
+    throw new IllegalArgumentException(
+            "Unable to download ASCII file.");
+}
+
+
+byte[] fileContent;
+
+try (FSDataInputStream inputStream = fs.open(normalizedPath)) {
+
+    fileContent = inputStream.readAllBytes();
+}
+
+
+
+headers.setContentDisposition(
+        ContentDisposition.attachment()
+                .filename(fileName + ".txt", StandardCharsets.UTF_8)
+                .build());
+
