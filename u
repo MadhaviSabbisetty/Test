@@ -1,400 +1,63 @@
 
-@Slf4j
-@RestController
-@RequiredArgsConstructor
-@RequestMapping("/api/communication")
-public class CommunicationController {
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.15.0:compile (default-compile) on project ReportService: Compilation failure: Compilation failure: 
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[333,13] illegal start of expression
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[334,13] illegal start of type
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[334,28] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[334,68] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[334,81] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[334,82] ';' expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[367,21] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[367,22] illegal start of type
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[371,13] illegal start of type
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[371,39] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[371,48] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[371,49] ';' expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[381,13] illegal start of type
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[382,81] ';' expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[392,14] illegal start of type
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[392,33] ';' expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[398,21] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[403,35] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[403,50] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[404,38] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[405,21] illegal start of type
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[406,35] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[406,44] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[408,33] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[408,51] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[410,32] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[410,43] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[413,21] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[413,22] illegal start of type
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[414,21] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[414,22] illegal start of type
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[415,21] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[415,22] illegal start of type
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[416,21] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[416,22] illegal start of type
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[417,21] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[417,22] illegal start of type
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[418,21] <identifier> expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[418,22] illegal start of type
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[421,9] implicitly declared classes are a preview feature and are disabled by default.
+[ERROR]   (use --enable-preview to enable implicitly declared classes)
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[423,9] class, interface, enum, or record expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[426,9] class, interface, enum, or record expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[427,9] class, interface, enum, or record expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[428,9] class, interface, enum, or record expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[430,9] class, interface, enum, or record expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[431,5] class, interface, enum, or record expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[943,1] class, interface, enum, or record expected
+[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[1,1] implicitly declared class should not have package declaration
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+
+D:\Workspace\Git\Fincore\Backend\fincore_report_service>
 
-    // private final SmsGatewayClient smsGatewayClient;
 
-    private final EmailService emailService;
-    private final SmsService smsService;
-
-    @PostMapping("/send-sms")
-    public ResponseEntity<SmsResponseDTO> sendSMS(@RequestBody Map<String, String> map) {
-        log.info("mobileNumber {}", map.get("mobileNumber"));
-
-        String mobileNumber = map.get("mobileNumber");
-        String message = map.get("message");
-        String env = map.get("env");
-
-        SmsResponseDTO smsResponseDTO = smsService.sendTestSms(mobileNumber, message, env);
-
-        return new ResponseEntity<>(smsResponseDTO, HttpStatus.OK);
-    }
-
-    @PostMapping("/send-mail")
-    public ResponseEntity<EmailResponse> sendMail(@RequestBody Map<String, Object> map) {
-        String templateId = map.get("templateId").toString();
-        String toEmail = map.get("toEmail").toString();
-        Map<String, Object> templateData = (Map<String, Object>) map.get("templateData");
-        log.info("Sending Mail with Payload {}", templateId, toEmail, templateData);
-        // emailService.sendEmail(event.getEnvironment(), event.getTemplateId(),
-        // event.getRecipient().getEmail(), templateDataMap);
-        EmailResponse emailResponseDto = emailService.sendEmail(templateId, toEmail, templateData);
-        return new ResponseEntity<>(emailResponseDto, HttpStatus.OK);
-    }
-
-}
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-@Builder
-public class AttachmentDownloadRequest{
-
-    private List<AttachmentRef> attachments;
-
-}
-
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class AttachmentDownloadResponse{
-
-    private List<DownloadedAttachment> attachments;
-}
-
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class AttachmentReference{
-    
-    private String attachmentId;
-
-    private String attachmentType;
-
-    private String fileName;
-}
-
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class DownloadedAttachment{
-
-    private String fileName;
-
-    private String contentType;
-
-    private String base64;
-
-    private long fileSize;
-
-
-}
-
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class PreparedAttachmentResponse{
-
-    private List<File> files;
-
-    private boolean zip;
-
-    private long totalSize;
-
-    private int attachmentCount;
-}
-/**
- * Generic communication event consumed by the Communication Service.
- *
- * Producer services publish this event to the
- * 'fincore.communication.generic' Kafka topic.
- *
- * The Communication Service is responsible for resolving recipients,
- * generating communication content, downloading attachments and
- * dispatching notifications through the requested channels.
- *
- * @author SHUBHANKAR
- * @since 2026-07
- */
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-@JsonInclude(JsonInclude.Include.NON_EMPTY)
-@JsonIgnoreProperties(ignoreUnknown = true)
-public class GenericCommunicationEvent {
-
-    private String eventId;
-
-    private String traceId;
-
-    private String correlationId;
-
-    private String producerService;
-
-    private String eventType;
-
-    private String priority;
-
-    private List<String> channels;
-
-    private Recipients recipients;
-
-    private String templateId;
-
-    private Map<String, Object> payload;
-
-    private List<AttachmentRef> attachments;
-
-    private List<DeepLinkRef> deepLinks;
-
-    private Map<String, String> metadata;
-
-    /**
-     * Recipient details supplied by the producer service.
-     * Communication Service resolves UserIds and Roles into
-     * Email and Mobile recipients.
-     */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @JsonInclude(JsonInclude.Include.NON_EMPTY)
-    public static class Recipients {
-
-        private List<String> userIds;
-
-        private List<String> roles;
-
-        private List<String> emails;
-
-        private List<String> mobiles;
-    }
-
-    /**
-     * Reference to an attachment.
-     *
-     * Files are never sent through Kafka. The AttachmentService
-     * downloads the file using this information.
-     */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class AttachmentRef {
-
-        private String attachmentId;
-
-        private String attachmentType;
-
-        private String fileName;
-    }
-
-    /**
-     * Reference used by the DeepLinkGenerator to create
-     * application-specific URLs.
-     */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class DeepLinkRef {
-
-        private String module;
-
-        private String entityId;
-
-        private String action;
-    }
-}
-
-/**
- * <p>
- * Central orchestration component responsible for processing all
- * Generic Communication Events consumed from Kafka.
- * </p>
- *
- * <p>
- * Responsibilities:
- * <ol>
- * <li>Resolve Recipients.</li>
- * <li>Prepare Email Attachments.</li>
- * <li>Dispatch Email.</li>
- * <li>Dispatch SMS.</li>
- * </ol>
- *
- * <p>
- * This class contains no vendor specific implementation.
- * All communication logic is delegated to the respective services.
- * </p>
- *
- * @author Jailabdin [V1023042]
- * @since 2026-07
- */
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class CommunicationOrchestrator {
-
-    private final RecipientResolver recipientResolver;
-
-    private final AttachmentPreparationService attachmentPreparationService;
-
-    private final EmailService emailService;
-
-    private final SmsService smsService;
-
-    /**
-     * Executes the Generic Communication flow.
-     *
-     * @param event Generic Communication Event
-     */
-    public void process(GenericCommunicationEvent event) {
-
-        log.info("Started processing Generic Communication Event. EventId={}",
-                event.getEventId());
-
-        /*
-         * Step-1
-         * Resolve Recipients.
-         */
-        List<ResolvedRecipient> recipients = recipientResolver.resolveRecipients(event.getRecipients());
-
-        log.info("Resolved {} recipient(s).", recipients.size());
-
-        /*
-         * Step-2
-         * Prepare Attachments.
-         *
-         * Downloads reports from Report Service,
-         * creates ZIP if required,
-         * returns prepared files.
-         */
-        PreparedAttachmentResponse attachmentResponse = null;
-
-        if (event.getAttachments() != null
-                && !event.getAttachments().isEmpty()) {
-
-            log.info(
-                    "Preparing {} attachment(s).",
-                    event.getAttachments().size());
-
-            AttachmentDownloadRequest request =
-                    AttachmentDownloadRequest.builder()
-                            .attachments(event.getAttachments())
-                            .build();
-
-            try{
-                attachmentResponse =
-                    attachmentPreparationService.prepareAttachments(request);
-
-            }
-            catch(Exception e){
-                log.error("attachment preparation failes",e);
-                throw new RuntimeException("Unable to prepare attachments",e);
-            }
-            log.info(
-                    "Prepared {} attachment(s). Zip Created : {}",
-                    attachmentResponse.getAttachmentCount(),
-                    attachmentResponse.isZip());
-        }
-
-        /*
-         * Step-3
-         * Dispatch Communication.
-         */
-        try {
-
-            for (String channel : event.getChannels()) {
-
-                switch (channel.toUpperCase()) {
-
-                    case "EMAIL" -> {
-
-                        log.info("Dispatching Email Communication.");
-
-
-                        // EmailResponse response =
-                        //         emailService.sendGenericEmail(
-                        //                 recipients,
-                        //                 event.getTemplateId(),
-                        //                 event.getPayload(),
-                        //                 attachmentResponse);
-
-                        // log.info(
-                        //         "Email dispatch completed. Response : {}",
-                        //         response);
-                        log.info( "Email dispatch completed");
-                    }
-
-                    case "SMS" -> {
-
-                        log.info("Dispatching SMS Communication.");
-
-                        // SmsResponseDTO response =
-                        //         smsService.sendGenericSms(
-                        //                 recipients,
-                        //                 event.getTemplateId(),
-                        //                 event.getPayload());
-
-                        // log.info(
-                        //         "SMS dispatch completed. Response : {}",
-                        //         response);
-                        log.info( "SMS dispatch completed");
-                    }
-
-                    default ->
-                            log.warn(
-                                    "Unsupported Communication Channel : {}",
-                                    channel);
-                }
-            }
-
-        } finally {
-
-            if (attachmentResponse != null) {
-
-                attachmentPreparationService.deleteTemporaryFiles(
-                        attachmentResponse.getFiles());
-            }
-        }
-
-        log.info("Completed Generic Communication Event. EventId={}",
-                event.getEventId());
-    }
-}
-# ===================================================================
-# SPRING DATASOURCE (ORACLE)
-# ===================================================================
-spring.datasource.url=jdbc:oracle:thin:@10.177.103.192:1523/fincorepdb1
-spring.datasource.username=fincore
-spring.datasource.password=Password#1234
-spring.datasource.driver-class-name=oracle.jdbc.OracleDriver
-
-# ===================================================================
-# REDIS CONFIG
-# ===================================================================
-spring.data.redis.host=10.0.17.242
-spring.data.redis.port=6379
-spring.cache.type=redis
-
-# ===================================================================
-# ENVIRONMENT NAME
-# ===================================================================
-app.preIpString=UAT
-
-# ===================================================================
-# KAFKA CONSUMER CONFIG
-# ===================================================================
-spring.kafka.bootstrap-servers=10.0.17.242:9092
-spring.kafka.consumer.group-id=communication-login-otp-group-v7
-# Auto offset: if a new consumer group starts, read from the earliest unread message
-spring.kafka.consumer.auto-offset-reset=earliest
-spring.kafka.consumer.key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
-spring.kafka.consumer.value-deserializer=org.apache.kafka.common.serialization.StringDeserializer
-# JSON Deserialization Mappings
-spring.kafka.consumer.properties.spring.json.trusted.packages=*
-spring.kafka.consumer.properties.spring.json.value.default.type=com.fincore.CommunicationService.dto.KafkaEvent
-spring.kafka.listener.ack-mode=manual-immediate
-# Shared aes key to decrypt the otp event payload
-security.internal.kafka-aes-key: xVEzviA5Ysgdp/YzTOskDOHbQwVoLgYNRRcK0+Dwdes=
-
-
-logging.level.com.fincore.CommunicationService=DEBUG
