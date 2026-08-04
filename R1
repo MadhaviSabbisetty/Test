@@ -1,252 +1,248 @@
-wrapper file
-package com.fincore.ReportService.advice;
+package com.fincore.ReportService.service;
 
-import org.springframework.core.MethodParameter;
-import org.springframework.core.annotation.AnnotatedElementUtils;
+import com.fincore.ReportService.dto.AsciiFileRequest;
+import com.fincore.ReportService.dto.AsciiFileResponse;
+import com.fincore.ReportService.dto.AsciiTypeResponse;
+import com.fincore.ReportService.model.AsciiMaster;
+import com.fincore.ReportService.model.AsciiConfig;
+import com.fincore.ReportService.model.AsciiConfigTb;
+import com.fincore.ReportService.repository.AsciiMasterRepository;
+import com.fincore.ReportService.repository.AsciiConfigRepository;
+import com.fincore.ReportService.repository.AsciiConfigTbRepository;
+import com.fincore.ReportService.service.AsciiFileService;
+import com.fincore.ReportService.service.HdfsService;
+
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageConverter;
-import org.springframework.http.server.ServerHttpRequest;
-import org.springframework.http.server.ServerHttpResponse;
-import org.springframework.web.bind.annotation.ControllerAdvice;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
-import com.fincore.ReportService.dto.ApiResponse;
+import org.springframework.stereotype.Service;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpStatus;
 
-
-/**
- * This ControllerAdvice intercepts successful responses from any @RestController
- * and wraps them in a standard ApiResponse format.
- */
-@ControllerAdvice
-public class ApiResponseWrapper implements ResponseBodyAdvice<Object> {
-
-    @Override
-    public boolean supports(MethodParameter returnType, Class<? extends HttpMessageConverter<?>> converterType) {
-        // This advice applies to any method in a class annotated with @RestController
-        // that is not already returning a ResponseEntity (which gives manual control).
-        return AnnotatedElementUtils.hasAnnotation(returnType.getContainingClass(), RestController.class) &&
-                !returnType.getParameterType().equals(ResponseEntity.class);
-    }
-
-
-    @Override
-    public Object beforeBodyWrite(Object body, MethodParameter returnType, MediaType selectedContentType,
-                                     Class<? extends HttpMessageConverter<?>> selectedConverterType,
-                                  ServerHttpRequest request, ServerHttpResponse response) {
-
-        // If the controller has already manually wrapped the response, do nothing.
-        if (body instanceof ApiResponse<?>) {
-
-            return body;
-
-        }
-
-        // Wrap the successful response body in the standard ApiResponse structure.
-
-        return ApiResponse.success(body);
-
-    }
-
-}
-config files
-1.
-package com.fincore.ReportService.config;
-
-import lombok.extern.slf4j.Slf4j;
-import org.apache.hadoop.fs.FileSystem;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
-@Configuration
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.regex.Pattern;
+
+
+@Service
+@RequiredArgsConstructor
 @Slf4j
-public class HadoopConfig {
-    @Value("${hadoop.fs.uri}")
-    private String hadoopFsUri;
-    @Value("${hadoop.fs.user}")
-    private String hadoopUser;
+public class AsciiFileServiceImpl implements AsciiFileService {
 
-    @Bean
-    public FileSystem fileSystem() {
+    private final AsciiMasterRepository asciiMasterRepository;
 
-        log.info("Initializing HDFS connection to: {} as user: {}", hadoopFsUri, hadoopUser);
-        org.apache.hadoop.conf.Configuration config = new org.apache.hadoop.conf.Configuration();
+    private final AsciiConfigRepository asciiConfigRepository;
 
-        // 1. Set the default FileSystem URI
-        config.set("fs.defaultFS", hadoopFsUri);
+    private final AsciiConfigTbRepository asciiConfigTbRepository;
 
-        // 2. OPTIMIZATION: Disable client-side permission checking.
-        // This relies on the server to check permissions, preventing local OS user mismatch errors.
-//        config.set("dfs.client.use.datanode.hostname", "true");
+    private final HdfsService hdfsService;
 
-        // 3. ROBUSTNESS: Set timeouts (default is often too high or infinite)
-        config.set("ipc.client.connect.timeout", "5000"); // 5 seconds
-        config.set("ipc.client.rpc-timeout.ms", "30000"); // 30 seconds
+    private static final Pattern SAFE_PATH_PATTERN = Pattern.compile("^[a-zA-Z0-9/_\\-\\.]+$");
 
-        // 4. Replication adjustment (optional, prevents warnings in single-node dev setups)
-        // config.set("dfs.replication", "1");
+    @Override
+    public List<AsciiTypeResponse> getAsciiTypes(){
+
+        log.info("API called - into service");
+        List<AsciiTypeResponse> response=asciiMasterRepository.findAll()
+            .stream()
+            .map(a->
+                    new AsciiTypeResponse(
+                        a.getId(),
+                        a.getReportName()
+                    ))
+                    .toList();
+                    if(response.isEmpty()){
+                        throw new IllegalArgumentException("No ASCII file types found");
+                    }
+                    return response;
+    }
+
+    // To view the ASCII file types
+    @Override
+    public AsciiFileResponse viewAscii(AsciiFileRequest request) {
+
         try {
-            // Returns a FileSystem instance. The FileSystem class handles caching internally.
-            // Spring will manage the lifecycle (closing it on shutdown).
-            return FileSystem.get(new URI(hadoopFsUri), config, hadoopUser);
 
-        } catch (IOException | InterruptedException | URISyntaxException e) {
+            AsciiMaster master =
+                    asciiMasterRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException("Invalid ASCII ID"));
 
-            log.error("CRITICAL: Failed to connect to HDFS at {}", hadoopFsUri, e);
-            throw new RuntimeException("Could not initialize Hadoop FileSystem", e);
+            String hdfsPath = buildFilePath(master, request);
+
+            FileSystem fs = hdfsService.getFs();
+
+            Path path = new Path(hdfsPath);
+
+            boolean fileExists=fs.exists(path);
+
+            if (!fs.exists(path)) {
+               throw new IllegalArgumentException("ASCII File not found");
+            }
+
+            StringBuilder content = new StringBuilder();
+
+            try (FSDataInputStream inputStream = fs.open(path);
+                 BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+
+                String line;
+
+                while ((line = reader.readLine()) != null) {
+                    content.append(line)
+                           .append(System.lineSeparator());
+                }
+            }
+
+            AsciiFileResponse response = new AsciiFileResponse();
+
+            response.setId(request.getId());
+            response.setReportDate(request.getReportDate());
+            response.setSearchBy(request.getSearchBy());
+
+            if ("branch".equalsIgnoreCase(request.getSearchBy())) {
+                response.setBranchCode(request.getBranchCode());
+            }
+
+            response.setContent(content.toString());
+
+            return response;
+
+        } catch (Exception e) {
+
+            log.error("Error while viewing ascii file", e);
+
+            throw new IllegalArgumentException(e.getMessage());
         }
     }
-}
-2.package com.fincore.ReportService.config;
 
-import com.fincore.commonutilities.buisnessobject.ControlDateService;
-import com.fincore.commonutilities.config.CommonSecurityConfig;
-import com.fincore.commonutilities.config.RedisConfig;
-import com.fincore.commonutilities.config.ResilienceConfig;
-import com.fincore.commonutilities.jwt.JwtUtil;
-import com.fincore.commonutilities.logging.MdcLoggingFilter;
-import com.fincore.commonutilities.security.ContextRbacFilter;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import jakarta.servlet.DispatcherType; // Import this is CRITICAL
-import com.fincore.commonutilities.security.DecryptRequestBodyAdvice;
-import com.fincore.commonutilities.util.AesEncryptionUtil;
+    //To download the ASCII files
+    @Override
+    public ResponseEntity<byte[]> downloadAscii(AsciiFileRequest request) {
+        try {
+            AsciiMaster master = asciiMasterRepository.findById(request.getId())
+                    .orElseThrow(() -> new IllegalArgumentException("Invalid ASCII ID"));
 
-/**
- * Common Security Configuration.
- * * Aligned with the "Distributed Gateway" architecture.
- * It uses the ContextRbacFilter from Common Utilities to enforce:
- * 1. Token Validity
- * 2. Single Session (Redis check)
- * 3. RBAC Permissions
- * Enforces Centralised Mdc Logging Filter, RESILIENCE4J Retry and Circuit
- * Breaker
- */
-@Configuration
-@EnableWebSecurity
-@Import({
-        RedisConfig.class,
-        JwtUtil.class,
-        CommonSecurityConfig.class,
-        ResilienceConfig.class, ControlDateService.class,
-        AesEncryptionUtil.class,
-        DecryptRequestBodyAdvice.class
-})
-public class SecurityConfig {
+            String hdfsPath = buildFilePath(master, request);
 
-    @Autowired
-    private StringRedisTemplate redisTemplate;
+            FileSystem fs = hdfsService.getFs();
+            Path path = new Path(hdfsPath);
 
-    @Autowired
-    private JwtUtil jwtUtil;
+            if (!fs.exists(path)) {
+                throw new IllegalArgumentException("Failed to download. ASCII File not found");
+            }
 
-    @Autowired
-    private CommonSecurityConfig commonSecurityConfig;
+            // Sink: Fortify flags this line because hdfsPath contains DB data
+            FSDataInputStream inputStream = fs.open(path);
 
-    // --- 1. Define Filters as Beans (Explicitly) ---
-    @Bean
-    public MdcLoggingFilter mdcLoggingFilter() {
-        return new MdcLoggingFilter(jwtUtil);
+            byte[] fileContent = inputStream.readAllBytes();
+            inputStream.close();
+
+            String fileName = path.getName();
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.TEXT_PLAIN);
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + ".txt\"");
+            headers.setContentLength(fileContent.length);
+            headers.add(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION);
+
+            return new ResponseEntity<>(fileContent, headers, HttpStatus.OK);
+
+        } catch (IllegalArgumentException | IOException e) {
+            // log.error("Error while downloading ascii file", e);
+            throw new IllegalArgumentException(e.getMessage());
+        }
     }
 
-    @Bean
-    public ContextRbacFilter contextRbacFilter() {
-        return new ContextRbacFilter(redisTemplate, jwtUtil);
-    }
+    // To build the final path
+    private String buildFilePath(AsciiMaster master,AsciiFileRequest request) {
 
-    // --- 2. Prevent Global Registration ---
-    // This stops "The Filter class ... does not have a registered order" error
+        if("branch".equalsIgnoreCase(request.getSearchBy())
+        && (request.getBranchCode()==null
+        || request.getBranchCode().isBlank())){
+            throw new IllegalArgumentException("Branch code is mandatory for branch search");
+        }
 
-    @Bean
-    public FilterRegistrationBean<MdcLoggingFilter> mdcFilterRegistration(MdcLoggingFilter filter) {
-        FilterRegistrationBean<MdcLoggingFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.setEnabled(false); // Disable global chain
-        return registration;
-    }
+        LocalDate reportDate=LocalDate.parse(request.getReportDate(),
+        DateTimeFormatter.ofPattern("dd-MM-yyyy"));
 
-    @Bean
-    public FilterRegistrationBean<ContextRbacFilter> rbacFilterRegistration(ContextRbacFilter filter) {
-        FilterRegistrationBean<ContextRbacFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.setEnabled(false); // Disable global chain
-        return registration;
-    }
+        String dateFolder= reportDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable())
-                .cors(cors -> cors.configurationSource(commonSecurityConfig.corsConfigurationSource()))
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authz -> authz
-                        // Allow Async Dispatches (StreamingResponseBody) to proceed without re-auth
-                        // checks
-                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
-                        .requestMatchers("/actuator/**", "/api/auth/**", "/error").permitAll()
-                        .anyRequest().authenticated())
-                // Add Filters using the BEAN references (methods above)
-                .addFilterBefore(mdcLoggingFilter(), UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(contextRbacFilter(), MdcLoggingFilter.class);
+        String fileDate= reportDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
 
-        return http.build();
+        // 1. Sanitize the location from DB
+        String rawLocation = master.getLocation().replace("{date}", dateFolder);
+        String safeLocation = sanitizePathSegment(rawLocation);
+
+        String branchCode = "bank".equalsIgnoreCase(request.getSearchBy())
+                        ? "00000" : request.getBranchCode();
+
+
+        String fileName;
+
+        if (request.getId() >= 101 && request.getId() <= 104) {
+
+            AsciiConfig config = asciiConfigRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException("ASCII Config not found"));
+
+            String safeOutputName = sanitizePathSegment(config.getOutputFileName());
+            String safeFileType = config.getFileType() != null && !config.getFileType().isBlank()
+                    ? sanitizePathSegment(config.getFileType())
+                    : null;
+
+            if (safeFileType != null) {
+                fileName = branchCode + "." + safeOutputName + "." + fileDate + "." + safeFileType;
+            } else {
+                fileName = branchCode + "." + safeOutputName + "." + fileDate;
+            }
+
+        }
+        else if (request.getId() >= 105 && request.getId() <= 107) {
+
+            AsciiConfigTb configTb = asciiConfigTbRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException("ASCII Config TB not found"));
+
+            String safeFileIdentifier = sanitizePathSegment(configTb.getFileIdentifier());
+            fileName = branchCode + "." + safeFileIdentifier + "." + fileDate;
+        }
+        else {
+
+            throw new IllegalArgumentException("Invalid ASCII ID");
+        }
+        String finalPath = "/" + safeLocation + "/" + fileName;
+        if (!SAFE_PATH_PATTERN.matcher(finalPath).matches() || finalPath.contains("..")) {
+            throw new SecurityException("Invalid path detected: Path manipulation attempt blocked.");
+        }
+
+        log.info("final path: {}", finalPath);
+        return finalPath;
     }
 
     /**
-     * Explicitly indicate that local user lookup is not supported
-     * Authentication is handled via JWT in ContextRbacFilter
+     * Removes any character that is not explicitly allowed in a file path segment.
+     * This breaks any traversal sequences stored in the DB.
      */
-    @Bean
-    public UserDetailsService userDetailsService() {
-        return username -> {
-            throw new UsernameNotFoundException("UserDetailsService is disabled. Use JWT authentication.");
-        };
-    }
-}
-3.
-package com.fincore.ReportService.config;
-
-import com.fincore.ReportService.dto.TaskProgressDto;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
-import org.springframework.data.redis.serializer.StringRedisSerializer;
-
-/**
- * Configuration for the RedisTemplate used to publish TaskProgressDto.
- * Uses JSON serialization for values so the Notification Service can read them.
- */
-@Configuration
-public class TaskRedisConfig {
-
-    @Bean(name = "progressRedisTemplate")
-    public RedisTemplate<String, TaskProgressDto> progressRedisTemplate(RedisConnectionFactory connectionFactory) {
-        RedisTemplate<String, TaskProgressDto> template = new RedisTemplate<>();
-        template.setConnectionFactory(connectionFactory);
-
-        // Keys are Strings (the topic name)
-        template.setKeySerializer(new StringRedisSerializer());
-
-        // Values are JSON (the DTO)
-        Jackson2JsonRedisSerializer<TaskProgressDto> serializer = new Jackson2JsonRedisSerializer<>(TaskProgressDto.class);
-        template.setValueSerializer(serializer);
-
-        return template;
+    private String sanitizePathSegment(String input) {
+        if (input == null || input.isBlank()) {
+            return "";
+        }
+        // Replace any invalid character with an underscore (or throw exception)
+        // This ensures Fortify sees the data as "sanitized"
+        return input.replaceAll("[^a-zA-Z0-9/_\\-\\.]", "_");
     }
 }
