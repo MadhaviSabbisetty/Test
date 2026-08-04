@@ -1,3 +1,46 @@
+package com.fincore.ReportService.service;
+
+import com.fincore.ReportService.dto.AsciiFileRequest;
+import com.fincore.ReportService.dto.AsciiFileResponse;
+import com.fincore.ReportService.dto.AsciiTypeResponse;
+import com.fincore.ReportService.model.AsciiMaster;
+import com.fincore.ReportService.model.AsciiConfig;
+import com.fincore.ReportService.model.AsciiConfigTb;
+import com.fincore.ReportService.repository.AsciiMasterRepository;
+import com.fincore.ReportService.repository.AsciiConfigRepository;
+import com.fincore.ReportService.repository.AsciiConfigTbRepository;
+import com.fincore.ReportService.service.AsciiFileService;
+import com.fincore.ReportService.service.HdfsService;
+
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpStatus;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.regex.Pattern;
+
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
 public class AsciiFileServiceImpl implements AsciiFileService {
 
     private final AsciiMasterRepository asciiMasterRepository;
@@ -43,7 +86,8 @@ public class AsciiFileServiceImpl implements AsciiFileService {
 
             FileSystem fs = hdfsService.getFs();
 
-            Path path = new Path(hdfsPath);
+            // Path path = new Path(hdfsPath);
+            Path path=Path.getPathWithoutSchemeAndAuthority(new Path(hdfsPath));
 
             boolean fileExists=fs.exists(path);
 
@@ -133,6 +177,16 @@ public class AsciiFileServiceImpl implements AsciiFileService {
             throw new IllegalArgumentException("Branch code is mandatory for branch search");
         }
 
+        if(!request.getReportDate().matches("\\d{2}-\\d{2}-\\d{4}")){
+
+            throw new IllegalArgumentException("invalid date");
+        }
+
+        if(branchCode.matches("\\d{5}")){
+            throw new IllegalArgumentException("invalid branch");
+        }
+
+
         LocalDate reportDate=LocalDate.parse(request.getReportDate(),
         DateTimeFormatter.ofPattern("dd-MM-yyyy"));
 
@@ -181,7 +235,13 @@ public class AsciiFileServiceImpl implements AsciiFileService {
 
             throw new IllegalArgumentException("Invalid ASCII ID");
         }
-        String finalPath = "/" + safeLocation + "/" + fileName;
+        // String finalPath = "/" + safeLocation + "/" + fileName;
+
+        if(!fileName.matches("[A_Za-z0-9._-]+")){
+            throw new SecurityException("InvalidfileName");
+        }
+        Path path=new Path("/".safeLocation,fileName);
+        return path.toString();
         if (!SAFE_PATH_PATTERN.matcher(finalPath).matches() || finalPath.contains("..")) {
             throw new SecurityException("Invalid path detected: Path manipulation attempt blocked.");
         }
@@ -195,11 +255,26 @@ public class AsciiFileServiceImpl implements AsciiFileService {
      * This breaks any traversal sequences stored in the DB.
      */
     private String sanitizePathSegment(String input) {
+        // if (input == null || input.isBlank()) {
+        //     return "";
+        // }
+        // // Replace any invalid character with an underscore (or throw exception)
+        // // This ensures Fortify sees the data as "sanitized"
+        // return input.replaceAll("[^a-zA-Z0-9/_\\-\\.]", "_");
+
         if (input == null || input.isBlank()) {
-            return "";
+            log.info("Invalid path");
+            throw new IllegalArgumentException("Invalid path");
         }
-        // Replace any invalid character with an underscore (or throw exception)
-        // This ensures Fortify sees the data as "sanitized"
-        return input.replaceAll("[^a-zA-Z0-9/_\\-\\.]", "_");
+
+        if(!SAFE_PATH_PATTERN.,matcher(input).matches()){
+            log.info("Invalied Characters");
+            throw new SecurityException("Invalied Characters");
+        }
+        if(input.contains("..")){
+            log.info("Traversal detected");
+            throw new SecurityException("Traversal detected");
+        }
+        return input;
     }
 }
