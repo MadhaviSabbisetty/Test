@@ -1,191 +1,205 @@
-package com.fincore.CommunicationService.orchestrator;
+public class AsciiFileServiceImpl implements AsciiFileService {
 
-import com.fincore.CommunicationService.dto.GenericCommunicationEvent;
-import com.fincore.CommunicationService.dto.ResolvedRecipient;
-import com.fincore.CommunicationService.exception.CommunicationExceptions.VendorDeliveryException;
-import com.fincore.CommunicationService.recipient.RecipientResolver;
-import com.fincore.CommunicationService.service.CommunicationAuditService;
-import com.fincore.CommunicationService.service.EmailService;
-import com.fincore.CommunicationService.service.SmsService;
-import com.fincore.CommunicationService.service.TemplateEngineService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Service;
+    private final AsciiMasterRepository asciiMasterRepository;
 
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
+    private final AsciiConfigRepository asciiConfigRepository;
 
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class CommunicationOrchestrator {
+    private final AsciiConfigTbRepository asciiConfigTbRepository;
 
-    private final RecipientResolver recipientResolver;
-    private final CommunicationAuditService auditService;
-    private final EmailService emailService;
-    private final SmsService smsService;
-    private final StringRedisTemplate redisTemplate;
+    private final HdfsService hdfsService;
 
-    // todo Future integration for Madhavi
-    // private final AttachmentPreparationService attachmentService;
+    private static final Pattern SAFE_PATH_PATTERN = Pattern.compile("^[a-zA-Z0-9/_\\-\\.]+$");
 
-    @Value("${communication.chunk.size:500}")
-    private int chunkSize;
+    @Override
+    public List<AsciiTypeResponse> getAsciiTypes(){
 
-    // Create a Semaphore limiting max concurrent HTTP/DB calls to 50
-    private final Semaphore vendorRateLimiter = new Semaphore(50);
-
-    /**
-     * The main entry point called by the GenericCommunicationConsumer.
-     */
-    public void process(GenericCommunicationEvent event) {
-        String eventId = event.getEventId();
-        log.info("Orchestrator started processing Event: {}", eventId);
-
-        // 1. Resolve Recipients
-        List<ResolvedRecipient> recipients = recipientResolver.resolveRecipients(event.getRecipients());
-        if (recipients.isEmpty()) {
-            log.warn("No active recipients resolved for Event: {}. Terminating process gracefully.", eventId);
-            return;
-        }
-
-        // 2. Prepare Attachments
-        // Object preparedAttachments = attachmentService.prepare(event.getAttachments());
-
-        // 3. Chunk the recipients to avoid massive JVM memory spikes
-        List<List<ResolvedRecipient>> chunks = partitionList(recipients, chunkSize);
-        log.info("Partitioned {} total recipients into {} chunks of max size {}", recipients.size(), chunks.size(), chunkSize);
-
-        AtomicInteger failureCount = new AtomicInteger(0);
-
-        // 4. Process Chunks Concurrently using Virtual Threads
-        try (ExecutorService virtualExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Callable<Void>> tasks = new ArrayList<>();
-
-            for (List<ResolvedRecipient> chunk : chunks) {
-                tasks.add(() -> {
-                    processChunk(chunk, event, failureCount);
-                    return null;
-                });
-            }
-
-            // invokeAll blocks until ALL virtual threads (all chunks) finish execution
-            List<Future<Void>> futures = virtualExecutor.invokeAll(tasks);
-
-            // Check for critical thread interruptions
-            for (Future<Void> future : futures) {
-                future.get();
-            }
-
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Critical threading error during bulk dispatch for Event: {}", eventId, e);
-            throw new VendorDeliveryException("Threading error during parallel chunk dispatch", e);
-        }
-
-        // 5. Aggregate Failures and trigger Kafka Retry if needed
-        if (failureCount.get() > 0) {
-            log.error("Event {} completed with {} failed dispatches. Throwing exception to trigger Kafka Retry.", eventId, failureCount.get());
-            // Throwing this exception causes the Consumer to NACK the message, routing it to the retry topic.
-            // On retry, the Idempotency checks will skip the successful ones.
-            throw new VendorDeliveryException(failureCount.get() + " recipients failed delivery. Check logs.", null);
-        }
-
-        log.info("Orchestrator successfully processed Event: {} for all {} recipients.", eventId, recipients.size());
+        log.info("API called - into service");
+        List<AsciiTypeResponse> response=asciiMasterRepository.findAll()
+            .stream()
+            .map(a->
+                    new AsciiTypeResponse(
+                        a.getId(),
+                        a.getReportName()
+                    ))
+                    .toList();
+                    if(response.isEmpty()){
+                        throw new IllegalArgumentException("No ASCII file types found");
+                    }
+                    return response;
     }
 
-    /**
-     * Processes a single chunk of recipients concurrently.
-     */
-    private void processChunk(List<ResolvedRecipient> chunk, GenericCommunicationEvent event, AtomicInteger failureCount) {
-
-        // Even within a chunk, we fire a Virtual Thread per recipient to maximize HTTP I/O throughput
-        try (ExecutorService ioExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Callable<Void>> dispatchTasks = new ArrayList<>();
-
-            for (ResolvedRecipient recipient : chunk) {
-                for (String channel : event.getChannels()) {
-                    dispatchTasks.add(() -> {
-                        dispatchToChannel(recipient, channel, event, failureCount);
-                        return null;
-                    });
-                }
-            }
-            // Execute all HTTP I/O concurrently
-            ioExecutor.invokeAll(dispatchTasks);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.error("Chunk processing interrupted", e);
-        }
-    }
-
-    private void dispatchToChannel(ResolvedRecipient recipient, String channel, GenericCommunicationEvent event, AtomicInteger failureCount) {
-
-        // E.g., evt-123_EMAIL_abc@sbi.com
-        String recipientIdentifier = "EMAIL".equalsIgnoreCase(channel) ? recipient.getEmail() : recipient.getMobile();
-
-        // Check If they requested SMS but the user has no mobile, skip silently.
-        if (recipientIdentifier == null || recipientIdentifier.isBlank()) {
-            log.debug("Skipping {} for User {} (No contact info)", channel, recipient.getUserId());
-            return;
-        }
-
-        String auditId = event.getEventId() + "_" + channel + "_" + Math.abs(recipientIdentifier.hashCode());
-        String idempotencyKey = "COMM_IDEMP:" + auditId + ":" + channel + ":" + recipientIdentifier;
-
-        // 1. Check Idempotency
-        // Setting TTL to 24 hours for generic events to prevent accidental blasts
-        Boolean isNew = redisTemplate.opsForValue().setIfAbsent(idempotencyKey, "PROCESSING", Duration.ofHours(24));
-        if (Boolean.FALSE.equals(isNew)) {
-            log.debug("Idempotency Hit: Already processed {} for {}. Skipping.", channel, recipientIdentifier);
-            return;
-        }
-
-        // 2. Audit Initialization
-        auditService.logAttempt(auditId, event.getEventId(), event.getTraceId(), event.getTemplateId(), channel, recipientIdentifier);
+    // To view the ASCII file types
+    @Override
+    public AsciiFileResponse viewAscii(AsciiFileRequest request) {
 
         try {
-            // 3. Dispatch
-            if ("EMAIL".equalsIgnoreCase(channel)) {
-                emailService.sendEmail(event.getTemplateId(), recipient.getEmail(), event.getPayload());
-                // Madhavi Note: Once AttachmentService is ready, pass prepared attachments here!
-                // emailService.sendEmail(event.getTemplateId(), recipient.getEmail(), event.getPayload(), preparedAttachments);
-            } else if ("SMS".equalsIgnoreCase(channel)) {
-                smsService.sendSms(event.getTemplateId(), recipient.getMobile(), event.getPayload());
+
+            AsciiMaster master =
+                    asciiMasterRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException("Invalid ASCII ID"));
+
+            String hdfsPath = buildFilePath(master, request);
+
+            FileSystem fs = hdfsService.getFs();
+
+            Path path = new Path(hdfsPath);
+
+            boolean fileExists=fs.exists(path);
+
+            if (!fs.exists(path)) {
+               throw new IllegalArgumentException("ASCII File not found");
             }
 
-            // 4. Audit Success
-            auditService.logSuccess(auditId);
+            StringBuilder content = new StringBuilder();
 
-            // Mark idempotency as permanently successful
-            redisTemplate.opsForValue().set(idempotencyKey, "SUCCESS", Duration.ofHours(24));
+            try (FSDataInputStream inputStream = fs.open(path);
+                 BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+
+                String line;
+
+                while ((line = reader.readLine()) != null) {
+                    content.append(line)
+                           .append(System.lineSeparator());
+                }
+            }
+
+            AsciiFileResponse response = new AsciiFileResponse();
+
+            response.setId(request.getId());
+            response.setReportDate(request.getReportDate());
+            response.setSearchBy(request.getSearchBy());
+
+            if ("branch".equalsIgnoreCase(request.getSearchBy())) {
+                response.setBranchCode(request.getBranchCode());
+            }
+
+            response.setContent(content.toString());
+
+            return response;
 
         } catch (Exception e) {
-            log.error("Failed to send {} to {} for Event {}", channel, recipientIdentifier, event.getEventId(), e);
 
-            // 5. Audit Failure
-            auditService.logFailure(auditId, e.getMessage());
+            log.error("Error while viewing ascii file", e);
 
-            // Delete idempotency key so Kafka can retry this specific user
-            redisTemplate.delete(idempotencyKey);
-
-            // Increment partial failure tracker
-            failureCount.incrementAndGet();
+            throw new IllegalArgumentException(e.getMessage());
         }
     }
-    private <T> List<List<T>> partitionList(List<T> list, int size) {
-        List<List<T>> partitions = new ArrayList<>();
-        if (list == null || list.isEmpty()) return partitions;
 
-        for (int i = 0; i < list.size(); i += size) {
-            partitions.add(new ArrayList<>(
-                    list.subList(i, Math.min(i + size, list.size())))
-            );
+    //To download the ASCII files
+    @Override
+    public ResponseEntity<byte[]> downloadAscii(AsciiFileRequest request) {
+        try {
+            AsciiMaster master = asciiMasterRepository.findById(request.getId())
+                    .orElseThrow(() -> new IllegalArgumentException("Invalid ASCII ID"));
+
+            String hdfsPath = buildFilePath(master, request);
+
+            FileSystem fs = hdfsService.getFs();
+            Path path = new Path(hdfsPath);
+
+            if (!fs.exists(path)) {
+                throw new IllegalArgumentException("Failed to download. ASCII File not found");
+            }
+
+            // Sink: Fortify flags this line because hdfsPath contains DB data
+            FSDataInputStream inputStream = fs.open(path);
+
+            byte[] fileContent = inputStream.readAllBytes();
+            inputStream.close();
+
+            String fileName = path.getName();
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.TEXT_PLAIN);
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + ".txt\"");
+            headers.setContentLength(fileContent.length);
+            headers.add(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION);
+
+            return new ResponseEntity<>(fileContent, headers, HttpStatus.OK);
+
+        } catch (IllegalArgumentException | IOException e) {
+            // log.error("Error while downloading ascii file", e);
+            throw new IllegalArgumentException(e.getMessage());
         }
-        return partitions;
+    }
+
+    // To build the final path
+    private String buildFilePath(AsciiMaster master,AsciiFileRequest request) {
+
+        if("branch".equalsIgnoreCase(request.getSearchBy())
+        && (request.getBranchCode()==null
+        || request.getBranchCode().isBlank())){
+            throw new IllegalArgumentException("Branch code is mandatory for branch search");
+        }
+
+        LocalDate reportDate=LocalDate.parse(request.getReportDate(),
+        DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+
+        String dateFolder= reportDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+
+        String fileDate= reportDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+
+        // 1. Sanitize the location from DB
+        String rawLocation = master.getLocation().replace("{date}", dateFolder);
+        String safeLocation = sanitizePathSegment(rawLocation);
+
+        String branchCode = "bank".equalsIgnoreCase(request.getSearchBy())
+                        ? "00000" : request.getBranchCode();
+
+
+        String fileName;
+
+        if (request.getId() >= 101 && request.getId() <= 104) {
+
+            AsciiConfig config = asciiConfigRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException("ASCII Config not found"));
+
+            String safeOutputName = sanitizePathSegment(config.getOutputFileName());
+            String safeFileType = config.getFileType() != null && !config.getFileType().isBlank()
+                    ? sanitizePathSegment(config.getFileType())
+                    : null;
+
+            if (safeFileType != null) {
+                fileName = branchCode + "." + safeOutputName + "." + fileDate + "." + safeFileType;
+            } else {
+                fileName = branchCode + "." + safeOutputName + "." + fileDate;
+            }
+
+        }
+        else if (request.getId() >= 105 && request.getId() <= 107) {
+
+            AsciiConfigTb configTb = asciiConfigTbRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException("ASCII Config TB not found"));
+
+            String safeFileIdentifier = sanitizePathSegment(configTb.getFileIdentifier());
+            fileName = branchCode + "." + safeFileIdentifier + "." + fileDate;
+        }
+        else {
+
+            throw new IllegalArgumentException("Invalid ASCII ID");
+        }
+        String finalPath = "/" + safeLocation + "/" + fileName;
+        if (!SAFE_PATH_PATTERN.matcher(finalPath).matches() || finalPath.contains("..")) {
+            throw new SecurityException("Invalid path detected: Path manipulation attempt blocked.");
+        }
+
+        log.info("final path: {}", finalPath);
+        return finalPath;
+    }
+
+    /**
+     * Removes any character that is not explicitly allowed in a file path segment.
+     * This breaks any traversal sequences stored in the DB.
+     */
+    private String sanitizePathSegment(String input) {
+        if (input == null || input.isBlank()) {
+            return "";
+        }
+        // Replace any invalid character with an underscore (or throw exception)
+        // This ensures Fortify sees the data as "sanitized"
+        return input.replaceAll("[^a-zA-Z0-9/_\\-\\.]", "_");
     }
 }
