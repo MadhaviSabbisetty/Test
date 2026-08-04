@@ -1,158 +1,115 @@
-package com.fincore.CommunicationService.dto;
+  @Override
+    public AttachmentDownloadResponse downloadAttachments(
+            AttachmentDownloadRequest request,
+            int userRoleId,
+            String userId) throws IOException {
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-import java.util.List;
-import java.util.Map;
+        log.info("Inside the report service download method");
 
-/**
- * Generic communication event consumed by the Communication Service.
- *
- * Producer services publish this event to the
- *  <code>fincore.communication.generic</code> Kafka topic.
- *
- * The Communication Service is responsible for resolving recipients,
- * generating communication content, downloading attachments and
- * dispatching notifications through the requested channels.
- *
- * @author SHUBHANKAR
- * @since 2026-07
- */
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-@JsonInclude(JsonInclude.Include.NON_EMPTY)
-@JsonIgnoreProperties(ignoreUnknown = true)
-public class GenericCommunicationEvent {
+        List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
 
-    /**
-     * Unique identifier for this specific event instance.
-     * Used as the primary correlation key across Kafka, Redis, and Oracle.
-     */
-    private String eventId;
+        //Process each requested attachment individually
 
-    /**
-     * Distributed tracing ID (e.g., from Jaeger/Zipkin).
-     * Vital for cross-microservice observability.
-     */
-    private String traceId;
+        for (AttachmentRef attachment : request.getAttachments()) {
 
-    private String correlationId;
+            log.info("-------------------------------------------------------------------");
+            log.info("Attachment Download Request Received");
+            log.info("Attachment Id: {}",attachment.getAttachmentId());
+            log.info("Report Name: {}",attachment.getFileName());
+            log.info("Attachment Type: {}",attachment.getAttachmentType());
 
-    private String producerService;
+            //Extract report details from attachment reference
 
-    /**
-     * The business context of the event (e.g., 'EOD_REPORT', 'BALANCE_ALERT').
-     */
-    private String eventType;
+            String attachmentId = attachment.getAttachmentId();
+            String reportFolder = attachment.getFileName();
 
-    /**
-     * FLAG: Determines the routing pipeline.
-     * If true, routes via Virtual Threads for 1-by-1 personalized vendor dispatch.
-     * If false, routes via Redis Pipelining and Vendor BCC arrays for massive scale.
-     * Defaults to true to ensure backward compatibility for legacy producers.
-     */
-    @JsonProperty("isPersonalized")
-    private boolean isPersonalized = true;
+            // Extracting date from attachmentId
+            // Example : balance_compare_report_31032026
+            String date = attachmentId.substring(attachmentId.lastIndexOf("_") + 1);
 
-    /**
-     * Defines SLA priority. E.g., 'HIGH', 'NORMAL'.
-     */
-    private String priority;
+            String folderDate =
+                    date.substring(4, 8) + "-"
+                + date.substring(2, 4) + "-"
+                + date.substring(0, 2);
 
-    /**
-     * The communication channels requested (e.g., ["EMAIL", "SMS"]).
-     */
-    @JsonProperty("channels")
-    private List<String> channels;
+            byte[] fileBytes;
+            long fileSize;
+            String actualFileName = attachmentId + ".xlsx";
 
-    /**
-     * Dynamic recipient resolution matrix. Producers can supply Roles, UserIds, or raw Emails/Mobiles.
-     */
-    @JsonProperty("recipients")
-    private Recipients recipients;
+            //Construct HDFS file path based on report date and folder
+            
+            String hdfsPath =
+                    reportsBasePath + "/"
+                + folderDate + "/"
+                // + reportFolder + "/"
+                + actualFileName;
 
-    /**
-     * The exact template ID to fetch from the L1 Caffeine Cache / Oracle COMM_TEMPLATE_MASTER.
-     */
-    private String templateId;
+            Path filePath = new Path(hdfsPath);
 
-    /**
-     * The dynamic FreeMarker variable bindings (e.g., Names, Account Balances).
-     */
-    private Map<String, Object> payload;
+            log.info("Reading HDFS File : {}", filePath);
 
-    /**
-     * List of attachments required (HDFS paths).
-     * Parsed by the AttachmentPreparationService in Phase 5.
-     */
-    private List<AttachmentRef> attachments;
+            //validate report existence in HDFS
 
-    private List<DeepLinkRef> deepLinks;
+            if (!hdfsFileSystem.exists(filePath)) {
+                log.info("Attachment not found");
+                throw new ResourceNotFoundException(
+                        "Attachment not found : " + filePath);
+            }
 
-    private Map<String, String> metadata;
+            FileStatus status = hdfsFileSystem.getFileStatus(filePath);
 
-    /**
-     * Recipient details supplied by the producer service.
-     * Communication Service resolves UserIds and Roles into
-     * Email and Mobile recipients.
-     */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @JsonInclude(JsonInclude.Include.NON_EMPTY)
-    public static class Recipients {
+            //Read report content from HDFS
 
-        private List<String> userIds;
+            try (FSDataInputStream inputStream = hdfsFileSystem.open(filePath);
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
 
-        private List<String> roles;
+                byte[] buffer = new byte[8192];
+                int bytesRead;
 
-        private List<String> emails;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
 
-        private List<String> mobiles;
+                fileBytes = outputStream.toByteArray();
+            }catch(IOException e){
+                log.error("Unable to read HDFS file {}",filePath,e);
+                throw new ResourceNotFoundException(
+                    "Unable to read attachment from HDFS:"+actualFileName);
+            }
+
+            fileSize = status.getLen();
+            
+
+            DownloadedAttachment downloaded = new DownloadedAttachment();
+
+            downloaded.setFileName(actualFileName);
+            downloaded.setContentType(
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            downloaded.setFileSize(fileSize);
+            //Encode report content into Base64 for REST response
+            downloaded.setBase64(Base64.getEncoder().encodeToString(fileBytes));
+
+            downloadedFiles.add(downloaded);
+
+            
+            log.info("REPORT DOWNLOADED SUCCESSFULLY");
+            log.info("Attachment Id   : {}", attachment.getAttachmentId());
+            log.info("Report Name     : {}", downloaded.getFileName());
+            log.info("Attachment Type : {}", attachment.getAttachmentType());
+            log.info("Content Type    : {}", downloaded.getContentType());
+            log.info("File Size       : {} bytes", downloaded.getFileSize());
+        }
+
+        AttachmentDownloadResponse response = new AttachmentDownloadResponse();
+        //Prepare final response containing all downloaded attachments
+        response.setAttachments(downloadedFiles);
+
+        
+        log.info("------------------------------------------------------------");
+        log.info("Attachment Download Completed Successfully");
+        log.info("Total Reports Downloaded : {}", downloadedFiles.size());
+
+        return response;
     }
-
-    /**
-     * Reference to an attachment.
-     *
-     * Files are never sent through Kafka. The AttachmentService
-     * downloads the file using this information.
-     */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class AttachmentRef {
-
-        private String attachmentId;
-
-        private String attachmentType;
-
-        private String fileName;
-    }
-
-    /**
-     * Reference used by the DeepLinkGenerator to create
-     * application-specific URLs.
-     */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class DeepLinkRef {
-
-        private String module;
-
-        private String entityId;
-
-        private String action;
-    }
-}
+    
