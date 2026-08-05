@@ -1,160 +1,332 @@
-2026-08-05 11:26:29.711 ERROR [http-nio-9005-exec-4] c.f.R.s.AsciiFileServiceImpl: Error while viewing ascii file 
-java.lang.IllegalArgumentException: Invalid report date
-        at com.fincore.ReportService.service.AsciiFileServiceImpl.buildFilePath(AsciiFileServiceImpl.java:217)
-        at com.fincore.ReportService.service.AsciiFileServiceImpl.viewAscii(AsciiFileServiceImpl.java:85)
-        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
-        at java.base/java.lang.reflect.Method.invoke(Method.java:580)
-        at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
-        at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
-        at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
-        at org.springframework.aop.interceptor.ExposeInvocationInterceptor.invoke(ExposeInvocationInterceptor.java:96)
-        at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
-        at org.springframework.aop.aspectj.MethodInvocationProceedingJoinPoint.proceed(MethodInvocationProceedingJoinPoint.java:82)
-        at com.fincore.commonutilities.aspect.GlobalResilienceAspect.lambda$applyResilience$0(GlobalResilienceAspect.java:60)
-        at io.github.resilience4j.retry.Retry.lambda$decorateSupplier$5(Retry.java:301)
-        at io.github.resilience4j.circuitbreaker.CircuitBreaker.lambda$decorateSupplier$5(CircuitBreaker.java:194)
-        at com.fincore.commonutilities.aspect.GlobalResilienceAspect.applyResilience(GlobalResilienceAspect.java:73)
-        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
-        at java.base/java.lang.reflect.Method.invoke(Method.java:580)
-        at org.springframework.aop.aspectj.AbstractAspectJAdvice.invokeAdviceMethodWithGivenArgs(AbstractAspectJAdvice.java:648)
-        at org.springframework.aop.aspectj.AbstractAspectJAdvice.invokeAdviceMethod(AbstractAspectJAdvice.java:630)
-        at org.springframework.aop.aspectj.AspectJAroundAdvice.invoke(AspectJAroundAdvice.java:70)
-        at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
-        at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:719)
-        at com.fincore.ReportService.service.AsciiFileServiceImpl$$SpringCGLIB$$0.viewAscii(<generated>)
-        at com.fincore.ReportService.controller.AsciiFileController.viewAscii(AsciiFileController.java:51)
-        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
-        at java.base/java.lang.reflect.Method.invoke(Method.java:580)
-        at org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:252)
-        at org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:184)
-        at org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:117)
-        at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:934)
-        at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.handleInternal(RequestMappingHandlerAdapter.java:853)
-        at org.springframework.web.servlet.mvc.method.AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:86)
-        at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:963)
-        at org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:866)
-        at org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1000)
-        at org.springframework.web.servlet.FrameworkServlet.doPost(FrameworkServlet.java:903)
-        at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:649)
-        at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:874)
-        at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:710)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:132)
-        at org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:59)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:108)
-        at org.springframework.security.web.FilterChainProxy.lambda$doFilterInternal$2(FilterChainProxy.java:235)
-        at org.springframework.security.web.ObservationFilterChainDecorator$FilterObservation$SimpleFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:491)
-        at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:353)
-        at org.springframework.security.web.ObservationFilterChainDecorator.lambda$wrapSecured$0(ObservationFilterChainDecorator.java:84)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:131)
-        at org.springframework.security.web.access.intercept.AuthorizationFilter.doFilter(AuthorizationFilter.java:101)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126)
-        at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:132)
-        at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:86)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.authentication.AnonymousAuthenticationFilter.doFilter(AnonymousAuthenticationFilter.java:100)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter.doFilter(SecurityContextHolderAwareRequestFilter.java:181)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.savedrequest.RequestCacheAwareFilter.doFilter(RequestCacheAwareFilter.java:63)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at com.fincore.commonutilities.security.ContextRbacFilter.doFilterInternal(ContextRbacFilter.java:161)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at com.fincore.commonutilities.logging.MdcLoggingFilter.doFilterInternal(MdcLoggingFilter.java:83)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:110)
-        at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:96)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.web.filter.CorsFilter.doFilterInternal(CorsFilter.java:91)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.header.HeaderWriterFilter.doHeadersAfter(HeaderWriterFilter.java:90)
-        at org.springframework.security.web.header.HeaderWriterFilter.doFilterInternal(HeaderWriterFilter.java:75)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:82)
-        at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:69)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter.doFilterInternal(WebAsyncManagerIntegrationFilter.java:62)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.session.DisableEncodeUrlFilter.doFilterInternal(DisableEncodeUrlFilter.java:42)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$0(ObservationFilterChainDecorator.java:336)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.FilterChainProxy.doFilterInternal(FilterChainProxy.java:237)
-        at org.springframework.security.web.FilterChainProxy.doFilter(FilterChainProxy.java:195)
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113)
-        at org.springframework.web.filter.ServletRequestPathFilter.doFilter(ServletRequestPathFilter.java:52)
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113)
-        at org.springframework.web.filter.CompositeFilter.doFilter(CompositeFilter.java:74)
-        at org.springframework.security.config.annotation.web.configuration.WebSecurityConfiguration$CompositeFilterChainProxy.doFilter(WebSecurityConfiguration.java:317)
-        at org.springframework.web.filter.DelegatingFilterProxy.invokeDelegate(DelegatingFilterProxy.java:355)
-        at org.springframework.web.filter.DelegatingFilterProxy.doFilter(DelegatingFilterProxy.java:272)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.RequestContextFilter.doFilterInternal(RequestContextFilter.java:100)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.FormContentFilter.doFilterInternal(FormContentFilter.java:93)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.ServerHttpObservationFilter.doFilterInternal(ServerHttpObservationFilter.java:110)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.CharacterEncodingFilter.doFilterInternal(CharacterEncodingFilter.java:199)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:165)
-        at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:77)
-        at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:535)
-        at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:115)
-        at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:86)
-        at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:71)
-        at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:347)
-        at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:406)
-        at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:71)
-        at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:1307)
-        at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:2036)
-        at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:74)
-        at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:949)
-        at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:483)
-        at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:74)
-        at java.base/java.lang.Thread.run(Thread.java:1570)
-{"@timestamp":"2026-08-05T11:26:29.7114621+05:30","level":"ERROR","service":"ReportService","traceId":"4e4a5655-2d3a-4c2e-8134-09e620a976f1","userId":"1023044","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/ascii/view","class":"c.f.R.service.AsciiFileServiceImpl","message":"Error while viewing ascii file","stack_trace":"java.lang.IllegalArgumentException: Invalid report date\r\n\tat com.fincore.ReportService.service.AsciiFileServiceImpl.buildFilePath(AsciiFileServiceImpl.java:217)\r\n\tat com.fincore.ReportService.service.AsciiFileServiceImpl.viewAscii(AsciiFileServiceImpl.java:85)\r\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)\r\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580)\r\n\tat org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)\r\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)\r\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)\r\n\tat org.springframework.aop.interceptor.ExposeInvocationInterceptor.invoke(ExposeInvocationInterceptor.java:96)\r\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)\r\n\tat org.springframework.aop.aspectj.MethodInvocationProceedingJoinPoint.proceed(MethodInvocationProceedingJoinPoint.java:82)\r\n"}
-2026-08-05 11:26:29.713 ERROR [http-nio-9005-exec-4] c.f.R.e.GlobalExceptionHandler: Illegal argument or state: Invalid normalized path 
-{"@timestamp":"2026-08-05T11:26:29.7134584+05:30","level":"ERROR","service":"ReportService","traceId":"4e4a5655-2d3a-4c2e-8134-09e620a976f1","userId":"1023044","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/ascii/view","class":"c.f.R.exception.GlobalExceptionHandler","message":"Illegal argument or state: Invalid normalized path","stack_trace":""}
-2026-08-05 11:26:29.716 INFO  [http-nio-9005-exec-4] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://localhost:9005/api/ascii/view | Status: 400 
-{"@timestamp":"2026-08-05T11:26:29.7164562+05:30","level":"INFO","service":"ReportService","traceId":"4e4a5655-2d3a-4c2e-8134-09e620a976f1","userId":"1023044","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/ascii/view","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://localhost:9005/api/ascii/view | Status: 400","stack_trace":""}
+package com.fincore.ReportService.service;
+
+import com.fincore.ReportService.dto.AsciiFileRequest;
+import com.fincore.ReportService.dto.AsciiFileResponse;
+import com.fincore.ReportService.dto.AsciiTypeResponse;
+import com.fincore.ReportService.model.AsciiMaster;
+import com.fincore.ReportService.model.AsciiConfig;
+import com.fincore.ReportService.model.AsciiConfigTb;
+import com.fincore.ReportService.repository.AsciiMasterRepository;
+import com.fincore.ReportService.repository.AsciiConfigRepository;
+import com.fincore.ReportService.repository.AsciiConfigTbRepository;
+import com.fincore.ReportService.service.AsciiFileService;
+import com.fincore.ReportService.service.HdfsService;
+
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpStatus;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.regex.Pattern;
+
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class AsciiFileServiceImpl implements AsciiFileService {
+
+    private final AsciiMasterRepository asciiMasterRepository;
+
+    private final AsciiConfigRepository asciiConfigRepository;
+
+    private final AsciiConfigTbRepository asciiConfigTbRepository;
+
+    private final HdfsService hdfsService;
+
+    private static final Pattern SAFE_PATH_PATTERN = Pattern.compile("^[a-zA-Z0-9/_\\-\\.]+$");
+
+    @Override
+    public List<AsciiTypeResponse> getAsciiTypes(){
+
+        log.info("API called - into service");
+        List<AsciiTypeResponse> response=asciiMasterRepository.findAll()
+            .stream()
+            .map(a->
+                    new AsciiTypeResponse(
+                        a.getId(),
+                        a.getReportName()
+                    ))
+                    .toList();
+                    if(response.isEmpty()){
+                        throw new IllegalArgumentException("No ASCII file types found");
+                    }
+                    return response;
+    }
+
+    // To view the ASCII file types
+    @Override
+    public AsciiFileResponse viewAscii(AsciiFileRequest request) {
+
+        try {
+
+            AsciiMaster master =
+                    asciiMasterRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException("Invalid ASCII ID"));
+
+            String hdfsPath = buildFilePath(master, request);
+
+            FileSystem fs = hdfsService.getFs();
+
+            // Path path = new Path(hdfsPath);
+
+            Path path = Path.getPathWithoutSchemeAndAuthority(new Path(hdfsPath));
+
+            Path normalizedPath = Path.getPathWithoutSchemeAndAuthority(path);
+
+            if (!normalizedPath.toString().equals(path.toString())) {
+                throw new SecurityException("Invalid HDFS path");
+            }
+
+            // boolean fileExists=fs.exists(path);
+
+            if (!fs.exists(path)) {
+               throw new IllegalArgumentException("ASCII File not found");
+            }
+
+            StringBuilder content = new StringBuilder();
+
+            // try (FSDataInputStream inputStream = fs.open(path);
+            try (FSDataInputStream inputStream = fs.open(normalizedPath);
+                 BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+
+                String line;
+
+                while ((line = reader.readLine()) != null) {
+                    content.append(line)
+                           .append(System.lineSeparator());
+                }
+            }
+
+            AsciiFileResponse response = new AsciiFileResponse();
+
+            response.setId(request.getId());
+            response.setReportDate(request.getReportDate());
+            response.setSearchBy(request.getSearchBy());
+
+            if ("branch".equalsIgnoreCase(request.getSearchBy())) {
+                response.setBranchCode(request.getBranchCode());
+            }
+
+            response.setContent(content.toString());
+
+            return response;
+
+        } catch (Exception e) {
+
+            log.error("Error while viewing ascii file", e);
+
+            throw new IllegalArgumentException("Invalid normalized path");
+        }
+    }
+
+    //To download the ASCII files
+    @Override
+    public ResponseEntity<byte[]> downloadAscii(AsciiFileRequest request) {
+        try {
+            AsciiMaster master = asciiMasterRepository.findById(request.getId())
+                    .orElseThrow(() -> new IllegalArgumentException("Invalid ASCII ID"));
+
+            String hdfsPath = buildFilePath(master, request);
+
+            FileSystem fs = hdfsService.getFs();
+            // Path path = new Path(hdfsPath);
+            Path path = Path.getPathWithoutSchemeAndAuthority(new Path(hdfsPath));
+
+            Path normalizedPath = Path.getPathWithoutSchemeAndAuthority(path);
+
+            if (!normalizedPath.equals(path)) {
+                throw new SecurityException("Invalid HDFS path");
+            }
+
+
+            if (!fs.exists(path)) {
+                throw new IllegalArgumentException("Failed to download. ASCII File not found");
+            }
+
+            // Sink: Fortify flags this line because hdfsPath contains DB data
+            // FSDataInputStream inputStream = fs.open(path);
+            
+            // FSDataInputStream inputStream = fs.open(normalizedPath);
+
+            // byte[] fileContent = inputStream.readAllBytes();
+            // inputStream.close();
+
+            byte[] fileContent;
+
+            try (FSDataInputStream inputStream = fs.open(normalizedPath)) {
+
+                fileContent = inputStream.readAllBytes();
+            }
+
+            String fileName = path.getName();
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.TEXT_PLAIN);
+            // headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + ".txt\"");
+
+            
+            headers.setContentDisposition(
+                    ContentDisposition.attachment()
+                            .filename(fileName + ".txt", StandardCharsets.UTF_8)
+                            .build());
+
+
+            headers.setContentLength(fileContent.length);
+            headers.add(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION);
+
+            return new ResponseEntity<>(fileContent, headers, HttpStatus.OK);
+
+        } catch (IllegalArgumentException | IOException e) {
+            // log.error("Error while downloading ascii file", e);
+            throw new IllegalArgumentException("Unable to view ASCII file.");
+        }
+    }
+
+    // To build the final path
+    private String buildFilePath(AsciiMaster master,AsciiFileRequest request) {
+
+        if("branch".equalsIgnoreCase(request.getSearchBy())
+        && (request.getBranchCode()==null
+        || request.getBranchCode().isBlank())){
+            throw new IllegalArgumentException("Branch code is mandatory for branch search");
+        }
+
+        
+        if (request.getReportDate() == null
+                || !request.getReportDate().matches("\\d{2}-\\d{2}-\\d{4}")) {
+
+            throw new IllegalArgumentException("Invalid report date");
+        }
+
+
+        LocalDate reportDate=LocalDate.parse(request.getReportDate(),
+        DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+
+        String dateFolder= reportDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+
+        String fileDate= reportDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+
+        // 1. Sanitize the location from DB
+        String rawLocation = master.getLocation().replace("{date}", dateFolder);
+
+        if (rawLocation.contains("..")) {
+            throw new SecurityException("Invalid report location");
+        }
+
+
+        String safeLocation = sanitizePathSegment(rawLocation);
+        if (safeLocation.contains("..")) {
+            throw new SecurityException("Directory traversal detected");
+        }
+
+        String branchCode = "bank".equalsIgnoreCase(request.getSearchBy())
+                        ? "00000" : request.getBranchCode();
+
+                
+        if (!branchCode.matches("\\d{5}")) {
+            throw new IllegalArgumentException("Invalid branch code");
+        }
+              
+
+
+        String fileName;
+        
+
+        if (request.getId() >= 101 && request.getId() <= 104) {
+
+            AsciiConfig config = asciiConfigRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException("ASCII Config not found"));
+
+            String safeOutputName = sanitizePathSegment(config.getOutputFileName());
+            String safeFileType = config.getFileType() != null && !config.getFileType().isBlank()
+                    ? sanitizePathSegment(config.getFileType())
+                    : null;
+
+            if (safeFileType != null) {
+                fileName = branchCode + "." + safeOutputName + "." + fileDate + "." + safeFileType;
+            } else {
+                fileName = branchCode + "." + safeOutputName + "." + fileDate;
+            }
+
+            if (!fileName.matches("[A-Za-z0-9._-]+")) {
+                throw new SecurityException("Invalid file name");
+            }
+
+        }
+        else if (request.getId() >= 105 && request.getId() <= 107) {
+
+            AsciiConfigTb configTb = asciiConfigTbRepository.findById(request.getId())
+                            .orElseThrow(() ->
+                                    new IllegalArgumentException("ASCII Config TB not found"));
+
+            String safeFileIdentifier = sanitizePathSegment(configTb.getFileIdentifier());
+            fileName = branchCode + "." + safeFileIdentifier + "." + fileDate;
+        }
+        else {
+
+            throw new IllegalArgumentException("Invalid ASCII ID");
+        }
+        // String finalPath = "/" + safeLocation + "/" + fileName;
+                
+        Path finalHdfsPath = new Path("/" + safeLocation, fileName);
+        String finalPath = finalHdfsPath.toString();
+        if (!SAFE_PATH_PATTERN.matcher(finalPath).matches() || finalPath.contains("..")) {
+            throw new SecurityException("Invalid path detected: Path manipulation attempt blocked.");
+        }
+
+        log.info("final path: {}", finalPath);
+        return finalPath;
+    }
+
+    /**
+     * Removes any character that is not explicitly allowed in a file path segment.
+     * This breaks any traversal sequences stored in the DB.
+     */
+    // private String sanitizePathSegment(String input) {
+    //     if (input == null || input.isBlank()) {
+    //         return "";
+    //     }
+    //     // Replace any invalid character with an underscore (or throw exception)
+    //     // This ensures Fortify sees the data as "sanitized"
+    //     return input.replaceAll("[^a-zA-Z0-9/_\\-\\.]", "_");
+    // }
+
+    private String sanitizePathSegment(String input) {
+
+        if (input == null || input.isBlank()) {
+            throw new IllegalArgumentException("Invalid path");
+        }
+
+        String sanitized = input.trim();
+
+        if (sanitized.contains("..")) {
+            throw new SecurityException("Directory traversal detected");
+        }
+
+        if (!SAFE_PATH_PATTERN.matcher(sanitized).matches()) {
+            throw new SecurityException("Invalid characters in path");
+        }
+
+        return sanitized;
+    }
+}
