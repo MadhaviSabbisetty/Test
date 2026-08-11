@@ -1,58 +1,172 @@
-package com.fincore.CommunicationService.dto;
-
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.Getter;
-
-import java.time.Instant;
-
-@Getter
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public class ApiResponse<T> {
-
-    private final boolean success;
-    private final String message;
-    private final T data;
-    private final Instant timestamp;
-
-    @JsonCreator
-    public ApiResponse(
-            @JsonProperty("success") boolean success,
-            @JsonProperty("message") String message,
-            @JsonProperty("data") T data,
-            @JsonProperty("timestamp") Instant timestamp) {
-
-        this.success = success;
-        this.message = message;
-        this.data = data;
-        this.timestamp = timestamp;
-    }
-
-    public static <T> ApiResponse<T> success(T data, String message) {
-        return new ApiResponse<>(
-                true,
-                message,
-                data,
-                Instant.now()
-        );
-    }
-
-    public static <T> ApiResponse<T> success(T data) {
-        return new ApiResponse<>(
-                true,
-                "Operation completed successfully.",
-                data,
-                Instant.now()
-        );
-    }
-
-    public static <T> ApiResponse<T> error(String message) {
-        return new ApiResponse<>(
-                false,
-                message,
-                null,
-                Instant.now()
-        );
-    }
-}
+Running with gitlab-runner 19.0.2 (02fcb2d7)
+  on dc_runner_80 KtJCK3d-w, system ID: s_37748334dac5
+Resolving secrets
+Preparing the "docker" executor
+00:02
+Using Docker executor with image artifactory.jfrog.sbi:443/dso-base-image/java-maven-images/rhel-jdk-21-maven3.8.9:0.0.1 ...
+Using helper image:  artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.0.2 )
+Using effective pull policy of [if-not-present] for container artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2
+Using locally found image version due to "if-not-present" pull policy
+Using docker image sha256:660e3634504b66e0ae3ad165131d9fc3fd05b2ac31ebf332b7fa8d93f4ed9682 for artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2 with digest artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper@sha256:660e3634504b66e0ae3ad165131d9fc3fd05b2ac31ebf332b7fa8d93f4ed9682 ...
+Using helper image:  artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.0.2 )
+Using effective pull policy of [if-not-present] for container artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2
+Using docker image sha256:660e3634504b66e0ae3ad165131d9fc3fd05b2ac31ebf332b7fa8d93f4ed9682 for artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2 with digest artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper@sha256:660e3634504b66e0ae3ad165131d9fc3fd05b2ac31ebf332b7fa8d93f4ed9682 ...
+Using effective pull policy of [if-not-present] for container artifactory.jfrog.sbi:443/dso-base-image/java-maven-images/rhel-jdk-21-maven3.8.9:0.0.1
+Using locally found image version due to "if-not-present" pull policy
+Using docker image sha256:26834e2b7839f7d5d440948c8d561124b44bd5305be9669b455ccff74eade7ed for artifactory.jfrog.sbi:443/dso-base-image/java-maven-images/rhel-jdk-21-maven3.8.9:0.0.1 with digest artifactory.jfrog.sbi:443/dso-base-image/java-maven-images/rhel-jdk-21-maven3.8.9@sha256:26834e2b7839f7d5d440948c8d561124b44bd5305be9669b455ccff74eade7ed ...
+Preparing environment
+00:01
+Using helper image:  artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.0.2 )
+Using effective pull policy of [if-not-present] for container artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2
+Using docker image sha256:660e3634504b66e0ae3ad165131d9fc3fd05b2ac31ebf332b7fa8d93f4ed9682 for artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2 with digest artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper@sha256:660e3634504b66e0ae3ad165131d9fc3fd05b2ac31ebf332b7fa8d93f4ed9682 ...
+Using effective pull policy of [if-not-present] for container sha256:660e3634504b66e0ae3ad165131d9fc3fd05b2ac31ebf332b7fa8d93f4ed9682
+Running on runner-ktjck3d-w-project-1768-concurrent-0 via PE3DSOPGRUNNERS6...
+Getting source from Git repository
+00:05
+Gitaly correlation ID: 01KZR9YVYT37MEJ1MGFTSJ6VVM
+Fetching changes with git depth set to 20...
+Reinitialized existing Git repository in /builds/cb-ops/fincore/fincorebackend/fincore_report_service/.git/
+Created fresh repository.
+Checking out 43165e6f as detached HEAD (ref is feature_spring_upgrade)...
+Removing target/
+Skipping Git submodules setup
+Downloading artifacts
+00:04
+Downloading artifacts for build_job (1412644)...
+Downloading artifacts from coordinator... ok        correlation_id=01KZR9Z6ANMS088ZZ3RM88HXRG id=1412644 status=200 token=eyJraWQiO
+Executing "step_script" stage of the job script
+00:52
+Using effective pull policy of [if-not-present] for container artifactory.jfrog.sbi:443/dso-base-image/java-maven-images/rhel-jdk-21-maven3.8.9:0.0.1
+Using docker image sha256:26834e2b7839f7d5d440948c8d561124b44bd5305be9669b455ccff74eade7ed for artifactory.jfrog.sbi:443/dso-base-image/java-maven-images/rhel-jdk-21-maven3.8.9:0.0.1 with digest artifactory.jfrog.sbi:443/dso-base-image/java-maven-images/rhel-jdk-21-maven3.8.9@sha256:26834e2b7839f7d5d440948c8d561124b44bd5305be9669b455ccff74eade7ed ...
+$ jf config add \--url="$JF_URL" \--xray-url="$JF_XRAY_URL" \--user="$JF_USER" \--access-token="$JF_TOKEN" \--interactive=false
+$ ls target
+ReportService-0.0.1-SNAPSHOT.jar
+$ jf scan target/*.jar --watches=CB-OPS --fail=true
+11:40:28 [Info] JFrog Xray Indexer 3.124.21 is not cached locally. Downloading it now...
+2026/08/11 11:40:30 maxprocs: Leaving GOMAXPROCS=32: CPU quota undefined
+11:40:31 [Info] The downloaded Xray Indexer version is 3.124.21
+11:40:31 [Info] [Thread 2] Indexing file: target/ReportService-0.0.1-SNAPSHOT.jar
+11:41:08 [Info] 2026/08/11 11:40:31 maxprocs: Leaving GOMAXPROCS=32: CPU quota undefined
+2026-08-11T11:40:38.332Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.slf4j:slf4j-api to :logback-classic: dependency again as already in list
+2026-08-11T11:40:38.332Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ch.qos.logback:logback-core to :logback-classic: dependency again as already in list
+2026-08-11T11:40:38.540Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ch.qos.logback:logback-core to :log4j-to-slf4j:2.25.4 dependency again as already in list
+2026-08-11T11:40:40.530Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-resolver-dns: dependency again as already in list
+2026-08-11T11:40:45.470Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ch.qos.logback:logback-core to commons-logging:commons-logging:1.3.6 dependency again as already in list
+2026-08-11T11:40:47.749Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.commons:commons-collections4 to :commons-beanutils2:2.0.0-M2 dependency again as already in list
+2026-08-11T11:40:52.972Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding com.ibm.icu:core to :collate: dependency again as already in list
+2026-08-11T11:40:53.016Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding com.ibm.icu:core to :translit: dependency again as already in list
+2026-08-11T11:40:56.607Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-auth to :hadoop-common:3.5.0 dependency again as already in list
+2026-08-11T11:40:56.626Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.zookeeper:zookeeper to :hadoop-common:3.5.0 dependency again as already in list
+2026-08-11T11:41:01.881Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.curator:curator-framework to :curator-recipes:5.2.0 dependency again as already in list
+2026-08-11T11:41:01.926Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-handler: dependency again as already in list
+2026-08-11T11:41:02.050Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-base: dependency again as already in list
+2026-08-11T11:41:02.066Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-epoll: dependency again as already in list
+2026-08-11T11:41:03.000Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-common to :hadoop-hdfs-client:3.5.0 dependency again as already in list
+2026-08-11T11:41:03.147Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-common to :hadoop-yarn-api:3.5.0 dependency again as already in list
+2026-08-11T11:41:03.191Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-hdfs to :hadoop-yarn-client:3.5.0 dependency again as already in list
+2026-08-11T11:41:03.193Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-common to :hadoop-yarn-client:3.5.0 dependency again as already in list
+2026-08-11T11:41:03.193Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-yarn-common to :hadoop-yarn-client:3.5.0 dependency again as already in list
+2026-08-11T11:41:03.193Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-yarn-server-resourcemanager to :hadoop-yarn-client:3.5.0 dependency again as already in list
+2026-08-11T11:41:03.215Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.eclipse.jetty.websocket:websocket-common to :websocket-client: dependency again as already in list
+2026-08-11T11:41:04.144Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-common to :hadoop-yarn-common:3.5.0 dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-kqueue to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-resolver-dns-native-macos to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-kqueue to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-kqueue to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-resolver-dns-native-macos to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-resolver-dns-native-macos to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.373Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.439Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-dns: dependency again as already in list
+2026-08-11T11:41:04.462Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-haproxy: dependency again as already in list
+2026-08-11T11:41:04.491Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-compression: dependency again as already in list
+2026-08-11T11:41:04.552Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-http: dependency again as already in list
+2026-08-11T11:41:04.591Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-http2: dependency again as already in list
+2026-08-11T11:41:04.612Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.612Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.612Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.612Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.612Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.612Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.612Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.612Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.612Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.16.Final dependency again as already in list
+2026-08-11T11:41:04.671Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-memcache: dependency again as already in list
+2026-08-11T11:41:04.690Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-mqtt: dependency again as already in list
+2026-08-11T11:41:04.701Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-redis: dependency again as already in list
+2026-08-11T11:41:04.714Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-smtp: dependency again as already in list
+2026-08-11T11:41:04.732Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-socks: dependency again as already in list
+2026-08-11T11:41:04.758Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-stomp: dependency again as already in list
+2026-08-11T11:41:04.792Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-xml: dependency again as already in list
+2026-08-11T11:41:04.803Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-protobuf: dependency again as already in list
+2026-08-11T11:41:04.815Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-marshalling: dependency again as already in list
+2026-08-11T11:41:04.826Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-handler-proxy: dependency again as already in list
+2026-08-11T11:41:04.904Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-transport-sctp: dependency again as already in list
+2026-08-11T11:41:05.037Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-epoll: dependency again as already in list
+2026-08-11T11:41:05.059Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-epoll: dependency again as already in list
+2026-08-11T11:41:05.076Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-epoll: dependency again as already in list
+2026-08-11T11:41:05.095Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-io_uring: dependency again as already in list
+2026-08-11T11:41:05.113Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-io_uring: dependency again as already in list
+2026-08-11T11:41:05.131Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-io_uring: dependency again as already in list
+2026-08-11T11:41:05.155Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-kqueue: dependency again as already in list
+2026-08-11T11:41:05.187Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-kqueue: dependency again as already in list
+2026-08-11T11:41:06.281Z [jfxia] [WARN ] [] [archive_mgr:1143              ] [UnnamedContext                  ] large metadata file, skip scanning, file: libnetty_quiche42_linux_x86_64.so, size: 6500136, limit: 5242880
+2026-08-11T11:41:06.365Z [jfxia] [WARN ] [] [archive_mgr:1143              ] [UnnamedContext                  ] large metadata file, skip scanning, file: libnetty_quiche42_linux_aarch_64.so, size: 6472600, limit: 5242880
+2026-08-11T11:41:06.405Z [jfxia] [WARN ] [] [archive_mgr:1143              ] [UnnamedContext                  ] large metadata file, skip scanning, file: libnetty_quiche42_osx_x86_64.jnilib, size: 6507152, limit: 5242880
+2026-08-11T11:41:06.438Z [jfxia] [WARN ] [] [archive_mgr:1143              ] [UnnamedContext                  ] large metadata file, skip scanning, file: libnetty_quiche42_osx_aarch_64.jnilib, size: 6221888, limit: 5242880
+2026-08-11T11:41:06.560Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-mapreduce-client-app to :hadoop-mapreduce-client-jobclient:3.5.0 dependency again as already in list
+2026-08-11T11:41:06.560Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-yarn-server-resourcemanager to :hadoop-mapreduce-client-jobclient:3.5.0 dependency again as already in list
+11:41:08 [Info] Waiting for scan to complete on JFrog Xray...
+11:41:13 [Info] Trace ID for JFrog Platform logs: 15184381cabe1918
+11:41:13 [Error] One or more of the detected violations are configured to fail the build that including them
+Security Violations
++----------------+----------+---------------------------+--------------+---------------------------+--------------+-----------------+-------+
+| CVE            | SEVERITY | DIRECT                    | DIRECT       | AFFECTED                  | AFFECTED     | FIXED           | TYPE  |
+|                |          | PACKAGE                   | PACKAGE      | COMPONENT                 | COMPONENT    | VERSIONS        |       |
+|                |          |                           | VERSION      | NAME                      | VERSION      |                 |       |
++----------------+----------+---------------------------+--------------+---------------------------+--------------+-----------------+-------+
+|                | 🔥High   | io.netty:netty-handler    | 4.2.16.Final | io.netty:netty-handler    | 4.2.16.Final | [4.1.137.Final] | Maven |
+|                |          |                           |              |                           |              | [4.2.17.Final]  |       |
++----------------+----------+---------------------------+--------------+---------------------------+--------------+-----------------+-------+
+|                | 🔥High   | io.netty:netty-handler    | 4.2.16.Final | io.netty:netty-handler    | 4.2.16.Final | [4.1.137.Final] | Maven |
+|                |          |                           |              |                           |              | [4.2.17.Final]  |       |
++----------------+----------+---------------------------+--------------+---------------------------+--------------+-----------------+-------+
+| CVE-2026-59902 | 🔥High   | io.netty:netty-transport- | 4.2.16.Final | io.netty:netty-transport- | 4.2.16.Final | [4.1.137.Final] | Maven |
+|                |          | sctp                      |              | sctp                      |              | [4.2.17.Final]  |       |
++----------------+----------+---------------------------+--------------+---------------------------+--------------+-----------------+-------+
+License Compliance Violations
++---------------------------------------------+
+| No license compliance violations were found |
++---------------------------------------------+
+Operational Risk Violations
++-------------------------------------------+
+| No operational risk violations were found |
++-------------------------------------------+
+Cleaning up project directory and file based variables
+00:02
+ERROR: Job failed: exit code 3
