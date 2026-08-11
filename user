@@ -1,349 +1,357 @@
-package com.fincore.ReportService.dto;
+package com.fincore.CommunicationService.attachment;
 
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import jakarta.validation.constraints.*;
-import java.util.Objects;
-
-@Data
-@NoArgsConstructor
-public class AsciiFileRequest {
-
-    @NotNull(message = "ID must not be null")
-    private Long id;
-
-    @NotBlank(message = "Report date is required")
-    @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$", message = "Report date must be in yyyy-MM-dd format")
-    private String reportDate;
-
-    @NotBlank(message = "Search criteria is required")
-    @Pattern(regexp = "^(bank|branch|)$", message = "Search by must be one of: BANK, BRANCH")
-    private String searchBy;
-
-    // Length validation only; presence is checked by the class-level constraint
-    @Size(max = 5, message = "Branch code must be exactly 5 characters")
-    @Pattern(regexp = "^[0-9]*$", message = "Branch code must be digits only")
-    private String branchCode;
-}   
-
-package com.fincore.ReportService.service;
-
-import com.fincore.ReportService.dto.AsciiFileRequest;
-import com.fincore.ReportService.dto.AsciiFileResponse;
-import com.fincore.ReportService.dto.AsciiTypeResponse;
-import com.fincore.ReportService.model.AsciiMaster;
-import com.fincore.ReportService.model.AsciiConfig;
-import com.fincore.ReportService.model.AsciiConfigTb;
-import com.fincore.ReportService.repository.AsciiMasterRepository;
-import com.fincore.ReportService.repository.AsciiConfigRepository;
-import com.fincore.ReportService.repository.AsciiConfigTbRepository;
-import com.fincore.ReportService.service.AsciiFileService;
-import com.fincore.ReportService.service.HdfsService;
-import org.springframework.beans.factory.annotation.Value;
-
-
+import com.fincore.CommunicationService.client.ReportServiceClient;
+import com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
+import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpStatus;
 
-import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.List;
+import java.util.Collections;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.regex.Pattern;
-
-
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
-public class AsciiFileServiceImpl implements AsciiFileService {
 
-    private final AsciiMasterRepository asciiMasterRepository;
+/**
+ * handles attachment download by invoking Report Service and
+ * prepares ZIP when attachment size or count exceeds configured limits.
+ */
 
-    private final AsciiConfigRepository asciiConfigRepository;
+public class AttachmentPreparationServiceImpl
+        implements AttachmentPreparationService {
 
-    private final AsciiConfigTbRepository asciiConfigTbRepository;
+    private final ReportServiceClient reportServiceClient;
 
-    private final HdfsService hdfsService;
+    private final ZipService zipService;
 
-    @Value("${glif.reports.base-path}")
-    private String hdfsBasePath;
+    @Value("${attachment.max.count:10}")
+    private int maxAttachmentCount;
 
-    private static final Pattern SAFE_PATH_PATTERN = Pattern.compile("^[a-zA-Z0-9/_\\-\\.]+$");
+    @Value("${attachment.max.size.mb:20}")
+    private long maxAttachmentSizeMb;
 
-    @Override
-    public List<AsciiTypeResponse> getAsciiTypes(){
-
-        log.info("API called - into service");
-        List<AsciiTypeResponse> response=asciiMasterRepository.findAll()
-            .stream()
-            .map(a->
-                    new AsciiTypeResponse(
-                        a.getId(),
-                        a.getReportName()
-                    ))
-                    .toList();
-                    if(response.isEmpty()){
-                        throw new IllegalArgumentException("No ASCII file types found");
-                    }
-                    return response;
-    }
-
-    // To view the ASCII file types
-    @Override
-    public AsciiFileResponse viewAscii(AsciiFileRequest request) {
-
-        try {
-
-            AsciiMaster master =
-                    asciiMasterRepository.findById(request.getId())
-                            .orElseThrow(() ->
-                                    new IllegalArgumentException("Invalid ASCII ID"));
-
-            String hdfsPath = buildFilePath(master, request);
-
-            FileSystem fs = hdfsService.getFs();
-
-
-            Path path = Path.getPathWithoutSchemeAndAuthority(new Path(hdfsPath));
-
-            Path normalizedPath = Path.getPathWithoutSchemeAndAuthority(path);
-
-            if (!normalizedPath.toString().equals(path.toString())) {
-                throw new SecurityException("Invalid HDFS path");
-            }
-
-
-            log.info("checking hdfs path: {}",path);
-            log.info("Exists: {}",fs.exists(path));
-
-            if (!fs.exists(path)) {
-               throw new IllegalArgumentException("ASCII File not found");
-            }
-
-            StringBuilder content = new StringBuilder();
-
-            try (FSDataInputStream inputStream = fs.open(normalizedPath);
-                 BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
-
-                String line;
-
-                while ((line = reader.readLine()) != null) {
-                    content.append(line)
-                           .append(System.lineSeparator());
-                }
-            }
-
-            AsciiFileResponse response = new AsciiFileResponse();
-
-            response.setId(request.getId());
-            response.setReportDate(request.getReportDate());
-            response.setSearchBy(request.getSearchBy());
-
-            if ("branch".equalsIgnoreCase(request.getSearchBy())) {
-                response.setBranchCode(request.getBranchCode());
-            }
-
-            response.setContent(content.toString());
-
-            return response;
-
-        } catch (Exception e) {
-
-            log.error("Error while viewing ascii file", e);
-
-            throw new IllegalArgumentException("Invalid normalized path");
-        }
-    }
-
-    //To download the ASCII files
-    @Override
-    public ResponseEntity<byte[]> downloadAscii(AsciiFileRequest request) {
-        try {
-            AsciiMaster master = asciiMasterRepository.findById(request.getId())
-                    .orElseThrow(() -> new IllegalArgumentException("Invalid ASCII ID"));
-
-            String hdfsPath = buildFilePath(master, request);
-
-            FileSystem fs = hdfsService.getFs();
-
-            Path path = Path.getPathWithoutSchemeAndAuthority(new Path(hdfsPath));
-
-            Path normalizedPath = Path.getPathWithoutSchemeAndAuthority(path);
-
-            if (!normalizedPath.equals(path)) {
-                throw new SecurityException("Invalid HDFS path");
-            }
-
-
-            if (!fs.exists(path)) {
-                throw new IllegalArgumentException("Failed to download. ASCII File not found");
-            }
-
-
-            byte[] fileContent;
-
-            try (FSDataInputStream inputStream = fs.open(normalizedPath)) {
-
-                fileContent = inputStream.readAllBytes();
-            }
-
-            String fileName = path.getName();
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.TEXT_PLAIN);
-
-            
-            headers.setContentDisposition(
-                    ContentDisposition.attachment()
-                            .filename(fileName + ".txt", StandardCharsets.UTF_8)
-                            .build());
-
-
-            headers.setContentLength(fileContent.length);
-            headers.add(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION);
-
-            return new ResponseEntity<>(fileContent, headers, HttpStatus.OK);
-
-        } catch (IllegalArgumentException | IOException e) {
-            throw new IllegalArgumentException("Unable to view ASCII file.");
-        }
-    }
-
-    // To build the final path
-    private String buildFilePath(AsciiMaster master,AsciiFileRequest request) {
-
-        if("branch".equalsIgnoreCase(request.getSearchBy())
-        && (request.getBranchCode()==null
-        || request.getBranchCode().isBlank())){
-            throw new IllegalArgumentException("Branch code is mandatory for branch search");
-        }
-
-        
-        if (request.getReportDate() == null
-                || !request.getReportDate().matches("\\d{4}-\\d{2}-\\d{2}")) {
-
-            throw new IllegalArgumentException("Invalid report date");
-        }
-
-
-        LocalDate reportDate=LocalDate.parse(request.getReportDate(),
-        DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-
-        log.info("Parsed report date: {}",reportDate);
-
-        String dateFolder= reportDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-
-        String fileDate= reportDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-
-        // 1. Sanitize the location from DB
-        String rawLocation = master.getLocation().replace("{date}", dateFolder);
-
-        if (rawLocation.contains("..")) {
-            throw new SecurityException("Invalid report location");
-        }
-
-
-        String safeLocation = sanitizePathSegment(rawLocation);
-        if (safeLocation.contains("..")) {
-            throw new SecurityException("Directory traversal detected");
-        }
-
-        String branchCode = "bank".equalsIgnoreCase(request.getSearchBy())
-                        ? "00000" : request.getBranchCode();
-
-                
-        if (!branchCode.matches("\\d{5}")) {
-            throw new IllegalArgumentException("Invalid branch code");
-        }
-              
-
-
-        String fileName;
-        
-
-        if (request.getId() >= 101 && request.getId() <= 104) {
-
-            AsciiConfig config = asciiConfigRepository.findById(request.getId())
-                            .orElseThrow(() ->
-                                    new IllegalArgumentException("ASCII Config not found"));
-
-            String safeOutputName = sanitizePathSegment(config.getOutputFileName());
-            String safeFileType = config.getFileType() != null && !config.getFileType().isBlank()
-                    ? sanitizePathSegment(config.getFileType())
-                    : null;
-
-            if (safeFileType != null) {
-                fileName = branchCode + "." + safeOutputName + "." + fileDate + "." + safeFileType;
-            } else {
-                fileName = branchCode + "." + safeOutputName + "." + fileDate;
-            }
-
-            if (!fileName.matches("[A-Za-z0-9._-]+")) {
-                throw new SecurityException("Invalid file name");
-            }
-
-        }
-        else if (request.getId() >= 105 && request.getId() <= 107) {
-
-            AsciiConfigTb configTb = asciiConfigTbRepository.findById(request.getId())
-                            .orElseThrow(() ->
-                                    new IllegalArgumentException("ASCII Config TB not found"));
-
-            String safeFileIdentifier = sanitizePathSegment(configTb.getFileIdentifier());
-            fileName = branchCode + "." + safeFileIdentifier + "." + fileDate;
-        }
-        else {
-
-            throw new IllegalArgumentException("Invalid ASCII ID");
-        }
-                
-        Path finalHdfsPath = new Path( hdfsBasePath+"/"+safeLocation, fileName);
-        String finalPath = finalHdfsPath.toString();
-        if (!SAFE_PATH_PATTERN.matcher(finalPath).matches() || finalPath.contains("..")) {
-            throw new SecurityException("Invalid path detected: Path manipulation attempt blocked.");
-        }                                         
-        log.info("final path: {}", finalPath);
-        return finalPath;
-    }
+    private static final Set<String> REQUIRED_FILENAMES= Set.of("intr_report","balance_compare_report","cntr_report");
 
     /**
-     * Removes any character that is not explicitly allowed in a file path segment.
-     * This breaks any traversal sequences stored in the DB.
+     * Downloads all required attachments before communication dispatch.
+     * 
+     * @param attachments Attachment references recived from Kafka event.
+     * @return Downloaded attachment response
      */
 
-    private String sanitizePathSegment(String input) {
+    @Override
+    public AttachmentDownloadResponse prepareAttachments(
+            List<AttachmentRef> attachments, String token)
+            throws IOException {
 
-        if (input == null || input.isBlank()) {
-            throw new IllegalArgumentException("Invalid path");
+        log.info("Preparing attachments");
+
+        if (attachments == null || attachments.isEmpty()) {
+            log.info("No attachments received.");
+            return new AttachmentDownloadResponse();
         }
 
-        String sanitized = input.trim();
+        
+        //Build request object to invoke Report Service
+        AttachmentDownloadRequest request =
+                AttachmentDownloadRequest.builder()
+                        .attachments(attachments)
+                        .build();
 
-        if (sanitized.contains("..")) {
-            throw new SecurityException("Directory traversal detected");
+        //download attachments from Report Service
+
+        AttachmentDownloadResponse response =
+                reportServiceClient.downloadAttachments(request,token);
+
+        if (response == null
+                || response.getAttachments() == null
+                || response.getAttachments().isEmpty()) {
+
+            log.info("No attachments downloaded.");
+            return new AttachmentDownloadResponse();
         }
 
-        if (!SAFE_PATH_PATTERN.matcher(sanitized).matches()) {
-            throw new SecurityException("Invalid characters in path");
+        //calculate total attachment size to determine ZIP generation
+        
+        long totalSize = 0;
+
+        for (DownloadedAttachment attachment :
+                response.getAttachments()) {
+
+            totalSize += attachment.getFileSize();
         }
 
-        return sanitized;
+        boolean zipRequired =
+                response.getAttachments().size() > maxAttachmentCount
+                        ||
+                totalSize > (maxAttachmentSizeMb * 1024 * 1024);
+        //Generate ZIP if attachment count or total size exceeds configured threshold
+
+        if (!zipRequired) {
+
+            log.info("ZIP not required.");
+        //return downloaded attachments without ZIP
+            return response;
+        }
+
+        log.info("ZIP generation required.");
+
+        List<File> files = new ArrayList<>();
+
+        for (DownloadedAttachment attachment :
+                response.getAttachments()) {
+
+            byte[] bytes =
+                    Base64.getDecoder().decode(
+                            attachment.getBase64());
+
+            File tempFile =
+                    File.createTempFile(
+                            "attachment_",
+                            "_" + attachment.getFileName());
+
+            Files.write(tempFile.toPath(), bytes);
+
+            files.add(tempFile);
+        }
+
+        //Create ZIP containing all downloaded attachments
+        File zipFile = zipService.createZip(files);
+
+        deleteTemporaryFiles(files);
+
+        byte[] zipBytes =
+                Files.readAllBytes(zipFile.toPath());
+
+        zipFile.delete();
+
+        DownloadedAttachment zipAttachment =
+                new DownloadedAttachment();
+
+        zipAttachment.setFileName("attachments.zip");
+
+        zipAttachment.setContentType("application/zip");
+
+        zipAttachment.setFileSize(zipBytes.length);
+
+        zipAttachment.setBase64(
+                Base64.getEncoder()
+                        .encodeToString(zipBytes));
+
+        AttachmentDownloadResponse zipResponse =
+                new AttachmentDownloadResponse();
+
+        zipResponse.setAttachments(
+                Collections.singletonList(zipAttachment));
+
+        //Return ZIP as a single attachment response.
+
+        return zipResponse;
+    }
+
+    public void deleteTemporaryFiles(List<File> files) {
+
+        if (files == null || files.isEmpty()) {
+            return;
+        }
+
+        for (File file : files) {
+
+            try {
+
+                if (file.exists()) {
+
+                    boolean deleted = file.delete();
+
+                    log.info("Deleted temp file : {} Result : {}",
+                            file.getName(),
+                            deleted);
+                }
+
+            } catch (Exception ex) {
+
+                log.error("Unable to delete temp file : {}",
+                        file.getAbsolutePath(),
+                        ex);
+            }
+        }
     }
 }
 
 
+import jakarta.validation.Valid;
+
+@Slf4j
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api/reports")
+/**
+ * Temporary controller used for local testing of
+ * attachment download functionality
+ */
+public class AttachmentController{
+    private final AttachmentPreparationService attachmentPreparationService;
+
+    //Triggers attachment download for testing
+    
+    @PostMapping("/attachment/download")
+    public AttachmentDownloadResponse download(@Valid @RequestHeader("Authorization") String token,@RequestBody AttachmentDownloadRequest request)throws IOException{
+
+        log.info("Download request received");
+        
+        return attachmentPreparationService.prepareAttachments(request.getAttachments(), token);
+
+    }
+}
+
+    @Override
+    public AttachmentDownloadResponse downloadAttachments(
+            AttachmentDownloadRequest request,
+            int userRoleId,
+            String userId) throws IOException {
+
+
+        log.info("Inside the report service download method");
+
+        List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
+
+        //Process each requested attachment individually
+
+        for (AttachmentRef attachment : request.getAttachments()) {
+
+            log.info("-------------------------------------------------------------------");
+            log.info("Attachment Download Request Received");
+            log.info("Attachment Id: {}",attachment.getAttachmentId());
+            log.info("Report Name: {}",attachment.getFileName());
+            log.info("Attachment Type: {}",attachment.getAttachmentType());
+
+            //Extract report details from attachment reference
+
+            String attachmentId = attachment.getAttachmentId();
+            
+
+            if(attachmentId == null || !ATTACHMENT_PATTERN.matcher(attachmentId).matches()){
+                log.info("Invalid attachment Id");
+                throw new IllegalArgumentException("Invalid attachment Id");
+            }
+            String reportFolder = attachment.getFileName();
+
+            // Extracting date from attachmentId
+            // Example : balance_compare_report_31032026
+            String date = attachmentId.substring(attachmentId.lastIndexOf("_") + 1);
+
+            String folderDate =
+                    date.substring(4, 8) + "-"
+                + date.substring(2, 4) + "-"
+                + date.substring(0, 2);
+
+            byte[] fileBytes;
+            long fileSize;
+            String actualFileName = attachmentId + ".xlsx";
+            log.info("Actual file name: {}",actualFileName);
+
+            //Construct HDFS file path based on report date and folder
+
+            if(!folderDate.matches("\\d{4}-\\d{2}-\\d{2}")){
+                throw new IllegalArgumentException("Invalid report date");
+            }
+            if(!ATTACHMENT_PATTERN.matcher(actualFileName).matches()){
+                throw new SecurityException("Invalid file name");
+            }
+
+            if(reportsBasePath.contains("..")){
+                throw new SecurityException("Invalid base path");
+            }
+
+            Path base=new Path(reportsBasePath);
+            Path datePath=new Path(base,folderDate);
+            // Path folderName=new Path(datePath,reportFolder);
+            // Path filePath= new Path(folderName,actualFileName);
+            Path filePath= new Path(datePath,actualFileName);
+
+            String finalPath = filePath.toString();
+            if(finalPath.contains("..")){
+                throw new SecurityException("Directory traversal detected");
+            }
+
+            log.info("Reading HDFS File : {}", filePath);
+
+            //validate report existence in HDFS
+
+            if (!hdfsFileSystem.exists(filePath)) {
+                log.info("Attachment not found");
+                throw new ResourceNotFoundException(
+                        "Attachment not found : " + filePath);
+            }
+
+            FileStatus status = hdfsFileSystem.getFileStatus(filePath);
+            Path normalizedPath = Path.getPathWithoutSchemeAndAuthority(filePath);
+
+            if (!normalizedPath.equals(filePath)) {
+                throw new SecurityException("Invalid HDFS path");
+            }
+
+            //Read report content from HDFS
+
+            try (FSDataInputStream inputStream = hdfsFileSystem.open(normalizedPath);
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+
+                fileBytes = outputStream.toByteArray();
+            }catch(IOException e){
+                log.error("Unable to read HDFS file {}",filePath,e);
+                throw new ResourceNotFoundException(
+                    "Unable to read attachment from HDFS:"+actualFileName);
+            }
+
+            fileSize = status.getLen();
+            
+
+            DownloadedAttachment downloaded = new DownloadedAttachment();
+
+            downloaded.setFileName(actualFileName);
+            downloaded.setContentType(
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            downloaded.setFileSize(fileSize);
+            //Encode report content into Base64 for REST response
+            downloaded.setBase64(Base64.getEncoder().encodeToString(fileBytes));
+
+            downloadedFiles.add(downloaded);
+
+            
+            log.info("REPORT DOWNLOADED SUCCESSFULLY");
+            log.info("Attachment Id   : {}", attachment.getAttachmentId());
+            log.info("Report Name     : {}", downloaded.getFileName());
+            log.info("Attachment Type : {}", attachment.getAttachmentType());
+            log.info("Content Type    : {}", downloaded.getContentType());
+            log.info("File Size       : {} bytes", downloaded.getFileSize());
+        }
+
+        AttachmentDownloadResponse response = new AttachmentDownloadResponse();
+        //Prepare final response containing all downloaded attachments
+        response.setAttachments(downloadedFiles);
+
+        
+        log.info("------------------------------------------------------------");
+        log.info("Attachment Download Completed Successfully");
+        log.info("Total Reports Downloaded : {}", downloadedFiles.size());
+
+        return response;
+    }
+    
