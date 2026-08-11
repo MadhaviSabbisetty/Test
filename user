@@ -1,357 +1,55 @@
-package com.fincore.CommunicationService.attachment;
+// package com.fincore.CommunicationService.dto;
+// import lombok.Data;
+// import lombok.AllArgsConstructor;
+// import lombok.NoArgsConstructor;
 
-import com.fincore.CommunicationService.client.ReportServiceClient;
-import com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+// @Data
+// @AllArgsConstructor
+// @NoArgsConstructor
+// public class ApiResponse<T>{
+//     private boolean success;
+//     private String message;
+//     private T data;
+// }
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
-import java.util.Collections;
+package com.fincore.CommunicationService.dto;
 
-@Slf4j
-@Service
-@RequiredArgsConstructor
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.Getter;
 
-/**
- * handles attachment download by invoking Report Service and
- * prepares ZIP when attachment size or count exceeds configured limits.
- */
+import java.time.Instant;
+import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 
-public class AttachmentPreparationServiceImpl
-        implements AttachmentPreparationService {
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Getter
+@JsonInclude(JsonInclude.Include.NON_NULL) // Don't include null fields in the JSON response
+public class ApiResponse<T> {
 
-    private final ReportServiceClient reportServiceClient;
+    private final boolean success;
+    private final String message;
+    private final T data;
+    private final Instant timestamp;
 
-    private final ZipService zipService;
-
-    @Value("${attachment.max.count:10}")
-    private int maxAttachmentCount;
-
-    @Value("${attachment.max.size.mb:20}")
-    private long maxAttachmentSizeMb;
-
-    private static final Set<String> REQUIRED_FILENAMES= Set.of("intr_report","balance_compare_report","cntr_report");
-
-    /**
-     * Downloads all required attachments before communication dispatch.
-     * 
-     * @param attachments Attachment references recived from Kafka event.
-     * @return Downloaded attachment response
-     */
-
-    @Override
-    public AttachmentDownloadResponse prepareAttachments(
-            List<AttachmentRef> attachments, String token)
-            throws IOException {
-
-        log.info("Preparing attachments");
-
-        if (attachments == null || attachments.isEmpty()) {
-            log.info("No attachments received.");
-            return new AttachmentDownloadResponse();
-        }
-
-        
-        //Build request object to invoke Report Service
-        AttachmentDownloadRequest request =
-                AttachmentDownloadRequest.builder()
-                        .attachments(attachments)
-                        .build();
-
-        //download attachments from Report Service
-
-        AttachmentDownloadResponse response =
-                reportServiceClient.downloadAttachments(request,token);
-
-        if (response == null
-                || response.getAttachments() == null
-                || response.getAttachments().isEmpty()) {
-
-            log.info("No attachments downloaded.");
-            return new AttachmentDownloadResponse();
-        }
-
-        //calculate total attachment size to determine ZIP generation
-        
-        long totalSize = 0;
-
-        for (DownloadedAttachment attachment :
-                response.getAttachments()) {
-
-            totalSize += attachment.getFileSize();
-        }
-
-        boolean zipRequired =
-                response.getAttachments().size() > maxAttachmentCount
-                        ||
-                totalSize > (maxAttachmentSizeMb * 1024 * 1024);
-        //Generate ZIP if attachment count or total size exceeds configured threshold
-
-        if (!zipRequired) {
-
-            log.info("ZIP not required.");
-        //return downloaded attachments without ZIP
-            return response;
-        }
-
-        log.info("ZIP generation required.");
-
-        List<File> files = new ArrayList<>();
-
-        for (DownloadedAttachment attachment :
-                response.getAttachments()) {
-
-            byte[] bytes =
-                    Base64.getDecoder().decode(
-                            attachment.getBase64());
-
-            File tempFile =
-                    File.createTempFile(
-                            "attachment_",
-                            "_" + attachment.getFileName());
-
-            Files.write(tempFile.toPath(), bytes);
-
-            files.add(tempFile);
-        }
-
-        //Create ZIP containing all downloaded attachments
-        File zipFile = zipService.createZip(files);
-
-        deleteTemporaryFiles(files);
-
-        byte[] zipBytes =
-                Files.readAllBytes(zipFile.toPath());
-
-        zipFile.delete();
-
-        DownloadedAttachment zipAttachment =
-                new DownloadedAttachment();
-
-        zipAttachment.setFileName("attachments.zip");
-
-        zipAttachment.setContentType("application/zip");
-
-        zipAttachment.setFileSize(zipBytes.length);
-
-        zipAttachment.setBase64(
-                Base64.getEncoder()
-                        .encodeToString(zipBytes));
-
-        AttachmentDownloadResponse zipResponse =
-                new AttachmentDownloadResponse();
-
-        zipResponse.setAttachments(
-                Collections.singletonList(zipAttachment));
-
-        //Return ZIP as a single attachment response.
-
-        return zipResponse;
+    private ApiResponse(boolean success, String message, T data) {
+        this.success = success;
+        this.message = message;
+        this.data = data;
+        this.timestamp = Instant.now();
     }
 
-    public void deleteTemporaryFiles(List<File> files) {
+    public static <T> ApiResponse<T> success(T data, String message) {
+        return new ApiResponse<>(true, message, data);
+    }
 
-        if (files == null || files.isEmpty()) {
-            return;
-        }
+    public static <T> ApiResponse<T> success(T data) {
+        return new ApiResponse<>(true, "Operation completed successfully.", data);
+    }
 
-        for (File file : files) {
-
-            try {
-
-                if (file.exists()) {
-
-                    boolean deleted = file.delete();
-
-                    log.info("Deleted temp file : {} Result : {}",
-                            file.getName(),
-                            deleted);
-                }
-
-            } catch (Exception ex) {
-
-                log.error("Unable to delete temp file : {}",
-                        file.getAbsolutePath(),
-                        ex);
-            }
-        }
+    public static <T> ApiResponse<T> error(String message) {
+        return new ApiResponse<>(false, message, null);
     }
 }
-
-
-import jakarta.validation.Valid;
-
-@Slf4j
-@RestController
-@RequiredArgsConstructor
-@RequestMapping("/api/reports")
-/**
- * Temporary controller used for local testing of
- * attachment download functionality
- */
-public class AttachmentController{
-    private final AttachmentPreparationService attachmentPreparationService;
-
-    //Triggers attachment download for testing
-    
-    @PostMapping("/attachment/download")
-    public AttachmentDownloadResponse download(@Valid @RequestHeader("Authorization") String token,@RequestBody AttachmentDownloadRequest request)throws IOException{
-
-        log.info("Download request received");
-        
-        return attachmentPreparationService.prepareAttachments(request.getAttachments(), token);
-
-    }
-}
-
-    @Override
-    public AttachmentDownloadResponse downloadAttachments(
-            AttachmentDownloadRequest request,
-            int userRoleId,
-            String userId) throws IOException {
-
-
-        log.info("Inside the report service download method");
-
-        List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
-
-        //Process each requested attachment individually
-
-        for (AttachmentRef attachment : request.getAttachments()) {
-
-            log.info("-------------------------------------------------------------------");
-            log.info("Attachment Download Request Received");
-            log.info("Attachment Id: {}",attachment.getAttachmentId());
-            log.info("Report Name: {}",attachment.getFileName());
-            log.info("Attachment Type: {}",attachment.getAttachmentType());
-
-            //Extract report details from attachment reference
-
-            String attachmentId = attachment.getAttachmentId();
-            
-
-            if(attachmentId == null || !ATTACHMENT_PATTERN.matcher(attachmentId).matches()){
-                log.info("Invalid attachment Id");
-                throw new IllegalArgumentException("Invalid attachment Id");
-            }
-            String reportFolder = attachment.getFileName();
-
-            // Extracting date from attachmentId
-            // Example : balance_compare_report_31032026
-            String date = attachmentId.substring(attachmentId.lastIndexOf("_") + 1);
-
-            String folderDate =
-                    date.substring(4, 8) + "-"
-                + date.substring(2, 4) + "-"
-                + date.substring(0, 2);
-
-            byte[] fileBytes;
-            long fileSize;
-            String actualFileName = attachmentId + ".xlsx";
-            log.info("Actual file name: {}",actualFileName);
-
-            //Construct HDFS file path based on report date and folder
-
-            if(!folderDate.matches("\\d{4}-\\d{2}-\\d{2}")){
-                throw new IllegalArgumentException("Invalid report date");
-            }
-            if(!ATTACHMENT_PATTERN.matcher(actualFileName).matches()){
-                throw new SecurityException("Invalid file name");
-            }
-
-            if(reportsBasePath.contains("..")){
-                throw new SecurityException("Invalid base path");
-            }
-
-            Path base=new Path(reportsBasePath);
-            Path datePath=new Path(base,folderDate);
-            // Path folderName=new Path(datePath,reportFolder);
-            // Path filePath= new Path(folderName,actualFileName);
-            Path filePath= new Path(datePath,actualFileName);
-
-            String finalPath = filePath.toString();
-            if(finalPath.contains("..")){
-                throw new SecurityException("Directory traversal detected");
-            }
-
-            log.info("Reading HDFS File : {}", filePath);
-
-            //validate report existence in HDFS
-
-            if (!hdfsFileSystem.exists(filePath)) {
-                log.info("Attachment not found");
-                throw new ResourceNotFoundException(
-                        "Attachment not found : " + filePath);
-            }
-
-            FileStatus status = hdfsFileSystem.getFileStatus(filePath);
-            Path normalizedPath = Path.getPathWithoutSchemeAndAuthority(filePath);
-
-            if (!normalizedPath.equals(filePath)) {
-                throw new SecurityException("Invalid HDFS path");
-            }
-
-            //Read report content from HDFS
-
-            try (FSDataInputStream inputStream = hdfsFileSystem.open(normalizedPath);
-                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    outputStream.write(buffer, 0, bytesRead);
-                }
-
-                fileBytes = outputStream.toByteArray();
-            }catch(IOException e){
-                log.error("Unable to read HDFS file {}",filePath,e);
-                throw new ResourceNotFoundException(
-                    "Unable to read attachment from HDFS:"+actualFileName);
-            }
-
-            fileSize = status.getLen();
-            
-
-            DownloadedAttachment downloaded = new DownloadedAttachment();
-
-            downloaded.setFileName(actualFileName);
-            downloaded.setContentType(
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            downloaded.setFileSize(fileSize);
-            //Encode report content into Base64 for REST response
-            downloaded.setBase64(Base64.getEncoder().encodeToString(fileBytes));
-
-            downloadedFiles.add(downloaded);
-
-            
-            log.info("REPORT DOWNLOADED SUCCESSFULLY");
-            log.info("Attachment Id   : {}", attachment.getAttachmentId());
-            log.info("Report Name     : {}", downloaded.getFileName());
-            log.info("Attachment Type : {}", attachment.getAttachmentType());
-            log.info("Content Type    : {}", downloaded.getContentType());
-            log.info("File Size       : {} bytes", downloaded.getFileSize());
-        }
-
-        AttachmentDownloadResponse response = new AttachmentDownloadResponse();
-        //Prepare final response containing all downloaded attachments
-        response.setAttachments(downloadedFiles);
-
-        
-        log.info("------------------------------------------------------------");
-        log.info("Attachment Download Completed Successfully");
-        log.info("Total Reports Downloaded : {}", downloadedFiles.size());
-
-        return response;
-    }
-    
