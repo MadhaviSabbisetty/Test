@@ -1,63 +1,46 @@
+log.info("Inside the report service download method");
 
-[INFO] ------------------------------------------------------------------------
-[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.15.0:compile (default-compile) on project ReportService: Compilation failure: Compilation failure: 
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[333,13] illegal start of expression
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[334,13] illegal start of type
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[334,28] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[334,68] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[334,81] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[334,82] ';' expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[367,21] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[367,22] illegal start of type
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[371,13] illegal start of type
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[371,39] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[371,48] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[371,49] ';' expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[381,13] illegal start of type
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[382,81] ';' expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[392,14] illegal start of type
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[392,33] ';' expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[398,21] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[403,35] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[403,50] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[404,38] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[405,21] illegal start of type
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[406,35] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[406,44] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[408,33] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[408,51] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[410,32] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[410,43] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[413,21] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[413,22] illegal start of type
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[414,21] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[414,22] illegal start of type
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[415,21] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[415,22] illegal start of type
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[416,21] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[416,22] illegal start of type
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[417,21] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[417,22] illegal start of type
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[418,21] <identifier> expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[418,22] illegal start of type
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[421,9] implicitly declared classes are a preview feature and are disabled by default.
-[ERROR]   (use --enable-preview to enable implicitly declared classes)
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[423,9] class, interface, enum, or record expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[426,9] class, interface, enum, or record expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[427,9] class, interface, enum, or record expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[428,9] class, interface, enum, or record expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[430,9] class, interface, enum, or record expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[431,5] class, interface, enum, or record expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[943,1] class, interface, enum, or record expected
-[ERROR] /D:/Workspace/Git/Fincore/Backend/fincore_report_service/src/main/java/com/fincore/ReportService/service/ReportServiceImpl.java:[1,1] implicitly declared class should not have package declaration
-[ERROR] -> [Help 1]
-[ERROR] 
-[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
-[ERROR] Re-run Maven using the -X switch to enable full debug logging.
-[ERROR] 
-[ERROR] For more information about the errors and possible solutions, please read the following articles:
-[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
-
-D:\Workspace\Git\Fincore\Backend\fincore_report_service>
+List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
 
 
+// Validate exactly 3 attachments
+if (request == null
+        || request.getAttachments() == null
+        || request.getAttachments().size() != 3) {
+
+    throw new IllegalArgumentException(
+            "Exactly 3 attachments are required");
+}
+
+
+// Validate exact filenames
+Set<String> requiredFileNames = Set.of(
+        "intr_report",
+        "balance_compare_report",
+        "cntr_report"
+);
+
+Set<String> actualFileNames = new HashSet<>();
+
+for (AttachmentRef attachment : request.getAttachments()) {
+
+    if (attachment == null || attachment.getFileName() == null) {
+        throw new IllegalArgumentException(
+                "Attachment filename is required");
+    }
+
+    actualFileNames.add(attachment.getFileName());
+}
+
+if (actualFileNames.size() != 3
+        || !actualFileNames.equals(requiredFileNames)) {
+
+    throw new IllegalArgumentException(
+            "Attachments must contain exactly these filenames: "
+            + "intr_report, balance_compare_report, cntr_report");
+}
+
+
+// Process each requested attachment individually
+
+for (AttachmentRef attachment : request.getAttachments()) {
