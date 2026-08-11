@@ -1,46 +1,58 @@
-log.info("Inside the report service download method");
+package com.fincore.CommunicationService.dto;
 
-List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Getter;
 
+import java.time.Instant;
 
-// Validate exactly 3 attachments
-if (request == null
-        || request.getAttachments() == null
-        || request.getAttachments().size() != 3) {
+@Getter
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class ApiResponse<T> {
 
-    throw new IllegalArgumentException(
-            "Exactly 3 attachments are required");
-}
+    private final boolean success;
+    private final String message;
+    private final T data;
+    private final Instant timestamp;
 
+    @JsonCreator
+    public ApiResponse(
+            @JsonProperty("success") boolean success,
+            @JsonProperty("message") String message,
+            @JsonProperty("data") T data,
+            @JsonProperty("timestamp") Instant timestamp) {
 
-// Validate exact filenames
-Set<String> requiredFileNames = Set.of(
-        "intr_report",
-        "balance_compare_report",
-        "cntr_report"
-);
-
-Set<String> actualFileNames = new HashSet<>();
-
-for (AttachmentRef attachment : request.getAttachments()) {
-
-    if (attachment == null || attachment.getFileName() == null) {
-        throw new IllegalArgumentException(
-                "Attachment filename is required");
+        this.success = success;
+        this.message = message;
+        this.data = data;
+        this.timestamp = timestamp;
     }
 
-    actualFileNames.add(attachment.getFileName());
+    public static <T> ApiResponse<T> success(T data, String message) {
+        return new ApiResponse<>(
+                true,
+                message,
+                data,
+                Instant.now()
+        );
+    }
+
+    public static <T> ApiResponse<T> success(T data) {
+        return new ApiResponse<>(
+                true,
+                "Operation completed successfully.",
+                data,
+                Instant.now()
+        );
+    }
+
+    public static <T> ApiResponse<T> error(String message) {
+        return new ApiResponse<>(
+                false,
+                message,
+                null,
+                Instant.now()
+        );
+    }
 }
-
-if (actualFileNames.size() != 3
-        || !actualFileNames.equals(requiredFileNames)) {
-
-    throw new IllegalArgumentException(
-            "Attachments must contain exactly these filenames: "
-            + "intr_report, balance_compare_report, cntr_report");
-}
-
-
-// Process each requested attachment individually
-
-for (AttachmentRef attachment : request.getAttachments()) {
