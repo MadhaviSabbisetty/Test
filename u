@@ -1,223 +1,291 @@
-{
-"id" :106,
-"reportDate":"2026-03-30",
-"searchBy":"branch",
-"branchCode":"00001"
-}
-{
-    "message": "Invalid normalized path",
-    "success": false,
-    "timestamp": "2026-08-12T07:09:55.948563Z"
-}
+package com.fincore.CommunicationService.attachment;
 
-2026-08-12 12:37:49.724 ERROR [http-nio-9005-exec-7] c.f.R.e.GlobalExceptionHandler: Illegal argument or state: Invalid normalized path
-{"@timestamp":"2026-08-12T12:37:49.7242121+05:30","level":"ERROR","service":"ReportService","traceId":"c1a1f1e8-e5aa-4c7d-8e51-41c50946b02c","userId":"1022918","clientIp":"10.0.19.35","apiPath":"/api/ascii/view","class":"c.f.R.exception.GlobalExceptionHandler","message":"Illegal argument or state: Invalid normalized path","stack_trace":""}
-2026-08-12 12:37:49.726 INFO  [http-nio-9005-exec-7] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:9005/api/ascii/view | Status: 400
-{"@timestamp":"2026-08-12T12:37:49.726193+05:30","level":"INFO","service":"ReportService","traceId":"c1a1f1e8-e5aa-4c7d-8e51-41c50946b02c","userId":"1022918","clientIp":"10.0.19.35","apiPath":"/api/ascii/view","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:9005/api/ascii/view | Status: 400","stack_trace":""}
-2026-08-12 12:39:55.877 INFO  [http-nio-9005-exec-9] c.f.R.s.AsciiFileServiceImpl: Parsed report date: 2026-03-30
-{"@timestamp":"2026-08-12T12:39:55.8772375+05:30","level":"INFO","service":"ReportService","traceId":"cb6b124f-8b19-4455-b680-858e5d771244","userId":"1022918","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/ascii/view","class":"c.f.R.service.AsciiFileServiceImpl","message":"Parsed report date: 2026-03-30","stack_trace":""}       
-2026-08-12 12:39:55.899 INFO  [http-nio-9005-exec-9] c.f.R.s.AsciiFileServiceImpl: final path: /reports/2026-03-30/tb_ascii_files/pnl_report/00001.TBP.20260330     
-{"@timestamp":"2026-08-12T12:39:55.8992596+05:30","level":"INFO","service":"ReportService","traceId":"cb6b124f-8b19-4455-b680-858e5d771244","userId":"1022918","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/ascii/view","class":"c.f.R.service.AsciiFileServiceImpl","message":"final path: /reports/2026-03-30/tb_ascii_files/pnl_report/00001.TBP.20260330","stack_trace":""}
-2026-08-12 12:39:55.900 INFO  [http-nio-9005-exec-9] c.f.R.s.AsciiFileServiceImpl: checking hdfs path: /reports/2026-03-30/tb_ascii_files/pnl_report/00001.TBP.20260330
-{"@timestamp":"2026-08-12T12:39:55.9007681+05:30","level":"INFO","service":"ReportService","traceId":"cb6b124f-8b19-4455-b680-858e5d771244","userId":"1022918","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/ascii/view","class":"c.f.R.service.AsciiFileServiceImpl","message":"checking hdfs path: /reports/2026-03-30/tb_ascii_files/pnl_report/00001.TBP.20260330","stack_trace":""}
-2026-08-12 12:39:55.946 ERROR [http-nio-9005-exec-9] c.f.R.s.AsciiFileServiceImpl: Error while viewing ascii file
-org.apache.hadoop.ipc.RemoteException(org.apache.hadoop.ipc.StandbyException): Operation category READ is not supported in state standby. Visit https://s.apache.org/sbnn-error
-        at org.apache.hadoop.hdfs.server.namenode.ha.StandbyState.checkOperation(StandbyState.java:108)
-        at org.apache.hadoop.hdfs.server.namenode.NameNode$NameNodeHAContext.checkOperation(NameNode.java:2255)
-        at org.apache.hadoop.hdfs.server.namenode.FSNamesystem.checkOperation(FSNamesystem.java:1628)
-        at org.apache.hadoop.hdfs.server.namenode.FSNamesystem.getFileInfo(FSNamesystem.java:3464)
-        at org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer.getFileInfo(NameNodeRpcServer.java:1229)
-        at org.apache.hadoop.hdfs.protocolPB.ClientNamenodeProtocolServerSideTranslatorPB.getFileInfo(ClientNamenodeProtocolServerSideTranslatorPB.java:1052)       
-        at org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos$ClientNamenodeProtocol$2.callBlockingMethod(ClientNamenodeProtocolProtos.java)        
-        at org.apache.hadoop.ipc.ProtobufRpcEngine2$Server$ProtoBufRpcInvoker.call(ProtobufRpcEngine2.java:621)
-        at org.apache.hadoop.ipc.ProtobufRpcEngine2$Server$ProtoBufRpcInvoker.call(ProtobufRpcEngine2.java:589)
-        at org.apache.hadoop.ipc.ProtobufRpcEngine2$Server$ProtoBufRpcInvoker.call(ProtobufRpcEngine2.java:573)
-        at org.apache.hadoop.ipc.RPC$Server.call(RPC.java:1228)
-        at org.apache.hadoop.ipc.Server$RpcCall.run(Server.java:1246)
-        at org.apache.hadoop.ipc.Server$RpcCall.run(Server.java:1169)
-        at java.base/java.security.AccessController.doPrivileged(AccessController.java:712)
-        at java.base/javax.security.auth.Subject.doAs(Subject.java:439)
-        at org.apache.hadoop.security.UserGroupInformation.doAs(UserGroupInformation.java:1953)
-        at org.apache.hadoop.ipc.Server$Handler.run(Server.java:3198)
+import com.fincore.CommunicationService.client.ReportServiceClient;
+import com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
+import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
 
-        at org.apache.hadoop.ipc.Client.warpIOException(Client.java:1614)
-        at org.apache.hadoop.ipc.Client.getRpcResponse(Client.java:1605)
-        at org.apache.hadoop.ipc.Client.call(Client.java:1558)
-        at org.apache.hadoop.ipc.Client.call(Client.java:1474)
-        at org.apache.hadoop.ipc.ProtobufRpcEngine2$Invoker.invoke(ProtobufRpcEngine2.java:259)
-        at org.apache.hadoop.ipc.ProtobufRpcEngine2$Invoker.invoke(ProtobufRpcEngine2.java:140)
-        at jdk.proxy2/jdk.proxy2.$Proxy207.getFileInfo(Unknown Source)
-        at org.apache.hadoop.hdfs.protocolPB.ClientNamenodeProtocolTranslatorPB.lambda$getFileInfo$41(ClientNamenodeProtocolTranslatorPB.java:820)
-        at org.apache.hadoop.ipc.internal.ShadedProtobufHelper.ipc(ShadedProtobufHelper.java:160)
-        at org.apache.hadoop.hdfs.protocolPB.ClientNamenodeProtocolTranslatorPB.getFileInfo(ClientNamenodeProtocolTranslatorPB.java:820)
-        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
-        at java.base/java.lang.reflect.Method.invoke(Method.java:580)
-        at org.apache.hadoop.io.retry.RetryInvocationHandler.invokeMethod(RetryInvocationHandler.java:437)
-        at org.apache.hadoop.io.retry.RetryInvocationHandler$Call.invokeMethod(RetryInvocationHandler.java:170)
-        at org.apache.hadoop.io.retry.RetryInvocationHandler$Call.invoke(RetryInvocationHandler.java:162)
-        at org.apache.hadoop.io.retry.RetryInvocationHandler$Call.invokeOnce(RetryInvocationHandler.java:100)
-        at org.apache.hadoop.io.retry.RetryInvocationHandler.invoke(RetryInvocationHandler.java:366)
-        at jdk.proxy2/jdk.proxy2.$Proxy208.getFileInfo(Unknown Source)
-        at org.apache.hadoop.hdfs.DFSClient.getFileInfo(DFSClient.java:1770)      
-        at org.apache.hadoop.hdfs.DistributedFileSystem$29.doCall(DistributedFileSystem.java:1838)
-        at org.apache.hadoop.hdfs.DistributedFileSystem$29.doCall(DistributedFileSystem.java:1835)
-        at org.apache.hadoop.fs.FileSystemLinkResolver.resolve(FileSystemLinkResolver.java:81)
-        at org.apache.hadoop.hdfs.DistributedFileSystem.getFileStatus(DistributedFileSystem.java:1850)
-        at org.apache.hadoop.fs.FileSystem.exists(FileSystem.java:1863)
-        at com.fincore.ReportService.service.AsciiFileServiceImpl.viewAscii(AsciiFileServiceImpl.java:104)
-        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
-        at java.base/java.lang.reflect.Method.invoke(Method.java:580)
-        at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
-        at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
-        at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
-        at org.springframework.aop.interceptor.ExposeInvocationInterceptor.invoke(ExposeInvocationInterceptor.java:96)
-        at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
-        at org.springframework.aop.aspectj.MethodInvocationProceedingJoinPoint.proceed(MethodInvocationProceedingJoinPoint.java:82)
-        at com.fincore.commonutilities.aspect.GlobalResilienceAspect.lambda$applyResilience$0(GlobalResilienceAspect.java:60)
-        at io.github.resilience4j.retry.Retry.lambda$decorateSupplier$5(Retry.java:301)
-        at io.github.resilience4j.circuitbreaker.CircuitBreaker.lambda$decorateSupplier$5(CircuitBreaker.java:194)
-        at com.fincore.commonutilities.aspect.GlobalResilienceAspect.applyResilience(GlobalResilienceAspect.java:73)
-        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
-        at java.base/java.lang.reflect.Method.invoke(Method.java:580)
-        at org.springframework.aop.aspectj.AbstractAspectJAdvice.invokeAdviceMethodWithGivenArgs(AbstractAspectJAdvice.java:648)
-        at org.springframework.aop.aspectj.AbstractAspectJAdvice.invokeAdviceMethod(AbstractAspectJAdvice.java:630)
-        at org.springframework.aop.aspectj.AspectJAroundAdvice.invoke(AspectJAroundAdvice.java:70)
-        at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
-        at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:719)
-        at com.fincore.ReportService.service.AsciiFileServiceImpl$$SpringCGLIB$$0.viewAscii(<generated>)
-        at com.fincore.ReportService.controller.AsciiFileController.viewAscii(AsciiFileController.java:51)
-        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
-        at java.base/java.lang.reflect.Method.invoke(Method.java:580)
-        at org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:252)
-        at org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:184)
-        at org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:117)
-        at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:934)
-        at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.handleInternal(RequestMappingHandlerAdapter.java:853)
-        at org.springframework.web.servlet.mvc.method.AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:86)
-        at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:963)
-        at org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:866)
-        at org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1000)
-        at org.springframework.web.servlet.FrameworkServlet.doPost(FrameworkServlet.java:903)
-        at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:649)
-        at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:874)
-        at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:710)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:132)
-        at org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:59) 
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:108)
-        at org.springframework.security.web.FilterChainProxy.lambda$doFilterInternal$2(FilterChainProxy.java:235)
-        at org.springframework.security.web.ObservationFilterChainDecorator$FilterObservation$SimpleFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:491)
-        at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:353)
-        at org.springframework.security.web.ObservationFilterChainDecorator.lambda$wrapSecured$0(ObservationFilterChainDecorator.java:84)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:131)
-        at org.springframework.security.web.access.intercept.AuthorizationFilter.doFilter(AuthorizationFilter.java:101)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126)
-        at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:132)
-        at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:86)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.authentication.AnonymousAuthenticationFilter.doFilter(AnonymousAuthenticationFilter.java:100)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter.doFilter(SecurityContextHolderAwareRequestFilter.java:181)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.savedrequest.RequestCacheAwareFilter.doFilter(RequestCacheAwareFilter.java:63)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at com.fincore.commonutilities.security.ContextRbacFilter.doFilterInternal(ContextRbacFilter.java:161)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at com.fincore.commonutilities.logging.MdcLoggingFilter.doFilterInternal(MdcLoggingFilter.java:83)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:110)
-        at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:96)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.web.filter.CorsFilter.doFilterInternal(CorsFilter.java:91)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.header.HeaderWriterFilter.doHeadersAfter(HeaderWriterFilter.java:90)
-        at org.springframework.security.web.header.HeaderWriterFilter.doFilterInternal(HeaderWriterFilter.java:75)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:82)
-        at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:69)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter.doFilterInternal(WebAsyncManagerIntegrationFilter.java:62)       
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.session.DisableEncodeUrlFilter.doFilterInternal(DisableEncodeUrlFilter.java:42)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$0(ObservationFilterChainDecorator.java:336)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.FilterChainProxy.doFilterInternal(FilterChainProxy.java:237)
-        at org.springframework.security.web.FilterChainProxy.doFilter(FilterChainProxy.java:195)
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113)
-        at org.springframework.web.filter.ServletRequestPathFilter.doFilter(ServletRequestPathFilter.java:52)
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113)
-        at org.springframework.web.filter.CompositeFilter.doFilter(CompositeFilter.java:74)
-        at org.springframework.security.config.annotation.web.configuration.WebSecurityConfiguration$CompositeFilterChainProxy.doFilter(WebSecurityConfiguration.java:317)
-        at org.springframework.web.filter.DelegatingFilterProxy.invokeDelegate(DelegatingFilterProxy.java:355)
-        at org.springframework.web.filter.DelegatingFilterProxy.doFilter(DelegatingFilterProxy.java:272)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.RequestContextFilter.doFilterInternal(RequestContextFilter.java:100)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.FormContentFilter.doFilterInternal(FormContentFilter.java:93)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.ServerHttpObservationFilter.doFilterInternal(ServerHttpObservationFilter.java:110)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.CharacterEncodingFilter.doFilterInternal(CharacterEncodingFilter.java:199)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:165)
-        at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:77)
-        at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:535)
-        at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:115)
-        at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:86)
-        at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:71)
-        at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:347)
-        at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:406)
-        at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:71)
-        at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:1307)
-        at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:2036)
-        at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:74)
-        at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:949)
-        at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:483)
-        at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:74)
-        at java.base/java.lang.Thread.run(Thread.java:1570)
-{"@timestamp":"2026-08-12T12:39:55.94656+05:30","level":"ERROR","service":"ReportService","traceId":"cb6b124f-8b19-4455-b680-858e5d771244","userId":"1022918","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/ascii/view","class":"c.f.R.service.AsciiFileServiceImpl","message":"Error while viewing ascii file","stack_trace":"org.apache.hadoop.ipc.RemoteException(org.apache.hadoop.ipc.StandbyException): Operation category READ is not supported in state standby. Visit https://s.apache.org/sbnn-error\n\tat org.apache.hadoop.hdfs.server.namenode.ha.StandbyState.checkOperation(StandbyState.java:108)\n\tat org.apache.hadoop.hdfs.server.namenode.NameNode$NameNodeHAContext.checkOperation(NameNode.java:2255)\n\tat org.apache.hadoop.hdfs.server.namenode.FSNamesystem.checkOperation(FSNamesystem.java:1628)\n\tat org.apache.hadoop.hdfs.server.namenode.FSNamesystem.getFileInfo(FSNamesystem.java:3464)\n\tat org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer.getFileInfo(NameNodeRpcServer.java:1229)\n\tat org.apache.hadoop.hdfs.protocolPB.ClientNamenodeProtocolServerSideTranslatorPB.getFileInfo(ClientNamenodeProtocolServerSideTranslatorPB.java:1052)\n\tat org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos$ClientNamenodeProtocol$2.callBlockingMethod(ClientNamenodeProtocolProtos.java)\n\tat org.apache.hadoop.ipc.ProtobufRpcEngine2$Server$ProtoBufRpcInvoker.call(ProtobufRpcEngine2.java:621)\n\tat org.apache.hadoop.ipc.ProtobufRpcEngine2$Server$ProtoBufRpcInvoker.call(ProtobufRpcEngine2.java:589)\n\tat org.apache.hadoop.ipc.ProtobufRpcEngine2$Server$ProtoBufRpcInvoker.call(ProtobufRpcEngine2.java:573)\n\tat org.apache.hadoop.ipc.RPC$Server.call(RPC.java:1228)\n\tat org.apache.hadoop.ipc.Server$RpcCall.run(Server.java:1246)\n\tat org.apache.hadoop.ipc.Server$RpcCall.run(Server.java:1169)\n\tat java.base/java.security.AccessController.doPrivileged(AccessController.java:712)\n\tat java.base/javax.security.auth.Subject.doAs(Subject.java:439)\n\tat org.apache.hadoop.security.UserGroupInformation.doAs(UserGroupInformation.java:1953)\n\tat org.apache.hadoop.ipc.Server$Handler.run(Server.java:3198)\n\r\n\tat org.apache.hadoop.ipc.Client.warpIOException(Client.java:1614)\r\n\tat org.apache.hadoop.ipc.Client.getRpcResponse(Client.java:1605)\r\n\tat org.apache.hadoop.ipc.Client.call(Client.java:1558)\r\n\tat org.apache.hadoop.ipc.Client.call(Client.java:1474)\r\n\tat org.apache.hadoop.ipc.ProtobufRpcEngine2$Invoker.invoke(ProtobufRpcEngine2.java:259)\r\n\tat org.apache.hadoo.getFileInfo(ClientNamenodeProtocolTranslatorPB.java:820)\r\n"}
-2026-08-12 12:39:55.948 ERROR [http-nio-9005-exec-9] c.f.R.e.GlobalExceptionHandler: Illegal argument or state: Invalid normalized path
-{"@timestamp":"2026-08-12T12:39:55.948563+05:30","level":"ERROR","service":"ReportService","traceId":"cb6b124f-8b19-4455-b680-858e5d771244","userId":"1022918","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/ascii/view","class":"c.f.R.exception.GlobalExceptionHandler","message":"Illegal argument or state: Invalid normalized path","stack_trace":""}
-2026-08-12 12:39:55.949 INFO  [http-nio-9005-exec-9] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://localhost:9005/api/ascii/view | Status: 400
-{"@timestamp":"2026-08-12T12:39:55.9495579+05:30","level":"INFO","service":"ReportService","traceId":"cb6b124f-8b19-4455-b680-858e5d771244","userId":"1022918","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/ascii/view","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://localhost:9005/api/ascii/view | Status: 400","stack_trace":""}
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.List;
+import java.util.Collections;
+
+import java.util.Set;
+import java.util.HashSet;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+
+/**
+ * handles attachment download by invoking Report Service and
+ * prepares ZIP when attachment size or count exceeds configured limits.
+ */
+
+public class AttachmentPreparationServiceImpl
+        implements AttachmentPreparationService {
+
+    private final ReportServiceClient reportServiceClient;
+
+    private final ZipService zipService;
+
+    @Value("${attachment.max.count:10}")
+    private int maxAttachmentCount;
+
+    @Value("${attachment.max.size.mb:20}")
+    private long maxAttachmentSizeMb;
+
+    private static final Set<String> REQUIRED_FILENAMES= Set.of("intr_report","balance_compare_report","cntr_report");
+
+    /**
+     * Downloads all required attachments before communication dispatch.
+     * 
+     * @param attachments Attachment references recived from Kafka event.
+     * @return Downloaded attachment response
+     */
+
+    @Override
+    public AttachmentDownloadResponse prepareAttachments(
+            List<AttachmentRef> attachments, String token)
+            throws IOException {
+
+        log.info("Preparing attachments");
+
+        if (attachments == null || attachments.isEmpty()) {
+            log.info("No attachments received.");
+            return new AttachmentDownloadResponse();
+        }
+
+        if(attachments.size()!=3)
+        {                
+                throw new IllegalArgumentException("Exactly 3 attachments are required");
+        }
+        Set<String> actualFileNames= new HashSet<>();
+
+        for(AttachmentRef attachment : attachments){
+                if(attachment == null || attachment.getFileName()== null){
+                        throw new IllegalArgumentException("Attachment filename is required");
+                }
+                actualFileNames.add(attachment.getFileName());
+        }
+        
+
+
+        if(actualFileNames.size()!=3 || !actualFileNames.equals(REQUIRED_FILENAMES)){
+                throw new IllegalArgumentException("Attachments must contain exactly these filenames:"+"intr_report,balance_compare_report,cntr_report");
+        }
+
+        
+        //Build request object to invoke Report Service
+        AttachmentDownloadRequest request =
+                AttachmentDownloadRequest.builder()
+                        .attachments(attachments)
+                        .build();
+
+        //download attachments from Report Service
+
+        AttachmentDownloadResponse response =
+                reportServiceClient.downloadAttachments(request,token);
+
+        if (response == null
+                || response.getAttachments() == null
+                || response.getAttachments().isEmpty()) {
+
+            log.info("No attachments downloaded.");
+            return new AttachmentDownloadResponse();
+        }
+
+        //calculate total attachment size to determine ZIP generation
+        
+        long totalSize = 0;
+
+        for (DownloadedAttachment attachment :
+                response.getAttachments()) {
+
+            totalSize += attachment.getFileSize();
+        }
+
+        boolean zipRequired =
+                response.getAttachments().size() > maxAttachmentCount
+                        ||
+                totalSize > (maxAttachmentSizeMb * 1024 * 1024);
+        //Generate ZIP if attachment count or total size exceeds configured threshold
+
+        if (!zipRequired) {
+
+            log.info("ZIP not required.");
+        //return downloaded attachments without ZIP
+            return response;
+        }
+
+        log.info("ZIP generation required.");
+
+        List<File> files = new ArrayList<>();
+
+        for (DownloadedAttachment attachment :
+                response.getAttachments()) {
+
+            byte[] bytes =
+                    Base64.getDecoder().decode(
+                            attachment.getBase64());
+
+            File tempFile =
+                    File.createTempFile(
+                            "attachment_",
+                            "_" + attachment.getFileName());
+
+            Files.write(tempFile.toPath(), bytes);
+
+            files.add(tempFile);
+        }
+
+        //Create ZIP containing all downloaded attachments
+        File zipFile = zipService.createZip(files);
+
+        deleteTemporaryFiles(files);
+
+        byte[] zipBytes =
+                Files.readAllBytes(zipFile.toPath());
+
+        zipFile.delete();
+
+        DownloadedAttachment zipAttachment =
+                new DownloadedAttachment();
+
+        zipAttachment.setFileName("attachments.zip");
+
+        zipAttachment.setContentType("application/zip");
+
+        zipAttachment.setFileSize(zipBytes.length);
+
+        zipAttachment.setBase64(
+                Base64.getEncoder()
+                        .encodeToString(zipBytes));
+
+        AttachmentDownloadResponse zipResponse =
+                new AttachmentDownloadResponse();
+
+        zipResponse.setAttachments(
+                Collections.singletonList(zipAttachment));
+
+        //Return ZIP as a single attachment response.
+
+        return zipResponse;
+    }
+
+    public void deleteTemporaryFiles(List<File> files) {
+
+        if (files == null || files.isEmpty()) {
+            return;
+        }
+
+        for (File file : files) {
+
+            try {
+
+                if (file.exists()) {
+
+                    boolean deleted = file.delete();
+
+                    log.info("Deleted temp file : {} Result : {}",
+                            file.getName(),
+                            deleted);
+                }
+
+            } catch (Exception ex) {
+
+                log.error("Unable to delete temp file : {}",
+                        file.getAbsolutePath(),
+                        ex);
+            }
+        }
+    }
+}package com.fincore.CommunicationService.client;
+
+import com.fincore.CommunicationService.dto.ApiResponse;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+/**
+ * REST client used to communicate with Report Service
+ * for attachment download requests
+ */
+public class ReportServiceClient {
+
+    private final RestClient restClient;
+
+    @Value("${report.service.url}")
+    private String reportServiceUrl;
+
+    /**
+     * Invokes Report Service to download attachment content
+     * 
+     * @param request Attachment download request
+     * @return Downloaded attachments
+     */
+
+    public AttachmentDownloadResponse downloadAttachments(
+            AttachmentDownloadRequest request, String token) {
+
+        try {
+
+            log.info("Calling Report Service : {}",
+                    reportServiceUrl + "/api/reports/attachment/download");
+
+            ApiResponse<AttachmentDownloadResponse> response =
+            //Invoke report Service attachment download endpoint
+                    restClient.post()
+                            .uri(reportServiceUrl + "/api/reports/attachment/download")
+                            .header("Authorization",token)
+                            .body(request)
+                            .retrieve()
+                            .body(new ParameterizedTypeReference<ApiResponse<AttachmentDownloadResponse>>() {});
+
+            //Validate response received from Report Service
+
+            if (response == null) {
+                throw new RuntimeException("No response received from Report Service");
+            }
+
+            if (!response.isSuccess()) {
+                throw new RuntimeException(response.getMessage());
+            }
+
+            if (response.getData() == null) {
+                throw new RuntimeException("Attachment response is empty");
+            }
+
+            log.info("Report Service returned {} attachment(s)",
+                    response.getData().getAttachments().size());
+
+            return response.getData();
+
+        } catch (Exception ex) {
+
+            log.error("Error while downloading attachments from Report Service", ex);
+
+            throw ex;
+        }
+    }
+}              
