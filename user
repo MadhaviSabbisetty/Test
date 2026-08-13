@@ -1,55 +1,213 @@
-// package com.fincore.CommunicationService.dto;
-// import lombok.Data;
-// import lombok.AllArgsConstructor;
-// import lombok.NoArgsConstructor;
+package com.fincore.CommunicationService.config;
 
-// @Data
-// @AllArgsConstructor
-// @NoArgsConstructor
-// public class ApiResponse<T>{
-//     private boolean success;
-//     private String message;
-//     private T data;
-// }
+import com.fincore.commonutilities.config.CommonSecurityConfig;
+import com.fincore.commonutilities.config.RedisConfig;
+import com.fincore.commonutilities.config.ResilienceConfig;
+import com.fincore.commonutilities.jwt.JwtUtil;
+import com.fincore.commonutilities.logging.MdcLoggingFilter;
+import com.fincore.commonutilities.security.ContextRbacFilter;
+import com.fincore.commonutilities.security.DecryptRequestBodyAdvice;
+import com.fincore.commonutilities.util.AesEncryptionUtil;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-package com.fincore.CommunicationService.dto;
+/**
+ * Common Security Configuration.
+ * * Aligned with the "Distributed Gateway" architecture.
+ * It uses the ContextRbacFilter from Common Utilities to enforce:
+ * 1. Token Validity
+ * 2. Single Session (Redis check)
+ * 3. RBAC Permissions
+ * Enforces Centralised Mdc Logging Filter, RESILIENCE4J Retry and Circuit Breaker
+ */
+@Configuration
+@EnableWebSecurity
+@Import({
+        RedisConfig.class,
+        JwtUtil.class,
+        CommonSecurityConfig.class,
+        ResilienceConfig.class,
+        AesEncryptionUtil.class,
+        DecryptRequestBodyAdvice.class
+})
+public class SecurityConfig {
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import lombok.Getter;
+    @Autowired
+    private StringRedisTemplate redisTemplate;
 
-import java.time.Instant;
-import lombok.Data;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
+    @Autowired
+    private JwtUtil jwtUtil;
 
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-@Getter
-@JsonInclude(JsonInclude.Include.NON_NULL) // Don't include null fields in the JSON response
-public class ApiResponse<T> {
+    @Autowired
+    private CommonSecurityConfig commonSecurityConfig;
 
-    private final boolean success;
-    private final String message;
-    private final T data;
-    private final Instant timestamp;
+    // --- 1. Define Filters as Beans (Explicitly) ---
 
-    private ApiResponse(boolean success, String message, T data) {
-        this.success = success;
-        this.message = message;
-        this.data = data;
-        this.timestamp = Instant.now();
+    @Bean
+    public MdcLoggingFilter mdcLoggingFilter() {
+        return new MdcLoggingFilter(jwtUtil);
     }
 
-    public static <T> ApiResponse<T> success(T data, String message) {
-        return new ApiResponse<>(true, message, data);
+    @Bean
+    public ContextRbacFilter contextRbacFilter() {
+        return new ContextRbacFilter(redisTemplate, jwtUtil);
     }
 
-    public static <T> ApiResponse<T> success(T data) {
-        return new ApiResponse<>(true, "Operation completed successfully.", data);
+    // --- 2. Prevent Global Registration ---
+    // This stops "The Filter class ... does not have a registered order" error
+
+    @Bean
+    public FilterRegistrationBean<MdcLoggingFilter> mdcFilterRegistration(MdcLoggingFilter filter) {
+        FilterRegistrationBean<MdcLoggingFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false); // Disable global chain
+        return registration;
     }
 
-    public static <T> ApiResponse<T> error(String message) {
-        return new ApiResponse<>(false, message, null);
+    @Bean
+    public FilterRegistrationBean<ContextRbacFilter> rbacFilterRegistration(ContextRbacFilter filter) {
+        FilterRegistrationBean<ContextRbacFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false); // Disable global chain
+        return registration;
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(commonSecurityConfig.corsConfigurationSource()))
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authz -> authz
+                        .requestMatchers("/actuator/**", "/api/auth/**", "/error", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                        .anyRequest().authenticated()
+                )
+                // Add Filters using the BEAN references (methods above)
+                .addFilterBefore(mdcLoggingFilter(), UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(contextRbacFilter(), MdcLoggingFilter.class);
+
+        return http.build();
     }
 }
+
+
+application.properties file
+
+spring.application.name=CommunicationService
+spring.datasource.driver-class-name=oracle.jdbc.OracleDriver
+spring.profiles.active=dev
+server.port=8001
+
+# ===================================================================
+# DEFAULT ENVIRONMENT NAME FOR FALLBACK
+# ===================================================================
+app.preIpString=DEV
+
+report.service.url=http://localhost:9005
+attachment.max.count = 10
+attachment.max.size.mb = 20
+
+
+#====================================================================
+#                          RESILIENCE
+#====================================================================
+resilience4j.retry.instances.bankApiRetry.max-attempts=3
+resilience4j.retry.instances.bankApiRetry.wait-duration=2s
+resilience4j.retry.instances.bankApiRetry.retry-exceptions[0]=java.io.IOException
+resilience4j.retry.instances.bankApiRetry.retry-exceptions[1]=java.net.SocketTimeoutException
+resilience4j.retry.instances.bankApiRetry.ignore-exceptions[0]=com.fincore.CommunicationService.exception.CommunicationExceptions.TemplateNotFoundException
+resilience4j.retry.instances.bankApiRetry.ignore-exceptions[1]=com.fincore.CommunicationService.exception.CommunicationExceptions.TemplateProcessingException
+
+
+application.dev.properties file
+
+# ===================================================================
+# SPRING DATASOURCE (ORACLE)
+# ===================================================================
+spring.datasource.url=jdbc:oracle:thin:@10.177.103.192:1523/fincorepdb1
+spring.datasource.username=fincore
+spring.datasource.password=Password#1234
+spring.datasource.driver-class-name=oracle.jdbc.OracleDriver
+
+# ===================================================================
+# REDIS CONFIG
+# ===================================================================
+spring.data.redis.host=10.0.17.242
+spring.data.redis.port=6379
+spring.cache.type=redis
+
+# ===================================================================
+# ENVIRONMENT NAME
+# ===================================================================
+app.preIpString=UAT
+
+# ===================================================================
+# KAFKA CONSUMER CONFIG
+# ===================================================================
+spring.kafka.bootstrap-servers=10.0.17.242:9092
+spring.kafka.consumer.group-id=communication-login-otp-group-v7
+# Auto offset: if a new consumer group starts, read from the earliest unread message
+spring.kafka.consumer.auto-offset-reset=earliest
+spring.kafka.consumer.key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
+spring.kafka.consumer.value-deserializer=org.apache.kafka.common.serialization.StringDeserializer
+# JSON Deserialization Mappings
+spring.kafka.consumer.properties.spring.json.trusted.packages=*
+spring.kafka.consumer.properties.spring.json.value.default.type=com.fincore.CommunicationService.dto.KafkaEvent
+spring.kafka.listener.ack-mode=manual-immediate
+# Shared aes key to decrypt the otp event payload
+security.internal.kafka-aes-key: xVEzviA5Ysgdp/YzTOskDOHbQwVoLgYNRRcK0+Dwdes=
+
+
+logging.level.com.fincore.CommunicationService=DEBUG
+
+
+applicationj.local.properties file
+# ===================================================================
+# SPRING DATASOURCE (ORACLE)
+# ===================================================================
+spring.datasource.url=jdbc:oracle:thin:@10.177.103.192:1523/fincorepdb1
+spring.datasource.username=fincore
+spring.datasource.password=Password#1234
+spring.datasource.driver-class-name=oracle.jdbc.OracleDriver
+
+# ===================================================================
+# REDIS CONFIG
+# ===================================================================
+spring.data.redis.host=10.0.17.242
+spring.data.redis.port=6379
+spring.cache.type=redis
+
+
+# ===================================================================
+# ENVIRONMENT NAME
+# ===================================================================
+app.preIpString=LOCAL
+
+
+# ===================================================================
+# KAFKA CONSUMER CONFIG
+# ===================================================================
+spring.kafka.consumer.bootstrap-servers=10.0.17.242:9092
+spring.kafka.producer.bootstrap-servers=10.0.17.242:9092
+spring.kafka.consumer.group-id=communication-login-otp-group
+# Auto offset: if a new consumer group starts, read from the earliest unread message
+spring.kafka.consumer.auto-offset-reset=earliest
+spring.kafka.consumer.key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
+spring.kafka.consumer.value-deserializer= org.apache.kafka.common.serialization.StringDeserializer
+# JSON Deserialization Mappings
+spring.kafka.consumer.properties.spring.json.trusted.packages=*
+spring.kafka.consumer.properties.spring.json.value.default.type=com.fincore.CommunicationService.dto.KafkaEvent
+spring.kafka.listener.ack-mode=manual-immediate
+# Shared aes key to decrypt the otp event payload
+security.internal.kafka-aes-key: xVEzviA5Ysgdp/YzTOskDOHbQwVoLgYNRRcK0+Dwkfk=
+
+logging.level.org.springframework.kafka=DEBUG
+logging.level.org.apache.kafka.clients.consumer=DEBUG
