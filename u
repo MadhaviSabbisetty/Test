@@ -1,181 +1,127 @@
-package com.fincore.CommunicationService.dto;
+Attachment Service to Report Service  : 
 
-import java.util.List;
+Objective
+Download report attachments before Email dispatch.
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.Data;
+Responsibilities
+1. Create AttachmentService.
+2. Receive attachment references from GenericCommunicationEvent.
+3. Download reports from Report Service using Spring RestClient.
 
-@Data
-@JsonIgnoreProperties(ignoreUnknown = true)
-public class KafkaEvent {
+Attachment Flow
 
-	private String eventId;
-    private String txId;
-    private String eventType;
+attachmentId
+       ?
+Report Service
+       ?
+Download Report
+       ?
+Communication Service
 
-    @JsonProperty("channel")
-    private List<String> channel;
+If multiple reports exist:
+- Download all reports.
+- Calculate attachment count and total size.
+- If configured threshold is exceeded,
+automatically create ZIP.
+- Otherwise send individual attachments.
+Delete temporary files after email is sent.
 
-    private String priority;
-	private String templateId;
 
-    @JsonProperty("recipient")
-    private Recipients recipient;
 
-    private String payload;
-    private String createdAt;
-}package com.fincore.CommunicationService.dto;
+Use Spring RestClient.
+Reason
+- Simple synchronous internal service call.
+- Better streaming support.
+- Lower overhead.
+- Better timeout handling.
+- Recommended modern Spring client.
+- No Eureka/OpenFeign required.
+Do NOT
+- Send reports through Kafka.
+- Store reports permanently.
+- Leave temporary files after processing.
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-import java.util.List;
-import java.util.Map;
 
-/**
- * Generic communication event consumed by the Communication Service.
- *
- * Producer services publish this event to the
- * 'fincore.communication.generic' Kafka topic.
- *
- * The Communication Service is responsible for resolving recipients,
- * generating communication content, downloading attachments and
- * dispatching notifications through the requested channels.
- *
- * @author SHUBHANKAR
- * @since 2026-07
- */
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-@JsonInclude(JsonInclude.Include.NON_EMPTY)
-@JsonIgnoreProperties(ignoreUnknown = true)
-public class GenericCommunicationEvent {
+zip logic :
+==============================================================
+1-5 PDFs? 
+Individual attachments
 
-    /**
-     * Unique identifier for this specific event instance.
-     * Used as the primary correlation key across Kafka, Redis, and Oracle.
-     */
-    private String eventId;
+6-10 PDFs ?
+Still individual (if size permits)
 
-    /**
-     * Distributed tracing ID (e.g., from Jaeger/Zipkin).
-     * Vital for cross-microservice observability.
-     */
-    private String traceId;
+20 PDFs ?
+ZIP
 
-    private String correlationId;
 
-    private String producerService;
-
-    /**
-     * The business context of the event (e.g., 'EOD_REPORT', 'BALANCE_ALERT').
-     */
-    private String eventType;
-
-    /**
-     * FLAG: Determines the routing pipeline.
-     * If true, routes via Virtual Threads for 1-by-1 personalized vendor dispatch.
-     * If false, routes via Redis Pipelining and Vendor BCC arrays for massive scale.
-     * Defaults to true to ensure backward compatibility for legacy producers.
-     */
-    @JsonProperty("isPersonalized")
-    private boolean isPersonalized = true;
-
-    /**
-     * Defines SLA priority. E.g., 'HIGH', 'NORMAL'.
-     */
-    private String priority;
-
-    /**
-     * The communication channels requested (e.g., ["EMAIL", "SMS"]).
-     */
-    @JsonProperty("channels")
-    private List<String> channels;
-
-    /**
-     * Dynamic recipient resolution matrix. Producers can supply Roles, UserIds, or raw Emails/Mobiles.
-     */
-    @JsonProperty("recipients")
-    private Recipients recipients;
-
-    /**
-     * The exact template ID to fetch from the L1 Caffeine Cache / Oracle COMM_TEMPLATE_MASTER.
-     */
-    private String templateId;
-
-    /**
-     * The dynamic FreeMarker variable bindings (e.g., Names, Account Balances).
-     */
-    private Map<String, Object> payload;
-
-    private List<AttachmentRef> attachments;
-
-    private List<DeepLinkRef> deepLinks;
-
-    private Map<String, String> metadata;
-
-    /**
-     * Recipient details supplied by the producer service.
-     * Communication Service resolves UserIds and Roles into
-     * Email and Mobile recipients.
-     */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @JsonInclude(JsonInclude.Include.NON_EMPTY)
-    public static class Recipients {
-
-        private List<String> userIds;
-
-        private List<String> roles;
-
-        private List<String> emails;
-
-        private List<String> mobiles;
-    }
-
-    /**
-     * Reference to an attachment.
-     *
-     * Files are never sent through Kafka. The AttachmentService
-     * downloads the file using this information.
-     */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class AttachmentRef {
-
-        private String attachmentId;
-
-        private String attachmentType;
-
-        private String fileName;
-    }
-
-    /**
-     * Reference used by the DeepLinkGenerator to create
-     * application-specific URLs.
-     */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class DeepLinkRef {
-
-        private String module;
-
-        private String entityId;
-
-        private String action;
-    }
+core flow ; 
+==============================================================
+AttachmentPreparationService
+prepareAttachments(List<AttachmentRef> refs)
+?
+Download all reports
+?
+Calculate
+attachmentCount
+totalSize
+?
+if (attachmentCount > MAX_ATTACHMENTS
+   || totalSize > MAX_EMAIL_SIZE)
+?
+createZip()
+?
+return zip
+else
+?
+return individual files
+ {
+eventId : "evt-2134-45465-464645",
+"traceId" : "trc-1288-78754-7541545", 
+"correlationId" : "batch-31-03-26",
+"producerService": "PROCESS_STATUS",
+"eventType" : "EOD_EVENT",
+"priority" : "NORMAL",
+"channels" : [SMS,EMAIL],
+"recipients" : {
+ "roles" : [12,45,95]
+},
+"templateId" : "SUCCESS_EOD_TEMPLATE",
+"payload" : 
+{
+"processDate" : "31-03-26",
+"title" : {
+"balanceCompareTitle" : "Balance Compare",
+"cibaTitle" : "CIBA",
+"suspenseTitle" : "Suspense"
+}
+"balanceCompareHeaders" : ["HEAD","Total_no_of_entries","new_entry"]
+"balanceCompareRows" : [
+{"HEAD":"CASH","Total_no_of_entries":11869,"new_entry":11869},
+{"HEAD":"CTA","Total_no_of_entries":3629,"new_entry":3629}
+]
+"cibaHeaders" : ["cgl","currency","amount"]
+"cibaRows" -> [{"cgl":"1106505001","currency":"INR","amount":-118133641491.3400000000},
+{"cgl":"1106505001","currency":"USD","amount":1524575.2800000000}]
+"suspenseHeaders" : ["cgl","currency","count"]
+"suspenseRows" : [{"cgl":"1111111111","currency":"INR","count":387.0000000000},{"cgl":"1260505001","currency":"INR","count":4141.0000000000}]
+"startTime" : 27-03-26
+"endTime" : 27-03-26
+"timeTaken" : "20:49:43"
+"STATUS" : "SUCCESS"
+},
+"attachments" :[
+{ "attachmentId" : "balance_compare_report_31032026",
+"attachmentType" : "BAL_COMP_SUMMARY",
+"fileName" : "balance_compare_report"
+},
+{ "attachmentId" : "intr_report_31032023",
+"attachmentType" : "INTR_SUMMARY",
+"fileName" : "intr_report"
+},
+{ "attachmentId" : "cntr_report_31032026",
+"attachmentType" : "CNTR_SUMMARY",
+"fileName" : "cntr_report"
+}
+]
 }
