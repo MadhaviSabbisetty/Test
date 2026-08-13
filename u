@@ -1,33 +1,181 @@
-package com.fincore.CommunicationService.controller;
+package com.fincore.CommunicationService.dto;
 
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-import com.fincore.CommunicationService.attachment.AttachmentPreparationService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.*;
-import java.io.IOException;
-import jakarta.validation.Valid;
+import java.util.List;
 
-@Slf4j
-@RestController
-@RequiredArgsConstructor
-@RequestMapping("/api/reports")
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Data;
+
+@Data
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class KafkaEvent {
+
+	private String eventId;
+    private String txId;
+    private String eventType;
+
+    @JsonProperty("channel")
+    private List<String> channel;
+
+    private String priority;
+	private String templateId;
+
+    @JsonProperty("recipient")
+    private Recipients recipient;
+
+    private String payload;
+    private String createdAt;
+}package com.fincore.CommunicationService.dto;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.List;
+import java.util.Map;
+
 /**
- * Temporary controller used for local testing of
- * attachment download functionality
+ * Generic communication event consumed by the Communication Service.
+ *
+ * Producer services publish this event to the
+ * 'fincore.communication.generic' Kafka topic.
+ *
+ * The Communication Service is responsible for resolving recipients,
+ * generating communication content, downloading attachments and
+ * dispatching notifications through the requested channels.
+ *
+ * @author SHUBHANKAR
+ * @since 2026-07
  */
-public class AttachmentController{
-    private final AttachmentPreparationService attachmentPreparationService;
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class GenericCommunicationEvent {
 
-    //Triggers attachment download for testing
-    
-    @PostMapping("/attachment/download")
-    public AttachmentDownloadResponse download(@Valid @RequestHeader("Authorization") String token,@RequestBody AttachmentDownloadRequest request)throws IOException{
+    /**
+     * Unique identifier for this specific event instance.
+     * Used as the primary correlation key across Kafka, Redis, and Oracle.
+     */
+    private String eventId;
 
-        log.info("Download request received");
-        
-        return attachmentPreparationService.prepareAttachments(request.getAttachments(), token);
+    /**
+     * Distributed tracing ID (e.g., from Jaeger/Zipkin).
+     * Vital for cross-microservice observability.
+     */
+    private String traceId;
 
+    private String correlationId;
+
+    private String producerService;
+
+    /**
+     * The business context of the event (e.g., 'EOD_REPORT', 'BALANCE_ALERT').
+     */
+    private String eventType;
+
+    /**
+     * FLAG: Determines the routing pipeline.
+     * If true, routes via Virtual Threads for 1-by-1 personalized vendor dispatch.
+     * If false, routes via Redis Pipelining and Vendor BCC arrays for massive scale.
+     * Defaults to true to ensure backward compatibility for legacy producers.
+     */
+    @JsonProperty("isPersonalized")
+    private boolean isPersonalized = true;
+
+    /**
+     * Defines SLA priority. E.g., 'HIGH', 'NORMAL'.
+     */
+    private String priority;
+
+    /**
+     * The communication channels requested (e.g., ["EMAIL", "SMS"]).
+     */
+    @JsonProperty("channels")
+    private List<String> channels;
+
+    /**
+     * Dynamic recipient resolution matrix. Producers can supply Roles, UserIds, or raw Emails/Mobiles.
+     */
+    @JsonProperty("recipients")
+    private Recipients recipients;
+
+    /**
+     * The exact template ID to fetch from the L1 Caffeine Cache / Oracle COMM_TEMPLATE_MASTER.
+     */
+    private String templateId;
+
+    /**
+     * The dynamic FreeMarker variable bindings (e.g., Names, Account Balances).
+     */
+    private Map<String, Object> payload;
+
+    private List<AttachmentRef> attachments;
+
+    private List<DeepLinkRef> deepLinks;
+
+    private Map<String, String> metadata;
+
+    /**
+     * Recipient details supplied by the producer service.
+     * Communication Service resolves UserIds and Roles into
+     * Email and Mobile recipients.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public static class Recipients {
+
+        private List<String> userIds;
+
+        private List<String> roles;
+
+        private List<String> emails;
+
+        private List<String> mobiles;
+    }
+
+    /**
+     * Reference to an attachment.
+     *
+     * Files are never sent through Kafka. The AttachmentService
+     * downloads the file using this information.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AttachmentRef {
+
+        private String attachmentId;
+
+        private String attachmentType;
+
+        private String fileName;
+    }
+
+    /**
+     * Reference used by the DeepLinkGenerator to create
+     * application-specific URLs.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DeepLinkRef {
+
+        private String module;
+
+        private String entityId;
+
+        private String action;
     }
 }
