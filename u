@@ -1,241 +1,54 @@
-package com.fincore.CommunicationService.config;
+package com.fincore.CommunicationService.security;
 
-import com.fincore.commonutilities.config.CommonSecurityConfig;
-import com.fincore.commonutilities.config.RedisConfig;
-import com.fincore.commonutilities.config.ResilienceConfig;
-import com.fincore.commonutilities.jwt.JwtUtil;
-import com.fincore.commonutilities.logging.MdcLoggingFilter;
-import com.fincore.commonutilities.security.ContextRbacFilter;
-import com.fincore.commonutilities.security.DecryptRequestBodyAdvice;
-import com.fincore.commonutilities.util.AesEncryptionUtil;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
-/**
- * Common Security Configuration.
- * * Aligned with the "Distributed Gateway" architecture.
- * It uses the ContextRbacFilter from Common Utilities to enforce:
- * 1. Token Validity
- * 2. Single Session (Redis check)
- * 3. RBAC Permissions
- * Enforces Centralised Mdc Logging Filter, RESILIENCE4J Retry and Circuit Breaker
- */
-@Configuration
-@EnableWebSecurity
-@Import({
-        RedisConfig.class,
-        JwtUtil.class,
-        CommonSecurityConfig.class,
-        ResilienceConfig.class,
-        AesEncryptionUtil.class,
-        DecryptRequestBodyAdvice.class
-})
-public class SecurityConfig {
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
 
-    @Autowired
-    private StringRedisTemplate redisTemplate;
+import java.io.IOException;
 
-    @Autowired
-    private JwtUtil jwtUtil;
+@Component
+public class InternalTokenFilter extends OncePerRequestFilter {
 
-    @Autowired
-    private CommonSecurityConfig commonSecurityConfig;
+    @Value("${communication.internal-token}")
+    private String expectedToken;
 
-    // --- 1. Define Filters as Beans (Explicitly) ---
+    @Override
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain)
+            throws ServletException, IOException {
 
-    @Bean
-    public MdcLoggingFilter mdcLoggingFilter() {
-        return new MdcLoggingFilter(jwtUtil);
-    }
+        String token = request.getHeader("X-Internal-Token");
 
-    @Bean
-    public ContextRbacFilter contextRbacFilter() {
-        return new ContextRbacFilter(redisTemplate, jwtUtil);
-    }
+        if (token == null || !token.equals(expectedToken)) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
+            response.getWriter().write(
+                    "{\"status\":401,\"message\":\"Invalid internal token\"}"
+            );
+            return;
+        }
 
-    // --- 2. Prevent Global Registration ---
-    // This stops "The Filter class ... does not have a registered order" error
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(
+                        "internal-client",
+                        null,
+                        AuthorityUtils.createAuthorityList(
+                                "ROLE_INTERNAL_SERVICE"));
 
-    @Bean
-    public FilterRegistrationBean<MdcLoggingFilter> mdcFilterRegistration(MdcLoggingFilter filter) {
-        FilterRegistrationBean<MdcLoggingFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.setEnabled(false); // Disable global chain
-        return registration;
-    }
+        SecurityContextHolder
+                .getContext()
+                .setAuthentication(authentication);
 
-    @Bean
-    public FilterRegistrationBean<ContextRbacFilter> rbacFilterRegistration(ContextRbacFilter filter) {
-        FilterRegistrationBean<ContextRbacFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.setEnabled(false); // Disable global chain
-        return registration;
-    }
-
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(commonSecurityConfig.corsConfigurationSource()))
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/actuator/**", "/api/auth/**", "/error", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
-                        .anyRequest().authenticated()
-                )
-                // Add Filters using the BEAN references (methods above)
-                .addFilterBefore(mdcLoggingFilter(), UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(contextRbacFilter(), MdcLoggingFilter.class);
-
-        return http.build();
-    }
-}
-package com.fincore.ReportService.config;
-
-import com.fincore.commonutilities.buisnessobject.ControlDateService;
-import com.fincore.commonutilities.config.CommonSecurityConfig;
-import com.fincore.commonutilities.config.RedisConfig;
-import com.fincore.commonutilities.config.ResilienceConfig;
-import com.fincore.commonutilities.jwt.JwtUtil;
-import com.fincore.commonutilities.logging.MdcLoggingFilter;
-import com.fincore.commonutilities.security.ContextRbacFilter;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import jakarta.servlet.DispatcherType; // Import this is CRITICAL
-import com.fincore.commonutilities.security.DecryptRequestBodyAdvice;
-import com.fincore.commonutilities.util.AesEncryptionUtil;
-
-/**
- * Common Security Configuration.
- * * Aligned with the "Distributed Gateway" architecture.
- * It uses the ContextRbacFilter from Common Utilities to enforce:
- * 1. Token Validity
- * 2. Single Session (Redis check)
- * 3. RBAC Permissions
- * Enforces Centralised Mdc Logging Filter, RESILIENCE4J Retry and Circuit
- * Breaker
- */
-@Configuration
-@EnableWebSecurity
-@Import({
-        RedisConfig.class,
-        JwtUtil.class,
-        CommonSecurityConfig.class,
-        ResilienceConfig.class, ControlDateService.class,
-        AesEncryptionUtil.class,
-        DecryptRequestBodyAdvice.class
-})
-public class SecurityConfig {
-
-    @Autowired
-    private StringRedisTemplate redisTemplate;
-
-    @Autowired
-    private JwtUtil jwtUtil;
-
-    @Autowired
-    private CommonSecurityConfig commonSecurityConfig;
-
-    // --- 1. Define Filters as Beans (Explicitly) ---
-    @Bean
-    public MdcLoggingFilter mdcLoggingFilter() {
-        return new MdcLoggingFilter(jwtUtil);
-    }
-
-    @Bean
-    public ContextRbacFilter contextRbacFilter() {
-        return new ContextRbacFilter(redisTemplate, jwtUtil);
-    }
-
-    // --- 2. Prevent Global Registration ---
-    // This stops "The Filter class ... does not have a registered order" error
-
-    @Bean
-    public FilterRegistrationBean<MdcLoggingFilter> mdcFilterRegistration(MdcLoggingFilter filter) {
-        FilterRegistrationBean<MdcLoggingFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.setEnabled(false); // Disable global chain
-        return registration;
-    }
-
-    @Bean
-    public FilterRegistrationBean<ContextRbacFilter> rbacFilterRegistration(ContextRbacFilter filter) {
-        FilterRegistrationBean<ContextRbacFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.setEnabled(false); // Disable global chain
-        return registration;
-    }
-
-//    @Bean
-//    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-//        http
-//                .csrf(csrf -> csrf.disable())
-//                .cors(cors -> cors.configurationSource(commonSecurityConfig.corsConfigurationSource()))
-//                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-//                .authorizeHttpRequests(authz -> authz
-//                        // Allow Async Dispatches (StreamingResponseBody) to proceed without re-auth
-//                        // checks
-//                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
-//                        .requestMatchers("/actuator/**", "/api/auth/**", "/error").permitAll()
-//                        .anyRequest().authenticated())
-//                // Add Filters using the BEAN references (methods above)
-//                .addFilterBefore(mdcLoggingFilter(), UsernamePasswordAuthenticationFilter.class)
-//                .addFilterAfter(contextRbacFilter(), MdcLoggingFilter.class);
-//
-//        return http.build();
-//    }
-
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(commonSecurityConfig.corsConfigurationSource()))
-
-                // --- SECURITY FIX: Content Security Policy (CSP) ---
-                // Configured to protect against XSS/Clickjacking while preserving Swagger UI functionality
-                .headers(headers -> headers
-                        .contentSecurityPolicy(csp -> csp
-                                .policyDirectives("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; frame-ancestors 'none';")
-                        )
-                )
-
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/actuator/**", "/api/auth/**", "/error", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
-                        .anyRequest().authenticated()
-                )
-                // Add Filters using the BEAN references (methods above)
-                .addFilterBefore(mdcLoggingFilter(), UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(contextRbacFilter(), MdcLoggingFilter.class);
-
-        return http.build();
-    }
-
-    /**
-     * Explicitly indicate that local user lookup is not supported
-     * Authentication is handled via JWT in ContextRbacFilter
-     */
-    @Bean
-    public UserDetailsService userDetailsService() {
-        return username -> {
-            throw new UsernameNotFoundException("UserDetailsService is disabled. Use JWT authentication.");
-        };
+        filterChain.doFilter(request, response);
     }
 }
