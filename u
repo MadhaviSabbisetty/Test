@@ -1,127 +1,241 @@
-Attachment Service to Report Service  : 
+package com.fincore.CommunicationService.config;
 
-Objective
-Download report attachments before Email dispatch.
+import com.fincore.commonutilities.config.CommonSecurityConfig;
+import com.fincore.commonutilities.config.RedisConfig;
+import com.fincore.commonutilities.config.ResilienceConfig;
+import com.fincore.commonutilities.jwt.JwtUtil;
+import com.fincore.commonutilities.logging.MdcLoggingFilter;
+import com.fincore.commonutilities.security.ContextRbacFilter;
+import com.fincore.commonutilities.security.DecryptRequestBodyAdvice;
+import com.fincore.commonutilities.util.AesEncryptionUtil;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-Responsibilities
-1. Create AttachmentService.
-2. Receive attachment references from GenericCommunicationEvent.
-3. Download reports from Report Service using Spring RestClient.
+/**
+ * Common Security Configuration.
+ * * Aligned with the "Distributed Gateway" architecture.
+ * It uses the ContextRbacFilter from Common Utilities to enforce:
+ * 1. Token Validity
+ * 2. Single Session (Redis check)
+ * 3. RBAC Permissions
+ * Enforces Centralised Mdc Logging Filter, RESILIENCE4J Retry and Circuit Breaker
+ */
+@Configuration
+@EnableWebSecurity
+@Import({
+        RedisConfig.class,
+        JwtUtil.class,
+        CommonSecurityConfig.class,
+        ResilienceConfig.class,
+        AesEncryptionUtil.class,
+        DecryptRequestBodyAdvice.class
+})
+public class SecurityConfig {
 
-Attachment Flow
+    @Autowired
+    private StringRedisTemplate redisTemplate;
 
-attachmentId
-       ?
-Report Service
-       ?
-Download Report
-       ?
-Communication Service
+    @Autowired
+    private JwtUtil jwtUtil;
 
-If multiple reports exist:
-- Download all reports.
-- Calculate attachment count and total size.
-- If configured threshold is exceeded,
-automatically create ZIP.
-- Otherwise send individual attachments.
-Delete temporary files after email is sent.
+    @Autowired
+    private CommonSecurityConfig commonSecurityConfig;
 
+    // --- 1. Define Filters as Beans (Explicitly) ---
 
+    @Bean
+    public MdcLoggingFilter mdcLoggingFilter() {
+        return new MdcLoggingFilter(jwtUtil);
+    }
 
-Use Spring RestClient.
-Reason
-- Simple synchronous internal service call.
-- Better streaming support.
-- Lower overhead.
-- Better timeout handling.
-- Recommended modern Spring client.
-- No Eureka/OpenFeign required.
-Do NOT
-- Send reports through Kafka.
-- Store reports permanently.
-- Leave temporary files after processing.
+    @Bean
+    public ContextRbacFilter contextRbacFilter() {
+        return new ContextRbacFilter(redisTemplate, jwtUtil);
+    }
 
+    // --- 2. Prevent Global Registration ---
+    // This stops "The Filter class ... does not have a registered order" error
 
+    @Bean
+    public FilterRegistrationBean<MdcLoggingFilter> mdcFilterRegistration(MdcLoggingFilter filter) {
+        FilterRegistrationBean<MdcLoggingFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false); // Disable global chain
+        return registration;
+    }
 
-zip logic :
-==============================================================
-1-5 PDFs? 
-Individual attachments
+    @Bean
+    public FilterRegistrationBean<ContextRbacFilter> rbacFilterRegistration(ContextRbacFilter filter) {
+        FilterRegistrationBean<ContextRbacFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false); // Disable global chain
+        return registration;
+    }
 
-6-10 PDFs ?
-Still individual (if size permits)
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(commonSecurityConfig.corsConfigurationSource()))
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authz -> authz
+                        .requestMatchers("/actuator/**", "/api/auth/**", "/error", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                        .anyRequest().authenticated()
+                )
+                // Add Filters using the BEAN references (methods above)
+                .addFilterBefore(mdcLoggingFilter(), UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(contextRbacFilter(), MdcLoggingFilter.class);
 
-20 PDFs ?
-ZIP
-
-
-core flow ; 
-==============================================================
-AttachmentPreparationService
-prepareAttachments(List<AttachmentRef> refs)
-?
-Download all reports
-?
-Calculate
-attachmentCount
-totalSize
-?
-if (attachmentCount > MAX_ATTACHMENTS
-   || totalSize > MAX_EMAIL_SIZE)
-?
-createZip()
-?
-return zip
-else
-?
-return individual files
- {
-eventId : "evt-2134-45465-464645",
-"traceId" : "trc-1288-78754-7541545", 
-"correlationId" : "batch-31-03-26",
-"producerService": "PROCESS_STATUS",
-"eventType" : "EOD_EVENT",
-"priority" : "NORMAL",
-"channels" : [SMS,EMAIL],
-"recipients" : {
- "roles" : [12,45,95]
-},
-"templateId" : "SUCCESS_EOD_TEMPLATE",
-"payload" : 
-{
-"processDate" : "31-03-26",
-"title" : {
-"balanceCompareTitle" : "Balance Compare",
-"cibaTitle" : "CIBA",
-"suspenseTitle" : "Suspense"
+        return http.build();
+    }
 }
-"balanceCompareHeaders" : ["HEAD","Total_no_of_entries","new_entry"]
-"balanceCompareRows" : [
-{"HEAD":"CASH","Total_no_of_entries":11869,"new_entry":11869},
-{"HEAD":"CTA","Total_no_of_entries":3629,"new_entry":3629}
-]
-"cibaHeaders" : ["cgl","currency","amount"]
-"cibaRows" -> [{"cgl":"1106505001","currency":"INR","amount":-118133641491.3400000000},
-{"cgl":"1106505001","currency":"USD","amount":1524575.2800000000}]
-"suspenseHeaders" : ["cgl","currency","count"]
-"suspenseRows" : [{"cgl":"1111111111","currency":"INR","count":387.0000000000},{"cgl":"1260505001","currency":"INR","count":4141.0000000000}]
-"startTime" : 27-03-26
-"endTime" : 27-03-26
-"timeTaken" : "20:49:43"
-"STATUS" : "SUCCESS"
-},
-"attachments" :[
-{ "attachmentId" : "balance_compare_report_31032026",
-"attachmentType" : "BAL_COMP_SUMMARY",
-"fileName" : "balance_compare_report"
-},
-{ "attachmentId" : "intr_report_31032023",
-"attachmentType" : "INTR_SUMMARY",
-"fileName" : "intr_report"
-},
-{ "attachmentId" : "cntr_report_31032026",
-"attachmentType" : "CNTR_SUMMARY",
-"fileName" : "cntr_report"
-}
-]
+package com.fincore.ReportService.config;
+
+import com.fincore.commonutilities.buisnessobject.ControlDateService;
+import com.fincore.commonutilities.config.CommonSecurityConfig;
+import com.fincore.commonutilities.config.RedisConfig;
+import com.fincore.commonutilities.config.ResilienceConfig;
+import com.fincore.commonutilities.jwt.JwtUtil;
+import com.fincore.commonutilities.logging.MdcLoggingFilter;
+import com.fincore.commonutilities.security.ContextRbacFilter;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import jakarta.servlet.DispatcherType; // Import this is CRITICAL
+import com.fincore.commonutilities.security.DecryptRequestBodyAdvice;
+import com.fincore.commonutilities.util.AesEncryptionUtil;
+
+/**
+ * Common Security Configuration.
+ * * Aligned with the "Distributed Gateway" architecture.
+ * It uses the ContextRbacFilter from Common Utilities to enforce:
+ * 1. Token Validity
+ * 2. Single Session (Redis check)
+ * 3. RBAC Permissions
+ * Enforces Centralised Mdc Logging Filter, RESILIENCE4J Retry and Circuit
+ * Breaker
+ */
+@Configuration
+@EnableWebSecurity
+@Import({
+        RedisConfig.class,
+        JwtUtil.class,
+        CommonSecurityConfig.class,
+        ResilienceConfig.class, ControlDateService.class,
+        AesEncryptionUtil.class,
+        DecryptRequestBodyAdvice.class
+})
+public class SecurityConfig {
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @Autowired
+    private CommonSecurityConfig commonSecurityConfig;
+
+    // --- 1. Define Filters as Beans (Explicitly) ---
+    @Bean
+    public MdcLoggingFilter mdcLoggingFilter() {
+        return new MdcLoggingFilter(jwtUtil);
+    }
+
+    @Bean
+    public ContextRbacFilter contextRbacFilter() {
+        return new ContextRbacFilter(redisTemplate, jwtUtil);
+    }
+
+    // --- 2. Prevent Global Registration ---
+    // This stops "The Filter class ... does not have a registered order" error
+
+    @Bean
+    public FilterRegistrationBean<MdcLoggingFilter> mdcFilterRegistration(MdcLoggingFilter filter) {
+        FilterRegistrationBean<MdcLoggingFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false); // Disable global chain
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<ContextRbacFilter> rbacFilterRegistration(ContextRbacFilter filter) {
+        FilterRegistrationBean<ContextRbacFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false); // Disable global chain
+        return registration;
+    }
+
+//    @Bean
+//    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+//        http
+//                .csrf(csrf -> csrf.disable())
+//                .cors(cors -> cors.configurationSource(commonSecurityConfig.corsConfigurationSource()))
+//                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+//                .authorizeHttpRequests(authz -> authz
+//                        // Allow Async Dispatches (StreamingResponseBody) to proceed without re-auth
+//                        // checks
+//                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
+//                        .requestMatchers("/actuator/**", "/api/auth/**", "/error").permitAll()
+//                        .anyRequest().authenticated())
+//                // Add Filters using the BEAN references (methods above)
+//                .addFilterBefore(mdcLoggingFilter(), UsernamePasswordAuthenticationFilter.class)
+//                .addFilterAfter(contextRbacFilter(), MdcLoggingFilter.class);
+//
+//        return http.build();
+//    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(commonSecurityConfig.corsConfigurationSource()))
+
+                // --- SECURITY FIX: Content Security Policy (CSP) ---
+                // Configured to protect against XSS/Clickjacking while preserving Swagger UI functionality
+                .headers(headers -> headers
+                        .contentSecurityPolicy(csp -> csp
+                                .policyDirectives("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; frame-ancestors 'none';")
+                        )
+                )
+
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authz -> authz
+                        .requestMatchers("/actuator/**", "/api/auth/**", "/error", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                        .anyRequest().authenticated()
+                )
+                // Add Filters using the BEAN references (methods above)
+                .addFilterBefore(mdcLoggingFilter(), UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(contextRbacFilter(), MdcLoggingFilter.class);
+
+        return http.build();
+    }
+
+    /**
+     * Explicitly indicate that local user lookup is not supported
+     * Authentication is handled via JWT in ContextRbacFilter
+     */
+    @Bean
+    public UserDetailsService userDetailsService() {
+        return username -> {
+            throw new UsernameNotFoundException("UserDetailsService is disabled. Use JWT authentication.");
+        };
+    }
 }
