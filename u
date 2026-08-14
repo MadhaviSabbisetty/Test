@@ -1,19 +1,197 @@
-@Bean
-@Order(1)
-public SecurityFilterChain internalTokenSecurityFilterChain(
-        HttpSecurity http) throws Exception {
+ @Override
+    public AttachmentDownloadResponse downloadAttachments(
+            AttachmentDownloadRequest request,
+            int userRoleId,
+            String userId) throws IOException {
 
-    http
-            .securityMatcher("/api/reports/attachment/download")
-            .csrf(AbstractHttpConfigurer::disable)
-            .sessionManagement(s ->
-                    s.sessionCreationPolicy(
-                            SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(authz ->
-                    authz.anyRequest().permitAll())
-            .addFilterBefore(
-                    internalTokenFilter,
-                    UsernamePasswordAuthenticationFilter.class);
 
-    return http.build();
-}
+        log.info("Inside the report service download method");
+
+        List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
+
+                // Validate exactly 3 attachments
+        if (request == null
+                || request.getAttachments() == null
+                || request.getAttachments().size() != 3) {
+
+            throw new IllegalArgumentException(
+                    "Exactly 3 attachments are required");
+        }
+
+
+        // Validate exact filenames
+        Set<String> requiredFileNames = Set.of(
+                "intr_report",
+                "balance_compare_report",
+                "cntr_report"
+        );
+
+        Set<String> actualFileNames = new HashSet<>();
+
+        for (AttachmentRef attachment : request.getAttachments()) {
+
+            if (attachment == null || attachment.getFileName() == null) {
+                throw new IllegalArgumentException(
+                        "Attachment filename is required");
+            }
+
+            actualFileNames.add(attachment.getFileName());
+        }
+
+        if (actualFileNames.size() != 3
+                || !actualFileNames.equals(requiredFileNames)) {
+
+            throw new IllegalArgumentException(
+                    "Attachments must contain exactly these filenames: "
+                    + "intr_report, balance_compare_report, cntr_report");
+        }
+
+
+
+
+        //Process each requested attachment individually
+
+        for (AttachmentRef attachment : request.getAttachments()) {
+
+            log.info("-------------------------------------------------------------------");
+            log.info("Attachment Download Request Received");
+            log.info("Attachment Id: {}",attachment.getAttachmentId());
+            log.info("Report Name: {}",attachment.getFileName());
+            log.info("Attachment Type: {}",attachment.getAttachmentType());
+
+            //Extract report details from attachment reference
+
+            String attachmentId = attachment.getAttachmentId();
+            
+
+            if(attachmentId == null || !ATTACHMENT_PATTERN.matcher(attachmentId).matches()){
+                log.info("Invalid attachment Id");
+                throw new IllegalArgumentException("Invalid attachment Id");
+            }
+            String reportFolder = attachment.getFileName();
+
+            // Extracting date from attachmentId
+            // Example : balance_compare_report_31032026
+            String date = attachmentId.substring(attachmentId.lastIndexOf("_") + 1);
+
+            String folderDate =
+                    date.substring(4, 8) + "-"
+                + date.substring(2, 4) + "-"
+                + date.substring(0, 2);
+
+            byte[] fileBytes;
+            long fileSize;
+            String actualFileName = attachmentId + ".xlsx";
+            log.info("Actual file name: {}",actualFileName);
+
+            //Construct HDFS file path based on report date and folder
+
+            if(!folderDate.matches("\\d{4}-\\d{2}-\\d{2}")){
+                throw new IllegalArgumentException("Invalid report date");
+            }
+            if(!ATTACHMENT_PATTERN.matcher(actualFileName).matches()){
+                throw new SecurityException("Invalid file name");
+            }
+
+            if(reportsBasePath.contains("..")){
+                throw new SecurityException("Invalid base path");
+            }
+
+            Path base=new Path(reportsBasePath);
+            Path datePath=new Path(base,folderDate);
+            // Path folderName=new Path(datePath,reportFolder);
+            // Path filePath= new Path(folderName,actualFileName);
+            Path filePath= new Path(datePath,actualFileName);
+
+            String finalPath = filePath.toString();
+            if(finalPath.contains("..")){
+                throw new SecurityException("Directory traversal detected");
+            }
+
+            log.info("Reading HDFS File : {}", filePath);
+
+            //validate report existence in HDFS
+
+            if (!hdfsFileSystem.exists(filePath)) {
+                log.info("Attachment not found");
+                throw new ResourceNotFoundException(
+                        "Attachment not found : " + filePath);
+            }
+
+            FileStatus status = hdfsFileSystem.getFileStatus(filePath);
+            Path normalizedPath = Path.getPathWithoutSchemeAndAuthority(filePath);
+
+            if (!normalizedPath.equals(filePath)) {
+                throw new SecurityException("Invalid HDFS path");
+            }
+
+            //Read report content from HDFS
+
+            try (FSDataInputStream inputStream = hdfsFileSystem.open(normalizedPath);
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+
+                fileBytes = outputStream.toByteArray();
+            }catch(IOException e){
+                log.error("Unable to read HDFS file {}",filePath,e);
+                throw new ResourceNotFoundException(
+                    "Unable to read attachment from HDFS:"+actualFileName);
+            }
+
+            fileSize = status.getLen();
+            
+
+            DownloadedAttachment downloaded = new DownloadedAttachment();
+
+            downloaded.setFileName(actualFileName);
+            downloaded.setContentType(
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            downloaded.setFileSize(fileSize);
+            //Encode report content into Base64 for REST response
+            downloaded.setBase64(Base64.getEncoder().encodeToString(fileBytes));
+
+            downloadedFiles.add(downloaded);
+
+            
+            log.info("REPORT DOWNLOADED SUCCESSFULLY");
+            log.info("Attachment Id   : {}", attachment.getAttachmentId());
+            log.info("Report Name     : {}", downloaded.getFileName());
+            log.info("Attachment Type : {}", attachment.getAttachmentType());
+            log.info("Content Type    : {}", downloaded.getContentType());
+            log.info("File Size       : {} bytes", downloaded.getFileSize());
+        }
+
+        AttachmentDownloadResponse response = new AttachmentDownloadResponse();
+        //Prepare final response containing all downloaded attachments
+        response.setAttachments(downloadedFiles);
+
+        
+        log.info("------------------------------------------------------------");
+        log.info("Attachment Download Completed Successfully");
+        log.info("Total Reports Downloaded : {}", downloadedFiles.size());
+
+        return response;
+    }    @PostMapping("/attachment/download")
+        public ResponseEntity<ApiResponse<AttachmentDownloadResponse>> downloadAttachments(@RequestHeader("Authorization") String token, 
+                        @RequestBody AttachmentDownloadRequest request){
+                              
+                               try{
+                                        log.info("inside report controller attachment endpoint");
+                                        AttachmentDownloadResponse response=reportService.downloadAttachments(request, jwtUtil.getUserRoleFromToken(token),
+                                        jwtUtil.getUserIdFromToken(token));
+                                        return ResponseEntity.ok(ApiResponse.success(response,"Attachment downloaded successfully"));
+                               }
+                               catch(IOException e){
+                                        log.error("Attachment download failed",e); 
+                                        return ResponseEntity.ok(
+                                                ApiResponse.error(e.getMessage() == null ?"Attachment download failed.":e.getMessage())
+                                );
+                               }
+
+        }
