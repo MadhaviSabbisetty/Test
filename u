@@ -1,197 +1,34 @@
- @Override
-    public AttachmentDownloadResponse downloadAttachments(
-            AttachmentDownloadRequest request,
-            int userRoleId,
-            String userId) throws IOException {
 
+2026-08-17T11:16:30.177+05:30  INFO 66744 --- [CommunicationService] [0-retry-0-0-C-1] c.f.C.o.CommunicationOrchestrator        : Orchestrator executing Event: evt-2134-45465-464645 | Personalized Flag: true
+2026-08-17T11:16:30.177+05:30  INFO 66744 --- [CommunicationService] [0-retry-0-0-C-1] c.f.C.recipient.RecipientResolver        : Recipient Resolution Started.
+2026-08-17T11:16:30.177+05:30 ERROR 66744 --- [CommunicationService] [0-retry-0-0-C-1] c.f.C.recipient.RecipientResolver        : Recipient Resolution Failed.
 
-        log.info("Inside the report service download method");
-
-        List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
-
-                // Validate exactly 3 attachments
-        if (request == null
-                || request.getAttachments() == null
-                || request.getAttachments().size() != 3) {
-
-            throw new IllegalArgumentException(
-                    "Exactly 3 attachments are required");
-        }
-
-
-        // Validate exact filenames
-        Set<String> requiredFileNames = Set.of(
-                "intr_report",
-                "balance_compare_report",
-                "cntr_report"
-        );
-
-        Set<String> actualFileNames = new HashSet<>();
-
-        for (AttachmentRef attachment : request.getAttachments()) {
-
-            if (attachment == null || attachment.getFileName() == null) {
-                throw new IllegalArgumentException(
-                        "Attachment filename is required");
-            }
-
-            actualFileNames.add(attachment.getFileName());
-        }
-
-        if (actualFileNames.size() != 3
-                || !actualFileNames.equals(requiredFileNames)) {
-
-            throw new IllegalArgumentException(
-                    "Attachments must contain exactly these filenames: "
-                    + "intr_report, balance_compare_report, cntr_report");
-        }
-
-
-
-
-        //Process each requested attachment individually
-
-        for (AttachmentRef attachment : request.getAttachments()) {
-
-            log.info("-------------------------------------------------------------------");
-            log.info("Attachment Download Request Received");
-            log.info("Attachment Id: {}",attachment.getAttachmentId());
-            log.info("Report Name: {}",attachment.getFileName());
-            log.info("Attachment Type: {}",attachment.getAttachmentType());
-
-            //Extract report details from attachment reference
-
-            String attachmentId = attachment.getAttachmentId();
-            
-
-            if(attachmentId == null || !ATTACHMENT_PATTERN.matcher(attachmentId).matches()){
-                log.info("Invalid attachment Id");
-                throw new IllegalArgumentException("Invalid attachment Id");
-            }
-            String reportFolder = attachment.getFileName();
-
-            // Extracting date from attachmentId
-            // Example : balance_compare_report_31032026
-            String date = attachmentId.substring(attachmentId.lastIndexOf("_") + 1);
-
-            String folderDate =
-                    date.substring(4, 8) + "-"
-                + date.substring(2, 4) + "-"
-                + date.substring(0, 2);
-
-            byte[] fileBytes;
-            long fileSize;
-            String actualFileName = attachmentId + ".xlsx";
-            log.info("Actual file name: {}",actualFileName);
-
-            //Construct HDFS file path based on report date and folder
-
-            if(!folderDate.matches("\\d{4}-\\d{2}-\\d{2}")){
-                throw new IllegalArgumentException("Invalid report date");
-            }
-            if(!ATTACHMENT_PATTERN.matcher(actualFileName).matches()){
-                throw new SecurityException("Invalid file name");
-            }
-
-            if(reportsBasePath.contains("..")){
-                throw new SecurityException("Invalid base path");
-            }
-
-            Path base=new Path(reportsBasePath);
-            Path datePath=new Path(base,folderDate);
-            // Path folderName=new Path(datePath,reportFolder);
-            // Path filePath= new Path(folderName,actualFileName);
-            Path filePath= new Path(datePath,actualFileName);
-
-            String finalPath = filePath.toString();
-            if(finalPath.contains("..")){
-                throw new SecurityException("Directory traversal detected");
-            }
-
-            log.info("Reading HDFS File : {}", filePath);
-
-            //validate report existence in HDFS
-
-            if (!hdfsFileSystem.exists(filePath)) {
-                log.info("Attachment not found");
-                throw new ResourceNotFoundException(
-                        "Attachment not found : " + filePath);
-            }
-
-            FileStatus status = hdfsFileSystem.getFileStatus(filePath);
-            Path normalizedPath = Path.getPathWithoutSchemeAndAuthority(filePath);
-
-            if (!normalizedPath.equals(filePath)) {
-                throw new SecurityException("Invalid HDFS path");
-            }
-
-            //Read report content from HDFS
-
-            try (FSDataInputStream inputStream = hdfsFileSystem.open(normalizedPath);
-                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    outputStream.write(buffer, 0, bytesRead);
-                }
-
-                fileBytes = outputStream.toByteArray();
-            }catch(IOException e){
-                log.error("Unable to read HDFS file {}",filePath,e);
-                throw new ResourceNotFoundException(
-                    "Unable to read attachment from HDFS:"+actualFileName);
-            }
-
-            fileSize = status.getLen();
-            
-
-            DownloadedAttachment downloaded = new DownloadedAttachment();
-
-            downloaded.setFileName(actualFileName);
-            downloaded.setContentType(
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            downloaded.setFileSize(fileSize);
-            //Encode report content into Base64 for REST response
-            downloaded.setBase64(Base64.getEncoder().encodeToString(fileBytes));
-
-            downloadedFiles.add(downloaded);
-
-            
-            log.info("REPORT DOWNLOADED SUCCESSFULLY");
-            log.info("Attachment Id   : {}", attachment.getAttachmentId());
-            log.info("Report Name     : {}", downloaded.getFileName());
-            log.info("Attachment Type : {}", attachment.getAttachmentType());
-            log.info("Content Type    : {}", downloaded.getContentType());
-            log.info("File Size       : {} bytes", downloaded.getFileSize());
-        }
-
-        AttachmentDownloadResponse response = new AttachmentDownloadResponse();
-        //Prepare final response containing all downloaded attachments
-        response.setAttachments(downloadedFiles);
-
-        
-        log.info("------------------------------------------------------------");
-        log.info("Attachment Download Completed Successfully");
-        log.info("Total Reports Downloaded : {}", downloadedFiles.size());
-
-        return response;
-    }    @PostMapping("/attachment/download")
-        public ResponseEntity<ApiResponse<AttachmentDownloadResponse>> downloadAttachments(@RequestHeader("Authorization") String token, 
-                        @RequestBody AttachmentDownloadRequest request){
-                              
-                               try{
-                                        log.info("inside report controller attachment endpoint");
-                                        AttachmentDownloadResponse response=reportService.downloadAttachments(request, jwtUtil.getUserRoleFromToken(token),
-                                        jwtUtil.getUserIdFromToken(token));
-                                        return ResponseEntity.ok(ApiResponse.success(response,"Attachment downloaded successfully"));
-                               }
-                               catch(IOException e){
-                                        log.error("Attachment download failed",e); 
-                                        return ResponseEntity.ok(
-                                                ApiResponse.error(e.getMessage() == null ?"Attachment download failed.":e.getMessage())
-                                );
-                               }
-
-        }
+java.util.concurrent.ExecutionException: java.lang.IllegalArgumentException: Cannot find cache named 'roles' for Builder[public java.util.List com.fincore.CommunicationService.recipient.provider.RoleRecipientProvider.resolve(com.fincore.CommunicationService.dto.GenericCommunicationEvent$Recipients)] caches=[roles] | key='#recipients.roles' | keyGenerator='' | cacheManager='' | cacheResolver='' | condition='' | unless='' | sync='false'
+        at java.base/java.util.concurrent.FutureTask.report(FutureTask.java:122) ~[na:na]
+        at java.base/java.util.concurrent.FutureTask.get(FutureTask.java:191) ~[na:na]
+        at com.fincore.CommunicationService.recipient.RecipientResolver.resolveRecipients(RecipientResolver.java:100) ~[classes/:na]
+        at com.fincore.CommunicationService.orchestrator.CommunicationOrchestrator.process(CommunicationOrchestrator.java:94) ~[classes/:na]
+        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+        at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+        at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359) ~[spring-aop-7.0.8.jar:7.0.8]
+        at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190) ~[spring-aop-7.0.8.jar:7.0.8]
+        at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158) ~[spring-aop-7.0.8.jar:7.0.8]
+        at org.springframework.aop.interceptor.ExposeInvocationInterceptor.invoke(ExposeInvocationInterceptor.java:96) ~[spring-aop-7.0.8.jar:7.0.8]
+        at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179) ~[spring-aop-7.0.8.jar:7.0.8]
+        at org.springframework.aop.aspectj.MethodInvocationProceedingJoinPoint.proceed(MethodInvocationProceedingJoinPoint.java:82) ~[spring-aop-7.0.8.jar:7.0.8]
+        at com.fincore.commonutilities.aspect.GlobalResilienceAspect.lambda$applyResilience$0(GlobalResilienceAspect.java:60) ~[common-utilities-1.0.0.jar:1.0.0]
+        at io.github.resilience4j.retry.Retry.lambda$decorateSupplier$5(Retry.java:301) ~[resilience4j-retry-2.3.0.jar:2.3.0]
+        at io.github.resilience4j.circuitbreaker.CircuitBreaker.lambda$decorateSupplier$5(CircuitBreaker.java:194) ~[resilience4j-circuitbreaker-2.3.0.jar:2.3.0]
+        at com.fincore.commonutilities.aspect.GlobalResilienceAspect.applyResilience(GlobalResilienceAspect.java:73) ~[common-utilities-1.0.0.jar:1.0.0]
+        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+        at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+        at org.springframework.aop.aspectj.AbstractAspectJAdvice.invokeAdviceMethodWithGivenArgs(AbstractAspectJAdvice.java:648) ~[spring-aop-7.0.8.jar:7.0.8]
+        at org.springframework.aop.aspectj.AbstractAspectJAdvice.invokeAdviceMethod(AbstractAspectJAdvice.java:630) ~[spring-aop-7.0.8.jar:7.0.8]
+        at org.springframework.aop.aspectj.AspectJAroundAdvice.invoke(AspectJAroundAdvice.java:70) ~[spring-aop-7.0.8.jar:7.0.8]
+        at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179) ~[spring-aop-7.0.8.jar:7.0.8]
+        at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:719) ~[spring-aop-7.0.8.jar:7.0.8]
+        at com.fincore.CommunicationService.orchestrator.CommunicationOrchestrator$$SpringCGLIB$$0.process(<generated>) ~[classes/:na]
+        at com.fincore.CommunicationService.consumer.GenericCommunicationConsumer.consumeGenericCommunication(GenericCommunicationConsumer.java:159) ~[classes/:na]
+        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+        at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+        at org.springframework.messaging.handler.invocation.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:168) ~[spring-messaging-7.0.8.jar:7.0.8]
