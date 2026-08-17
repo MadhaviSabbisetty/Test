@@ -94,4 +94,91 @@ io.github.resilience4j.circuitbreaker.CallNotPermittedException: CircuitBreaker 
         at org.springframework.aop.aspectj.AspectJAroundAdvice.invoke(AspectJAroundAdvice.java:70)
         at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
         at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:719)
-        at com.fincore.ReportService.service.ReportServiceImpl$$SpringCGLIB$$0.downloadAttachments(<generated>
+        at com.fincore.ReportService.service.ReportServiceImpl$$SpringCGLIB$$0.downloadAttachments(<generated> c.f.R.c.ReportController: inside report controller attachment endpoint 
+{"@timestamp":"2026-08-17T11:53:46.4155312+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.controller.ReportController","message":"inside report controller attachment endpoint","stack_trace":""}
+2026-08-17 11:53:46.416 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Inside the report service download method 
+{"@timestamp":"2026-08-17T11:53:46.416533+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Inside the report service download method","stack_trace":""}
+2026-08-17 11:53:46.416 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: ------------------------------------------------------------------- 
+{"@timestamp":"2026-08-17T11:53:46.416533+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"-------------------------------------------------------------------","stack_trace":""}
+2026-08-17 11:53:46.416 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Download Request Received 
+{"@timestamp":"2026-08-17T11:53:46.416533+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Download Request Received","stack_trace":""}
+2026-08-17 11:53:46.416 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Id: balance_compare_report_31032026 
+{"@timestamp":"2026-08-17T11:53:46.416533+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Id: balance_compare_report_31032026","stack_trace":""}
+2026-08-17 11:53:46.417 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Report Name: balance_compare_report 
+{"@timestamp":"2026-08-17T11:53:46.4175143+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Report Name: balance_compare_report","stack_trace":""}
+2026-08-17 11:53:46.417 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Type: BAL_COMP_SUMMARY 
+{"@timestamp":"2026-08-17T11:53:46.4175143+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Type: BAL_COMP_SUMMARY","stack_trace":""}
+2026-08-17 11:53:46.417 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Actual file name: balance_compare_report_31032026.xlsx 
+{"@timestamp":"2026-08-17T11:53:46.4175143+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Actual file name: balance_compare_report_31032026.xlsx","stack_trace":""}
+2026-08-17 11:53:46.417 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Reading HDFS File : /reports/2026-03-31/balance_compare_report_31032026.xlsx 
+{"@timestamp":"2026-08-17T11:53:46.4175143+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Reading HDFS File : /reports/2026-03-31/balance_compare_report_31032026.xlsx","stack_trace":""}
+2026-08-17 11:53:46.597 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: REPORT DOWNLOADED SUCCESSFULLY 
+{"@timestamp":"2026-08-17T11:53:46.597419+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"REPORT DOWNLOADED SUCCESSFULLY","stack_trace":""}
+2026-08-17 11:53:46.598 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Id   : balance_compare_report_31032026 
+{"@timestamp":"2026-08-17T11:53:46.5984195+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Id   : balance_compare_report_31032026","stack_trace":""}
+2026-08-17 11:53:46.598 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Report Name     : balance_compare_report_31032026.xlsx 
+{"@timestamp":"2026-08-17T11:53:46.5984195+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Report Name     : balance_compare_report_31032026.xlsx","stack_trace":""}
+2026-08-17 11:53:46.599 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Type : BAL_COMP_SUMMARY 
+{"@timestamp":"2026-08-17T11:53:46.5997342+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Type : BAL_COMP_SUMMARY","stack_trace":""}
+2026-08-17 11:53:46.599 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Content Type    : application/vnd.openxmlformats-officedocument.spreadsheetml.sheet 
+{"@timestamp":"2026-08-17T11:53:46.5997342+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Content Type    : application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","stack_trace":""}
+2026-08-17 11:53:46.599 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: File Size       : 51165 bytes 
+{"@timestamp":"2026-08-17T11:53:46.5997342+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"File Size       : 51165 bytes","stack_trace":""}
+2026-08-17 11:53:46.600 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: ------------------------------------------------------------------- 
+{"@timestamp":"2026-08-17T11:53:46.6007258+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"-------------------------------------------------------------------","stack_trace":""}
+2026-08-17 11:53:46.600 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Download Request Received 
+{"@timestamp":"2026-08-17T11:53:46.6007258+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Download Request Received","stack_trace":""}
+2026-08-17 11:53:46.601 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Id: intr_report_31032026 
+{"@timestamp":"2026-08-17T11:53:46.6017265+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Id: intr_report_31032026","stack_trace":""}
+2026-08-17 11:53:46.601 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Report Name: intr_report 
+{"@timestamp":"2026-08-17T11:53:46.6017265+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Report Name: intr_report","stack_trace":""}
+2026-08-17 11:53:46.601 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Type: INTR_SUMMARY 
+{"@timestamp":"2026-08-17T11:53:46.6017265+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Type: INTR_SUMMARY","stack_trace":""}
+2026-08-17 11:53:46.601 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Actual file name: intr_report_31032026.xlsx 
+{"@timestamp":"2026-08-17T11:53:46.6017265+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Actual file name: intr_report_31032026.xlsx","stack_trace":""}
+2026-08-17 11:53:46.602 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Reading HDFS File : /reports/2026-03-31/intr_report_31032026.xlsx 
+{"@timestamp":"2026-08-17T11:53:46.6027228+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Reading HDFS File : /reports/2026-03-31/intr_report_31032026.xlsx","stack_trace":""}
+2026-08-17 11:53:46.703 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: REPORT DOWNLOADED SUCCESSFULLY 
+{"@timestamp":"2026-08-17T11:53:46.7037871+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"REPORT DOWNLOADED SUCCESSFULLY","stack_trace":""}
+2026-08-17 11:53:46.703 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Id   : intr_report_31032026 
+{"@timestamp":"2026-08-17T11:53:46.7037871+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Id   : intr_report_31032026","stack_trace":""}
+2026-08-17 11:53:46.704 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Report Name     : intr_report_31032026.xlsx 
+{"@timestamp":"2026-08-17T11:53:46.7047711+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Report Name     : intr_report_31032026.xlsx","stack_trace":""}
+2026-08-17 11:53:46.704 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Type : INTR_SUMMARY 
+{"@timestamp":"2026-08-17T11:53:46.7047711+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Type : INTR_SUMMARY","stack_trace":""}
+2026-08-17 11:53:46.704 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Content Type    : application/vnd.openxmlformats-officedocument.spreadsheetml.sheet 
+{"@timestamp":"2026-08-17T11:53:46.7047711+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Content Type    : application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","stack_trace":""}
+2026-08-17 11:53:46.705 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: File Size       : 4518 bytes 
+{"@timestamp":"2026-08-17T11:53:46.7057933+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"File Size       : 4518 bytes","stack_trace":""}
+2026-08-17 11:53:46.705 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: ------------------------------------------------------------------- 
+{"@timestamp":"2026-08-17T11:53:46.7057933+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"-------------------------------------------------------------------","stack_trace":""}
+2026-08-17 11:53:46.705 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Download Request Received 
+{"@timestamp":"2026-08-17T11:53:46.7057933+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Download Request Received","stack_trace":""}
+2026-08-17 11:53:46.705 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Id: cntr_report_31032026 
+{"@timestamp":"2026-08-17T11:53:46.7057933+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Id: cntr_report_31032026","stack_trace":""}
+2026-08-17 11:53:46.705 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Report Name: cntr_report 
+{"@timestamp":"2026-08-17T11:53:46.7057933+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Report Name: cntr_report","stack_trace":""}
+2026-08-17 11:53:46.706 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Type: CNTR_SUMMARY 
+{"@timestamp":"2026-08-17T11:53:46.7067705+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Type: CNTR_SUMMARY","stack_trace":""}
+2026-08-17 11:53:46.706 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Actual file name: cntr_report_31032026.xlsx 
+{"@timestamp":"2026-08-17T11:53:46.7067705+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Actual file name: cntr_report_31032026.xlsx","stack_trace":""}
+2026-08-17 11:53:46.706 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Reading HDFS File : /reports/2026-03-31/cntr_report_31032026.xlsx 
+{"@timestamp":"2026-08-17T11:53:46.7067705+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Reading HDFS File : /reports/2026-03-31/cntr_report_31032026.xlsx","stack_trace":""}
+2026-08-17 11:53:46.800 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: REPORT DOWNLOADED SUCCESSFULLY 
+{"@timestamp":"2026-08-17T11:53:46.8009318+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"REPORT DOWNLOADED SUCCESSFULLY","stack_trace":""}
+2026-08-17 11:53:46.801 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Id   : cntr_report_31032026 
+{"@timestamp":"2026-08-17T11:53:46.8019263+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Id   : cntr_report_31032026","stack_trace":""}
+2026-08-17 11:53:46.802 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Report Name     : cntr_report_31032026.xlsx 
+{"@timestamp":"2026-08-17T11:53:46.8029339+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Report Name     : cntr_report_31032026.xlsx","stack_trace":""}
+2026-08-17 11:53:46.803 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Type : CNTR_SUMMARY 
+{"@timestamp":"2026-08-17T11:53:46.803937+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Type : CNTR_SUMMARY","stack_trace":""}
+2026-08-17 11:53:46.803 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Content Type    : application/vnd.openxmlformats-officedocument.spreadsheetml.sheet 
+{"@timestamp":"2026-08-17T11:53:46.803937+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Content Type    : application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","stack_trace":""}
+2026-08-17 11:53:46.804 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: File Size       : 4506 bytes 
+{"@timestamp":"2026-08-17T11:53:46.8049244+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"File Size       : 4506 bytes","stack_trace":""}
+2026-08-17 11:53:46.805 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: ------------------------------------------------------------ 
+{"@timestamp":"2026-08-17T11:53:46.8059329+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"------------------------------------------------------------","stack_trace":""}
+2026-08-17 11:53:46.805 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Download Completed Successfully 
+{"@timestamp":"2026-08-17T11:53:46.8059329+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Download Completed Successfully","stack_trace":""}
+2026-08-17 11:53:46.805 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Total Reports Downloaded : 3 
+{"@timestamp":"2026-08-17T11:53:46.8059329+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Total Reports Downloaded : 3","stack_trace":""}
