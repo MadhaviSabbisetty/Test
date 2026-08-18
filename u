@@ -1,87 +1,123 @@
+package com.fincore.ReportService.config;
 
-2026-08-18 15:43:29.532 INFO  [http-nio-9005-exec-1] o.s.w.s.FrameworkServlet: Initializing Servlet 'dispatcherServlet' 
-{"@timestamp":"2026-08-18T15:43:29.5325622+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.web.servlet.DispatcherServlet","message":"Initializing Servlet 'dispatcherServlet'","stack_trace":""}
-2026-08-18 15:43:29.538 INFO  [http-nio-9005-exec-1] o.s.w.s.FrameworkServlet: Completed initialization in 5 ms 
-{"@timestamp":"2026-08-18T15:43:29.5385536+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.web.servlet.DispatcherServlet","message":"Completed initialization in 5 ms","stack_trace":""}
-2026-08-18 15:43:29.595 INFO  [http-nio-9005-exec-1] c.f.R.c.InternalTokenFilter: Internal token filter executed for URI: /api/reports/attachment/download 
-{"@timestamp":"2026-08-18T15:43:29.595228+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.config.InternalTokenFilter","message":"Internal token filter executed for URI: /api/reports/attachment/download","stack_trace":""}
-2026-08-18 15:43:29.596 INFO  [http-nio-9005-exec-1] c.f.R.c.InternalTokenFilter: Expected token configured: FincoreCommReport@26#Internal 
-{"@timestamp":"2026-08-18T15:43:29.5962283+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.config.InternalTokenFilter","message":"Expected token configured: FincoreCommReport@26#Internal","stack_trace":""}
-2026-08-18 15:43:29.597 INFO  [http-nio-9005-exec-1] c.f.R.c.InternalTokenFilter: Token received: FincoreCommReport@2026#Internal 
-{"@timestamp":"2026-08-18T15:43:29.5972277+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.config.InternalTokenFilter","message":"Token received: FincoreCommReport@2026#Internal","stack_trace":""}
-2026-08-18 15:43:29.807 INFO  [http-nio-9005-exec-1] c.f.R.c.ReportController: inside report controller attachment endpoint 
-{"@timestamp":"2026-08-18T15:43:29.8073565+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.controller.ReportController","message":"inside report controller attachment endpoint","stack_trace":""}
-2026-08-18 15:43:29.817 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Inside the report service download method 
-{"@timestamp":"2026-08-18T15:43:29.8173644+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Inside the report service download method","stack_trace":""}
-2026-08-18 15:43:29.818 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: ------------------------------------------------------------------- 
-{"@timestamp":"2026-08-18T15:43:29.8183619+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"-------------------------------------------------------------------","stack_trace":""}
-2026-08-18 15:43:29.819 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Attachment Download Request Received 
-{"@timestamp":"2026-08-18T15:43:29.819371+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Download Request Received","stack_trace":""}
-2026-08-18 15:43:29.819 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Attachment Id: balance_compare_report_31032026 
-{"@timestamp":"2026-08-18T15:43:29.819371+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Id: balance_compare_report_31032026","stack_trace":""}
-2026-08-18 15:43:29.820 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Report Name: balance_compare_report 
-{"@timestamp":"2026-08-18T15:43:29.8203638+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Report Name: balance_compare_report","stack_trace":""}
-2026-08-18 15:43:29.821 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Attachment Type: BAL_COMP_SUMMARY 
-{"@timestamp":"2026-08-18T15:43:29.8213564+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Type: BAL_COMP_SUMMARY","stack_trace":""}
-2026-08-18 15:43:29.823 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Actual file name: balance_compare_report_31032026.xlsx 
-{"@timestamp":"2026-08-18T15:43:29.8233538+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Actual file name: balance_compare_report_31032026.xlsx","stack_trace":""}
-2026-08-18 15:43:29.824 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Reading HDFS File : /reports/2026-03-31/balance_compare_report_31032026.xlsx 
-{"@timestamp":"2026-08-18T15:43:29.8243713+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Reading HDFS File : /reports/2026-03-31/balance_compare_report_31032026.xlsx","stack_trace":""}
-2026-08-18 15:43:29.829 INFO  [main] o.a.k.c.u.AppInfoParser$AppInfo: Kafka version: 4.2.1 
-{"@timestamp":"2026-08-18T15:43:29.8294194+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.kafka.common.utils.AppInfoParser","message":"Kafka version: 4.2.1","stack_trace":""}
-2026-08-18 15:43:29.830 INFO  [main] o.a.k.c.u.AppInfoParser$AppInfo: Kafka commitId: 92f61c44867f39dc 
-{"@timestamp":"2026-08-18T15:43:29.8303667+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.kafka.common.utils.AppInfoParser","message":"Kafka commitId: 92f61c44867f39dc","stack_trace":""}
-2026-08-18 15:43:29.831 INFO  [main] o.a.k.c.u.AppInfoParser$AppInfo: Kafka startTimeMs: 1787048009825 
-{"@timestamp":"2026-08-18T15:43:29.8313572+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.kafka.common.utils.AppInfoParser","message":"Kafka startTimeMs: 1787048009825","stack_trace":""}
-2026-08-18 15:43:29.857 INFO  [main] o.a.k.c.c.i.ClassicKafkaConsumer: [Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Subscribed to topic(s): report-generation-request 
-{"@timestamp":"2026-08-18T15:43:29.8573657+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.k.c.c.internals.ClassicKafkaConsumer","message":"[Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Subscribed to topic(s): report-generation-request","stack_trace":""}
-2026-08-18 15:43:29.893 INFO  [main] o.s.b.StartupInfoLogger: Started ReportServiceApplication in 48.503 seconds (process running for 50.683) 
-{"@timestamp":"2026-08-18T15:43:29.8939115+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.ReportServiceApplication","message":"Started ReportServiceApplication in 48.503 seconds (process running for 50.683)","stack_trace":""}
-2026-08-18 15:43:30.819 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: REPORT DOWNLOADED SUCCESSFULLY 
-{"@timestamp":"2026-08-18T15:43:30.8199481+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"REPORT DOWNLOADED SUCCESSFULLY","stack_trace":""}
-2026-08-18 15:43:30.820 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Attachment Id   : balance_compare_report_31032026 
-{"@timestamp":"2026-08-18T15:43:30.8209536+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Id   : balance_compare_report_31032026","stack_trace":""}
-2026-08-18 15:43:30.821 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Report Name     : balance_compare_report_31032026.xlsx 
-{"@timestamp":"2026-08-18T15:43:30.821952+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Report Name     : balance_compare_report_31032026.xlsx","stack_trace":""}
-2026-08-18 15:43:30.822 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Attachment Type : BAL_COMP_SUMMARY 
-{"@timestamp":"2026-08-18T15:43:30.8229548+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Type : BAL_COMP_SUMMARY","stack_trace":""}
-2026-08-18 15:43:30.823 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Content Type    : application/vnd.openxmlformats-officedocument.spreadsheetml.sheet 
-{"@timestamp":"2026-08-18T15:43:30.8239542+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Content Type    : application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","stack_trace":""}
-2026-08-18 15:43:30.824 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: File Size       : 51165 bytes 
-{"@timestamp":"2026-08-18T15:43:30.8249517+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"File Size       : 51165 bytes","stack_trace":""}
-2026-08-18 15:43:30.825 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: ------------------------------------------------------------------- 
-{"@timestamp":"2026-08-18T15:43:30.8259566+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"-------------------------------------------------------------------","stack_trace":""}
-2026-08-18 15:43:30.826 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Attachment Download Request Received 
-{"@timestamp":"2026-08-18T15:43:30.8269559+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Download Request Received","stack_trace":""}
-2026-08-18 15:43:30.827 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Attachment Id: intr_report_31032026 
-{"@timestamp":"2026-08-18T15:43:30.827955+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Id: intr_report_31032026","stack_trace":""}
-2026-08-18 15:43:30.828 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Report Name: intr_report 
-{"@timestamp":"2026-08-18T15:43:30.8289502+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Report Name: intr_report","stack_trace":""}
-2026-08-18 15:43:30.828 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Attachment Type: INTR_SUMMARY 
-{"@timestamp":"2026-08-18T15:43:30.8289502+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Type: INTR_SUMMARY","stack_trace":""}
-2026-08-18 15:43:30.829 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Actual file name: intr_report_31032026.xlsx 
-{"@timestamp":"2026-08-18T15:43:30.8299565+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Actual file name: intr_report_31032026.xlsx","stack_trace":""}
-2026-08-18 15:43:30.830 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: Reading HDFS File : /reports/2026-03-31/intr_report_31032026.xlsx 
-{"@timestamp":"2026-08-18T15:43:30.8309551+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Reading HDFS File : /reports/2026-03-31/intr_report_31032026.xlsx","stack_trace":""}
-2026-08-18 15:43:30.833 INFO  [org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1] o.a.k.c.Metadata: [Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Cluster ID:  
-{"@timestamp":"2026-08-18T15:43:30.8339504+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"org.apache.kafka.clients.Metadata","message":"[Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Cluster ID: ","stack_trace":""}
-2026-08-18 15:43:30.839 INFO  [org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1] o.a.k.c.c.i.AbstractCoordinator$FindCoordinatorResponseHandler: [Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Discovered group coordinator 10.0.17.242:9092 (id: 2147483646 rack: null isFenced: false) 
-{"@timestamp":"2026-08-18T15:43:30.8399511+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.k.c.c.internals.ConsumerCoordinator","message":"[Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Discovered group coordinator 10.0.17.242:9092 (id: 2147483646 rack: null isFenced: false)","stack_trace":""}
-2026-08-18 15:43:30.844 INFO  [org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1] o.a.k.c.c.i.AbstractCoordinator: [Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] (Re-)joining group 
-{"@timestamp":"2026-08-18T15:43:30.84495+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.k.c.c.internals.ConsumerCoordinator","message":"[Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] (Re-)joining group","stack_trace":""}
-2026-08-18 15:43:30.881 INFO  [org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1] o.a.k.c.c.i.AbstractCoordinator: [Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Request joining group due to: need to re-join with the given member-id: consumer-Airflow_ETL-1-7022561d-563b-48cb-a92b-e45bdad4a131 
-{"@timestamp":"2026-08-18T15:43:30.8815128+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.k.c.c.internals.ConsumerCoordinator","message":"[Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Request joining group due to: need to re-join with the given member-id: consumer-Airflow_ETL-1-7022561d-563b-48cb-a92b-e45bdad4a131","stack_trace":""}
-2026-08-18 15:43:30.882 INFO  [org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1] o.a.k.c.c.i.AbstractCoordinator: [Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] (Re-)joining group 
-{"@timestamp":"2026-08-18T15:43:30.8825099+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.k.c.c.internals.ConsumerCoordinator","message":"[Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] (Re-)joining group","stack_trace":""}
-2026-08-18 15:43:30.892 INFO  [org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1] o.a.k.c.c.i.AbstractCoordinator$JoinGroupResponseHandler: [Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Successfully joined group with generation Generation{generationId=1, memberId='consumer-Airflow_ETL-1-7022561d-563b-48cb-a92b-e45bdad4a131', protocol='range'} 
-{"@timestamp":"2026-08-18T15:43:30.8925052+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.k.c.c.internals.ConsumerCoordinator","message":"[Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Successfully joined group with generation Generation{generationId=1, memberId='consumer-Airflow_ETL-1-7022561d-563b-48cb-a92b-e45bdad4a131', protocol='range'}","stack_trace":""}
-2026-08-18 15:43:30.905 INFO  [org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1] o.a.k.c.c.i.ConsumerCoordinator: [Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Finished assignment for group at generation 1: {consumer-Airflow_ETL-1-7022561d-563b-48cb-a92b-e45bdad4a131=Assignment(partitions=[report-generation-request-0])} 
-{"@timestamp":"2026-08-18T15:43:30.9054989+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.k.c.c.internals.ConsumerCoordinator","message":"[Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Finished assignment for group at generation 1: {consumer-Airflow_ETL-1-7022561d-563b-48cb-a92b-e45bdad4a131=Assignment(partitions=[report-generation-request-0])}","stack_trace":""}
-2026-08-18 15:43:30.930 INFO  [org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1] o.a.k.c.c.i.AbstractCoordinator$SyncGroupResponseHandler: [Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Successfully synced group in generation Generation{generationId=1, memberId='consumer-Airflow_ETL-1-7022561d-563b-48cb-a92b-e45bdad4a131', protocol='range'} 
-{"@timestamp":"2026-08-18T15:43:30.9305011+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.k.c.c.internals.ConsumerCoordinator","message":"[Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Successfully synced group in generation Generation{generationId=1, memberId='consumer-Airflow_ETL-1-7022561d-563b-48cb-a92b-e45bdad4a131', protocol='range'}","stack_trace":""}
-2026-08-18 15:43:30.931 INFO  [org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1] o.a.k.c.c.i.ConsumerCoordinator: [Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Notifying assignor about the new Assignment(partitions=[report-generation-request-0]) 
-{"@timestamp":"2026-08-18T15:43:30.9315044+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.k.c.c.internals.ConsumerCoordinator","message":"[Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Notifying assignor about the new Assignment(partitions=[report-generation-request-0])","stack_trace":""}
-2026-08-18 15:43:30.936 INFO  [org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1] o.a.k.c.c.i.ConsumerRebalanceListenerInvoker: [Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Adding newly assigned partitions: [report-generation-request-0] 
-{"@timestamp":"2026-08-18T15:43:30.9365059+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.k.c.c.i.ConsumerRebalanceListenerInvoker","message":"[Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Adding newly assigned partitions: [report-generation-request-0]","stack_trace":""}
-2026-08-18 15:43:30.947 INFO  [http-nio-9005-exec-1] c.f.R.s.ReportServiceImpl: REPORT DOWNLOADED SUCCESSFULLY 
-{"@timestamp":"2026-08-18T15:43:30.947505+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp"
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+import java.io.IOException;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * Validates the internal token received from Communication Service.
+ */
+
+@Slf4j
+@Component
+public class InternalTokenFilter extends OncePerRequestFilter {
+
+    // Expected token configured in Report Service application.properties
+    @Value("${security.internal-token}")
+    private String expectedToken;
+
+    @Override
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain)
+            throws ServletException, IOException {
+
+        // Read the internal token from the request header
+        String token = request.getHeader("X-Internal-Token");
+
+        log.info("Internal token filter executed for URI: {}",request.getRequestURI());
+        log.info("Expected token configured: {}",expectedToken);
+        log.info("Token received: {}",token);
+        
+        // Reject the request if the token is missing or invalid
+        if (token != null && token.equals(expectedToken)) {
+
+            // Mark the request as authenticated
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(
+                            "communication-service",
+                            null,
+                            AuthorityUtils.createAuthorityList(
+                                    "ROLE_INTERNAL_SERVICE"));
+
+            SecurityContextHolder
+                    .getContext()
+                    .setAuthentication(authentication);
+        }
+
+        // Continue to the next filter/controller
+        filterChain.doFilter(request, response);
+    }
+}package com.fincore.ReportService.config;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+import java.io.IOException;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * Validates the internal token received from Communication Service.
+ */
+
+@Slf4j
+@Component
+public class InternalTokenFilter extends OncePerRequestFilter {
+
+    // Expected token configured in Report Service application.properties
+    @Value("${security.internal-token}")
+    private String expectedToken;
+
+    @Override
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain)
+            throws ServletException, IOException {
+
+        // Read the internal token from the request header
+        String token = request.getHeader("X-Internal-Token");
+
+        log.info("Internal token filter executed for URI: {}",request.getRequestURI());
+        log.info("Expected token configured: {}",expectedToken);
+        log.info("Token received: {}",token);
+        
+        // Reject the request if the token is missing or invalid
+        if (token != null && token.equals(expectedToken)) {
+
+            // Mark the request as authenticated
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(
+                            "communication-service",
+                            null,
+                            AuthorityUtils.createAuthorityList(
+                                    "ROLE_INTERNAL_SERVICE"));
+
+            SecurityContextHolder
+                    .getContext()
+                    .setAuthentication(authentication);
+        }
+
+        // Continue to the next filter/controller
+        filterChain.doFilter(request, response);
+    }
+}
