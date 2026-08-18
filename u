@@ -1,51 +1,16 @@
-// package com.fincore.CommunicationService.dto;
-// import lombok.Data;
-// import lombok.AllArgsConstructor;
-// import lombok.NoArgsConstructor;
+   @PostMapping("/attachment/download")
+        public ResponseEntity<ApiResponse<AttachmentDownloadResponse>> downloadAttachments(@RequestBody AttachmentDownloadRequest request){
+                              
+                               try{
+                                        log.info("inside report controller attachment endpoint");
+                                        AttachmentDownloadResponse response=reportService.downloadAttachments(request); 
+                                        return ResponseEntity.ok(ApiResponse.success(response,"Attachment downloaded successfully"));
+                               }
+                               catch(IOException e){
+                                        log.error("Attachment download failed",e); 
+                                        return ResponseEntity.ok(
+                                                ApiResponse.error(e.getMessage() == null ?"Attachment download failed.":e.getMessage())
+                                );
+                               }
 
-// @Data
-// @AllArgsConstructor
-// @NoArgsConstructor
-// public class ApiResponse<T>{
-//     private boolean success;
-//     private String message;
-//     private T data;
-// }
-
-
-package com.fincore.CommunicationService.dto;
-import lombok.Data;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import lombok.Getter;
-
-import java.time.Instant;
-
-@Data
-@Getter
-@JsonInclude(JsonInclude.Include.NON_NULL) // Don't include null fields in the JSON response
-public class ApiResponse<T> {
-
-    private final boolean success;
-    private final String message;
-    private final T data;
-    private final Instant timestamp;
-
-    private ApiResponse(boolean success, String message, T data) {
-        this.success = success;
-        this.message = message;
-        this.data = data;
-        this.timestamp = Instant.now();
-    }
-
-    public static <T> ApiResponse<T> success(T data, String message) {
-        return new ApiResponse<>(true, message, data);
-    }
-
-    public static <T> ApiResponse<T> success(T data) {
-        return new ApiResponse<>(true, "Operation completed successfully.", data);
-    }
-
-    public static <T> ApiResponse<T> error(String message) {
-        return new ApiResponse<>(false, message, null);
-    }
-}
+        }
