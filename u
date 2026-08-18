@@ -1,80 +1,51 @@
-package com.fincore.CommunicationService.client;
+// package com.fincore.CommunicationService.dto;
+// import lombok.Data;
+// import lombok.AllArgsConstructor;
+// import lombok.NoArgsConstructor;
 
-import com.fincore.CommunicationService.dto.ApiResponse;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
+// @Data
+// @AllArgsConstructor
+// @NoArgsConstructor
+// public class ApiResponse<T>{
+//     private boolean success;
+//     private String message;
+//     private T data;
+// }
 
-@Slf4j
-@Component
-@RequiredArgsConstructor
-/**
- * REST client used to communicate with Report Service
- * for attachment download requests
- */
-public class ReportServiceClient {
 
-    private final RestClient restClient;
+package com.fincore.CommunicationService.dto;
+import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.Getter;
 
-    @Value("${report.service.url}")
-    private String reportServiceUrl;
+import java.time.Instant;
 
-    @Value("${report.service.internal-token}")
-    private String reportServiceInternalToken;
+@Data
+@Getter
+@JsonInclude(JsonInclude.Include.NON_NULL) // Don't include null fields in the JSON response
+public class ApiResponse<T> {
 
-    /**
-     * Invokes Report Service to download attachment content
-     * 
-     * @param request Attachment download request
-     * @return Downloaded attachments
-     */
+    private final boolean success;
+    private final String message;
+    private final T data;
+    private final Instant timestamp;
 
-    public AttachmentDownloadResponse downloadAttachments(
-            AttachmentDownloadRequest request) {
-
-        try {
-
-            log.info("Calling Report Service : {}",
-                    reportServiceUrl + "/api/reports/attachment/download");
-
-            ApiResponse<AttachmentDownloadResponse> response =
-            //Invoke report Service attachment download endpoint
-                    restClient.post()
-                            .uri(reportServiceUrl + "/api/reports/attachment/download")
-                            .header("X-Internal-Token", reportServiceInternalToken)
-                            .body(request)
-                            .retrieve()
-                            .body(new ParameterizedTypeReference<ApiResponse<AttachmentDownloadResponse>>() {});
-
-            //Validate response received from Report Service
-
-            if (response == null) {
-                throw new RuntimeException("No response received from Report Service");
-            }
-
-            if (!response.isSuccess()) {
-                throw new RuntimeException(response.getMessage());
-            }
-
-            if (response.getData() == null) {
-                throw new RuntimeException("Attachment response is empty");
-            }
-
-            log.info("Report Service returned {} attachment(s)",
-                    response.getData().getAttachments().size());
-
-            return response.getData();
-
-        } catch (Exception ex) {
-
-            log.error("Error while downloading attachments from Report Service", ex);
-
-            throw ex;
-        }
+    private ApiResponse(boolean success, String message, T data) {
+        this.success = success;
+        this.message = message;
+        this.data = data;
+        this.timestamp = Instant.now();
     }
-}              
+
+    public static <T> ApiResponse<T> success(T data, String message) {
+        return new ApiResponse<>(true, message, data);
+    }
+
+    public static <T> ApiResponse<T> success(T data) {
+        return new ApiResponse<>(true, "Operation completed successfully.", data);
+    }
+
+    public static <T> ApiResponse<T> error(String message) {
+        return new ApiResponse<>(false, message, null);
+    }
+}
