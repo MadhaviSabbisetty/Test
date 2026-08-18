@@ -1,94 +1,71 @@
-package com.fincore.ReportService.config;
+package com.fincore.CommunicationService.exception;
 
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.AuthorityUtils;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
-import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fincore.CommunicationService.dto.ApiResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.context.request.WebRequest;
 
+import jakarta.validation.ConstraintViolationException;
+import java.util.stream.Collectors;
+
+@ControllerAdvice
+@Slf4j
 /**
- * Validates the internal token received from Communication Service.
+ * Exception Taxonomy for the Communication Service.
  */
-@Component
-public class InternalTokenFilter extends OncePerRequestFilter {
+public class CommunicationExceptions {
 
-    // Expected token configured in Report Service application.properties
-    @Value("${security.internal-token}")
-    private String expectedToken;
+    /**
+     * Deterministic Error: Do NOT Retry. Route to DLQ instantly.
+     */
+    public static class DecryptionFailureException extends RuntimeException {
+        public DecryptionFailureException(String message, Throwable cause) { super(message, cause); }
+    }
 
-    @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain)
-            throws ServletException, IOException {
+    /**
+     * Deterministic Error: Do NOT Retry. Missing DB configuration.
+     */
+    public static class TemplateNotFoundException extends RuntimeException {
+        public TemplateNotFoundException(String message) { super(message); }
+    }
 
-        // Read the internal token from the request header
-        String token = request.getHeader("X-Internal-Token");
+    /**
+     * Transient Error: Vendor Timeout/502. DO Retry with Exponential Backoff.
+     */
+    public static class VendorDeliveryException extends RuntimeException {
+        public VendorDeliveryException(String message, Throwable cause) { super(message, cause); }
+    }
 
-        // Reject the request if the token is missing or invalid
-        if (token == null || !token.equals(expectedToken)) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json");
-            response.getWriter().write(
-                    "{\"status\":401,\"message\":\"Invalid internal token\"}"
-            );
-            return;
-        }
+    /**
+     * Data Error: Invalid Payload structure. Do NOT Retry.
+     */
+    public static class InvalidPayloadException extends RuntimeException {
+        public InvalidPayloadException(String message) { super(message); }
+    }
 
-        // Mark the request as authenticated
-        UsernamePasswordAuthenticationToken authentication =
-                new UsernamePasswordAuthenticationToken(
-                        "internal-client",
-                        null,
-                        AuthorityUtils.createAuthorityList(
-                                "ROLE_INTERNAL_SERVICE"));
-
-        SecurityContextHolder
-                .getContext()
-                .setAuthentication(authentication);
-
-        // Continue to the next filter/controller
-        filterChain.doFilter(request, response);
+    /**
+     * Deterministic Error: Thrown if FreeMarker fails to compile (e.g., missing variable).
+     * DO NOT RETRY. Route to DLQ instantly, as retrying a broken template will always fail.
+     */
+    public static class TemplateProcessingException extends RuntimeException {
+        public TemplateProcessingException(String message, Throwable cause) { super(message, cause); }
+    }
+    
+   // This ALREADY handles IllegalArgumentException, so we don't need a new one
+    @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
+    public ResponseEntity<ApiResponse<Object>> handleArgumentAndStateExceptions(RuntimeException ex, WebRequest request) {
+        log.error("Illegal argument or state: {}", ex.getMessage());
+        return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.BAD_REQUEST);
     }
 }
-
-
-
-@Bean
-@Order(1)
-public SecurityFilterChain internalTokenSecurityFilterChain(
-        HttpSecurity http) throws Exception {
-
-    http
-            // Apply this security chain only to the attachment download API
-            .securityMatcher("/api/reports/attachment/download")
-
-            // CSRF is not required for this service-to-service REST call
-            .csrf(AbstractHttpConfigurer::disable)
-
-            // Do not maintain HTTP sessions; authentication is per request
-            .sessionManagement(s ->
-                    s.sessionCreationPolicy(
-                            SessionCreationPolicy.STATELESS))
-
-            // Token validation is handled by InternalTokenFilter
-            .authorizeHttpRequests(authz ->
-                    authz.anyRequest().permitAll())
-
-            // Validate X-Internal-Token before the request reaches the controller
-            .addFilterBefore(
-                    internalTokenFilter,
-                    UsernamePasswordAuthenticationFilter.class);
-
-    return http.build();
-}
-
