@@ -1,124 +1,94 @@
-spring.application.name=ReportService
-# LOGIN SERVICE KEY USED BY common-entities
-spring.profiles.active=local
-# ===================================================================
-# SERVER CONFIGURATION
-# ===================================================================
-server.port=9005
-spring.datasource.driver-class-name=oracle.jdbc.OracleDriver
-# ===================================================================
-# CUSTOM APPLICATION PROPERTIES
-# ===================================================================
-spring.mvc.async.request-timeout=3600000
-notification.progress.topic=notifications:progress
-# STORAGE MODE: 'hdfs' (Default) or 'sftp' (Temporary UAT Fix)
-app.storage.mode=hdfs
-# -----------------------------------------------------------------------
-# DB Timeouts: Configuration of connection pooling timeouts ## 30 sec.
-spring.datasource.hikari.connection-timeout=300000
-spring.datasource.hikari.maximum-pool-size=60
+package com.fincore.ReportService.config;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+/**
+ * Validates the internal token received from Communication Service.
+ */
+@Component
+public class InternalTokenFilter extends OncePerRequestFilter {
+
+    // Expected token configured in Report Service application.properties
+    @Value("${security.internal-token}")
+    private String expectedToken;
+
+    @Override
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain)
+            throws ServletException, IOException {
+
+        // Read the internal token from the request header
+        String token = request.getHeader("X-Internal-Token");
+
+        // Reject the request if the token is missing or invalid
+        if (token == null || !token.equals(expectedToken)) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
+            response.getWriter().write(
+                    "{\"status\":401,\"message\":\"Invalid internal token\"}"
+            );
+            return;
+        }
+
+        // Mark the request as authenticated
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(
+                        "internal-client",
+                        null,
+                        AuthorityUtils.createAuthorityList(
+                                "ROLE_INTERNAL_SERVICE"));
+
+        SecurityContextHolder
+                .getContext()
+                .setAuthentication(authentication);
+
+        // Continue to the next filter/controller
+        filterChain.doFilter(request, response);
+    }
+}
 
 
-security.internal-token=FincoreCommReport@2025#Internal
 
-# Fix for Time property issue in upgrade
-spring.jpa.properties.hibernate.type.preferred_instant_jdbc_type=TIMESTAMP
-# --- Actuator Base Config ---
-# Enable the endpoints, but control exposure in specific profile files
-management.endpoints.web.base-path=/actuator
-management.endpoint.health.probes.enabled=true
-management.endpoints.web.exposure.include=health,info,prometheus
-management.endpoint.health.show-details=always
-management.metrics.tags.application=${spring.application.name}
-management.info.env.enabled=true
-info.app.name=ReportService
-info.app.description=Service for managing all report download and creation
-info.app.version=1.0.0
-# ==============================================================
-# RESILIENCE4J CONFIGURATION (Global Rules)
-# ==============================================================
-# --- 1. RETRY STRATEGY ---
-# A. RETRY ON THESE (Transient / "Blips")
-# 1. Spring's wrapper for DB Timeouts, Deadlocks, Connection Drops
-resilience4j.retry.instances.defaultService.retry-exceptions[0]=org.springframework.dao.TransientDataAccessException
-# 2. Connection failure at start of transaction
-resilience4j.retry.instances.defaultService.retry-exceptions[1]=org.springframework.transaction.CannotCreateTransactionException
-# 3. DB Resource Failure (DB Down)
-resilience4j.retry.instances.defaultService.retry-exceptions[2]=org.springframework.dao.DataAccessResourceFailureException
-# 4. Network I/O errors (for Feign/RestCalls)
-resilience4j.retry.instances.defaultService.retry-exceptions[3]=java.io.IOException
-resilience4j.retry.instances.defaultService.retry-exceptions[4]=java.net.ConnectException
-resilience4j.retry.instances.defaultService.retry-exceptions[5]=java.net.SocketTimeoutException
-# B. DO NOT RETRY ON THESE (Logic / Permanent Errors)
-# Even if these happen, we fail immediately so GlobalExceptionHandler can return 400/409
-resilience4j.retry.instances.defaultService.ignore-exceptions[0]=java.lang.IllegalArgumentException
-resilience4j.retry.instances.defaultService.ignore-exceptions[1]=java.lang.NullPointerException
-resilience4j.retry.instances.defaultService.ignore-exceptions[2]=org.springframework.dao.DataIntegrityViolationException
-resilience4j.retry.instances.defaultService.ignore-exceptions[3]=org.springframework.dao.DuplicateKeyException
-resilience4j.retry.instances.defaultService.ignore-exceptions[4]=org.springframework.web.client.HttpClientErrorException
-# --- 2. CIRCUIT BREAKER STRATEGY ---
-# If 50% of requests fail, OPEN the circuit (Fail Fast)
-resilience4j.circuitbreaker.instances.defaultService.failure-rate-threshold=50
-# Wait 10 seconds before trying again (Half-Open state)
-resilience4j.circuitbreaker.instances.defaultService.wait-duration-in-open-state=10s
-# Must have at least 5 calls to calculate failure rate
-resilience4j.circuitbreaker.instances.defaultService.minimum-number-of-calls=5
-# When Half-Open, allow 3 test calls to see if backend is up
-resilience4j.circuitbreaker.instances.defaultService.permitted-number-of-calls-in-half-open-state=3
-# Automatically move from Open to Half-Open
-resilience4j.circuitbreaker.instances.defaultService.automatic-transition-from-open-to-half-open-enabled=true
-# =========================
-# CONSUMER CONFIG
-# =========================
-spring.kafka.consumer.group-id=Airflow_ETL
-spring.kafka.consumer.auto-offset-reset=earliest
-spring.kafka.consumer.key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
-spring.kafka.consumer.value-deserializer=org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
-spring.kafka.consumer.properties.spring.deserializer.value.delegate.class=org.springframework.kafka.support.serializer.JsonDeserializer
-spring.kafka.consumer.properties.spring.json.trusted.packages=*
-# =========================
-# PRODUCER CONFIG
-# =========================
-spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer
-spring.kafka.producer.value-serializer=org.springframework.kafka.support.serializer.JsonSerializer
-# HDFS Paths
-glif.reports.base-path=/reports
-glif.branch-reports.base-path=/branch_reports
-glif.temp-reports.base-path=/temp-report
+@Bean
+@Order(1)
+public SecurityFilterChain internalTokenSecurityFilterChain(
+        HttpSecurity http) throws Exception {
 
+    http
+            // Apply this security chain only to the attachment download API
+            .securityMatcher("/api/reports/attachment/download")
 
-# From application-dev
-spring.jpa.database-platform=org.hibernate.dialect.OracleDialect
-spring.jpa.hibernate.ddl-auto=validate
-spring.jpa.show-sql=false
-spring.jpa.properties.hibernate.format_sql=false
-logging.level.org.hibernate.SQL=OFF
-logging.level.org.hibernate.orm.jdbc.bind=OFF
+            // CSRF is not required for this service-to-service REST call
+            .csrf(AbstractHttpConfigurer::disable)
 
+            // Do not maintain HTTP sessions; authentication is per request
+            .sessionManagement(s ->
+                    s.sessionCreationPolicy(
+                            SessionCreationPolicy.STATELESS))
 
-spring.application.name=CommunicationService
-spring.datasource.driver-class-name=oracle.jdbc.OracleDriver
-spring.profiles.active=dev
-server.port=8001
+            // Token validation is handled by InternalTokenFilter
+            .authorizeHttpRequests(authz ->
+                    authz.anyRequest().permitAll())
 
-# ===================================================================
-# DEFAULT ENVIRONMENT NAME FOR FALLBACK
-# ===================================================================
-app.preIpString=DEV
+            // Validate X-Internal-Token before the request reaches the controller
+            .addFilterBefore(
+                    internalTokenFilter,
+                    UsernamePasswordAuthenticationFilter.class);
 
-report.service.url=http://localhost:9005
-report.service.internal-token=FincoreCommReport@2026#Internal
-security.internal-token=PostmanToComm@2026#Internal
-attachment.max.count = 10
-attachment.max.size.mb = 20
+    return http.build();
+}
 
-
-#====================================================================
-#                          RESILIENCE
-#====================================================================
-resilience4j.retry.instances.bankApiRetry.max-attempts=3
-resilience4j.retry.instances.bankApiRetry.wait-duration=2s
-resilience4j.retry.instances.bankApiRetry.retry-exceptions[0]=java.io.IOException
-resilience4j.retry.instances.bankApiRetry.retry-exceptions[1]=java.net.SocketTimeoutException
-resilience4j.retry.instances.bankApiRetry.ignore-exceptions[0]=com.fincore.CommunicationService.exception.CommunicationExceptions.TemplateNotFoundException
-resilience4j.retry.instances.bankApiRetry.ignore-exceptions[1]=com.fincore.CommunicationService.exception.CommunicationExceptions.TemplateProcessingException
