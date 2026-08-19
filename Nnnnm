@@ -1,114 +1,57 @@
-package com.fincore.enquiry_service.controller;
+package com.fincore.enquiry_service.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.WebDataBinder;
-import org.springframework.web.bind.annotation.*;
-
-import com.fincore.enquiry_service.dto.ApiResponse;
 import com.fincore.enquiry_service.dto.DifferenceDTO;
 import com.fincore.enquiry_service.dto.DifferenceHistoryDTO;
 import com.fincore.enquiry_service.dto.DifferenceSearchDto;
-import com.fincore.enquiry_service.dto.GlccRequestBodyDto;
-import com.fincore.enquiry_service.service.DifferenceService;
+import com.fincore.enquiry_service.repository.DifferenceRepository;
+import io.micrometer.common.util.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import jakarta.validation.Valid;
-
-@RestController
-@RequestMapping("/api/differences")
-public class DifferenceController {
+@Service
+public class DifferenceService implements IDifferenceService {
 
     @Autowired
-    private DifferenceService service;
+    private DifferenceRepository repository;
 
-    // --- SECURITY FIX: Explicitly disallow mass assignment on sensitive internal fields ---
-    @InitBinder
-    public void initBinder(WebDataBinder binder) {
-        binder.setDisallowedFields("class.*", "Class.*", "*.class.*", "*.Class.*", "classLoader.*");
+    @Transactional(readOnly = true)
+    public Page<DifferenceDTO> getAllDifferences(int page, int size) {
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by("id"));
+        return repository.findAllAsDto(pageRequest);
     }
 
-    // GET All with ApiResponse
-    @GetMapping
-    public ResponseEntity<ApiResponse<Page<DifferenceDTO>>> getDifferences(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "100") int size) {
-        Page<DifferenceDTO> result = service.getAllDifferences(page, size);
-        return ResponseEntity.ok(ApiResponse.success(result, "Differences retrieved successfully"));
+    @Transactional(readOnly = true)
+    public Page<DifferenceDTO> searchDifferences(DifferenceSearchDto criteria, int page, int size) {
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by("id"));
+
+        // sanitize inputs: convert empty strings to null so SQL ignores them
+        String branch = StringUtils.isBlank(criteria.getBranchCode()) ? null : criteria.getBranchCode();
+        String curr = StringUtils.isBlank(criteria.getCurrency()) ? null : criteria.getCurrency();
+        String cgl = StringUtils.isBlank(criteria.getCgl()) ? null : criteria.getCgl();
+
+        return repository.searchDifferencesDynamic(
+                criteria.getFromDate(),
+                criteria.getEffectiveToDate(), // Handles the "Single Date vs Range" logic
+                branch,
+                curr,
+                cgl,
+                pageRequest);
     }
 
-    // POST Search with ApiResponse
-    @PostMapping("/search")
-    public ResponseEntity<ApiResponse<Page<DifferenceDTO>>> searchDifferences(
-            @Valid @RequestBody DifferenceSearchDto criteria,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "100") int size) {
+    @Transactional(readOnly = true)
+    public Page<DifferenceHistoryDTO> getGlccHistory(String branchCode, String cgl, int page, int size) {
+        // We do not pass Sort here because it is explicitly handled by 'ORDER BY
+        // d.reconRunDate DESC' in the JPQL query
+        PageRequest pageRequest = PageRequest.of(page, size);
 
-        Page<DifferenceDTO> result = service.searchDifferences(criteria, page, size);
+        // Sanitize inputs to prevent blank strings from failing the exact-match query
+        String safeBranch = StringUtils.isBlank(branchCode) ? null : branchCode;
+        String safeCgl = StringUtils.isBlank(cgl) ? null : cgl;
 
-        if (result.isEmpty()) {
-            return ResponseEntity.ok(ApiResponse.error("No differences found for the given criteria"));
-        }
-
-        return ResponseEntity.ok(ApiResponse.success(result, "Differences retrieved successfully"));
+        return repository.findHistoryByBranchAndCgl(safeBranch, safeCgl, pageRequest);
     }
-
-    // GET History for a specific GLCC lifecycle
-    @PostMapping("/history")
-    public ResponseEntity<ApiResponse<Page<DifferenceHistoryDTO>>> getGlccHistory(
-            @RequestBody GlccRequestBodyDto dto,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "100") int size) {
-
-        Page<DifferenceHistoryDTO> result = service.getGlccHistory(dto.getBranchCode(), dto.getCgl(), page, size);
-
-        if (result.isEmpty()) {
-            return ResponseEntity.ok(ApiResponse.error("No historical records found for the provided Branch and CGL"));
-        }
-
-        return ResponseEntity.ok(ApiResponse.success(result, "GLCC History retrieved successfully"));
-    }
-
-
-    @PostMapping("/export")
-       public ResponseEntity<byte[]> exportBalance(
-               @RequestHeader("Authorization") String token,
-               @RequestBody DifferenceDTO request) {
-               String userId = jwtUtil.getUserIdFromToken(token);
-               byte[] bytes = service.exportBalanceCompareToExcel(
-                       request,
-                       userId);
-               return ResponseEntity.ok()
-                       .header(
-                               HttpHeaders.CONTENT_DISPOSITION,
-                               "attachment; filename=Balance_Compare_Difference.xlsx")
-                       .contentType(
-                               MediaType.parseMediaType(
-                                       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                       .body(bytes);
-       }
-}
-
-package com.fincore.enquiry_service.dto;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class DifferenceDTO {
-    private LocalDate reconRunDate;
-    private String branchCode;
-    private String currency;
-    private String cgl;
-    private BigDecimal cbsBalance;
-    private BigDecimal glBalance;
-    private BigDecimal differenceAmount;
-    private BigDecimal diffBwYesterday;
-    private String type;
-    private String head;
-    private LocalDate FIRST_ERROR_DATE;
 }
