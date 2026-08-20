@@ -1,5 +1,1 @@
- byte[] exportBalanceCompareToExcel(DifferenceDTO request, String userId);
- @Override
-    public byte[] exportBalanceCompareToExcel(DifferenceDTO request, String userId){
-        return balanceCompareStreamingExportService.export(request,userId);
-    }
+const payload={fromDate:etlDate.format("YYYY-MM-DD"),toDate:etlDate.format("YYYY-MM-DD"),branchCode:branch.split("-")[0]||null,currency:currency||null,cgl:cgl.split(" - ")[0]||null};
