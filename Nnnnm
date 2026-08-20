@@ -59,8 +59,10 @@ public class BalanceCompareStreamingExportService
 
             workbook.setCompressTempFiles(true);
 
+            String sheetName = "Balance_Compare_Diff_"+formatter.format(reconRunDate);
+
             SXSSFSheet sheet =
-                    workbook.createSheet("Balance Compare Difference");
+                    workbook.createSheet(sheetName);
 
             // ==================================================
             // STYLES
@@ -68,6 +70,8 @@ public class BalanceCompareStreamingExportService
 
             CellStyle headerStyle =
                     ExcelStyleUtil.createHeaderStyle(workbook);
+
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
 
             CellStyle titleStyle =
                     ExcelStyleUtil.createTitleStyle(workbook);
@@ -103,13 +107,14 @@ public class BalanceCompareStreamingExportService
 
             Row titleRow =
                     sheet.createRow(rowNum.getAndIncrement());
+        
+            String displayFileName = "Balance_Compare_Difference_"+formatter.format(reconRunDate);
 
-            Cell titleCell =
-                    titleRow.createCell(0);
+            Cell titleCell = titleRow.createCell(0);
 
-            titleCell.setCellValue(
-                    "Balance Compare Difference"
-            );
+            titleCell.setCellValue(displayFileName);
+
+            titleStyle.setAlignment(HorizontalAlignment.CENTER);
 
             titleCell.setCellStyle(titleStyle);
 
@@ -139,6 +144,8 @@ public class BalanceCompareStreamingExportService
                     "CGL"
             };
 
+            int summaryStartColumn = 3;
+
             for (int i = 0;
                  i < summaryHeaders.length;
                  i++) {
@@ -162,7 +169,7 @@ public class BalanceCompareStreamingExportService
 
             // Recon Run Date
             Cell reconDateCell =
-                    summaryRow.createCell(0);
+                    summaryRow.createCell(summaryStartColumn);
 
             reconDateCell.setCellValue(
                     java.sql.Date.valueOf(reconRunDate)
@@ -171,7 +178,7 @@ public class BalanceCompareStreamingExportService
             reconDateCell.setCellStyle(dateStyle);
 
             // Branch
-            summaryRow.createCell(1)
+            summaryRow.createCell(summaryStartColumn + 1)
                     .setCellValue(
                             ExcelExportUtil.safeString(
                                     request.getBranchCode()
@@ -179,7 +186,7 @@ public class BalanceCompareStreamingExportService
                     );
 
             // Currency
-            summaryRow.createCell(2)
+            summaryRow.createCell(summaryStartColumn + 2)
                     .setCellValue(
                             ExcelExportUtil.safeString(
                                     request.getCurrency()
@@ -187,7 +194,7 @@ public class BalanceCompareStreamingExportService
                     );
 
             // CGL
-            summaryRow.createCell(3)
+            summaryRow.createCell(summaryStartColumn + 3)
                     .setCellValue(
                             ExcelExportUtil.safeString(
                                     request.getCgl()
@@ -336,40 +343,43 @@ public class BalanceCompareStreamingExportService
                         // BRANCH CODE
                         // ==================================================
 
-                        row.createCell(col++)
-                                .setCellValue(
+                        Cell branchCell = row.createCell(col++);
+                        branchCell.setCellValue(
                                         ExcelExportUtil.safeString(
                                                 rs.getString(
                                                         "BRANCH_CODE"
                                                 )
                                         )
                                 );
+                        branchCell.setCellStyle(centerStyle);
 
                         // ==================================================
                         // CURRENCY
                         // ==================================================
 
-                        row.createCell(col++)
-                                .setCellValue(
+                        Cell currencyCell = row.createCell(col++);
+                        currencyCell.setCellValue(
                                         ExcelExportUtil.safeString(
                                                 rs.getString(
                                                         "CURRENCY"
                                                 )
                                         )
                                 );
+                        currencyCell.setCellStyle(centerStyle);
 
                         // ==================================================
                         // CGL
                         // ==================================================
 
-                        row.createCell(col++)
-                                .setCellValue(
+                        Cell cglCell = row.createCell(col++);
+                        cglCell.setCellValue(
                                         ExcelExportUtil.safeString(
                                                 rs.getString(
                                                         "CGL"
                                                 )
                                         )
                                 );
+                        cglCell.setCellStyle(centerStyle);
 
                         // ==================================================
                         // CBS BALANCE
@@ -484,13 +494,13 @@ public class BalanceCompareStreamingExportService
                         // HEAD
                         // ==================================================
 
-                        row.createCell(col++)
-                                .setCellValue(
+                        Cell headCell = row.createCell(col++);
+                        headCell.setCellValue(
                                         ExcelExportUtil.safeString(
                                                 rs.getString("HEAD")
                                         )
                                 );
-
+                        headCell.setCellStyle(centerStyle);
                         // ==================================================
                         // FIRST ERROR DATE
                         // ==================================================
@@ -569,7 +579,7 @@ public class BalanceCompareStreamingExportService
                             // + request.getBranchCode()
                             // + request.getCurrency()
                             // + request.getCgl()
-                            + request.getReconRunDate()
+                            + formatter.format(reconRunDate)
                             + ".xlsx";
 
             downloadRequest.setFileName(
