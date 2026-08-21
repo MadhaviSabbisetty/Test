@@ -1,65 +1,32 @@
-package com.fincore.enquiry_service.repository;
 
-import com.fincore.enquiry_service.dto.DifferenceDTO;
-import com.fincore.enquiry_service.dto.DifferenceHistoryDTO;
-import com.fincore.enquiry_service.model.Difference;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-import java.time.LocalDate;
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled. 
+{"@timestamp":"2026-08-21T17:24:21.8065424+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.b.a.l.ConditionEvaluationReportLogger","message":"\r\n\r\nError starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.","stack_trace":""}
+2026-08-21 17:24:21.834 ERROR [main] o.s.b.d.LoggingFailureAnalysisReporter: 
 
-@Repository
-public interface DifferenceRepository extends JpaRepository<Difference, Long> {
+***************************
+APPLICATION FAILED TO START
+***************************
 
-    // 1. Keep the original 'Find All' for basic listing
-    @Query("""
-                SELECT new com.fincore.enquiry_service.dto.DifferenceDTO(
-                    d.reconRunDate, d.branchCode, d.currency, d.cgl,
-                    d.cbsBalance, d.glBalance, d.differenceAmount,
-                    d.diffBwYesterday, d.type, d.head, d.FIRST_ERROR_DATE
-                )
-                FROM Difference d
-            """)
-    Page<DifferenceDTO> findAllAsDto(Pageable pageable);
+Description:
 
-    /**
-     * 2. MASTER DYNAMIC FILTER
-     * Handles: Date Range, Optional Branch, Optional Currency, Optional CGL
-     */
-    @Query("""
-                SELECT new  com.fincore.enquiry_service.dto.DifferenceDTO(
-                    d.reconRunDate, d.branchCode, d.currency, d.cgl,
-                    d.cbsBalance, d.glBalance, d.differenceAmount,
-                    d.diffBwYesterday, d.type, d.head, d.FIRST_ERROR_DATE
-                )
-                FROM Difference d
-                WHERE (d.reconRunDate BETWEEN :fromDate AND :toDate)
-                AND (:branchCode IS NULL OR d.branchCode = :branchCode)
-                AND (:currency IS NULL OR d.currency = :currency)
-                AND (:cgl IS NULL OR d.cgl = :cgl)
-            """)
-    Page<DifferenceDTO> searchDifferencesDynamic(
-            @Param("fromDate") LocalDate fromDate,
-            @Param("toDate") LocalDate toDate,
-            @Param("branchCode") String branchCode,
-            @Param("currency") String currency,
-            @Param("cgl") String cgl,
-            Pageable pageable);
+Parameter 2 of constructor in com.fincore.enquiry_service.controller.DifferenceController required a bean of type 'com.fasterxml.jackson.databind.ObjectMapper' that could not be found.
 
-    @Query("""
-                SELECT new com.fincore.enquiry_service.dto.DifferenceHistoryDTO(
-                    d.reconRunDate, d.FIRST_ERROR_DATE, d.branchCode, d.currency, d.cgl,
-                    d.differenceAmount, d.diffBwYesterday, d.type
-                )
-                FROM Difference d
-                WHERE d.branchCode = :branchCode
-                AND d.cgl = :cgl
-                ORDER BY d.reconRunDate DESC
-            """)
-    Page<DifferenceHistoryDTO> findHistoryByBranchAndCgl(
-            @Param("branchCode") String branchCode,
-            @Param("cgl") String cgl, Pageable pageable);
-}
+
+Action:
+
+Consider defining a bean of type 'com.fasterxml.jackson.databind.ObjectMapper' in your configuration.
+ 
+{"@timestamp":"2026-08-21T17:24:21.834097+05:30","level":"ERROR","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.b.d.LoggingFailureAnalysisReporter","message":"\r\n\r\n***************************\r\nAPPLICATION FAILED TO START\r\n***************************\r\n\r\nDescription:\r\n\r\nParameter 2 of constructor in com.fincore.enquiry_service.controller.DifferenceController required a bean of type 'com.fasterxml.jackson.databind.ObjectMapper' that could not be found.\r\n\r\n\r\nAction:\r\n\r\nConsider defining a bean of type 'com.fasterxml.jackson.databind.ObjectMapper' in your configuration.\r\n","stack_trace":""}
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  25.149 s
+[INFO] Finished at: 2026-08-21T17:24:23+05:30
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.springframework.boot:spring-boot-maven-plugin:4.1.0:run (default-cli) on project EnquiryService: Process terminated with exit code: 1 -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
