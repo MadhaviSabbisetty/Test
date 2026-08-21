@@ -1,211 +1,39 @@
-if (isDateWise) {
+ @PostMapping("/export")
+    public ResponseEntity<byte[]> exportBalance(
+            @RequestHeader("Authorization") String token,
+            @RequestBody JsonNode request) {
+            String userId = jwtUtil.getUserIdFromToken(token);
+            byte[] bytes;
+            String fileName;
+            if(request.has("reconRunDate")){
+                DifferenceDTO differenceRequest = new ObjectMapper().treeToValue(request, DifferenceDTO.class);
 
-    Cell dateCell =
-            summaryRow.createCell(0);
+                bytes = service.exportBalanceCompareToExcel(
+                    differenceRequest,
+                    userId);
+                filename = "Balance_Compare_Difference_"+differenceRequest.getReconRunDate()+".xlsx";
+            }
 
-    dateCell.setCellValue(
-            Date.valueOf(fromDate)
-    );
+        else if (request.has("fromDate") && request.has("toDate")){
+            DifferenceSearchDto searchRequest = new ObjectMapper().treeToValue(request, DifferenceSearchDto.class);
 
-    dateCell.setCellStyle(dateStyle);
+                bytes = service.exportBalanceCompareToExcel(
+                    searchRequest,
+                    userId);
+                filename = "Balance_Compare_Difference_"+searchRequest.getFromDate()+"_to_"+searchRequest.getToDate()+".xlsx";
+        }
 
-    Cell branchCell =
-            summaryRow.createCell(1);
-
-    branchCell.setCellValue(
-            ExcelExportUtil.safeString(branchCode)
-    );
-
-    branchCell.setCellStyle(centerStyle);
-
-    Cell currencyCell =
-            summaryRow.createCell(2);
-
-    currencyCell.setCellValue(
-            ExcelExportUtil.safeString(currency)
-    );
-
-    currencyCell.setCellStyle(centerStyle);
-
-    Cell cglCell =
-            summaryRow.createCell(3);
-
-    cglCell.setCellValue(
-            ExcelExportUtil.safeString(cgl)
-    );
-
-    cglCell.setCellStyle(centerStyle);
-
-} else {
-
-    Cell fromDateCell =
-            summaryRow.createCell(0);
-
-    fromDateCell.setCellValue(
-            Date.valueOf(fromDate)
-    );
-
-    fromDateCell.setCellStyle(dateStyle);
-
-    Cell toDateCell =
-            summaryRow.createCell(1);
-
-    toDateCell.setCellValue(
-            Date.valueOf(toDate)
-    );
-
-    toDateCell.setCellStyle(dateStyle);
-
-    Cell branchCell =
-            summaryRow.createCell(2);
-
-    branchCell.setCellValue(
-            ExcelExportUtil.safeString(branchCode)
-    );
-
-    branchCell.setCellStyle(centerStyle);
-
-    Cell currencyCell =
-            summaryRow.createCell(3);
-
-    currencyCell.setCellValue(
-            ExcelExportUtil.safeString(currency)
-    );
-
-    currencyCell.setCellStyle(centerStyle);
-
-    Cell cglCell =
-            summaryRow.createCell(4);
-
-    cglCell.setCellValue(
-            ExcelExportUtil.safeString(cgl)
-    );
-
-    cglCell.setCellStyle(centerStyle);
-}
-
-
-
-String sql;
-
-if (isDateWise) {
-
-    sql = """
-            SELECT
-                d.FIRST_ERROR_DATE,
-                d.BRANCH_CODE,
-                d.CURRENCY,
-                d.CGL,
-                d.CBS_BALANCE,
-                d.GL_BALANCE,
-                d.DIFFERENCE_AMOUNT,
-                d.DIFF_BW_YESTERDAY,
-                d.TYPE,
-                d.HEAD
-            FROM DIFFERENCE d
-            WHERE d.RECON_RUN_DATE = ?
-              AND d.BRANCH_CODE = ?
-              AND d.CURRENCY = ?
-              AND d.CGL = ?
-            ORDER BY d.RECON_RUN_DATE
-            """;
-
-} else {
-
-    sql = """
-            SELECT
-                d.FIRST_ERROR_DATE,
-                d.BRANCH_CODE,
-                d.CURRENCY,
-                d.CGL,
-                d.CBS_BALANCE,
-                d.GL_BALANCE,
-                d.DIFFERENCE_AMOUNT,
-                d.DIFF_BW_YESTERDAY,
-                d.TYPE,
-                d.HEAD
-            FROM DIFFERENCE d
-            WHERE d.RECON_RUN_DATE BETWEEN ?
-              AND ?
-              AND d.BRANCH_CODE = ?
-              AND d.CURRENCY = ?
-              AND d.CGL = ?
-            ORDER BY d.RECON_RUN_DATE
-            """;
-}
-
-
-
-
-if (isDateWise) {
-
-    ps.setDate(
-            1,
-            Date.valueOf(fromDate)
-    );
-
-    ps.setString(2, branchCode);
-    ps.setString(3, currency);
-    ps.setString(4, cgl);
-
-} else {
-
-    ps.setDate(
-            1,
-            Date.valueOf(fromDate)
-    );
-
-    ps.setDate(
-            2,
-            Date.valueOf(toDate)
-    );
-
-    ps.setString(3, branchCode);
-    ps.setString(4, currency);
-    ps.setString(5, cgl);
-}
-
-
-String searchCriteria;
-
-if (isDateWise) {
-
-    searchCriteria =
-            "{"
-                    + "\"reconRunDate\":\""
-                    + formatter.format(fromDate)
-                    + "\","
-                    + "\"branchCode\":\""
-                    + ExcelExportUtil.safeString(branchCode)
-                    + "\","
-                    + "\"currency\":\""
-                    + ExcelExportUtil.safeString(currency)
-                    + "\","
-                    + "\"cgl\":\""
-                    + ExcelExportUtil.safeString(cgl)
-                    + "\""
-                    + "}";
-
-} else {
-
-    searchCriteria =
-            "{"
-                    + "\"fromDate\":\""
-                    + formatter.format(fromDate)
-                    + "\","
-                    + "\"toDate\":\""
-                    + formatter.format(toDate)
-                    + "\","
-                    + "\"branchCode\":\""
-                    + ExcelExportUtil.safeString(branchCode)
-                    + "\","
-                    + "\"currency\":\""
-                    + ExcelExportUtil.safeString(currency)
-                    + "\","
-                    + "\"cgl\":\""
-                    + ExcelExportUtil.safeString(cgl)
-                    + "\""
-                    + "}";
-}
-
-
+        else{
+            log.info("Invalid export request");
+            throw new IllegalArgumentException("Invalid export request");
+        }
+             
+            return ResponseEntity.ok()
+                    .header(
+                            HttpHeaders.CONTENT_DISPOSITION,
+                            "attachment; filename="+fileName)
+                    .contentType(
+                            MediaType.parseMediaType(
+                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .body(bytes);
+    }
