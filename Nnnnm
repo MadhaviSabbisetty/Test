@@ -1,49 +1,300 @@
-// Branch
-Cell summaryBranchCell =
-        summaryRow.createCell(
-                summaryStartColumn + 1
-        );
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.0</version>
+        <relativePath/>
+    </parent>
+    <groupId>com.fincore</groupId>
+    <artifactId>ReportService</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>jar</packaging>
+    <name>report-service</name>
+    <description>Service to manage and retrieve different reports</description>
+    <properties>
+        <java.version>21</java.version>
+        <lombok.version>1.18.38</lombok.version>
+        <tomcat.version>11.0.24</tomcat.version>
+        <!-- Override Netty to fix critical vulnerabilities -->
+        <netty.version>4.2.17.Final</netty.version>
+    </properties>
+    <dependencies>
+    <!--        <Madhavi>-->
+<!--        <dependency>-->
+<!--            <groupId>org.springframework.boot</groupId>-->
+<!--            <artifactId>spring-boot-devtools</artifactId>-->
+<!--            <scope>runtime</scope>-->
+<!--            <optional>true</optional>-->
+<!--        </dependency>-->
 
-summaryBranchCell.setCellValue(
-        ExcelExportUtil.safeString(
-                request.getBranchCode()
-        )
-);
 
-summaryBranchCell.setCellStyle(
-        centerStyle
-);
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <!-- Recommended for connection pooling -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-pool2</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>net.sf.jasperreports</groupId>
+            <artifactId>jasperreports</artifactId>
+            <version>7.0.7</version>
+        </dependency>
 
 
-// Currency
-Cell summaryCurrencyCell =
-        summaryRow.createCell(
-                summaryStartColumn + 2
-        );
+        <!-- REQUIRED for PDF generation (Replaces iText) -->
+        <dependency>
+            <groupId>net.sf.jasperreports</groupId>
+            <artifactId>jasperreports-pdf</artifactId>
+            <version>7.0.7</version>
+        </dependency>
+        <!-- Optional: Required if you export to Excel (Common missing dependency) -->
+        <dependency>
+            <groupId>net.sf.jasperreports</groupId>
+            <artifactId>jasperreports-excel-poi</artifactId>
+            <version>7.0.7</version>
+        </dependency>
+        <!-- Fonts (Optional but recommended to match v6 behavior) -->
+        <dependency>
+            <groupId>net.sf.jasperreports</groupId>
+            <artifactId>jasperreports-fonts</artifactId>
+            <version>7.0.7</version>
+        </dependency>
 
-summaryCurrencyCell.setCellValue(
-        ExcelExportUtil.safeString(
-                request.getCurrency()
-        )
-);
+                <!-- Need to  Add the JDT compiler module explicitly  to compiler reports at run time-->
+        <dependency>
+            <groupId>net.sf.jasperreports</groupId>
+            <artifactId>jasperreports-jdt</artifactId>
+            <version>7.0.7</version>
+        </dependency>
 
-summaryCurrencyCell.setCellStyle(
-        centerStyle
-);
+        <!-- Add ECJ compiler (Required by jasperreports-jdt in  container/JAR setups) -->
+        <dependency>
+            <groupId>org.eclipse.jdt</groupId>
+            <artifactId>ecj</artifactId>
+            <version>3.35.0</version>
+        </dependency>
 
 
-// CGL
-Cell summaryCglCell =
-        summaryRow.createCell(
-                summaryStartColumn + 3
-        );
+        <dependency>
+            <groupId>com.oracle.database.jdbc</groupId>
+            <artifactId>ojdbc11</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20240303</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
 
-summaryCglCell.setCellValue(
-        ExcelExportUtil.safeString(
-                request.getCgl()
-        )
-);
+         <!-- health metrics -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
 
-summaryCglCell.setCellStyle(
-        centerStyle
-);
+        <dependency>
+            <groupId>com.ibm.icu</groupId>
+            <artifactId>icu4j</artifactId>
+            <version>75.1</version>
+        </dependency>
+
+
+        <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
+            <version>25.0.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>at.yawk.lz4</groupId>
+            <artifactId>lz4-java</artifactId>
+            <version>1.10.1</version>
+        </dependency>
+
+
+                <dependency>
+            <groupId>com.fincore</groupId>
+            <artifactId>common-utilities</artifactId>
+            <version>1.1.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-client</artifactId>
+            <version>3.5.0</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-reload4j</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>7.4</version>
+        </dependency>
+
+        <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+
+        <!-- JAXB API -->
+        <dependency>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+            <version>2.3.1</version>
+        </dependency>
+        <!-- JAXB Runtime Implementation -->
+        <dependency>
+            <groupId>org.glassfish.jaxb</groupId>
+            <artifactId>jaxb-core</artifactId>
+            <version>2.3.0.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.jaxb</groupId>
+            <artifactId>jaxb-runtime</artifactId>
+            <version>2.3.1</version>
+        </dependency>
+
+
+    </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro</artifactId>
+                <version>1.12.1</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>1.84</version>
+            </dependency>
+            <!-- Force JLine to 3.30.14 (High Fix) -->
+            <dependency>
+                <groupId>org.jline</groupId>
+                <artifactId>jline</artifactId>
+                <version>3.30.15</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>0.12.6</version>
+            </dependency>
+
+
+
+
+        </dependencies>
+    </dependencyManagement>
+
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>Security Violations
++----------------+----------+-----------------+---------+--------------------------+-----------+-----------+-------+
+| CVE            | SEVERITY | DIRECT          | DIRECT  | AFFECTED                 | AFFECTED  | FIXED     | TYPE  |
+|                |          | PACKAGE         | PACKAGE | COMPONENT                | COMPONENT | VERSIONS  |       |
+|                |          |                 | VERSION | NAME                     | VERSION   |           |       |
++----------------+----------+-----------------+---------+--------------------------+-----------+-----------+-------+
+| CVE-2026-77423 | 🔥High   | org.jline:jline | 3.30.15 | org.jline:jline-builtins | 3.30.15   | [3.30.15] | Maven |
+|                |          |                 |         |                          |           | [4.3.1]   |       |
++----------------+----------+-----------------+---------+--------------------------+-----------+-----------+-------+
+| CVE-2026-77422 | 🔥High   | org.jline:jline | 3.30.15 | org.jline:jline-builtins | 3.30.15   | [3.30.15] | Maven |
+|                |          |                 |         |                          |           | [4.3.1]   |       |
++----------------+----------+-----------------+---------+--------------------------+-----------+-----------+-------+
+License Compliance Violations
++---------------------------------------------+
+| No license compliance violations were found |
++---------------------------------------------+
+Operational Risk Violations
++-------------------------------------------+
+| No operational risk violations were found |
++-------------------------------------------+
+07:20:41 [Info] Trace ID for JFrog Platform logs: ac705944f7564025
+07:20:41 [Error] One or more of the detected violations are configured to fail the build that including them
+Cleaning up project directory and file based variables
+00:00
+ERROR: Job failed: exit code 3
