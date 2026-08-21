@@ -1,101 +1,202 @@
-if (isDateWise) {
+2026-08-21 18:26:42.566 INFO  [http-nio-4001-exec-9] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 500 
+{"@timestamp":"2026-08-21T18:26:42.5663858+05:30","level":"INFO","service":"TransactionsService","traceId":"1d3626e0-2f47-4224-9cab-eca11a6aa816","userId":"1015698","clientIp":"","apiPath":"/api/differences/export","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 500","stack_trace":""}
+2026-08-21 18:27:04.714 INFO  [http-nio-4001-exec-10] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200 
+{"@timestamp":"2026-08-21T18:27:04.7144364+05:30","level":"INFO","service":"TransactionsService","traceId":"8ba2de41-99f9-4bcc-93cd-ef752baba9bf","userId":"1015698","clientIp":"","apiPath":"/api/differences/search","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200","stack_trace":""}
+2026-08-21 18:28:05.703 INFO  [http-nio-4001-exec-1] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200 
+{"@timestamp":"2026-08-21T18:28:05.7036822+05:30","level":"INFO","service":"TransactionsService","traceId":"2856d189-81f8-49c8-911a-37c82f46f542","userId":"1015698","clientIp":"","apiPath":"/api/differences/search","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200","stack_trace":""}
+2026-08-21 18:28:05.841 INFO  [http-nio-4001-exec-2] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 404 
+{"@timestamp":"2026-08-21T18:28:05.841801+05:30","level":"INFO","service":"TransactionsService","traceId":"574f0abf-e810-4209-9435-9f093e2cafc5","userId":"1015698","clientIp":"","apiPath":"/api/differences/export","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 404","stack_trace":""}
+2026-08-21 18:28:06.174 INFO  [http-nio-4001-exec-3] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 404 
+{"@timestamp":"2026-08-21T18:28:06.1747274+05:30","level":"INFO","service":"TransactionsService","traceId":"ae2f8d5b-fc29-43a0-a188-123c209cd48b","userId":"1015698","clientIp":"","apiPath":"/api/differences/export","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 404","stack_trace":""}
+2026-08-21 18:28:33.924 INFO  [http-nio-4001-exec-4] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 404 
+{"@timestamp":"2026-08-21T18:28:33.9242027+05:30","level":"INFO","service":"TransactionsService","traceId":"23725337-f59c-4f19-a03d-9b92bceee3b5","userId":"1015698","clientIp":"","apiPath":"/api/differences/export","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 404","stack_trace":""}
+2026-08-21 18:29:22.481 INFO  [SpringApplicationShutdownHook] o.s.b.t.GracefulShutdown: Commencing graceful shutdown. Waiting for active requests to complete 
+{"@timestamp":"2026-08-21T18:29:22.4815526+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.boot.tomcat.GracefulShutdown","message":"Commencing graceful shutdown. Waiting for active requests to complete","stack_trace":""}
+2026-08-21 18:29:22.510 INFO  [tomcat-shutdown] o.s.b.t.GracefulShutdown: Graceful shutdown complete 
+{"@timestamp":"2026-08-21T18:29:22.5100913+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.boot.tomcat.GracefulShutdown","message":"Graceful shutdown complete","stack_trace":""}
+2026-08-21 18:29:22.543 INFO  [SpringApplicationShutdownHook] o.s.o.j.AbstractEntityManagerFactoryBean: Closing JPA EntityManagerFactory for persistence unit 'default' 
+{"@timestamp":"2026-08-21T18:29:22.54309+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.o.j.LocalContainerEntityManagerFactoryBean","message":"Closing JPA EntityManagerFactory for persistence unit 'default'","stack_trace":""}
+2026-08-21 18:29:22.545 INFO  [SpringApplicationShutdownHook] c.z.h.HikariDataSource: HikariPool-1 - Shutdown initiated... 
+{"@timestamp":"2026-08-21T18:29:22.5450917+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"com.zaxxer.hikari.HikariDataSource","message":"HikariPool-1 - Shutdown initiated...","stack_trace":""}
+2026-08-21 18:29:23.504 INFO  [SpringApplicationShutdownHook] c.z.h.HikariDataSource: HikariPool-1 - Shutdown completed. 
+{"@timestamp":"2026-08-21T18:29:23.5043955+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"com.zaxxer.hikari.HikariDataSource","message":"HikariPool-1 - Shutdown completed.","stack_trace":""}
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  49:11 min
+[INFO] Finished at: 2026-08-21T18:29:24+05:30
+[INFO] ------------------------------------------------------------------------
+Terminate batch job (Y/N)? 
+^CThe system cannot open the device or file specified.
 
-    // Recon Run Date -> Column D
-    Cell dateCell =
-            summaryRow.createCell(summaryStartColumn);
+D:\Workspace\Git\Fincore\Backend\fincore_enquiry_service>mvn spring-boot:run
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ---------------------< com.fincore:EnquiryService >---------------------
+[INFO] Building enquiry-service 0.0.1-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] >>> spring-boot:4.1.0:run (default-cli) > test-compile @ EnquiryService >>>
+[INFO] 
+[INFO] --- resources:3.5.0:resources (default-resources) @ EnquiryService ---
+[INFO] Copying 5 resources from src\main\resources to target\classes
+[INFO] Copying 1 resource from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ EnquiryService ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 103 source files with javac [debug parameters release 21] to target\classes
+[INFO] /D:/Workspace/Git/Fincore/Backend/fincore_enquiry_service/src/main/java/com/fincore/enquiry_service/model/GLBalance.java: Some input files use or override a deprecated API.
+[INFO] /D:/Workspace/Git/Fincore/Backend/fincore_enquiry_service/src/main/java/com/fincore/enquiry_service/model/GLBalance.java: Recompile with -Xlint:deprecation for details.
+[INFO] 
+[INFO] --- resources:3.5.0:testResources (default-testResources) @ EnquiryService ---
+[INFO] skip non existing resourceDirectory D:\Workspace\Git\Fincore\Backend\fincore_enquiry_service\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ EnquiryService ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] <<< spring-boot:4.1.0:run (default-cli) < test-compile @ EnquiryService <<<
+[INFO] 
+[INFO] 
+[INFO] --- spring-boot:4.1.0:run (default-cli) @ EnquiryService ---
+[INFO] Attaching agents: []
 
-    dateCell.setCellValue(
-            Date.valueOf(fromDate)
-    );
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
 
-    dateCell.setCellStyle(dateStyle);
+ :: Spring Boot ::                (v4.1.0)
 
+2026-08-21 18:29:52.041 INFO  [main] o.s.b.StartupInfoLogger: Starting EnquiryServiceApplication using Java 22.0.2 with PID 80804 (D:\Workspace\Git\Fincore\Backend\fincore_enquiry_service\target\classes started by V1023044 in D:\Workspace\Git\Fincore\Backend\fincore_enquiry_service) 
+{"@timestamp":"2026-08-21T18:29:52.0415453+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.e.EnquiryServiceApplication","message":"Starting EnquiryServiceApplication using Java 22.0.2 with PID 80804 (D:\\Workspace\\Git\\Fincore\\Backend\\fincore_enquiry_service\\target\\classes started by V1023044 in D:\\Workspace\\Git\\Fincore\\Backend\\fincore_enquiry_service)","stack_trace":""}
+2026-08-21 18:29:52.048 INFO  [main] o.s.b.SpringApplication: The following 1 profile is active: "dev" 
+{"@timestamp":"2026-08-21T18:29:52.0482465+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.e.EnquiryServiceApplication","message":"The following 1 profile is active: \"dev\"","stack_trace":""}
+2026-08-21 18:29:52.340 INFO  [background-preinit] o.h.v.i.u.Version: HV000001: Hibernate Validator 9.1.0.Final 
+{"@timestamp":"2026-08-21T18:29:52.3401215+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.h.validator.internal.util.Version","message":"HV000001: Hibernate Validator 9.1.0.Final","stack_trace":""}
+2026-08-21 18:29:53.110 INFO  [main] o.s.d.r.c.RepositoryConfigurationDelegate: Multiple Spring Data modules found, entering strict repository configuration mode 
+{"@timestamp":"2026-08-21T18:29:53.1107221+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.r.c.RepositoryConfigurationDelegate","message":"Multiple Spring Data modules found, entering strict repository configuration mode","stack_trace":""}
+2026-08-21 18:29:53.110 INFO  [main] o.s.d.r.c.RepositoryConfigurationDelegate: Bootstrapping Spring Data JPA repositories in DEFAULT mode. 
+{"@timestamp":"2026-08-21T18:29:53.1107221+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.r.c.RepositoryConfigurationDelegate","message":"Bootstrapping Spring Data JPA repositories in DEFAULT mode.","stack_trace":""}
+2026-08-21 18:29:53.251 INFO  [main] o.s.d.r.c.RepositoryConfigurationDelegate: Finished Spring Data repository scanning in 132 ms. Found 9 JPA repository interfaces. 
+{"@timestamp":"2026-08-21T18:29:53.2512036+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.r.c.RepositoryConfigurationDelegate","message":"Finished Spring Data repository scanning in 132 ms. Found 9 JPA repository interfaces.","stack_trace":""}
+2026-08-21 18:29:53.281 INFO  [main] o.s.d.r.c.RepositoryConfigurationDelegate: Multiple Spring Data modules found, entering strict repository configuration mode 
+{"@timestamp":"2026-08-21T18:29:53.2813423+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.r.c.RepositoryConfigurationDelegate","message":"Multiple Spring Data modules found, entering strict repository configuration mode","stack_trace":""}
+2026-08-21 18:29:53.281 INFO  [main] o.s.d.r.c.RepositoryConfigurationDelegate: Bootstrapping Spring Data Redis repositories in DEFAULT mode. 
+{"@timestamp":"2026-08-21T18:29:53.2813423+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.r.c.RepositoryConfigurationDelegate","message":"Bootstrapping Spring Data Redis repositories in DEFAULT mode.","stack_trace":""}
+2026-08-21 18:29:53.308 INFO  [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport: Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.BranchMasterRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository 
+{"@timestamp":"2026-08-21T18:29:53.3083139+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.r.c.RepositoryConfigurationExtensionSupport","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.BranchMasterRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","stack_trace":""}
+2026-08-21 18:29:53.308 INFO  [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport: Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.DifferenceRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository 
+{"@timestamp":"2026-08-21T18:29:53.3083139+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.r.c.RepositoryConfigurationExtensionSupport","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.DifferenceRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","stack_trace":""}
+2026-08-21 18:29:53.309 INFO  [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport: Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.GLBalanceRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository 
+{"@timestamp":"2026-08-21T18:29:53.309309+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.r.c.RepositoryConfigurationExtensionSupport","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.GLBalanceRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","stack_trace":""}
+2026-08-21 18:29:53.309 INFO  [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport: Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.GlTransactionsRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository 
+{"@timestamp":"2026-08-21T18:29:53.309309+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.r.c.RepositoryConfigurationExtensionSupport","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.GlTransactionsRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","stack_trace":""}
+2026-08-21 18:29:53.309 INFO  [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport: Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.LedgerWiseBalanceRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository 
+{"@timestamp":"2026-08-21T18:29:53.309309+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.r.c.RepositoryConfigurationExtensionSupport","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.LedgerWiseBalanceRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","stack_trace":""}
+2026-08-21 18:29:53.310 INFO  [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport: Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.LedgerWiseRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository 
+{"@timestamp":"2026-08-21T18:29:53.31031+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.r.c.RepositoryConfigurationExtensionSupport","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.LedgerWiseRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","stack_trace":""}
+2026-08-21 18:29:53.310 INFO  [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport: Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.SuspenseTrackerRepo; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository 
+{"@timestamp":"2026-08-21T18:29:53.31031+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.r.c.RepositoryConfigurationExtensionSupport","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.SuspenseTrackerRepo; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","stack_trace":""}
+2026-08-21 18:29:53.311 INFO  [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport: Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.UserDownloadsDataRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository 
+{"@timestamp":"2026-08-21T18:29:53.3111132+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.r.c.RepositoryConfigurationExtensionSupport","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.UserDownloadsDataRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","stack_trace":""}
+2026-08-21 18:29:53.311 INFO  [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport: Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.UserDownloadsRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository 
+{"@timestamp":"2026-08-21T18:29:53.3111132+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.r.c.RepositoryConfigurationExtensionSupport","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.fincore.enquiry_service.repository.UserDownloadsRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","stack_trace":""}
+2026-08-21 18:29:53.311 INFO  [main] o.s.d.r.c.RepositoryConfigurationDelegate: Finished Spring Data repository scanning in 8 ms. Found 0 Redis repository interfaces. 
+{"@timestamp":"2026-08-21T18:29:53.3111132+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.r.c.RepositoryConfigurationDelegate","message":"Finished Spring Data repository scanning in 8 ms. Found 0 Redis repository interfaces.","stack_trace":""}
+2026-08-21 18:29:54.048 INFO  [main] o.s.b.t.TomcatWebServer: Tomcat initialized with port 4001 (http) 
+{"@timestamp":"2026-08-21T18:29:54.0489107+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.boot.tomcat.TomcatWebServer","message":"Tomcat initialized with port 4001 (http)","stack_trace":""}
+2026-08-21 18:29:54.064 INFO  [main] o.a.j.l.DirectJDKLog: Initializing ProtocolHandler ["http-nio-4001"] 
+{"@timestamp":"2026-08-21T18:29:54.0648655+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.apache.coyote.http11.Http11NioProtocol","message":"Initializing ProtocolHandler [\"http-nio-4001\"]","stack_trace":""}
+2026-08-21 18:29:54.075 INFO  [main] o.a.j.l.DirectJDKLog: Starting service [Tomcat] 
+{"@timestamp":"2026-08-21T18:29:54.0757274+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.apache.catalina.core.StandardService","message":"Starting service [Tomcat]","stack_trace":""}
+2026-08-21 18:29:54.075 INFO  [main] o.a.j.l.DirectJDKLog: Starting Servlet engine: [Apache Tomcat/11.0.23] 
+{"@timestamp":"2026-08-21T18:29:54.0757274+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"org.apache.catalina.core.StandardEngine","message":"Starting Servlet engine: [Apache Tomcat/11.0.23]","stack_trace":""}
+2026-08-21 18:29:54.131 INFO  [main] o.s.b.w.c.s.WebApplicationContextInitializer: Root WebApplicationContext: initialization completed in 2053 ms 
+{"@timestamp":"2026-08-21T18:29:54.1313876+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.b.w.c.s.WebApplicationContextInitializer","message":"Root WebApplicationContext: initialization completed in 2053 ms","stack_trace":""}
+2026-08-21 18:29:54.791 INFO  [main] o.s.b.w.s.RegistrationBean: Filter mdcFilterRegistration was not registered (disabled) 
+{"@timestamp":"2026-08-21T18:29:54.7912752+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.boot.web.servlet.RegistrationBean","message":"Filter mdcFilterRegistration was not registered (disabled)","stack_trace":""}
+2026-08-21 18:29:54.791 INFO  [main] o.s.b.w.s.RegistrationBean: Filter rbacFilterRegistration was not registered (disabled) 
+{"@timestamp":"2026-08-21T18:29:54.7912752+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.boot.web.servlet.RegistrationBean","message":"Filter rbacFilterRegistration was not registered (disabled)","stack_trace":""}
+2026-08-21 18:29:55.070 INFO  [main] c.z.h.HikariDataSource: HikariPool-1 - Starting... 
+{"@timestamp":"2026-08-21T18:29:55.0708115+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"com.zaxxer.hikari.HikariDataSource","message":"HikariPool-1 - Starting...","stack_trace":""}
+2026-08-21 18:29:55.606 INFO  [main] c.z.h.p.HikariPool: HikariPool-1 - Added connection oracle.jdbc.driver.T4CConnection@28d37d43 
+{"@timestamp":"2026-08-21T18:29:55.6060969+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"com.zaxxer.hikari.pool.HikariPool","message":"HikariPool-1 - Added connection oracle.jdbc.driver.T4CConnection@28d37d43","stack_trace":""}
+2026-08-21 18:29:55.606 INFO  [main] c.z.h.HikariDataSource: HikariPool-1 - Start completed. 
+{"@timestamp":"2026-08-21T18:29:55.6060969+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"com.zaxxer.hikari.HikariDataSource","message":"HikariPool-1 - Start completed.","stack_trace":""}
+2026-08-21 18:29:55.633 INFO  [main] o.h.j.i.u.LogHelper: HHH008540: Processing PersistenceUnitInfo [name: default] 
+{"@timestamp":"2026-08-21T18:29:55.633457+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"org.hibernate.orm.jpa","message":"HHH008540: Processing PersistenceUnitInfo [name: default]","stack_trace":""}
+2026-08-21 18:29:55.697 INFO  [main] o.h.Version: HHH000001: Hibernate ORM core version 7.4.1.Final 
+{"@timestamp":"2026-08-21T18:29:55.6970261+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"org.hibernate.orm.core","message":"HHH000001: Hibernate ORM core version 7.4.1.Final","stack_trace":""}
+2026-08-21 18:29:55.992 INFO  [main] o.s.o.j.p.SpringPersistenceUnitInfo: No LoadTimeWeaver setup: ignoring JPA class transformer 
+{"@timestamp":"2026-08-21T18:29:55.9928849+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.o.j.p.SpringPersistenceUnitInfo","message":"No LoadTimeWeaver setup: ignoring JPA class transformer","stack_trace":""}
+2026-08-21 18:29:56.329 WARN  [main] o.h.e.j.e.i.JdbcEnvironmentImpl: HHH100123: Low default JDBC fetch size: 10 (consider setting 'hibernate.jdbc.fetch_size') 
+{"@timestamp":"2026-08-21T18:29:56.3292672+05:30","level":"WARN","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"org.hibernate.orm.jdbc","message":"HHH100123: Low default JDBC fetch size: 10 (consider setting 'hibernate.jdbc.fetch_size')","stack_trace":""}
+2026-08-21 18:29:56.333 INFO  [main] o.h.e.j.e.i.JdbcEnvironmentInitiator: HHH10001005: Database info:
+        Database JDBC URL [jdbc:oracle:thin:@10.177.103.192:1523/fincorepdb1]
+        Database driver: Oracle JDBC driver
+        Database dialect: OracleDialect
+        Database version: 19.32
+        Default catalog/schema: undefined/FINCORE
+        Autocommit mode: undefined/unknown
+        Isolation level: READ_COMMITTED [default READ_COMMITTED]
+        JDBC fetch size: 10
+        Pool: DataSourceConnectionProvider
+        Minimum pool size: undefined/unknown
+        Maximum pool size: undefined/unknown 
+{"@timestamp":"2026-08-21T18:29:56.3332606+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"org.hibernate.orm.connections.pooling","message":"HHH10001005: Database info:\n\tDatabase JDBC URL [jdbc:oracle:thin:@10.177.103.192:1523/fincorepdb1]\n\tDatabase driver: Oracle JDBC driver\n\tDatabase dialect: OracleDialect\n\tDatabase version: 19.32\n\tDefault catalog/schema: undefined/FINCORE\n\tAutocommit mode: undefined/unknown\n\tIsolation level: READ_COMMITTED [default READ_COMMITTED]\n\tJDBC fetch size: 10\n\tPool: DataSourceConnectionProvider\n\tMinimum pool size: undefined/unknown\n\tMaximum pool size: undefined/unknown","stack_trace":""}
+2026-08-21 18:29:56.469 WARN  [main] o.h.b.m.i.BasicValueBinder: HHH90000033: Encountered use of deprecated annotation [interface jakarta.persistence.Temporal] at com.fincore.enquiry_service.model.GLBalance.date. 
+{"@timestamp":"2026-08-21T18:29:56.4695489+05:30","level":"WARN","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"org.hibernate.orm.deprecation","message":"HHH90000033: Encountered use of deprecated annotation [interface jakarta.persistence.Temporal] at com.fincore.enquiry_service.model.GLBalance.date.","stack_trace":""}
+2026-08-21 18:29:56.478 WARN  [main] o.h.b.m.i.ToOneBinder: HHH160133: 'com.fincore.enquiry_service.model.LedgerBalance.cglMaster' uses both @NotFound and FetchType.LAZY;@ManyToOne and @OneToOne associations mapped with @NotFound are forced to EAGER fetching 
+{"@timestamp":"2026-08-21T18:29:56.4785405+05:30","level":"WARN","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"org.hibernate.orm.boot","message":"HHH160133: 'com.fincore.enquiry_service.model.LedgerBalance.cglMaster' uses both @NotFound and FetchType.LAZY;@ManyToOne and @OneToOne associations mapped with @NotFound are forced to EAGER fetching","stack_trace":""}
+2026-08-21 18:29:56.488 WARN  [main] o.h.b.m.i.BasicValueBinder: HHH90000033: Encountered use of deprecated annotation [interface jakarta.persistence.Temporal] at com.fincore.enquiry_service.model.SuspenseTracker.date. 
+{"@timestamp":"2026-08-21T18:29:56.4885404+05:30","level":"WARN","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"org.hibernate.orm.deprecation","message":"HHH90000033: Encountered use of deprecated annotation [interface jakarta.persistence.Temporal] at com.fincore.enquiry_service.model.SuspenseTracker.date.","stack_trace":""}
+2026-08-21 18:29:56.489 WARN  [main] o.h.b.m.i.BasicValueBinder: HHH90000033: Encountered use of deprecated annotation [interface jakarta.persistence.Temporal] at com.fincore.enquiry_service.model.SuspenseTracker.firstErrorDate. 
+{"@timestamp":"2026-08-21T18:29:56.4895416+05:30","level":"WARN","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"org.hibernate.orm.deprecation","message":"HHH90000033: Encountered use of deprecated annotation [interface jakarta.persistence.Temporal] at com.fincore.enquiry_service.model.SuspenseTracker.firstErrorDate.","stack_trace":""}
+2026-08-21 18:29:57.155 INFO  [main] o.h.e.t.j.p.i.JtaPlatformInitiator: HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration) 
+{"@timestamp":"2026-08-21T18:29:57.155445+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"org.hibernate.orm.core","message":"HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)","stack_trace":""}
+2026-08-21 18:29:57.161 INFO  [main] o.s.o.j.AbstractEntityManagerFactoryBean: Initialized JPA EntityManagerFactory for persistence unit 'default' 
+{"@timestamp":"2026-08-21T18:29:57.1614386+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.o.j.LocalContainerEntityManagerFactoryBean","message":"Initialized JPA EntityManagerFactory for persistence unit 'default'","stack_trace":""}
+2026-08-21 18:29:57.279 INFO  [main] o.s.d.j.r.q.QueryEnhancerFactories: Hibernate is in classpath; If applicable, HQL parser will be used. 
+{"@timestamp":"2026-08-21T18:29:57.2792657+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.d.j.r.query.QueryEnhancerFactories","message":"Hibernate is in classpath; If applicable, HQL parser will be used.","stack_trace":""}
+2026-08-21 18:29:58.769 WARN  [main] o.s.b.j.a.JpaBaseConfiguration$JpaWebConfiguration: spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning 
+{"@timestamp":"2026-08-21T18:29:58.7699458+05:30","level":"WARN","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.b.j.a.JpaBaseConfiguration$JpaWebConfiguration","message":"spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning","stack_trace":""}
+2026-08-21 18:29:58.834 WARN  [main] o.s.b.s.a.UserDetailsServiceAutoConfiguration: 
 
-    // Branch Code -> Column E
-    Cell branchCell =
-            summaryRow.createCell(summaryStartColumn + 1);
+Using generated security password: c8245eb2-0455-4129-b255-3a87ba9c4809
 
-    branchCell.setCellValue(
-            ExcelExportUtil.safeString(branchCode)
-    );
-
-    branchCell.setCellStyle(centerStyle);
-
-
-    // Currency -> Column F
-    Cell currencyCell =
-            summaryRow.createCell(summaryStartColumn + 2);
-
-    currencyCell.setCellValue(
-            ExcelExportUtil.safeString(currency)
-    );
-
-    currencyCell.setCellStyle(centerStyle);
-
-
-    // CGL -> Column G
-    Cell cglCell =
-            summaryRow.createCell(summaryStartColumn + 3);
-
-    cglCell.setCellValue(
-            ExcelExportUtil.safeString(cgl)
-    );
-
-    cglCell.setCellStyle(centerStyle);
-
-} else {
-
-    // From Date -> Column D
-    Cell fromDateCell =
-            summaryRow.createCell(summaryStartColumn);
-
-    fromDateCell.setCellValue(
-            Date.valueOf(fromDate)
-    );
-
-    fromDateCell.setCellStyle(dateStyle);
-
-
-    // To Date -> Column E
-    Cell toDateCell =
-            summaryRow.createCell(summaryStartColumn + 1);
-
-    toDateCell.setCellValue(
-            Date.valueOf(toDate)
-    );
-
-    toDateCell.setCellStyle(dateStyle);
-
-
-    // Branch Code -> Column F
-    Cell branchCell =
-            summaryRow.createCell(summaryStartColumn + 2);
-
-    branchCell.setCellValue(
-            ExcelExportUtil.safeString(branchCode)
-    );
-
-    branchCell.setCellStyle(centerStyle);
-
-
-    // Currency -> Column G
-    Cell currencyCell =
-            summaryRow.createCell(summaryStartColumn + 3);
-
-    currencyCell.setCellValue(
-            ExcelExportUtil.safeString(currency)
-    );
-
-    currencyCell.setCellStyle(centerStyle);
-
-
-    // CGL -> Column H
-    Cell cglCell =
-            summaryRow.createCell(summaryStartColumn + 4);
-
-    cglCell.setCellValue(
-            ExcelExportUtil.safeString(cgl)
-    );
-
-    cglCell.setCellStyle(centerStyle);
-}
+This generated password is for development use only. Your security configuration must be updated before running your application in production.
+ 
+{"@timestamp":"2026-08-21T18:29:58.8348847+05:30","level":"WARN","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.b.s.a.UserDetailsServiceAutoConfiguration","message":"\r\n\r\nUsing generated security password: c8245eb2-0455-4129-b255-3a87ba9c4809\r\n\r\nThis generated password is for development use only. Your security configuration must be updated before running your application in production.\r\n","stack_trace":""}
+2026-08-21 18:29:58.842 INFO  [main] o.s.s.c.a.a.c.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer: Global AuthenticationManager configured with UserDetailsService bean with name inMemoryUserDetailsManager 
+{"@timestamp":"2026-08-21T18:29:58.8429034+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.s.c.a.a.c.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer","message":"Global AuthenticationManager configured with UserDetailsService bean with name inMemoryUserDetailsManager","stack_trace":""}
+2026-08-21 18:29:59.815 INFO  [main] o.s.b.a.e.w.EndpointLinksResolver: Exposing 3 endpoints beneath base path '/actuator' 
+{"@timestamp":"2026-08-21T18:29:59.815676+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.b.a.e.web.EndpointLinksResolver","message":"Exposing 3 endpoints beneath base path '/actuator'","stack_trace":""}
+2026-08-21 18:29:59.880 INFO  [main] o.a.j.l.DirectJDKLog: Starting ProtocolHandler ["http-nio-4001"] 
+{"@timestamp":"2026-08-21T18:29:59.8803538+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.apache.coyote.http11.Http11NioProtocol","message":"Starting ProtocolHandler [\"http-nio-4001\"]","stack_trace":""}
+2026-08-21 18:29:59.930 INFO  [main] o.s.b.t.TomcatWebServer: Tomcat started on port 4001 (http) with context path '/' 
+{"@timestamp":"2026-08-21T18:29:59.9303708+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.boot.tomcat.TomcatWebServer","message":"Tomcat started on port 4001 (http) with context path '/'","stack_trace":""}
+2026-08-21 18:29:59.936 INFO  [main] o.s.b.StartupInfoLogger: Started EnquiryServiceApplication in 8.614 seconds (process running for 9.155) 
+{"@timestamp":"2026-08-21T18:29:59.936371+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.e.EnquiryServiceApplication","message":"Started EnquiryServiceApplication in 8.614 seconds (process running for 9.155)","stack_trace":""}
+2026-08-21 18:30:27.798 INFO  [http-nio-4001-exec-2] o.a.j.l.DirectJDKLog: Initializing Spring DispatcherServlet 'dispatcherServlet' 
+{"@timestamp":"2026-08-21T18:30:27.7989207+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.c.c.C.[Tomcat].[localhost].[/]","message":"Initializing Spring DispatcherServlet 'dispatcherServlet'","stack_trace":""}
+2026-08-21 18:30:27.799 INFO  [http-nio-4001-exec-2] o.s.w.s.FrameworkServlet: Initializing Servlet 'dispatcherServlet' 
+{"@timestamp":"2026-08-21T18:30:27.7999185+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.web.servlet.DispatcherServlet","message":"Initializing Servlet 'dispatcherServlet'","stack_trace":""}
+2026-08-21 18:30:27.804 INFO  [http-nio-4001-exec-2] o.s.w.s.FrameworkServlet: Completed initialization in 5 ms 
+{"@timestamp":"2026-08-21T18:30:27.8049174+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.web.servlet.DispatcherServlet","message":"Completed initialization in 5 ms","stack_trace":""}
+2026-08-21 18:30:28.892 INFO  [http-nio-4001-exec-2] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://localhost:4001/api/differences/export | Status: 401 
+{"@timestamp":"2026-08-21T18:30:28.8922364+05:30","level":"INFO","service":"TransactionsService","traceId":"a31d52d7-c3bf-4543-b813-32dd0d0d2113","userId":"1015698","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/differences/export","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://localhost:4001/api/differences/export | Status: 401","stack_trace":""}
+2026-08-21 18:31:02.126 WARN  [http-nio-4001-exec-6] o.a.p.x.u.XSSFWorkbook: Sheet 'Bal_Comp_Diff_31-03-2026_to_20-08-2026' will be added with a trimmed name 'Bal_Comp_Diff_31-03-2026_to_20-' for MS Excel compliance. 
+{"@timestamp":"2026-08-21T18:31:02.1265618+05:30","level":"WARN","service":"TransactionsService","traceId":"1670ee31-b2a6-4ab7-9336-9b9b09ca1bd1","userId":"1015698","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/differences/export","class":"o.apache.poi.xssf.usermodel.XSSFWorkbook","message":"Sheet 'Bal_Comp_Diff_31-03-2026_to_20-08-2026' will be added with a trimmed name 'Bal_Comp_Diff_31-03-2026_to_20-' for MS Excel compliance.","stack_trace":""}
+2026-08-21 18:31:03.229 INFO  [http-nio-4001-exec-6] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://localhost:4001/api/differences/export | Status: 200 
+{"@timestamp":"2026-08-21T18:31:03.2299182+05:30","level":"INFO","service":"TransactionsService","traceId":"1670ee31-b2a6-4ab7-9336-9b9b09ca1bd1","userId":"1015698","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/differences/export","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://localhost:4001/api/differences/export | Status: 200","stack_trace":""}
+2026-08-21 18:35:13.719 INFO  [http-nio-4001-exec-4] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200 
+{"@timestamp":"2026-08-21T18:35:13.7199822+05:30","level":"INFO","service":"TransactionsService","traceId":"28d8b61f-0055-4f31-89a9-7a366a03c83e","userId":"1015698","clientIp":"10.0.19.34","apiPath":"/api/differences/search","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200","stack_trace":""}
+2026-08-21 18:36:11.131 INFO  [http-nio-4001-exec-5] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200 
+{"@timestamp":"2026-08-21T18:36:11.1312678+05:30","level":"INFO","service":"TransactionsService","traceId":"2970a299-7dbd-4f6c-92e8-981738fc495b","userId":"1015698","clientIp":"10.0.19.34","apiPath":"/api/differences/search","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200","stack_trace":""}
+2026-08-21 18:36:13.851 INFO  [http-nio-4001-exec-3] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 404 
+{"@timestamp":"2026-08-21T18:36:13.8519326+05:30","level":"INFO","service":"TransactionsService","traceId":"0f034f05-7d3a-4b6d-ae10-55e45dfd6372","userId":"1015698","clientIp":"10.0.19.34","apiPath":"/api/differences/export","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 404","stack_trace":""}
+2026-08-21 18:37:22.652 INFO  [http-nio-4001-exec-7] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200 
+{"@timestamp":"2026-08-21T18:37:22.6526059+05:30","level":"INFO","service":"TransactionsService","traceId":"d8941b64-6106-4d63-b565-1809559b2005","userId":"1015698","clientIp":"10.0.19.34","apiPath":"/api/differences/search","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200","stack_trace":""}
