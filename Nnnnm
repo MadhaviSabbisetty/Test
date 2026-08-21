@@ -1,69 +1,282 @@
-@PostMapping("/export")
-public ResponseEntity<byte[]> exportBalance(
-        @RequestHeader("Authorization") String token,
-        @RequestBody JsonNode request) throws Exception {
+package com.fincore.enquiry_service.controller;
 
-    String userId = jwtUtil.getUserIdFromToken(token);
+// import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.WebDataBinder;
+import org.springframework.web.bind.annotation.*;
 
-    byte[] bytes;
-    String fileName;
+import com.fincore.enquiry_service.dto.ApiResponse;
+import com.fincore.enquiry_service.dto.DifferenceDTO;
+import com.fincore.enquiry_service.dto.DifferenceHistoryDTO;
+import com.fincore.enquiry_service.dto.DifferenceSearchDto;
+import com.fincore.enquiry_service.dto.GlccRequestBodyDto;
+import com.fincore.enquiry_service.service.DifferenceService;
 
-    if (request.has("reconRunDate")) {
+import jakarta.validation.Valid;
 
-        DifferenceDTO differenceRequest =
-                objectMapper.treeToValue(
-                        request,
-                        DifferenceDTO.class
-                );
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import com.fincore.commonutilities.jwt.JwtUtil;
+import lombok.RequiredArgsConstructor;
 
-        bytes = service.exportBalanceCompareToExcel(
-                differenceRequest,
-                userId
-        );
+import java.time.format.DateTimeFormatter;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
-        fileName =
-                "Balance_Compare_Difference_"
-                        + differenceRequest.getReconRunDate()
-                        + ".xlsx";
+@Slf4j
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api/differences")
+public class DifferenceController {
 
-    } else if (
-            request.has("fromDate")
-                    && request.has("toDate")) {
-
-        DifferenceSearchDto searchRequest =
-                objectMapper.treeToValue(
-                        request,
-                        DifferenceSearchDto.class
-                );
-
-        bytes = service.exportBalanceCompareToExcel(
-                searchRequest,
-                userId
-        );
-
-        fileName =
-                "Balance_Compare_Difference_"
-                        + searchRequest.getFromDate()
-                        + "_to_"
-                        + searchRequest.getToDate()
-                        + ".xlsx";
-
-    } else {
-
-        throw new IllegalArgumentException(
-                "Invalid export request"
-        );
+    // @Autowired
+    private final DifferenceService service;
+    private final JwtUtil jwtUtil;
+    // private final ObjectMapper objectMapper;
+    
+    // --- SECURITY FIX: Explicitly disallow mass assignment on sensitive internal fields ---
+    @InitBinder
+    public void initBinder(WebDataBinder binder) {
+        binder.setDisallowedFields("class.*", "Class.*", "*.class.*", "*.Class.*", "classLoader.*");
     }
 
-    return ResponseEntity.ok()
-            .header(
-                    HttpHeaders.CONTENT_DISPOSITION,
-                    "attachment; filename=\"" + fileName + "\""
-            )
-            .contentType(
-                    MediaType.parseMediaType(
-                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-            )
-            .body(bytes);
+    // GET All with ApiResponse
+    @GetMapping
+    public ResponseEntity<ApiResponse<Page<DifferenceDTO>>> getDifferences(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size) {
+        Page<DifferenceDTO> result = service.getAllDifferences(page, size);
+        return ResponseEntity.ok(ApiResponse.success(result, "Differences retrieved successfully"));
+    }
+
+    // POST Search with ApiResponse
+    @PostMapping("/search")
+    public ResponseEntity<ApiResponse<Page<DifferenceDTO>>> searchDifferences(
+            @Valid @RequestBody DifferenceSearchDto criteria,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size) {
+
+        Page<DifferenceDTO> result = service.searchDifferences(criteria, page, size);
+
+        if (result.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.error("No differences found for the given criteria"));
+        }
+
+        return ResponseEntity.ok(ApiResponse.success(result, "Differences retrieved successfully"));
+    }
+
+    // GET History for a specific GLCC lifecycle
+    @PostMapping("/history")
+    public ResponseEntity<ApiResponse<Page<DifferenceHistoryDTO>>> getGlccHistory(
+            @RequestBody GlccRequestBodyDto dto,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size) {
+
+        Page<DifferenceHistoryDTO> result = service.getGlccHistory(dto.getBranchCode(), dto.getCgl(), page, size);
+
+        if (result.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.error("No historical records found for the provided Branch and CGL"));
+        }
+
+        return ResponseEntity.ok(ApiResponse.success(result, "GLCC History retrieved successfully"));
+    }
+
+
+    // @PostMapping("/export")
+    // public ResponseEntity<byte[]> exportBalance(
+    //         @RequestHeader("Authorization") String token,
+    //         @RequestBody DifferenceDTO request) {
+    //         String userId = jwtUtil.getUserIdFromToken(token);
+    //         byte[] bytes = service.exportBalanceCompareToExcel(
+    //                 request,
+    //                 userId);
+    //         return ResponseEntity.ok()
+    //                 .header(
+    //                         HttpHeaders.CONTENT_DISPOSITION,
+    //                         "attachment; filename=Balance_Compare_Difference_"+request.getReconRunDate().format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy"))+".xlsx")
+    //                 .contentType(
+    //                         MediaType.parseMediaType(
+    //                                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+    //                 .body(bytes);
+    // }
+
+
+    // @PostMapping("/export")
+    // public ResponseEntity<byte[]> exportBalance(
+    //         @RequestHeader("Authorization") String token,
+    //         @RequestBody JsonNode request) throws JsonProcessingException {
+    //         String userId = jwtUtil.getUserIdFromToken(token);
+    //         ObjectMapper objectMapper = new ObjectMapper();
+    //         objectMapper.registerModule(new JavaTimeModule());
+    //         byte[] bytes;
+    //         String fileName;
+    //         if(request.has("reconRunDate")){
+    //             DifferenceDTO differenceRequest = objectMapper.treeToValue(request, DifferenceDTO.class);
+
+    //             bytes = service.exportBalanceCompareToExcel(
+    //                 differenceRequest,
+    //                 userId);
+    //             fileName = "Balance_Compare_Difference_"+differenceRequest.getReconRunDate()+".xlsx";
+    //         }
+
+    //     else if (request.has("fromDate") && request.has("toDate")){
+    //         DifferenceSearchDto searchRequest = objectMapper.treeToValue(request, DifferenceSearchDto.class);
+
+    //             bytes = service.exportBalanceCompareToExcel(
+    //                 searchRequest,
+    //                 userId);
+    //             fileName = "Balance_Compare_Difference_"+searchRequest.getFromDate()+"_to_"+searchRequest.getToDate()+".xlsx";
+    //     }
+
+    //     else{
+    //         log.info("Invalid export request");
+    //         throw new IllegalArgumentException("Invalid export request");
+    //     }
+             
+    //         return ResponseEntity.ok()
+    //                 .header(
+    //                         HttpHeaders.CONTENT_DISPOSITION,
+    //                         "attachment; filename="+fileName)
+    //                 .contentType(
+    //                         MediaType.parseMediaType(
+    //                                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+    //                 .body(bytes);
+    // }
+
+
+
+    @PostMapping("/export")
+    public ResponseEntity<byte[]> exportBalance(
+            @RequestHeader("Authorization") String token,
+            @RequestBody JsonNode request) throws Exception {
+
+        String userId = jwtUtil.getUserIdFromToken(token);
+
+        byte[] bytes;
+        String fileName;
+
+        if (request.has("reconRunDate")) {
+
+            DifferenceDTO differenceRequest =
+                    objectMapper.treeToValue(
+                            request,
+                            DifferenceDTO.class
+                    );
+
+            bytes = service.exportBalanceCompareToExcel(
+                    differenceRequest,
+                    userId
+            );
+
+            fileName =
+                    "Balance_Compare_Difference_"
+                            + differenceRequest.getReconRunDate()
+                            + ".xlsx";
+
+        } else if (
+                request.has("fromDate")
+                        && request.has("toDate")) {
+
+            DifferenceSearchDto searchRequest =
+                    objectMapper.treeToValue(
+                            request,
+                            DifferenceSearchDto.class
+                    );
+
+            bytes = service.exportBalanceCompareToExcel(
+                    searchRequest,
+                    userId
+            );
+
+            fileName =
+                    "Balance_Compare_Difference_"
+                            + searchRequest.getFromDate()
+                            + "_to_"
+                            + searchRequest.getToDate()
+                            + ".xlsx";
+
+        } else {
+
+            throw new IllegalArgumentException(
+                    "Invalid export request"
+            );
+        }
+
+        return ResponseEntity.ok()
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + fileName + "\""
+                )
+                .contentType(
+                        MediaType.parseMediaType(
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                )
+                .body(bytes);
+    }
+}package com.fincore.enquiry_service.dto;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class DifferenceDTO {
+    @JsonFormat(pattern = "dd-MM-yyyy")
+    private LocalDate reconRunDate;
+    private String branchCode;
+    private String currency;
+    private String cgl;
+    private BigDecimal cbsBalance;
+    private BigDecimal glBalance;
+    private BigDecimal differenceAmount;
+    private BigDecimal diffBwYesterday;
+    private String type;
+    private String head;
+    private LocalDate FIRST_ERROR_DATE;
+}package com.fincore.enquiry_service.dto;
+
+import java.time.LocalDate;
+
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class DifferenceSearchDto {
+    @NotNull(message = "fromDate is required")
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+    private LocalDate fromDate;
+
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+    private LocalDate toDate;
+
+    @Pattern(regexp = "^\\d{5}$", message = "branchCode must be exactly 5 digits (e.g., 00001)")
+    private String branchCode;
+
+    @Pattern(regexp = "^[A-Z]{3}$", message = "currency must be 3 uppercase letters (e.g., USD)")
+    private String currency;
+
+    @Pattern(regexp = "^\\d{10}$", message = "cgl must be exactly 10 digits")
+    private String cgl;
+
+    public LocalDate getEffectiveToDate() {
+        return (toDate == null) ? fromDate : toDate;
+    }
+
 }
