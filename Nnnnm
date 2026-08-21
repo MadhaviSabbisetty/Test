@@ -1,3 +1,11 @@
+const payload = {
+        fromDate: start.format("DD-MM-YYYY"),
+        endDate: end.format("DD-MM-YYYY"),
+        branchCode: branch?.split("-")[0],
+        currency:currency,
+        cgl: cgl?.split(" - ")[0],
+      };
+
 package com.fincore.enquiry_service.controller;
 
 // import org.springframework.beans.factory.annotation.Autowired;
