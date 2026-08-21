@@ -1,16 +1,224 @@
-2026-08-21 19:00:37.512 INFO  [http-nio-4001-exec-1] o.a.j.l.DirectJDKLog: Initializing Spring DispatcherServlet 'dispatcherServlet' 
-{"@timestamp":"2026-08-21T19:00:37.5123448+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.c.c.C.[Tomcat].[localhost].[/]","message":"Initializing Spring DispatcherServlet 'dispatcherServlet'","stack_trace":""}
-2026-08-21 19:00:37.512 INFO  [http-nio-4001-exec-1] o.s.w.s.FrameworkServlet: Initializing Servlet 'dispatcherServlet' 
-{"@timestamp":"2026-08-21T19:00:37.5123448+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.web.servlet.DispatcherServlet","message":"Initializing Servlet 'dispatcherServlet'","stack_trace":""}
-2026-08-21 19:00:37.514 INFO  [http-nio-4001-exec-1] o.s.w.s.FrameworkServlet: Completed initialization in 1 ms 
-{"@timestamp":"2026-08-21T19:00:37.5143448+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.web.servlet.DispatcherServlet","message":"Completed initialization in 1 ms","stack_trace":""}
-2026-08-21 19:00:38.337 INFO  [http-nio-4001-exec-1] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200 
-{"@timestamp":"2026-08-21T19:00:38.3370771+05:30","level":"INFO","service":"TransactionsService","traceId":"6d8e2730-bc5e-4725-bab1-5fc051809800","userId":"1015698","clientIp":"10.0.19.34","apiPath":"/api/differences/search","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200","stack_trace":""}
-2026-08-21 19:00:45.272 INFO  [http-nio-4001-exec-2] c.f.e.s.e.BalanceCompareStreamingExportService: EXPORT DOWNLOAD REQUEST - userId=1015698, menuId=52, fileName=Balance_Compare_Difference_31-03-2026.xlsx, searchCriteria={"reconRunDate":"31-03-2026","branchCode":"12716","currency":"INR","cgl":"1204505001"} 
-{"@timestamp":"2026-08-21T19:00:45.2721995+05:30","level":"INFO","service":"TransactionsService","traceId":"a4ad90bf-e129-42fd-a13b-a2c757bfeae1","userId":"1015698","clientIp":"10.0.19.34","apiPath":"/api/differences/export","class":"c.f.e.s.e.BalanceCompareStreamingExportService","message":"EXPORT DOWNLOAD REQUEST - userId=1015698, menuId=52, fileName=Balance_Compare_Difference_31-03-2026.xlsx, searchCriteria={\"reconRunDate\":\"31-03-2026\",\"branchCode\":\"12716\",\"currency\":\"INR\",\"cgl\":\"1204505001\"}","stack_trace":""}
-2026-08-21 19:00:45.456 INFO  [http-nio-4001-exec-2] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 200 
-{"@timestamp":"2026-08-21T19:00:45.4567703+05:30","level":"INFO","service":"TransactionsService","traceId":"a4ad90bf-e129-42fd-a13b-a2c757bfeae1","userId":"1015698","clientIp":"10.0.19.34","apiPath":"/api/differences/export","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 200","stack_trace":""}
-2026-08-21 19:01:38.007 INFO  [http-nio-4001-exec-3] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200 
-{"@timestamp":"2026-08-21T19:01:38.0079199+05:30","level":"INFO","service":"TransactionsService","traceId":"095cbe8a-aaa0-4067-bbd8-78bf75f6cf3f","userId":"1015698","clientIp":"10.0.19.34","apiPath":"/api/differences/search","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200","stack_trace":""}
-2026-08-21 19:01:43.856 INFO  [http-nio-4001-exec-4] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 404 
-{"@timestamp":"2026-08-21T19:01:43.8563063+05:30","level":"INFO","service":"TransactionsService","traceId":"d594c825-b7ee-49c9-b713-9a68ebc8ba4d","userId":"1015698","clientIp":"10.0.19.34","apiPath":"/api/differences/export","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 404","stack_trace":""}
+package com.fincore.enquiry_service.controller;
+
+// import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.WebDataBinder;
+import org.springframework.web.bind.annotation.*;
+
+import com.fincore.enquiry_service.dto.ApiResponse;
+import com.fincore.enquiry_service.dto.DifferenceDTO;
+import com.fincore.enquiry_service.dto.DifferenceHistoryDTO;
+import com.fincore.enquiry_service.dto.DifferenceSearchDto;
+import com.fincore.enquiry_service.dto.GlccRequestBodyDto;
+import com.fincore.enquiry_service.service.DifferenceService;
+
+import jakarta.validation.Valid;
+
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import com.fincore.commonutilities.jwt.JwtUtil;
+import lombok.RequiredArgsConstructor;
+
+import java.time.format.DateTimeFormatter;
+// import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import lombok.extern.slf4j.Slf4j;
+// import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import java.util.Map;
+
+@Slf4j
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api/differences")
+public class DifferenceController {
+
+    // @Autowired
+    private final DifferenceService service;
+    private final JwtUtil jwtUtil;
+    // private final ObjectMapper objectMapper;
+
+    // --- SECURITY FIX: Explicitly disallow mass assignment on sensitive internal fields ---
+    @InitBinder
+    public void initBinder(WebDataBinder binder) {
+        binder.setDisallowedFields("class.*", "Class.*", "*.class.*", "*.Class.*", "classLoader.*");
+    }
+
+    // GET All with ApiResponse
+    @GetMapping
+    public ResponseEntity<ApiResponse<Page<DifferenceDTO>>> getDifferences(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size) {
+        Page<DifferenceDTO> result = service.getAllDifferences(page, size);
+        return ResponseEntity.ok(ApiResponse.success(result, "Differences retrieved successfully"));
+    }
+
+    // POST Search with ApiResponse
+    @PostMapping("/search")
+    public ResponseEntity<ApiResponse<Page<DifferenceDTO>>> searchDifferences(
+            @Valid @RequestBody DifferenceSearchDto criteria,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size) {
+
+        Page<DifferenceDTO> result = service.searchDifferences(criteria, page, size);
+
+        if (result.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.error("No differences found for the given criteria"));
+        }
+
+        return ResponseEntity.ok(ApiResponse.success(result, "Differences retrieved successfully"));
+    }
+
+    // GET History for a specific GLCC lifecycle
+    @PostMapping("/history")
+    public ResponseEntity<ApiResponse<Page<DifferenceHistoryDTO>>> getGlccHistory(
+            @RequestBody GlccRequestBodyDto dto,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size) {
+
+        Page<DifferenceHistoryDTO> result = service.getGlccHistory(dto.getBranchCode(), dto.getCgl(), page, size);
+
+        if (result.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.error("No historical records found for the provided Branch and CGL"));
+        }
+
+        return ResponseEntity.ok(ApiResponse.success(result, "GLCC History retrieved successfully"));
+    }
+
+
+    // @PostMapping("/export")
+    // public ResponseEntity<byte[]> exportBalance(
+    //         @RequestHeader("Authorization") String token,
+    //         @RequestBody DifferenceDTO request) {
+    //         String userId = jwtUtil.getUserIdFromToken(token);
+    //         byte[] bytes = service.exportBalanceCompareToExcel(
+    //                 request,
+    //                 userId);
+    //         return ResponseEntity.ok()
+    //                 .header(
+    //                         HttpHeaders.CONTENT_DISPOSITION,
+    //                         "attachment; filename=Balance_Compare_Difference_"+request.getReconRunDate().format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy"))+".xlsx")
+    //                 .contentType(
+    //                         MediaType.parseMediaType(
+    //                                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+    //                 .body(bytes);
+    // }
+
+
+    // @PostMapping("/export")
+    // public ResponseEntity<byte[]> exportBalance(
+    //         @RequestHeader("Authorization") String token,
+    //         @RequestBody JsonNode request) throws JsonProcessingException {
+    //         String userId = jwtUtil.getUserIdFromToken(token);
+    //         ObjectMapper objectMapper = new ObjectMapper();
+    //         objectMapper.registerModule(new JavaTimeModule());
+    //         byte[] bytes;
+    //         String fileName;
+    //         if(request.has("reconRunDate")){
+    //             DifferenceDTO differenceRequest = objectMapper.treeToValue(request, DifferenceDTO.class);
+
+    //             bytes = service.exportBalanceCompareToExcel(
+    //                 differenceRequest,
+    //                 userId);
+    //             fileName = "Balance_Compare_Difference_"+differenceRequest.getReconRunDate()+".xlsx";
+    //         }
+
+    //     else if (request.has("fromDate") && request.has("toDate")){
+    //         DifferenceSearchDto searchRequest = objectMapper.treeToValue(request, DifferenceSearchDto.class);
+
+    //             bytes = service.exportBalanceCompareToExcel(
+    //                 searchRequest,
+    //                 userId);
+    //             fileName = "Balance_Compare_Difference_"+searchRequest.getFromDate()+"_to_"+searchRequest.getToDate()+".xlsx";
+    //     }
+
+    //     else{
+    //         log.info("Invalid export request");
+    //         throw new IllegalArgumentException("Invalid export request");
+    //     }
+             
+    //         return ResponseEntity.ok()
+    //                 .header(
+    //                         HttpHeaders.CONTENT_DISPOSITION,
+    //                         "attachment; filename="+fileName)
+    //                 .contentType(
+    //                         MediaType.parseMediaType(
+    //                                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+    //                 .body(bytes);
+    // }
+
+
+
+    @PostMapping("/export")
+    public ResponseEntity<byte[]> exportBalance(
+            @RequestHeader("Authorization") String token,
+            @RequestBody Map<String, Object> request) throws Exception {
+
+        String userId = jwtUtil.getUserIdFromToken(token);
+         ObjectMapper objectMapper = new ObjectMapper();
+        // objectMapper.registerModule(new JavaTimeModule());
+
+        byte[] bytes;
+        String fileName;
+
+        if (request.containsKey("reconRunDate")) {
+
+            DifferenceDTO differenceRequest =
+                    objectMapper.convertValue(
+                            request,
+                            DifferenceDTO.class
+                    );
+
+            bytes = service.exportBalanceCompareToExcel(
+                    differenceRequest,
+                    userId
+            );
+
+            fileName =
+                    "Balance_Compare_Difference_"
+                            + differenceRequest.getReconRunDate()
+                            + ".xlsx";
+
+        } else if (
+                request.containsKey("fromDate")
+                        && request.containsKey("toDate")) {
+
+            DifferenceSearchDto searchRequest =
+                    objectMapper.convertValue(
+                            request,
+                            DifferenceSearchDto.class
+                    );
+
+            bytes = service.exportBalanceCompareToExcel(
+                    searchRequest,
+                    userId
+            );
+
+            fileName =
+                    "Balance_Compare_Difference_"
+                            + searchRequest.getFromDate()
+                            + "_to_"
+                            + searchRequest.getToDate()
+                            + ".xlsx";
+
+        } else {
+
+            throw new IllegalArgumentException(
+                    "Invalid export request"
+            );
+        }
+
+        return ResponseEntity.ok()
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + fileName + "\""
+                )
+                .contentType(
+                        MediaType.parseMediaType(
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                )
+                .body(bytes);
+    }
+}
