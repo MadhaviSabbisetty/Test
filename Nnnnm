@@ -1,7 +1,16 @@
-log.info(
-        "EXPORT DOWNLOAD REQUEST - userId={}, menuId={}, fileName={}, searchCriteria={}",
-        userId,
-        downloadRequest.getMenuId(),
-        downloadRequest.getFileName(),
-        downloadRequest.getSearchCriteria()
-);
+2026-08-21 19:00:37.512 INFO  [http-nio-4001-exec-1] o.a.j.l.DirectJDKLog: Initializing Spring DispatcherServlet 'dispatcherServlet' 
+{"@timestamp":"2026-08-21T19:00:37.5123448+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.a.c.c.C.[Tomcat].[localhost].[/]","message":"Initializing Spring DispatcherServlet 'dispatcherServlet'","stack_trace":""}
+2026-08-21 19:00:37.512 INFO  [http-nio-4001-exec-1] o.s.w.s.FrameworkServlet: Initializing Servlet 'dispatcherServlet' 
+{"@timestamp":"2026-08-21T19:00:37.5123448+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.web.servlet.DispatcherServlet","message":"Initializing Servlet 'dispatcherServlet'","stack_trace":""}
+2026-08-21 19:00:37.514 INFO  [http-nio-4001-exec-1] o.s.w.s.FrameworkServlet: Completed initialization in 1 ms 
+{"@timestamp":"2026-08-21T19:00:37.5143448+05:30","level":"INFO","service":"TransactionsService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.web.servlet.DispatcherServlet","message":"Completed initialization in 1 ms","stack_trace":""}
+2026-08-21 19:00:38.337 INFO  [http-nio-4001-exec-1] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200 
+{"@timestamp":"2026-08-21T19:00:38.3370771+05:30","level":"INFO","service":"TransactionsService","traceId":"6d8e2730-bc5e-4725-bab1-5fc051809800","userId":"1015698","clientIp":"10.0.19.34","apiPath":"/api/differences/search","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200","stack_trace":""}
+2026-08-21 19:00:45.272 INFO  [http-nio-4001-exec-2] c.f.e.s.e.BalanceCompareStreamingExportService: EXPORT DOWNLOAD REQUEST - userId=1015698, menuId=52, fileName=Balance_Compare_Difference_31-03-2026.xlsx, searchCriteria={"reconRunDate":"31-03-2026","branchCode":"12716","currency":"INR","cgl":"1204505001"} 
+{"@timestamp":"2026-08-21T19:00:45.2721995+05:30","level":"INFO","service":"TransactionsService","traceId":"a4ad90bf-e129-42fd-a13b-a2c757bfeae1","userId":"1015698","clientIp":"10.0.19.34","apiPath":"/api/differences/export","class":"c.f.e.s.e.BalanceCompareStreamingExportService","message":"EXPORT DOWNLOAD REQUEST - userId=1015698, menuId=52, fileName=Balance_Compare_Difference_31-03-2026.xlsx, searchCriteria={\"reconRunDate\":\"31-03-2026\",\"branchCode\":\"12716\",\"currency\":\"INR\",\"cgl\":\"1204505001\"}","stack_trace":""}
+2026-08-21 19:00:45.456 INFO  [http-nio-4001-exec-2] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 200 
+{"@timestamp":"2026-08-21T19:00:45.4567703+05:30","level":"INFO","service":"TransactionsService","traceId":"a4ad90bf-e129-42fd-a13b-a2c757bfeae1","userId":"1015698","clientIp":"10.0.19.34","apiPath":"/api/differences/export","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 200","stack_trace":""}
+2026-08-21 19:01:38.007 INFO  [http-nio-4001-exec-3] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200 
+{"@timestamp":"2026-08-21T19:01:38.0079199+05:30","level":"INFO","service":"TransactionsService","traceId":"095cbe8a-aaa0-4067-bbd8-78bf75f6cf3f","userId":"1015698","clientIp":"10.0.19.34","apiPath":"/api/differences/search","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/search?page=0&size=25 | Status: 200","stack_trace":""}
+2026-08-21 19:01:43.856 INFO  [http-nio-4001-exec-4] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 404 
+{"@timestamp":"2026-08-21T19:01:43.8563063+05:30","level":"INFO","service":"TransactionsService","traceId":"d594c825-b7ee-49c9-b713-9a68ebc8ba4d","userId":"1015698","clientIp":"10.0.19.34","apiPath":"/api/differences/export","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://10.0.19.34:4001/api/differences/export | Status: 404","stack_trace":""}
