@@ -1,280 +1,892 @@
- An unexpected error occurred: No static resource api/differences for request '/api/differences/'. 
-org.springframework.web.servlet.resource.NoResourceFoundException: No static resource api/differences for request '/api/differences/'.
-        at org.springframework.web.servlet.resource.ResourceHttpRequestHandler.handleRequest(ResourceHttpRequestHandler.java:527)
-        at org.springframework.web.servlet.mvc.HttpRequestHandlerAdapter.handle(HttpRequestHandlerAdapter.java:50)
-        at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:963)
-        at org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:866)
-        at org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1000)
-        at org.springframework.web.servlet.FrameworkServlet.doPost(FrameworkServlet.java:903)
-        at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:649)
-        at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:874)
-        at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:710)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:132)
-        at org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:59)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:108)
-        at org.springframework.security.web.FilterChainProxy.lambda$doFilterInternal$2(FilterChainProxy.java:235)
-        at org.springframework.security.web.ObservationFilterChainDecorator$FilterObservation$SimpleFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:491)
-        at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:353)
-        at org.springframework.security.web.ObservationFilterChainDecorator.lambda$wrapSecured$0(ObservationFilterChainDecorator.java:84)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:131)
-        at org.springframework.security.web.access.intercept.AuthorizationFilter.doFilter(AuthorizationFilter.java:101)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126)
-        at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:132)
-        at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:86)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.authentication.AnonymousAuthenticationFilter.doFilter(AnonymousAuthenticationFilter.java:100)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter.doFilter(SecurityContextHolderAwareRequestFilter.java:181)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.savedrequest.RequestCacheAwareFilter.doFilter(RequestCacheAwareFilter.java:63)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at com.fincore.commonutilities.security.ContextRbacFilter.doFilterInternal(ContextRbacFilter.java:161)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at com.fincore.commonutilities.logging.MdcLoggingFilter.doFilterInternal(MdcLoggingFilter.java:83)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:110)
-        at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:96)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.web.filter.CorsFilter.doFilterInternal(CorsFilter.java:91)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.header.HeaderWriterFilter.doHeadersAfter(HeaderWriterFilter.java:90)
-        at org.springframework.security.web.header.HeaderWriterFilter.doFilterInternal(HeaderWriterFilter.java:75)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:82)
-        at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:69)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter.doFilterInternal(WebAsyncManagerIntegrationFilter.java:62)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.session.DisableEncodeUrlFilter.doFilterInternal(DisableEncodeUrlFilter.java:42)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$0(ObservationFilterChainDecorator.java:336)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.FilterChainProxy.doFilterInternal(FilterChainProxy.java:237)
-        at org.springframework.security.web.FilterChainProxy.doFilter(FilterChainProxy.java:195)
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113)
-        at org.springframework.web.filter.ServletRequestPathFilter.doFilter(ServletRequestPathFilter.java:52)
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113)
-        at org.springframework.web.filter.CompositeFilter.doFilter(CompositeFilter.java:74)
-        at org.springframework.security.config.annotation.web.configuration.WebSecurityConfiguration$CompositeFilterChainProxy.doFilter(WebSecurityConfiguration.java:317)
-        at org.springframework.web.filter.DelegatingFilterProxy.invokeDelegate(DelegatingFilterProxy.java:355)
-        at org.springframework.web.filter.DelegatingFilterProxy.doFilter(DelegatingFilterProxy.java:272)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.RequestContextFilter.doFilterInternal(RequestContextFilter.java:100)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.FormContentFilter.doFilterInternal(FormContentFilter.java:93)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.ServerHttpObservationFilter.doFilterInternal(ServerHttpObservationFilter.java:110)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.CharacterEncodingFilter.doFilterInternal(CharacterEncodingFilter.java:199)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:165)
-        at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:77)
-        at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:534)
-        at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:115)
-        at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:86)
-        at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:72)
-        at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:347)
-        at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:406)
-        at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:71)
-        at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:1307)
-        at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:2036)
-        at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:74)
-        at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:949)
-        at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:483)
-        at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:74)
-        at java.base/java.lang.Thread.run(Thread.java:1570)
-{"@timestamp":"2026-08-21T17:27:34.0591758+05:30","level":"ERROR","service":"TransactionsService","traceId":"a3ecb8c8-08f5-49f8-bf5a-5ceddef4d6c2","userId":"1015698","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/differences/","class":"c.f.e.exception.GlobalException","message":"An unexpected error occurred: No static resource api/differences for request '/api/differences/'.","stack_trace":"org.springframework.web.servlet.resource.NoResourceFoundException: No static resource api/differences for request '/api/differences/'.\r\n\tat org.springframework.web.servlet.resource.ResourceHttpRequestHandler.handleRequest(ResourceHttpRequestHandler.java:527)\r\n\tat org.springframework.web.servlet.mvc.HttpRequestHandlerAdapter.handle(HttpRequestHandlerAdapter.java:50)\r\n\tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:963)\r\n\tat org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:866)\r\n\tat org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1000)\r\n\tat org.springframework.web.servlet.FrameworkServlet.doPost(FrameworkServlet.java:903)\r\n\tat jakarta.servlet.http.HttpServlet.service(HttpServlet.java:649)\r\n\tat org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:874)\r\n\tat jakarta.servlet.http.HttpServlet.service(HttpServlet.java:710)\r\n\tat org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:132)\r\n"}
-2026-08-21 17:27:34.085 INFO  [http-nio-4001-exec-9] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://localhost:4001/api/differences/ | Status: 500 
-{"@timestamp":"2026-08-21T17:27:34.0851964+05:30","level":"INFO","service":"TransactionsService","traceId":"a3ecb8c8-08f5-49f8-bf5a-5ceddef4d6c2","userId":"1015698","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/differences/","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://localhost:4001/api/differences/ | Status: 500","stack_trace":""}
-2026-08-21 17:27:40.091 ERROR [http-nio-4001-exec-6] c.f.e.e.GlobalException: An unexpected error occurred: Type definition error: [simple type, class com.fasterxml.jackson.databind.JsonNode] 
-org.springframework.http.converter.HttpMessageConversionException: Type definition error: [simple type, class com.fasterxml.jackson.databind.JsonNode]
-        at org.springframework.http.converter.AbstractJacksonHttpMessageConverter.readJavaType(AbstractJacksonHttpMessageConverter.java:360)
-        at org.springframework.http.converter.AbstractJacksonHttpMessageConverter.read(AbstractJacksonHttpMessageConverter.java:319)
-        at org.springframework.web.servlet.mvc.method.annotation.AbstractMessageConverterMethodArgumentResolver.readWithMessageConverters(AbstractMessageConverterMethodArgumentResolver.java:203)
-        at org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor.readWithMessageConverters(RequestResponseBodyMethodProcessor.java:181)
-        at org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor.resolveArgument(RequestResponseBodyMethodProcessor.java:156)
-        at org.springframework.web.method.support.HandlerMethodArgumentResolverComposite.resolveArgument(HandlerMethodArgumentResolverComposite.java:122)
-        at org.springframework.web.method.support.InvocableHandlerMethod.getMethodArgumentValues(InvocableHandlerMethod.java:224)
-        at org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:174)
-        at org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:117)
-        at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:934)
-        at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.handleInternal(RequestMappingHandlerAdapter.java:853)
-        at org.springframework.web.servlet.mvc.method.AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:86)
-        at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:963)
-        at org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:866)
-        at org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1000)
-        at org.springframework.web.servlet.FrameworkServlet.doPost(FrameworkServlet.java:903)
-        at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:649)
-        at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:874)
-        at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:710)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:132)
-        at org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:59)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:108)
-        at org.springframework.security.web.FilterChainProxy.lambda$doFilterInternal$2(FilterChainProxy.java:235)
-        at org.springframework.security.web.ObservationFilterChainDecorator$FilterObservation$SimpleFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:491)
-        at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:353)
-        at org.springframework.security.web.ObservationFilterChainDecorator.lambda$wrapSecured$0(ObservationFilterChainDecorator.java:84)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:131)
-        at org.springframework.security.web.access.intercept.AuthorizationFilter.doFilter(AuthorizationFilter.java:101)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126)
-        at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:132)
-        at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:86)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.authentication.AnonymousAuthenticationFilter.doFilter(AnonymousAuthenticationFilter.java:100)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter.doFilter(SecurityContextHolderAwareRequestFilter.java:181)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.savedrequest.RequestCacheAwareFilter.doFilter(RequestCacheAwareFilter.java:63)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at com.fincore.commonutilities.security.ContextRbacFilter.doFilterInternal(ContextRbacFilter.java:161)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at com.fincore.commonutilities.logging.MdcLoggingFilter.doFilterInternal(MdcLoggingFilter.java:83)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:110)
-        at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:96)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.web.filter.CorsFilter.doFilterInternal(CorsFilter.java:91)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.header.HeaderWriterFilter.doHeadersAfter(HeaderWriterFilter.java:90)
-        at org.springframework.security.web.header.HeaderWriterFilter.doFilterInternal(HeaderWriterFilter.java:75)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:82)
-        at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:69)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter.doFilterInternal(WebAsyncManagerIntegrationFilter.java:62)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:230)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.session.DisableEncodeUrlFilter.doFilterInternal(DisableEncodeUrlFilter.java:42)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:243)
-        at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$0(ObservationFilterChainDecorator.java:336)
-        at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227)
-        at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:140)
-        at org.springframework.security.web.FilterChainProxy.doFilterInternal(FilterChainProxy.java:237)
-        at org.springframework.security.web.FilterChainProxy.doFilter(FilterChainProxy.java:195)
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113)
-        at org.springframework.web.filter.ServletRequestPathFilter.doFilter(ServletRequestPathFilter.java:52)
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113)
-        at org.springframework.web.filter.CompositeFilter.doFilter(CompositeFilter.java:74)
-        at org.springframework.security.config.annotation.web.configuration.WebSecurityConfiguration$CompositeFilterChainProxy.doFilter(WebSecurityConfiguration.java:317)
-        at org.springframework.web.filter.DelegatingFilterProxy.invokeDelegate(DelegatingFilterProxy.java:355)
-        at org.springframework.web.filter.DelegatingFilterProxy.doFilter(DelegatingFilterProxy.java:272)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.RequestContextFilter.doFilterInternal(RequestContextFilter.java:100)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.FormContentFilter.doFilterInternal(FormContentFilter.java:93)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.ServerHttpObservationFilter.doFilterInternal(ServerHttpObservationFilter.java:110)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.springframework.web.filter.CharacterEncodingFilter.doFilterInternal(CharacterEncodingFilter.java:199)
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:111)
-        at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:165)
-        at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:77)
-        at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:534)
-        at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:115)
-        at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:86)
-        at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:72)
-        at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:347)
-        at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:406)
-        at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:71)
-        at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:1307)
-        at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:2036)
-        at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:74)
-        at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:949)
-        at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:483)
-        at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:74)
-        at java.base/java.lang.Thread.run(Thread.java:1570)
-Caused by: tools.jackson.databind.exc.InvalidDefinitionException: Cannot construct instance of `com.fasterxml.jackson.databind.JsonNode` (no Creators, like default constructor, exist): abstract types either need to be mapped to concrete types, have custom deserializer, or contain additional type information
- at [Source: REDACTED (`StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION` disabled); byte offset: #0]
-        at tools.jackson.databind.exc.InvalidDefinitionException.from(InvalidDefinitionException.java:70)
-        at tools.jackson.databind.DeserializationContext.reportBadDefinition(DeserializationContext.java:1995)
-        at tools.jackson.databind.DatabindContext.reportBadDefinition(DatabindContext.java:511)
-        at tools.jackson.databind.DeserializationContext.handleMissingInstantiator(DeserializationContext.java:1525)
-        at tools.jackson.databind.deser.AbstractDeserializer.deserialize(AbstractDeserializer.java:254)
-        at tools.jackson.databind.deser.DeserializationContextExt.readRootValue(DeserializationContextExt.java:266)
-        at tools.jackson.databind.ObjectReader._bindAndClose(ObjectReader.java:1888)
-        at tools.jackson.databind.ObjectReader.readValue(ObjectReader.java:1270)
-        at org.springframework.http.converter.AbstractJacksonHttpMessageConverter.readJavaType(AbstractJacksonHttpMessageConverter.java:352)
-        ... 133 common frames omitted
-{"@timestamp":"2026-08-21T17:27:40.0910871+05:30","level":"ERROR","service":"TransactionsService","traceId":"2827916a-35b4-4525-8a55-45d926d494c9","userId":"1015698","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/differences/export","class":"c.f.e.exception.GlobalException","message":"An unexpected error occurred: Type definition error: [simple type, class com.fasterxml.jackson.databind.JsonNode]","stack_trace":"org.springframework.http.converter.HttpMessageConversionException: Type definition error: [simple type, class com.fasterxml.jackson.databind.JsonNode]\r\n\tat org.springframework.http.converter.AbstractJacksonHttpMessageConverter.readJavaType(AbstractJacksonHttpMessageConverter.java:360)\r\n\tat org.springframework.http.converter.AbstractJacksonHttpMessageConverter.read(AbstractJacksonHttpMessageConverter.java:319)\r\n\tat org.springframework.web.servlet.mvc.method.annotation.AbstractMessageConverterMethodArgumentResolver.readWithMessageConverters(AbstractMessageConverterMethodArgumentResolver.java:203)\r\n\tat org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor.readWithMessageConverters(RequestResponseBodyMethodProcessor.java:181)\r\n\tat org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor.resolveArgument(RequestResponseBodyMethodProcessor.java:156)\r\n\tat org.springframework.web.method.support.HandlerMethodArgumentResolverComposite.resolveArgument(HandlerMethodArgumentResolverComposite.java:122)\r\n\tat org.springframework.web.method.support.InvocableHandlerMethod.getMethodArgumentValues(InvocableHandlerMethod.java:224)\r\n\tat org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:174)\r\n\tat org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:117)\r\n\tat org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:934)\r\nCaused by: tools.jackson.databind.exc.InvalidDefinitionException: Cannot construct instance of `com.fasterxml.jackson.databind.JsonNode` (no Creators, like default constructor, exist): abstract types either need to be mapped to concrete types, have custom deserializer, or contain additional type information\n at [Source: REDACTED (`StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION` disabled); byte offset: #0]\r\n\tat tools.jackson.databind.exc.InvalidDefinitionException.from(InvalidDefinitionException.java:70)\r\n\tat tools.jackson.databind.DeserializationContext.reportBadDefinition(DeserializationContext.java:1995)\r\n\tat tools.jackson.databind.DatabindContext.reportBadDefinition(DatabindContext.java:511)\r\n\tat tools.jackson.databind.DeserializationContext.handleMissingInstantiator(DeserializationContext.java:1525)\r\n\tat tools.jackson.databind.deser.AbstractDeserializer.deserialize(AbstractDeserializer.java:254)\r\n\tat tools.jackson.databind.deser.DeserializationContextExt.readRootValue(DeserializationContextExt.java:266)\r\n\tat tools.jackson.databind.ObjectReader._bindAndClose(ObjectReader.java:1888)\r\n\tat tools.jackson.databind.ObjectReader.readValue(ObjectReader.java:1270)\r\n\tat org.springframework.http.converter.AbstractJacksonHttpMessageConverter.readJavaType(AbstractJacksonHttpMessageConverter.java:352)\r\n\tat org.springframework.http.converter.AbstractJacksonHttpMessageConverter.read(AbstractJacksonHttpMessageConverter.java:319)\r\n"}
-2026-08-21 17:27:40.095 INFO  [http-nio-4001-exec-6] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://localhost:4001/api/differences/export | Status: 500 
-{"@timestamp":"2026-08-21T17:27:40.0950681+05:30","level":"INFO","service":"TransactionsService","traceId":"2827916a-35b4-4525-8a55-45d926d494c9","userId":"1015698","clientIp":"0:0:0:0:0:0:0:1","apiPath":"/api/differences/export","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://localhost:4001/api/differences/export | Status: 500","stack_trace":""}
+package com.fincore.enquiry_service.service.export;
+
+import com.fincore.enquiry_service.dto.DifferenceDTO;
+import com.fincore.enquiry_service.dto.DifferenceSearchDto;
+import com.fincore.enquiry_service.dto.MyDownloadsRequestDTO;
+import com.fincore.enquiry_service.exception.ExportGenerationException;
+import com.fincore.enquiry_service.service.MyDownloadsService;
+import com.fincore.enquiry_service.service.utils.BaseStreamingExcelExporter;
+import com.fincore.enquiry_service.service.utils.ExcelExportUtil;
+import com.fincore.enquiry_service.service.utils.ExcelStyleUtil;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.CreationHelper;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.xssf.streaming.SXSSFSheet;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.sql.Date;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.concurrent.atomic.AtomicInteger;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class BalanceCompareStreamingExportService extends BaseStreamingExcelExporter {
+
+    private final JdbcTemplate jdbcTemplate;
+    private final MyDownloadsService myDownloadsService;
+
+    public byte[] export(Object request, String userId) {
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+        DifferenceDTO differenceRequest = null;
+        DifferenceSearchDto searchRequest = null;
+
+        boolean isDateWise = request instanceof DifferenceDTO;
+
+        LocalDate fromDate;
+        LocalDate toDate;
+        String branchCode;
+        String currency;
+        String cgl;
+
+        if(isDateWise){
+                differenceRequest = (DifferenceDTO) request;
+                fromDate = differenceRequest.getReconRunDate();
+                toDate = differenceRequest.getReconRunDate();
+                branchCode = differenceRequest.getBranchCode();
+                currency = differenceRequest.getCurrency();
+                cgl = differenceRequest.getCgl();
+        }
+        else{
+              searchRequest = (DifferenceSearchDto) request;
+                fromDate = searchRequest.getFromDate();
+                toDate = searchRequest.getToDate();
+                branchCode = searchRequest.getBranchCode();
+                currency = searchRequest.getCurrency();
+                cgl = searchRequest.getCgl();
+        }  
+        if (fromDate == null || toDate == null) {
+            throw new IllegalArgumentException("Date is required for Difference export");
+        }
+        
+        try (
+                SXSSFWorkbook workbook = new SXSSFWorkbook(100);
+                ByteArrayOutputStream out = new ByteArrayOutputStream()
+        ) {
+
+            workbook.setCompressTempFiles(true);
+
+            String sheetName = "Bal_Comp_Diff_"+formatter.format(fromDate);
+            if(!isDateWise){
+                sheetName += "_to_"+ formatter.format(toDate);
+            }
+
+            SXSSFSheet sheet = workbook.createSheet(sheetName);
+
+            // ==================================================
+            // STYLES
+            // ==================================================
+
+            CellStyle headerStyle = ExcelStyleUtil.createHeaderStyle(workbook);
+
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+
+            CellStyle titleStyle = ExcelStyleUtil.createTitleStyle(workbook);
+
+            CellStyle amountStyle = ExcelStyleUtil.createAmountStyle(workbook);
+
+            CreationHelper creationHelper = workbook.getCreationHelper();
+
+            CellStyle dateStyle = workbook.createCellStyle();
+
+            dateStyle.setDataFormat(
+                    creationHelper
+                            .createDataFormat()
+                            .getFormat("dd-MM-yyyy")
+            );
+
+            CellStyle centerStyle =
+                    workbook.createCellStyle();
+
+            centerStyle.setAlignment(
+                    HorizontalAlignment.CENTER
+            );
+
+            AtomicInteger rowNum =
+                    new AtomicInteger(0);
+
+            // ==================================================
+            // TITLE
+            // ==================================================
+
+            Row titleRow =
+                    sheet.createRow(rowNum.getAndIncrement());
+        
+            String displayFileName = "Balance_Compare_Difference_"+formatter.format(fromDate);
+             if(!isDateWise){
+                displayFileName += "_to_"+ formatter.format(toDate);
+            }
+
+            Cell titleCell = titleRow.createCell(0);
+
+            titleCell.setCellValue(displayFileName);
+
+            titleStyle.setAlignment(HorizontalAlignment.CENTER);
+
+            titleCell.setCellStyle(titleStyle);
+
+            sheet.addMergedRegion(
+                    new CellRangeAddress(
+                            0,
+                            0,
+                            0,
+                            9
+                    )
+            );
+
+            // Blank row
+            rowNum.incrementAndGet();
+
+            // ==================================================
+            // SUMMARY HEADER
+            // ==================================================
+
+            Row summaryHeader =
+                    sheet.createRow(rowNum.getAndIncrement());
+
+            String[] summaryHeaders;
+            if(isDateWise){
+            summaryHeaders = new String[] {
+                    "Recon Run Date",
+                    "Branch Code",
+                    "Currency",
+                    "CGL"
+                };
+            }
+            else{
+                summaryHeaders = new String[] {
+                    "From Date",
+                    "To Date",
+                    "Branch Code",
+                    "Currency",
+                    "CGL"
+                };
+            }
+
+
+            int summaryStartColumn = 3;
+
+            for (int i = 0;
+                 i < summaryHeaders.length;
+                 i++) {
+
+                Cell cell =
+                        summaryHeader.createCell(summaryStartColumn + i);
+
+                cell.setCellValue(
+                        summaryHeaders[i]
+                );
+
+                cell.setCellStyle(headerStyle);
+            }
+
+            // ==================================================
+            // SUMMARY VALUES
+            // ==================================================
+
+            Row summaryRow =
+                    sheet.createRow(rowNum.getAndIncrement());
+            if (isDateWise) {
+
+                Cell dateCell =
+                        summaryRow.createCell(0);
+        
+                dateCell.setCellValue(
+                        Date.valueOf(fromDate)
+                );
+        
+                dateCell.setCellStyle(dateStyle);
+        
+                Cell branchCell =
+                        summaryRow.createCell(1);
+        
+                branchCell.setCellValue(
+                        ExcelExportUtil.safeString(branchCode)
+                );
+        
+                branchCell.setCellStyle(centerStyle);
+        
+                Cell currencyCell =
+                        summaryRow.createCell(2);
+        
+                currencyCell.setCellValue(
+                        ExcelExportUtil.safeString(currency)
+                );
+        
+                currencyCell.setCellStyle(centerStyle);
+        
+                Cell cglCell =
+                        summaryRow.createCell(3);
+        
+                cglCell.setCellValue(
+                        ExcelExportUtil.safeString(cgl)
+                );
+        
+                cglCell.setCellStyle(centerStyle);
+        
+                } else {
+        
+                Cell fromDateCell =
+                        summaryRow.createCell(0);
+        
+                fromDateCell.setCellValue(
+                        Date.valueOf(fromDate)
+                );
+        
+                fromDateCell.setCellStyle(dateStyle);
+        
+                Cell toDateCell =
+                        summaryRow.createCell(1);
+        
+                toDateCell.setCellValue(
+                        Date.valueOf(toDate)
+                );
+        
+                toDateCell.setCellStyle(dateStyle);
+        
+                Cell branchCell =
+                        summaryRow.createCell(2);
+        
+                branchCell.setCellValue(
+                        ExcelExportUtil.safeString(branchCode)
+                );
+        
+                branchCell.setCellStyle(centerStyle);
+        
+                Cell currencyCell =
+                        summaryRow.createCell(3);
+        
+                currencyCell.setCellValue(
+                        ExcelExportUtil.safeString(currency)
+                );
+        
+                currencyCell.setCellStyle(centerStyle);
+        
+                Cell cglCell =
+                        summaryRow.createCell(4);
+        
+                cglCell.setCellValue(
+                        ExcelExportUtil.safeString(cgl)
+                );
+        
+                cglCell.setCellStyle(centerStyle);
+            }
+            
+
+        //     // Recon Run Date
+        //     Cell reconDateCell =
+        //             summaryRow.createCell(summaryStartColumn);
+
+        //     reconDateCell.setCellValue(
+        //             java.sql.Date.valueOf(reconRunDate)
+        //     );
+
+        //     reconDateCell.setCellStyle(dateStyle);
+
+        //     // Branch
+        //     Cell summaryBranchCell =
+        //             summaryRow.createCell(
+        //                     summaryStartColumn + 1
+        //             );
+    
+        //     summaryBranchCell.setCellValue(
+        //             ExcelExportUtil.safeString(
+        //                     request.getBranchCode()
+        //             )
+        //     );
+    
+        //     summaryBranchCell.setCellStyle(
+        //             centerStyle
+        //     );
+    
+    
+        //     // Currency
+        //     Cell summaryCurrencyCell =
+        //             summaryRow.createCell(
+        //                     summaryStartColumn + 2
+        //             );
+    
+        //     summaryCurrencyCell.setCellValue(
+        //             ExcelExportUtil.safeString(
+        //                     request.getCurrency()
+        //             )
+        //     );
+    
+        //     summaryCurrencyCell.setCellStyle(
+        //             centerStyle
+        //     );
+    
+    
+        //     // CGL
+        //     Cell summaryCglCell =
+        //             summaryRow.createCell(
+        //                     summaryStartColumn + 3
+        //             );
+    
+        //     summaryCglCell.setCellValue(
+        //             ExcelExportUtil.safeString(
+        //                     request.getCgl()
+        //             )
+        //     );
+    
+        //     summaryCglCell.setCellStyle(
+        //             centerStyle
+        //     );
+    
+            // Blank row
+            rowNum.incrementAndGet();
+
+            // ==================================================
+            // MAIN HEADER
+            // ==================================================
+
+            String[] columns = {
+
+                    "First Error Date",
+
+                    "Branch Code",
+
+                    "Currency",
+
+                    "CGL",
+
+                    "CBS Balance",
+
+                    "GL Balance",
+
+                    "Difference Amount",
+
+                    "Difference Between Yesterday",
+
+                    "Type",
+
+                    "Head"
+            };
+
+            Row headerRow =
+                    sheet.createRow(
+                            rowNum.getAndIncrement()
+                    );
+
+            for (int i = 0;
+                 i < columns.length;
+                 i++) {
+
+                Cell cell =
+                        headerRow.createCell(i);
+
+                cell.setCellValue(columns[i]);
+
+                cell.setCellStyle(headerStyle);
+            }
+
+            // ==================================================
+            // SQL
+            // ==================================================
+
+        //     String sql = """
+        //             SELECT
+        //                 d.RECON_RUN_DATE,
+        //                 d.BRANCH_CODE,
+        //                 d.CURRENCY,
+        //                 d.CGL,
+        //                 d.CBS_BALANCE,
+        //                 d.GL_BALANCE,
+        //                 d.DIFFERENCE_AMOUNT,
+        //                 d.DIFF_BW_YESTERDAY,
+        //                 d.TYPE,
+        //                 d.HEAD,
+        //                 d.FIRST_ERROR_DATE
+        //             FROM DIFFERENCE d
+        //             WHERE d.RECON_RUN_DATE = ?
+        //               AND d.BRANCH_CODE = ?
+        //               AND d.CURRENCY = ?
+        //               AND d.CGL = ?
+        //             ORDER BY d.RECON_RUN_DATE
+        //             """;
+
+            String sql;
+
+            if (isDateWise) {
+    
+            sql = """
+                    SELECT
+                            d.FIRST_ERROR_DATE,
+                            d.BRANCH_CODE,
+                            d.CURRENCY,
+                            d.CGL,
+                            d.CBS_BALANCE,
+                            d.GL_BALANCE,
+                            d.DIFFERENCE_AMOUNT,
+                            d.DIFF_BW_YESTERDAY,
+                            d.TYPE,
+                            d.HEAD
+                    FROM DIFFERENCE d
+                    WHERE d.RECON_RUN_DATE = ?
+                    AND d.BRANCH_CODE = ?
+                    AND d.CURRENCY = ?
+                    AND d.CGL = ?
+                    ORDER BY d.RECON_RUN_DATE
+                    """;
+    
+            } else {
+    
+            sql = """
+                    SELECT
+                            d.FIRST_ERROR_DATE,
+                            d.BRANCH_CODE,
+                            d.CURRENCY,
+                            d.CGL,
+                            d.CBS_BALANCE,
+                            d.GL_BALANCE,
+                            d.DIFFERENCE_AMOUNT,
+                            d.DIFF_BW_YESTERDAY,
+                            d.TYPE,
+                            d.HEAD
+                    FROM DIFFERENCE d
+                    WHERE d.RECON_RUN_DATE BETWEEN ?
+                    AND ?
+                    AND d.BRANCH_CODE = ?
+                    AND d.CURRENCY = ?
+                    AND d.CGL = ?
+                    ORDER BY d.RECON_RUN_DATE
+                    """;
+            }
+
+
+            jdbcTemplate.setFetchSize(20000);
+
+            jdbcTemplate.query(
+                    connection -> {
+
+                        var ps =
+                                connection.prepareStatement(sql);
+
+                        ps.setFetchSize(20000);
+
+                        // ps.setDate(
+                        //         1,
+                        //         Date.valueOf(reconRunDate)
+                        // );
+
+                        // ps.setString(
+                        //         2,
+                        //         request.getBranchCode()
+                        // );
+
+                        // ps.setString(
+                        //         3,
+                        //         request.getCurrency()
+                        // );
+
+                        // ps.setString(
+                        //         4,
+                        //         request.getCgl()
+                        // );
+
+                        if (isDateWise) {
+
+                                ps.setDate(
+                                        1,
+                                        Date.valueOf(fromDate)
+                                );
+
+                                ps.setString(2, branchCode);
+                                ps.setString(3, currency);
+                                ps.setString(4, cgl);
+
+                                } else {
+
+                                ps.setDate(
+                                        1,
+                                        Date.valueOf(fromDate)
+                                );
+
+                                ps.setDate(
+                                        2,
+                                        Date.valueOf(toDate)
+                                );
+
+                                ps.setString(3, branchCode);
+                                ps.setString(4, currency);
+                                ps.setString(5, cgl);
+                        }
+
+
+                        return ps;
+                    },
+
+                    rs -> {
+
+                        Row row =
+                                sheet.createRow(
+                                        rowNum.getAndIncrement()
+                                );
+
+                        int col = 0;
+
+                        // ==================================================
+                        // FIRST ERROR DATE
+                        // ==================================================
+
+                        Cell firstErrorDateCell =
+                                row.createCell(col++);
+
+                        if (rs.getDate(
+                                "FIRST_ERROR_DATE"
+                        ) != null) {
+
+                            firstErrorDateCell.setCellValue(
+                                    rs.getDate(
+                                            "FIRST_ERROR_DATE"
+                                    )
+                            );
+
+                            firstErrorDateCell.setCellStyle(
+                                    dateStyle
+                            );
+                        }
+
+                        // ==================================================
+                        // BRANCH CODE
+                        // ==================================================
+
+                        Cell branchCell = row.createCell(col++);
+                        branchCell.setCellValue(
+                                        ExcelExportUtil.safeString(
+                                                rs.getString(
+                                                        "BRANCH_CODE"
+                                                )
+                                        )
+                                );
+                        branchCell.setCellStyle(centerStyle);
+
+                        // ==================================================
+                        // CURRENCY
+                        // ==================================================
+
+                        Cell currencyCell = row.createCell(col++);
+                        currencyCell.setCellValue(
+                                        ExcelExportUtil.safeString(
+                                                rs.getString(
+                                                        "CURRENCY"
+                                                )
+                                        )
+                                );
+                        currencyCell.setCellStyle(centerStyle);
+
+                        // ==================================================
+                        // CGL
+                        // ==================================================
+
+                        Cell cglCell = row.createCell(col++);
+                        cglCell.setCellValue(
+                                        ExcelExportUtil.safeString(
+                                                rs.getString(
+                                                        "CGL"
+                                                )
+                                        )
+                                );
+                        cglCell.setCellStyle(centerStyle);
+
+                        // ==================================================
+                        // CBS BALANCE
+                        // ==================================================
+
+                        BigDecimal cbsBalance =
+                                rs.getBigDecimal(
+                                        "CBS_BALANCE"
+                                );
+
+                        Cell cbsBalanceCell =
+                                row.createCell(col++);
+
+                        if (cbsBalance != null) {
+
+                            cbsBalanceCell.setCellValue(
+                                    cbsBalance.doubleValue()
+                            );
+
+                            cbsBalanceCell.setCellStyle(
+                                    amountStyle
+                            );
+                        }
+
+                        // ==================================================
+                        // GL BALANCE
+                        // ==================================================
+
+                        BigDecimal glBalance =
+                                rs.getBigDecimal(
+                                        "GL_BALANCE"
+                                );
+
+                        Cell glBalanceCell =
+                                row.createCell(col++);
+
+                        if (glBalance != null) {
+
+                            glBalanceCell.setCellValue(
+                                    glBalance.doubleValue()
+                            );
+
+                            glBalanceCell.setCellStyle(
+                                    amountStyle
+                            );
+                        }
+
+                        // ==================================================
+                        // DIFFERENCE AMOUNT
+                        // ==================================================
+
+                        BigDecimal differenceAmount =
+                                rs.getBigDecimal(
+                                        "DIFFERENCE_AMOUNT"
+                                );
+
+                        Cell differenceCell =
+                                row.createCell(col++);
+
+                        if (differenceAmount != null) {
+
+                            differenceCell.setCellValue(
+                                    differenceAmount.doubleValue()
+                            );
+
+                            differenceCell.setCellStyle(
+                                    amountStyle
+                            );
+                        }
+
+                        // ==================================================
+                        // DIFFERENCE BETWEEN YESTERDAY
+                        // ==================================================
+
+                        BigDecimal diffBwYesterday =
+                                rs.getBigDecimal(
+                                        "DIFF_BW_YESTERDAY"
+                                );
+
+                        Cell yesterdayDiffCell =
+                                row.createCell(col++);
+
+                        if (diffBwYesterday != null) {
+
+                            yesterdayDiffCell.setCellValue(
+                                    diffBwYesterday.doubleValue()
+                            );
+
+                            yesterdayDiffCell.setCellStyle(
+                                    amountStyle
+                            );
+                        }
+
+                        // ==================================================
+                        // TYPE
+                        // ==================================================
+
+                        Cell typeCell =
+                                row.createCell(col++);
+
+                        typeCell.setCellValue(
+                                ExcelExportUtil.safeString(
+                                        rs.getString("TYPE")
+                                )
+                        );
+
+                        typeCell.setCellStyle(
+                                centerStyle
+                        );
+
+                        // ==================================================
+                        // HEAD
+                        // ==================================================
+
+                        Cell headCell = row.createCell(col++);
+                        headCell.setCellValue(
+                                        ExcelExportUtil.safeString(
+                                                rs.getString("HEAD")
+                                        )
+                                );
+                        headCell.setCellStyle(centerStyle);
+
+                        // ==================================================
+                        // FLUSH STREAMING ROWS
+                        // ==================================================
+
+                        ExcelExportUtil.flushIfNeeded(
+                                sheet,
+                                rowNum.get()
+                        );
+                    }
+            );
+
+            // ==================================================
+            // COLUMN WIDTHS
+            // ==================================================
+
+            sheet.setColumnWidth(0, 5000);  // First Error Date
+            sheet.setColumnWidth(1, 5000);  // Branch Code
+            sheet.setColumnWidth(2, 4000);  // Currency
+            sheet.setColumnWidth(3, 5000);  // CGL
+            sheet.setColumnWidth(4, 6000);  // CBS Balance
+            sheet.setColumnWidth(5, 6000);  // GL Balance
+            sheet.setColumnWidth(6, 7000);  // Difference Amount
+            sheet.setColumnWidth(7, 8000);  // Yesterday Difference
+            sheet.setColumnWidth(8, 5000);  // Type
+            sheet.setColumnWidth(9, 6000);  // Head
+
+            // ==================================================
+            // WRITE EXCEL
+            // ==================================================
+
+            workbook.write(out);
+
+            byte[] bytes =
+                    out.toByteArray();
+
+            // ==================================================
+            // MY DOWNLOADS
+            // ==================================================
+
+            MyDownloadsRequestDTO downloadRequest =
+                    new MyDownloadsRequestDTO();
+
+            downloadRequest.setUserId(userId);
+
+            // Required filename:
+            // Balance_Compare_Difference_(GLCC VALUE).xlsx
+            //
+            // Example:
+            // Balance_Compare_Difference_123456.xlsx
+
+            String fileName = displayFileName + ".xlsx";
+                //     "Balance_Compare_Difference_"
+                //             // + request.getBranchCode()
+                //             // + request.getCurrency()
+                //             // + request.getCgl()
+                //             + formatter.format(reconRunDate)
+                //             + ".xlsx";
+
+            downloadRequest.setFileName(
+                    fileName
+            );
+
+            // ==================================================
+            // MENU ID
+            // ==================================================
+
+            // IMPORTANT:
+            // Replace 52 with the actual Difference menu ID
+            // if your Difference screen uses another menu ID.
+
+            downloadRequest.setMenuId(52);
+
+            // ==================================================
+            // SEARCH CRITERIA
+            // ==================================================
+
+        //     String searchCriteria =
+        //             "{"
+        //                     + "\"reconRunDate\":\""
+        //                     + formatter.format(reconRunDate)
+        //                     + "\","
+        //                     + "\"branchCode\":\""
+        //                     + ExcelExportUtil.safeString(
+        //                             request.getBranchCode()
+        //                     )
+        //                     + "\","
+        //                     + "\"currency\":\""
+        //                     + ExcelExportUtil.safeString(
+        //                             request.getCurrency()
+        //                     )
+        //                     + "\","
+        //                     + "\"cgl\":\""
+        //                     + ExcelExportUtil.safeString(
+        //                             request.getCgl()
+        //                     )
+        //                     + "\""
+        //                     + "}";
+
+
+            
+            String searchCriteria;
+
+                if (isDateWise) {
+
+                searchCriteria =
+                        "{"
+                                + "\"reconRunDate\":\""
+                                + formatter.format(fromDate)
+                                + "\","
+                                + "\"branchCode\":\""
+                                + ExcelExportUtil.safeString(branchCode)
+                                + "\","
+                                + "\"currency\":\""
+                                + ExcelExportUtil.safeString(currency)
+                                + "\","
+                                + "\"cgl\":\""
+                                + ExcelExportUtil.safeString(cgl)
+                                + "\""
+                                + "}";
+
+                } else {
+
+                searchCriteria =
+                        "{"
+                                + "\"fromDate\":\""
+                                + formatter.format(fromDate)
+                                + "\","
+                                + "\"toDate\":\""
+                                + formatter.format(toDate)
+                                + "\","
+                                + "\"branchCode\":\""
+                                + ExcelExportUtil.safeString(branchCode)
+                                + "\","
+                                + "\"currency\":\""
+                                + ExcelExportUtil.safeString(currency)
+                                + "\","
+                                + "\"cgl\":\""
+                                + ExcelExportUtil.safeString(cgl)
+                                + "\""
+                                + "}";
+                }
+            downloadRequest.setSearchCriteria(
+                    searchCriteria
+            );
+
+            downloadRequest.setResultData(
+                    bytes
+            );
+
+            myDownloadsService.insertRequest(
+                    downloadRequest
+            );
+
+            return bytes;
+
+        } catch (IOException e) {
+
+            throw new ExportGenerationException(
+                    "Failed to generate Balance Compare Difference export",
+                    e
+            );
+        }
+    }
+}
