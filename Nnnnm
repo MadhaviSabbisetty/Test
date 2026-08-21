@@ -1,6 +1,69 @@
-{
-    "LocalDatetime": "2026-08-21T15:45:14.632421",
-    "data": null,
-    "message": "An internal server error occurred.",
-    "status": "500 INTERNAL_SERVER_ERROR"
+@PostMapping("/export")
+public ResponseEntity<byte[]> exportBalance(
+        @RequestHeader("Authorization") String token,
+        @RequestBody JsonNode request) throws Exception {
+
+    String userId = jwtUtil.getUserIdFromToken(token);
+
+    byte[] bytes;
+    String fileName;
+
+    if (request.has("reconRunDate")) {
+
+        DifferenceDTO differenceRequest =
+                objectMapper.treeToValue(
+                        request,
+                        DifferenceDTO.class
+                );
+
+        bytes = service.exportBalanceCompareToExcel(
+                differenceRequest,
+                userId
+        );
+
+        fileName =
+                "Balance_Compare_Difference_"
+                        + differenceRequest.getReconRunDate()
+                        + ".xlsx";
+
+    } else if (
+            request.has("fromDate")
+                    && request.has("toDate")) {
+
+        DifferenceSearchDto searchRequest =
+                objectMapper.treeToValue(
+                        request,
+                        DifferenceSearchDto.class
+                );
+
+        bytes = service.exportBalanceCompareToExcel(
+                searchRequest,
+                userId
+        );
+
+        fileName =
+                "Balance_Compare_Difference_"
+                        + searchRequest.getFromDate()
+                        + "_to_"
+                        + searchRequest.getToDate()
+                        + ".xlsx";
+
+    } else {
+
+        throw new IllegalArgumentException(
+                "Invalid export request"
+        );
+    }
+
+    return ResponseEntity.ok()
+            .header(
+                    HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"" + fileName + "\""
+            )
+            .contentType(
+                    MediaType.parseMediaType(
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+            )
+            .body(bytes);
 }
