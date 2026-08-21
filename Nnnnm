@@ -1,282 +1,892 @@
-package com.fincore.enquiry_service.controller;
+package com.fincore.enquiry_service.service.export;
 
-// import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.WebDataBinder;
-import org.springframework.web.bind.annotation.*;
-
-import com.fincore.enquiry_service.dto.ApiResponse;
 import com.fincore.enquiry_service.dto.DifferenceDTO;
-import com.fincore.enquiry_service.dto.DifferenceHistoryDTO;
 import com.fincore.enquiry_service.dto.DifferenceSearchDto;
-import com.fincore.enquiry_service.dto.GlccRequestBodyDto;
-import com.fincore.enquiry_service.service.DifferenceService;
+import com.fincore.enquiry_service.dto.MyDownloadsRequestDTO;
+import com.fincore.enquiry_service.exception.ExportGenerationException;
+import com.fincore.enquiry_service.service.MyDownloadsService;
+import com.fincore.enquiry_service.service.utils.BaseStreamingExcelExporter;
+import com.fincore.enquiry_service.service.utils.ExcelExportUtil;
+import com.fincore.enquiry_service.service.utils.ExcelStyleUtil;
 
-import jakarta.validation.Valid;
-
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import com.fincore.commonutilities.jwt.JwtUtil;
 import lombok.RequiredArgsConstructor;
-
-import java.time.format.DateTimeFormatter;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import lombok.extern.slf4j.Slf4j;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.CreationHelper;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.xssf.streaming.SXSSFSheet;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.sql.Date;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
-@RestController
+@Service
 @RequiredArgsConstructor
-@RequestMapping("/api/differences")
-public class DifferenceController {
+public class BalanceCompareStreamingExportService extends BaseStreamingExcelExporter {
 
-    // @Autowired
-    private final DifferenceService service;
-    private final JwtUtil jwtUtil;
-    // private final ObjectMapper objectMapper;
+    private final JdbcTemplate jdbcTemplate;
+    private final MyDownloadsService myDownloadsService;
+
+    public byte[] export(Object request, String userId) {
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+        DifferenceDTO differenceRequest = null;
+        DifferenceSearchDto searchRequest = null;
+
+        boolean isDateWise = request instanceof DifferenceDTO;
+
+        LocalDate fromDate;
+        LocalDate toDate;
+        String branchCode;
+        String currency;
+        String cgl;
+
+        if(isDateWise){
+                differenceRequest = (DifferenceDTO) request;
+                fromDate = differenceRequest.getReconRunDate();
+                toDate = differenceRequest.getReconRunDate();
+                branchCode = differenceRequest.getBranchCode();
+                currency = differenceRequest.getCurrency();
+                cgl = differenceRequest.getCgl();
+        }
+        else{
+              searchRequest = (DifferenceSearchDto) request;
+                fromDate = searchRequest.getFromDate();
+                toDate = searchRequest.getToDate();
+                branchCode = searchRequest.getBranchCode();
+                currency = searchRequest.getCurrency();
+                cgl = searchRequest.getCgl();
+        }  
+        if (fromDate == null || toDate == null) {
+            throw new IllegalArgumentException("Date is required for Difference export");
+        }
+        
+        try (
+                SXSSFWorkbook workbook = new SXSSFWorkbook(100);
+                ByteArrayOutputStream out = new ByteArrayOutputStream()
+        ) {
+
+            workbook.setCompressTempFiles(true);
+
+            String sheetName = "Bal_Comp_Diff_"+formatter.format(fromDate);
+            if(!isDateWise){
+                sheetName += "_to_"+ formatter.format(toDate);
+            }
+
+            SXSSFSheet sheet = workbook.createSheet(sheetName);
+
+            // ==================================================
+            // STYLES
+            // ==================================================
+
+            CellStyle headerStyle = ExcelStyleUtil.createHeaderStyle(workbook);
+
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+
+            CellStyle titleStyle = ExcelStyleUtil.createTitleStyle(workbook);
+
+            CellStyle amountStyle = ExcelStyleUtil.createAmountStyle(workbook);
+
+            CreationHelper creationHelper = workbook.getCreationHelper();
+
+            CellStyle dateStyle = workbook.createCellStyle();
+
+            dateStyle.setDataFormat(
+                    creationHelper
+                            .createDataFormat()
+                            .getFormat("dd-MM-yyyy")
+            );
+
+            CellStyle centerStyle =
+                    workbook.createCellStyle();
+
+            centerStyle.setAlignment(
+                    HorizontalAlignment.CENTER
+            );
+
+            AtomicInteger rowNum =
+                    new AtomicInteger(0);
+
+            // ==================================================
+            // TITLE
+            // ==================================================
+
+            Row titleRow =
+                    sheet.createRow(rowNum.getAndIncrement());
+        
+            String displayFileName = "Balance_Compare_Difference_"+formatter.format(fromDate);
+             if(!isDateWise){
+                displayFileName += "_to_"+ formatter.format(toDate);
+            }
+
+            Cell titleCell = titleRow.createCell(0);
+
+            titleCell.setCellValue(displayFileName);
+
+            titleStyle.setAlignment(HorizontalAlignment.CENTER);
+
+            titleCell.setCellStyle(titleStyle);
+
+            sheet.addMergedRegion(
+                    new CellRangeAddress(
+                            0,
+                            0,
+                            0,
+                            9
+                    )
+            );
+
+            // Blank row
+            rowNum.incrementAndGet();
+
+            // ==================================================
+            // SUMMARY HEADER
+            // ==================================================
+
+            Row summaryHeader =
+                    sheet.createRow(rowNum.getAndIncrement());
+
+            String[] summaryHeaders;
+            if(isDateWise){
+            summaryHeaders = new String[] {
+                    "Recon Run Date",
+                    "Branch Code",
+                    "Currency",
+                    "CGL"
+                };
+            }
+            else{
+                summaryHeaders = new String[] {
+                    "From Date",
+                    "To Date",
+                    "Branch Code",
+                    "Currency",
+                    "CGL"
+                };
+            }
+
+
+            int summaryStartColumn = 3;
+
+            for (int i = 0;
+                 i < summaryHeaders.length;
+                 i++) {
+
+                Cell cell =
+                        summaryHeader.createCell(summaryStartColumn + i);
+
+                cell.setCellValue(
+                        summaryHeaders[i]
+                );
+
+                cell.setCellStyle(headerStyle);
+            }
+
+            // ==================================================
+            // SUMMARY VALUES
+            // ==================================================
+
+            Row summaryRow =
+                    sheet.createRow(rowNum.getAndIncrement());
+            if (isDateWise) {
+
+                Cell dateCell =
+                        summaryRow.createCell(0);
+        
+                dateCell.setCellValue(
+                        Date.valueOf(fromDate)
+                );
+        
+                dateCell.setCellStyle(dateStyle);
+        
+                Cell branchCell =
+                        summaryRow.createCell(1);
+        
+                branchCell.setCellValue(
+                        ExcelExportUtil.safeString(branchCode)
+                );
+        
+                branchCell.setCellStyle(centerStyle);
+        
+                Cell currencyCell =
+                        summaryRow.createCell(2);
+        
+                currencyCell.setCellValue(
+                        ExcelExportUtil.safeString(currency)
+                );
+        
+                currencyCell.setCellStyle(centerStyle);
+        
+                Cell cglCell =
+                        summaryRow.createCell(3);
+        
+                cglCell.setCellValue(
+                        ExcelExportUtil.safeString(cgl)
+                );
+        
+                cglCell.setCellStyle(centerStyle);
+        
+                } else {
+        
+                Cell fromDateCell =
+                        summaryRow.createCell(0);
+        
+                fromDateCell.setCellValue(
+                        Date.valueOf(fromDate)
+                );
+        
+                fromDateCell.setCellStyle(dateStyle);
+        
+                Cell toDateCell =
+                        summaryRow.createCell(1);
+        
+                toDateCell.setCellValue(
+                        Date.valueOf(toDate)
+                );
+        
+                toDateCell.setCellStyle(dateStyle);
+        
+                Cell branchCell =
+                        summaryRow.createCell(2);
+        
+                branchCell.setCellValue(
+                        ExcelExportUtil.safeString(branchCode)
+                );
+        
+                branchCell.setCellStyle(centerStyle);
+        
+                Cell currencyCell =
+                        summaryRow.createCell(3);
+        
+                currencyCell.setCellValue(
+                        ExcelExportUtil.safeString(currency)
+                );
+        
+                currencyCell.setCellStyle(centerStyle);
+        
+                Cell cglCell =
+                        summaryRow.createCell(4);
+        
+                cglCell.setCellValue(
+                        ExcelExportUtil.safeString(cgl)
+                );
+        
+                cglCell.setCellStyle(centerStyle);
+            }
+            
+
+        //     // Recon Run Date
+        //     Cell reconDateCell =
+        //             summaryRow.createCell(summaryStartColumn);
+
+        //     reconDateCell.setCellValue(
+        //             java.sql.Date.valueOf(reconRunDate)
+        //     );
+
+        //     reconDateCell.setCellStyle(dateStyle);
+
+        //     // Branch
+        //     Cell summaryBranchCell =
+        //             summaryRow.createCell(
+        //                     summaryStartColumn + 1
+        //             );
     
-    // --- SECURITY FIX: Explicitly disallow mass assignment on sensitive internal fields ---
-    @InitBinder
-    public void initBinder(WebDataBinder binder) {
-        binder.setDisallowedFields("class.*", "Class.*", "*.class.*", "*.Class.*", "classLoader.*");
-    }
+        //     summaryBranchCell.setCellValue(
+        //             ExcelExportUtil.safeString(
+        //                     request.getBranchCode()
+        //             )
+        //     );
+    
+        //     summaryBranchCell.setCellStyle(
+        //             centerStyle
+        //     );
+    
+    
+        //     // Currency
+        //     Cell summaryCurrencyCell =
+        //             summaryRow.createCell(
+        //                     summaryStartColumn + 2
+        //             );
+    
+        //     summaryCurrencyCell.setCellValue(
+        //             ExcelExportUtil.safeString(
+        //                     request.getCurrency()
+        //             )
+        //     );
+    
+        //     summaryCurrencyCell.setCellStyle(
+        //             centerStyle
+        //     );
+    
+    
+        //     // CGL
+        //     Cell summaryCglCell =
+        //             summaryRow.createCell(
+        //                     summaryStartColumn + 3
+        //             );
+    
+        //     summaryCglCell.setCellValue(
+        //             ExcelExportUtil.safeString(
+        //                     request.getCgl()
+        //             )
+        //     );
+    
+        //     summaryCglCell.setCellStyle(
+        //             centerStyle
+        //     );
+    
+            // Blank row
+            rowNum.incrementAndGet();
 
-    // GET All with ApiResponse
-    @GetMapping
-    public ResponseEntity<ApiResponse<Page<DifferenceDTO>>> getDifferences(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "100") int size) {
-        Page<DifferenceDTO> result = service.getAllDifferences(page, size);
-        return ResponseEntity.ok(ApiResponse.success(result, "Differences retrieved successfully"));
-    }
+            // ==================================================
+            // MAIN HEADER
+            // ==================================================
 
-    // POST Search with ApiResponse
-    @PostMapping("/search")
-    public ResponseEntity<ApiResponse<Page<DifferenceDTO>>> searchDifferences(
-            @Valid @RequestBody DifferenceSearchDto criteria,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "100") int size) {
+            String[] columns = {
 
-        Page<DifferenceDTO> result = service.searchDifferences(criteria, page, size);
+                    "First Error Date",
 
-        if (result.isEmpty()) {
-            return ResponseEntity.ok(ApiResponse.error("No differences found for the given criteria"));
-        }
+                    "Branch Code",
 
-        return ResponseEntity.ok(ApiResponse.success(result, "Differences retrieved successfully"));
-    }
+                    "Currency",
 
-    // GET History for a specific GLCC lifecycle
-    @PostMapping("/history")
-    public ResponseEntity<ApiResponse<Page<DifferenceHistoryDTO>>> getGlccHistory(
-            @RequestBody GlccRequestBodyDto dto,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "100") int size) {
+                    "CGL",
 
-        Page<DifferenceHistoryDTO> result = service.getGlccHistory(dto.getBranchCode(), dto.getCgl(), page, size);
+                    "CBS Balance",
 
-        if (result.isEmpty()) {
-            return ResponseEntity.ok(ApiResponse.error("No historical records found for the provided Branch and CGL"));
-        }
+                    "GL Balance",
 
-        return ResponseEntity.ok(ApiResponse.success(result, "GLCC History retrieved successfully"));
-    }
+                    "Difference Amount",
 
+                    "Difference Between Yesterday",
 
-    // @PostMapping("/export")
-    // public ResponseEntity<byte[]> exportBalance(
-    //         @RequestHeader("Authorization") String token,
-    //         @RequestBody DifferenceDTO request) {
-    //         String userId = jwtUtil.getUserIdFromToken(token);
-    //         byte[] bytes = service.exportBalanceCompareToExcel(
-    //                 request,
-    //                 userId);
-    //         return ResponseEntity.ok()
-    //                 .header(
-    //                         HttpHeaders.CONTENT_DISPOSITION,
-    //                         "attachment; filename=Balance_Compare_Difference_"+request.getReconRunDate().format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy"))+".xlsx")
-    //                 .contentType(
-    //                         MediaType.parseMediaType(
-    //                                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-    //                 .body(bytes);
-    // }
+                    "Type",
 
+                    "Head"
+            };
 
-    // @PostMapping("/export")
-    // public ResponseEntity<byte[]> exportBalance(
-    //         @RequestHeader("Authorization") String token,
-    //         @RequestBody JsonNode request) throws JsonProcessingException {
-    //         String userId = jwtUtil.getUserIdFromToken(token);
-    //         ObjectMapper objectMapper = new ObjectMapper();
-    //         objectMapper.registerModule(new JavaTimeModule());
-    //         byte[] bytes;
-    //         String fileName;
-    //         if(request.has("reconRunDate")){
-    //             DifferenceDTO differenceRequest = objectMapper.treeToValue(request, DifferenceDTO.class);
-
-    //             bytes = service.exportBalanceCompareToExcel(
-    //                 differenceRequest,
-    //                 userId);
-    //             fileName = "Balance_Compare_Difference_"+differenceRequest.getReconRunDate()+".xlsx";
-    //         }
-
-    //     else if (request.has("fromDate") && request.has("toDate")){
-    //         DifferenceSearchDto searchRequest = objectMapper.treeToValue(request, DifferenceSearchDto.class);
-
-    //             bytes = service.exportBalanceCompareToExcel(
-    //                 searchRequest,
-    //                 userId);
-    //             fileName = "Balance_Compare_Difference_"+searchRequest.getFromDate()+"_to_"+searchRequest.getToDate()+".xlsx";
-    //     }
-
-    //     else{
-    //         log.info("Invalid export request");
-    //         throw new IllegalArgumentException("Invalid export request");
-    //     }
-             
-    //         return ResponseEntity.ok()
-    //                 .header(
-    //                         HttpHeaders.CONTENT_DISPOSITION,
-    //                         "attachment; filename="+fileName)
-    //                 .contentType(
-    //                         MediaType.parseMediaType(
-    //                                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-    //                 .body(bytes);
-    // }
-
-
-
-    @PostMapping("/export")
-    public ResponseEntity<byte[]> exportBalance(
-            @RequestHeader("Authorization") String token,
-            @RequestBody JsonNode request) throws Exception {
-
-        String userId = jwtUtil.getUserIdFromToken(token);
-
-        byte[] bytes;
-        String fileName;
-
-        if (request.has("reconRunDate")) {
-
-            DifferenceDTO differenceRequest =
-                    objectMapper.treeToValue(
-                            request,
-                            DifferenceDTO.class
+            Row headerRow =
+                    sheet.createRow(
+                            rowNum.getAndIncrement()
                     );
 
-            bytes = service.exportBalanceCompareToExcel(
-                    differenceRequest,
-                    userId
+            for (int i = 0;
+                 i < columns.length;
+                 i++) {
+
+                Cell cell =
+                        headerRow.createCell(i);
+
+                cell.setCellValue(columns[i]);
+
+                cell.setCellStyle(headerStyle);
+            }
+
+            // ==================================================
+            // SQL
+            // ==================================================
+
+        //     String sql = """
+        //             SELECT
+        //                 d.RECON_RUN_DATE,
+        //                 d.BRANCH_CODE,
+        //                 d.CURRENCY,
+        //                 d.CGL,
+        //                 d.CBS_BALANCE,
+        //                 d.GL_BALANCE,
+        //                 d.DIFFERENCE_AMOUNT,
+        //                 d.DIFF_BW_YESTERDAY,
+        //                 d.TYPE,
+        //                 d.HEAD,
+        //                 d.FIRST_ERROR_DATE
+        //             FROM DIFFERENCE d
+        //             WHERE d.RECON_RUN_DATE = ?
+        //               AND d.BRANCH_CODE = ?
+        //               AND d.CURRENCY = ?
+        //               AND d.CGL = ?
+        //             ORDER BY d.RECON_RUN_DATE
+        //             """;
+
+            String sql;
+
+            if (isDateWise) {
+    
+            sql = """
+                    SELECT
+                            d.FIRST_ERROR_DATE,
+                            d.BRANCH_CODE,
+                            d.CURRENCY,
+                            d.CGL,
+                            d.CBS_BALANCE,
+                            d.GL_BALANCE,
+                            d.DIFFERENCE_AMOUNT,
+                            d.DIFF_BW_YESTERDAY,
+                            d.TYPE,
+                            d.HEAD
+                    FROM DIFFERENCE d
+                    WHERE d.RECON_RUN_DATE = ?
+                    AND d.BRANCH_CODE = ?
+                    AND d.CURRENCY = ?
+                    AND d.CGL = ?
+                    ORDER BY d.RECON_RUN_DATE
+                    """;
+    
+            } else {
+    
+            sql = """
+                    SELECT
+                            d.FIRST_ERROR_DATE,
+                            d.BRANCH_CODE,
+                            d.CURRENCY,
+                            d.CGL,
+                            d.CBS_BALANCE,
+                            d.GL_BALANCE,
+                            d.DIFFERENCE_AMOUNT,
+                            d.DIFF_BW_YESTERDAY,
+                            d.TYPE,
+                            d.HEAD
+                    FROM DIFFERENCE d
+                    WHERE d.RECON_RUN_DATE BETWEEN ?
+                    AND ?
+                    AND d.BRANCH_CODE = ?
+                    AND d.CURRENCY = ?
+                    AND d.CGL = ?
+                    ORDER BY d.RECON_RUN_DATE
+                    """;
+            }
+
+
+            jdbcTemplate.setFetchSize(20000);
+
+            jdbcTemplate.query(
+                    connection -> {
+
+                        var ps =
+                                connection.prepareStatement(sql);
+
+                        ps.setFetchSize(20000);
+
+                        // ps.setDate(
+                        //         1,
+                        //         Date.valueOf(reconRunDate)
+                        // );
+
+                        // ps.setString(
+                        //         2,
+                        //         request.getBranchCode()
+                        // );
+
+                        // ps.setString(
+                        //         3,
+                        //         request.getCurrency()
+                        // );
+
+                        // ps.setString(
+                        //         4,
+                        //         request.getCgl()
+                        // );
+
+                        if (isDateWise) {
+
+                                ps.setDate(
+                                        1,
+                                        Date.valueOf(fromDate)
+                                );
+
+                                ps.setString(2, branchCode);
+                                ps.setString(3, currency);
+                                ps.setString(4, cgl);
+
+                                } else {
+
+                                ps.setDate(
+                                        1,
+                                        Date.valueOf(fromDate)
+                                );
+
+                                ps.setDate(
+                                        2,
+                                        Date.valueOf(toDate)
+                                );
+
+                                ps.setString(3, branchCode);
+                                ps.setString(4, currency);
+                                ps.setString(5, cgl);
+                        }
+
+
+                        return ps;
+                    },
+
+                    rs -> {
+
+                        Row row =
+                                sheet.createRow(
+                                        rowNum.getAndIncrement()
+                                );
+
+                        int col = 0;
+
+                        // ==================================================
+                        // FIRST ERROR DATE
+                        // ==================================================
+
+                        Cell firstErrorDateCell =
+                                row.createCell(col++);
+
+                        if (rs.getDate(
+                                "FIRST_ERROR_DATE"
+                        ) != null) {
+
+                            firstErrorDateCell.setCellValue(
+                                    rs.getDate(
+                                            "FIRST_ERROR_DATE"
+                                    )
+                            );
+
+                            firstErrorDateCell.setCellStyle(
+                                    dateStyle
+                            );
+                        }
+
+                        // ==================================================
+                        // BRANCH CODE
+                        // ==================================================
+
+                        Cell branchCell = row.createCell(col++);
+                        branchCell.setCellValue(
+                                        ExcelExportUtil.safeString(
+                                                rs.getString(
+                                                        "BRANCH_CODE"
+                                                )
+                                        )
+                                );
+                        branchCell.setCellStyle(centerStyle);
+
+                        // ==================================================
+                        // CURRENCY
+                        // ==================================================
+
+                        Cell currencyCell = row.createCell(col++);
+                        currencyCell.setCellValue(
+                                        ExcelExportUtil.safeString(
+                                                rs.getString(
+                                                        "CURRENCY"
+                                                )
+                                        )
+                                );
+                        currencyCell.setCellStyle(centerStyle);
+
+                        // ==================================================
+                        // CGL
+                        // ==================================================
+
+                        Cell cglCell = row.createCell(col++);
+                        cglCell.setCellValue(
+                                        ExcelExportUtil.safeString(
+                                                rs.getString(
+                                                        "CGL"
+                                                )
+                                        )
+                                );
+                        cglCell.setCellStyle(centerStyle);
+
+                        // ==================================================
+                        // CBS BALANCE
+                        // ==================================================
+
+                        BigDecimal cbsBalance =
+                                rs.getBigDecimal(
+                                        "CBS_BALANCE"
+                                );
+
+                        Cell cbsBalanceCell =
+                                row.createCell(col++);
+
+                        if (cbsBalance != null) {
+
+                            cbsBalanceCell.setCellValue(
+                                    cbsBalance.doubleValue()
+                            );
+
+                            cbsBalanceCell.setCellStyle(
+                                    amountStyle
+                            );
+                        }
+
+                        // ==================================================
+                        // GL BALANCE
+                        // ==================================================
+
+                        BigDecimal glBalance =
+                                rs.getBigDecimal(
+                                        "GL_BALANCE"
+                                );
+
+                        Cell glBalanceCell =
+                                row.createCell(col++);
+
+                        if (glBalance != null) {
+
+                            glBalanceCell.setCellValue(
+                                    glBalance.doubleValue()
+                            );
+
+                            glBalanceCell.setCellStyle(
+                                    amountStyle
+                            );
+                        }
+
+                        // ==================================================
+                        // DIFFERENCE AMOUNT
+                        // ==================================================
+
+                        BigDecimal differenceAmount =
+                                rs.getBigDecimal(
+                                        "DIFFERENCE_AMOUNT"
+                                );
+
+                        Cell differenceCell =
+                                row.createCell(col++);
+
+                        if (differenceAmount != null) {
+
+                            differenceCell.setCellValue(
+                                    differenceAmount.doubleValue()
+                            );
+
+                            differenceCell.setCellStyle(
+                                    amountStyle
+                            );
+                        }
+
+                        // ==================================================
+                        // DIFFERENCE BETWEEN YESTERDAY
+                        // ==================================================
+
+                        BigDecimal diffBwYesterday =
+                                rs.getBigDecimal(
+                                        "DIFF_BW_YESTERDAY"
+                                );
+
+                        Cell yesterdayDiffCell =
+                                row.createCell(col++);
+
+                        if (diffBwYesterday != null) {
+
+                            yesterdayDiffCell.setCellValue(
+                                    diffBwYesterday.doubleValue()
+                            );
+
+                            yesterdayDiffCell.setCellStyle(
+                                    amountStyle
+                            );
+                        }
+
+                        // ==================================================
+                        // TYPE
+                        // ==================================================
+
+                        Cell typeCell =
+                                row.createCell(col++);
+
+                        typeCell.setCellValue(
+                                ExcelExportUtil.safeString(
+                                        rs.getString("TYPE")
+                                )
+                        );
+
+                        typeCell.setCellStyle(
+                                centerStyle
+                        );
+
+                        // ==================================================
+                        // HEAD
+                        // ==================================================
+
+                        Cell headCell = row.createCell(col++);
+                        headCell.setCellValue(
+                                        ExcelExportUtil.safeString(
+                                                rs.getString("HEAD")
+                                        )
+                                );
+                        headCell.setCellStyle(centerStyle);
+
+                        // ==================================================
+                        // FLUSH STREAMING ROWS
+                        // ==================================================
+
+                        ExcelExportUtil.flushIfNeeded(
+                                sheet,
+                                rowNum.get()
+                        );
+                    }
             );
 
-            fileName =
-                    "Balance_Compare_Difference_"
-                            + differenceRequest.getReconRunDate()
-                            + ".xlsx";
+            // ==================================================
+            // COLUMN WIDTHS
+            // ==================================================
 
-        } else if (
-                request.has("fromDate")
-                        && request.has("toDate")) {
+            sheet.setColumnWidth(0, 5000);  // First Error Date
+            sheet.setColumnWidth(1, 5000);  // Branch Code
+            sheet.setColumnWidth(2, 4000);  // Currency
+            sheet.setColumnWidth(3, 5000);  // CGL
+            sheet.setColumnWidth(4, 6000);  // CBS Balance
+            sheet.setColumnWidth(5, 6000);  // GL Balance
+            sheet.setColumnWidth(6, 7000);  // Difference Amount
+            sheet.setColumnWidth(7, 8000);  // Yesterday Difference
+            sheet.setColumnWidth(8, 5000);  // Type
+            sheet.setColumnWidth(9, 6000);  // Head
 
-            DifferenceSearchDto searchRequest =
-                    objectMapper.treeToValue(
-                            request,
-                            DifferenceSearchDto.class
-                    );
+            // ==================================================
+            // WRITE EXCEL
+            // ==================================================
 
-            bytes = service.exportBalanceCompareToExcel(
-                    searchRequest,
-                    userId
+            workbook.write(out);
+
+            byte[] bytes =
+                    out.toByteArray();
+
+            // ==================================================
+            // MY DOWNLOADS
+            // ==================================================
+
+            MyDownloadsRequestDTO downloadRequest =
+                    new MyDownloadsRequestDTO();
+
+            downloadRequest.setUserId(userId);
+
+            // Required filename:
+            // Balance_Compare_Difference_(GLCC VALUE).xlsx
+            //
+            // Example:
+            // Balance_Compare_Difference_123456.xlsx
+
+            String fileName = displayFileName + ".xlsx";
+                //     "Balance_Compare_Difference_"
+                //             // + request.getBranchCode()
+                //             // + request.getCurrency()
+                //             // + request.getCgl()
+                //             + formatter.format(reconRunDate)
+                //             + ".xlsx";
+
+            downloadRequest.setFileName(
+                    fileName
             );
 
-            fileName =
-                    "Balance_Compare_Difference_"
-                            + searchRequest.getFromDate()
-                            + "_to_"
-                            + searchRequest.getToDate()
-                            + ".xlsx";
+            // ==================================================
+            // MENU ID
+            // ==================================================
 
-        } else {
+            // IMPORTANT:
+            // Replace 52 with the actual Difference menu ID
+            // if your Difference screen uses another menu ID.
 
-            throw new IllegalArgumentException(
-                    "Invalid export request"
+            downloadRequest.setMenuId(52);
+
+            // ==================================================
+            // SEARCH CRITERIA
+            // ==================================================
+
+        //     String searchCriteria =
+        //             "{"
+        //                     + "\"reconRunDate\":\""
+        //                     + formatter.format(reconRunDate)
+        //                     + "\","
+        //                     + "\"branchCode\":\""
+        //                     + ExcelExportUtil.safeString(
+        //                             request.getBranchCode()
+        //                     )
+        //                     + "\","
+        //                     + "\"currency\":\""
+        //                     + ExcelExportUtil.safeString(
+        //                             request.getCurrency()
+        //                     )
+        //                     + "\","
+        //                     + "\"cgl\":\""
+        //                     + ExcelExportUtil.safeString(
+        //                             request.getCgl()
+        //                     )
+        //                     + "\""
+        //                     + "}";
+
+
+            
+            String searchCriteria;
+
+                if (isDateWise) {
+
+                searchCriteria =
+                        "{"
+                                + "\"reconRunDate\":\""
+                                + formatter.format(fromDate)
+                                + "\","
+                                + "\"branchCode\":\""
+                                + ExcelExportUtil.safeString(branchCode)
+                                + "\","
+                                + "\"currency\":\""
+                                + ExcelExportUtil.safeString(currency)
+                                + "\","
+                                + "\"cgl\":\""
+                                + ExcelExportUtil.safeString(cgl)
+                                + "\""
+                                + "}";
+
+                } else {
+
+                searchCriteria =
+                        "{"
+                                + "\"fromDate\":\""
+                                + formatter.format(fromDate)
+                                + "\","
+                                + "\"toDate\":\""
+                                + formatter.format(toDate)
+                                + "\","
+                                + "\"branchCode\":\""
+                                + ExcelExportUtil.safeString(branchCode)
+                                + "\","
+                                + "\"currency\":\""
+                                + ExcelExportUtil.safeString(currency)
+                                + "\","
+                                + "\"cgl\":\""
+                                + ExcelExportUtil.safeString(cgl)
+                                + "\""
+                                + "}";
+                }
+            downloadRequest.setSearchCriteria(
+                    searchCriteria
+            );
+
+            downloadRequest.setResultData(
+                    bytes
+            );
+
+            myDownloadsService.insertRequest(
+                    downloadRequest
+            );
+
+            return bytes;
+
+        } catch (IOException e) {
+
+            throw new ExportGenerationException(
+                    "Failed to generate Balance Compare Difference export",
+                    e
             );
         }
-
-        return ResponseEntity.ok()
-                .header(
-                        HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + fileName + "\""
-                )
-                .contentType(
-                        MediaType.parseMediaType(
-                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                )
-                .body(bytes);
     }
-}package com.fincore.enquiry_service.dto;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-import com.fasterxml.jackson.annotation.JsonFormat;
-
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class DifferenceDTO {
-    @JsonFormat(pattern = "dd-MM-yyyy")
-    private LocalDate reconRunDate;
-    private String branchCode;
-    private String currency;
-    private String cgl;
-    private BigDecimal cbsBalance;
-    private BigDecimal glBalance;
-    private BigDecimal differenceAmount;
-    private BigDecimal diffBwYesterday;
-    private String type;
-    private String head;
-    private LocalDate FIRST_ERROR_DATE;
-}package com.fincore.enquiry_service.dto;
-
-import java.time.LocalDate;
-
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class DifferenceSearchDto {
-    @NotNull(message = "fromDate is required")
-    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-    private LocalDate fromDate;
-
-    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-    private LocalDate toDate;
-
-    @Pattern(regexp = "^\\d{5}$", message = "branchCode must be exactly 5 digits (e.g., 00001)")
-    private String branchCode;
-
-    @Pattern(regexp = "^[A-Z]{3}$", message = "currency must be 3 uppercase letters (e.g., USD)")
-    private String currency;
-
-    @Pattern(regexp = "^\\d{10}$", message = "cgl must be exactly 10 digits")
-    private String cgl;
-
-    public LocalDate getEffectiveToDate() {
-        return (toDate == null) ? fromDate : toDate;
-    }
-
 }
