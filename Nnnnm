@@ -1,25 +1,27 @@
-D:\Workspace\Git\Fincore\frontend>npm run dev
+npm clean-install 
 npm warn Unknown project config "email". This will stop working in the next major version of npm.
 npm warn Unknown project config "always-auth". This will stop working in the next major version of npm.
-
-> fmui@0.0.0 dev
-> vite
-
-node:internal/modules/cjs/loader:1372
-  throw err;
-  ^
-
-Error: Cannot find module 'D:\Workspace\Git\Fincore\frontend\node_modules\vite\bin\vite.js'
-    at Module._resolveFilename (node:internal/modules/cjs/loader:1369:15)
-    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
-    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
-    at Module._load (node:internal/modules/cjs/loader:1179:37)
-    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
-    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
-    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:152:5)
-    at node:internal/main/run_main_module:33:47 {
-  code: 'MODULE_NOT_FOUND',
-  requireStack: []
-}
-
-Node.js v24.4.1
+npm error code EUSAGE
+npm error
+npm error The `npm ci` command can only install with an existing package-lock.json or
+npm error npm-shrinkwrap.json with lockfileVersion >= 1. Run an install with npm@5 or
+npm error later to generate a package-lock.json file, then try again.
+npm error
+npm error Clean install a project
+npm error
+npm error Usage:
+npm error npm ci
+npm error
+npm error Options:
+npm error [--install-strategy <hoisted|nested|shallow|linked>] [--legacy-bundling]
+npm error [--global-style] [--omit <dev|optional|peer> [--omit <dev|optional|peer> ...]]
+npm error [--include <prod|dev|optional|peer> [--include <prod|dev|optional|peer> ...]]
+npm error [--strict-peer-deps] [--foreground-scripts] [--ignore-scripts] [--no-audit]
+npm error [--no-bin-links] [--no-fund] [--dry-run]
+npm error [-w|--workspace <workspace-name> [-w|--workspace <workspace-name> ...]]
+npm error [--workspaces] [--include-workspace-root] [--install-links]
+npm error
+npm error aliases: clean-install, ic, install-clean, isntall-clean
+npm error
+npm error Run "npm help ci" for more info
+npm error A complete log of this run can be found in: C:\Users\v1023044\AppData\Local\npm-cache\_logs\2026-08-24T12_41_43_547Z-debug-0.log
