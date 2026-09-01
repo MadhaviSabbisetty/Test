@@ -1,350 +1,231 @@
-public ReportGenerationResponseDTO generateReports(ReportGenerationDTO parameters) throws IOException {
+import React,{useState,useEffect,useCallback, useMemo}from"react";
+import{Box,Paper,Typography,Stack,Autocomplete,TextField,Chip}from"@mui/material";
+import{DatePicker,LocalizationProvider}from"@mui/x-date-pickers";
+import{AdapterDayjs}from"@mui/x-date-pickers/AdapterDayjs";
+import CalendarMonthIcon from"@mui/icons-material/CalendarMonth";
+import ManageSearchOutlinedIcon from"@mui/icons-material/ManageSearchOutlined";
+import SearchIcon from"@mui/icons-material/Search";
+import RestartAltIcon from"@mui/icons-material/RestartAlt";
+import {useSelector}from"react-redux";
+import dayjs from"dayjs";
+import useApi from"../../hooks/useApi";
+import useCustomSnackbar from"../../utils/useCustomSnackbar";
+import{getPermissions}from"../../utils/CommonUtilities";
+import BalanceDateWiseTable from"./Components/BalanceDateWiseTable";
+import{StyledButton}from"./Components/BalanceDifferenceStyles";
+import downloadFile from "../../utils/DownloadUtils";
 
-        ReportGenerationResponseDTO reportGenerationResponseDTO = new ReportGenerationResponseDTO();
-        reportGenerationResponseDTO.setProcessRunId(parameters.getProcessRunId());
-        reportGenerationResponseDTO.setRunId(parameters.getRunId());
-        reportGenerationResponseDTO.setStageId(parameters.getStageId());
-        LocalDate reportDate = parameters.getDate();
-
-        if (reportDate == null) {
-            reportDate = controlDateService.getEtlDate();
-        }
-
-        reportGenerationResponseDTO.setDate(reportDate);
-        String formattedDate = reportDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-        String jasperFormattedDate = reportDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-        String datePrefix = reportDate.format(DateTimeFormatter.ofPattern("ddMMyyyy"));
-        String runId = String.valueOf(parameters.getRunId());
-        Path dateDir = new Path(tempReportsBasepath, formattedDate);
-        Path reportDir = new Path(dateDir, runId);
-//        Path mainReportDir = new Path(reportsBasePath, formattedDate,parameters.getReportType());
-        Path mainReportDir = new Path(new Path(reportsBasePath, formattedDate), parameters.getReportType());
-        try {
-            if (!hdfsFileSystem.exists(reportDir)) {
-                hdfsFileSystem.mkdirs(reportDir);
-            }if (!hdfsFileSystem.exists(mainReportDir)) {
-                hdfsFileSystem.mkdirs(mainReportDir);
-            }
-        } catch (IOException e) {
-
-            throw new IOException("Failed to Create Folder in HDFS "+e.getMessage());
-
-        }
-        // JasperReports reportDetails = jasperReportTypeRepository.findByType(parameters.getReportType());
-
-        String reportName = parameters.getReportType();
-        String jasperFileName = env.getProperty(reportName);
-
-        String logoPath = null;
-        try {
-            // logoPath = new
-            // ClassPathResource("images/logo.png").getFile().getAbsolutePath();
-            logoPath = extractLogoToTemp();
-        } catch (ResourceNotFoundException e) {
-            log.warn("Logo not found");
-        }
-
-        try (Connection connection = dataSource.getConnection()) {
-
-            // String reportName = reportDetails.getType();
-            // String jasperFileName = reportDetails.getFileName();
-
-            reportGenerationResponseDTO.setReportName(reportName);
-            reportGenerationResponseDTO.setRunId(parameters.getRunId());
-            reportGenerationResponseDTO.setExtensions(new ArrayList<>());
-
-            StringBuilder status = new StringBuilder();
-
-            String fileBaseName = reportName + "_" + datePrefix + "_" + "run" + "_" + runId;
-
-            String fileNamePrefix = reportName + "_" + datePrefix.formatted(DateTimeFormatter.ofPattern("ddMMyyyy"));
-
-            // String resourcePath = jasperFileResources + jasperFileName;
-            String resourcePath = "classpath:jasper/" + jasperFileName;
-            Resource resource = resourceLoader.getResource(resourcePath);
-            if (!resource.exists()) {
-                throw new FileNotFoundException("Jasper file missing: " + jasperFileName);
-            }
-            try (InputStream jasperStream = resource.getInputStream()) {
-                Map<String, Object> reportParams = new HashMap<>();
-                reportParams.put("imagePath", logoPath);
-                reportParams.put("date", jasperFormattedDate);
-                log.info("Started Filling Jasper for {} Report", parameters.getReportType());
-                JasperPrint jasperPrint = JasperFillManager.fillReport(jasperStream, reportParams, connection);
-                log.info("Completed Jasper Fill  for {} Report", parameters.getReportType());
-                Map<ReportFormat, FormatStatus> formatResults = new LinkedHashMap<>();
-                Map<ReportFormat, String> formatErrors = new HashMap<>();
-
-                generateReportFile(ReportFormat.PDF, jasperPrint, reportDir, fileBaseName, hdfsFileSystem,
-                        formatResults, formatErrors);
-                generateReportFile(ReportFormat.EXCEL, jasperPrint, reportDir, fileBaseName, hdfsFileSystem,
-                        formatResults, formatErrors);
-                generateReportFile(ReportFormat.PSV, jasperPrint, reportDir, fileBaseName, hdfsFileSystem,
-                        formatResults, formatErrors);
-
-                //saving reports parallely in "/reports/date" path
-                generateReportFile(ReportFormat.PDF, jasperPrint, mainReportDir, fileNamePrefix, hdfsFileSystem,
-                        formatResults, formatErrors);
-                generateReportFile(ReportFormat.EXCEL, jasperPrint, mainReportDir, fileNamePrefix, hdfsFileSystem,
-                        formatResults, formatErrors);
-                generateReportFile(ReportFormat.PSV, jasperPrint, mainReportDir, fileNamePrefix, hdfsFileSystem,
-                        formatResults, formatErrors);
+export default function BalanceParticularSearchScreen(){
+ const{callApi}=useApi(),showSnackBar=useCustomSnackbar();
+ const user=useSelector(s=>s.auth.user),selectedMenu=useSelector(s=>s.menus.selectedMenuItem),permissions=getPermissions(selectedMenu);
+ const[rows,setRows]=useState([]),[rowCount,setRowCount]=useState(0),[loading,setLoading]=useState(false),[searched,setSearched]=useState(false),[filtersExpanded,setFiltersExpanded]=useState(true);
+ const [exportLoading,setExportLoading] =useState(false);
+ const[etlDate,setEtlDate]=useState(null),[glcc,setGlcc]=useState(""),[glccValidated,setGlccValidated]=useState(false),[glccLoading,setGlccLoading]=useState(false);
+ const[branch,setBranch]=useState(""),[branchInput,setBranchInput]=useState(""),[branches,setBranches]=useState([]);
+ const[currency,setCurrency]=useState(""),[currencyInput,setCurrencyInput]=useState(""),[currencies,setCurrencies]=useState([]);
+ const[cgl,setCgl]=useState(""),[cglInput,setCglInput]=useState(""),[cgls,setCgls]=useState([]);
+ const[paginationModel,setPaginationModel]=useState({page:0,pageSize:25});
+const MIN_ALLOWED_DATE = useMemo(() => dayjs("2026-03-31"), []);
 
 
-                long successCount = formatResults.values()
-                        .stream()
-                        .filter(v -> v == FormatStatus.GENERATED)
-                        .count();
-                String finalStatus;
-                String remark;
-                if (successCount == 0) {
-                    finalStatus = Constants.FAILED;
-                    remark = "Failed to generate all report formats.";
-                } else if (successCount == formatResults.size()) {
-                    finalStatus = Constants.SUCCESS;
-                    remark = "All formats generated successfully.";
-                } else {
-                    finalStatus = Constants.PARTIAL_SUCCESS;
-                    remark = "Generated: " +
-                            formatResults.entrySet().stream()
-                                    .filter(e -> e.getValue() == FormatStatus.GENERATED)
-                                    .map(e -> e.getKey().name())
-                                    .toList()
-                            + ", Failed: " +
-                            formatErrors.keySet();
-                }
+ const fetchCurrencies=useCallback(async()=>{
+  try{
+   const res=await callApi("/CM/common-master/currency-code-name-only",null,"GET");
+   setCurrencies((res?.data||[]).sort((a,b)=>a.currencyCode==="INR"?-1:b.currencyCode==="INR"?1:a.currencyName.localeCompare(b.currencyName)));
+  }catch{showSnackBar("Currency data not available","error")}
+ },[callApi,showSnackBar]);
 
-                reportGenerationResponseDTO.setStatus(finalStatus);
-                reportGenerationResponseDTO.setRemark(remark);
-                reportGenerationResponseDTO.setFormatErrors(formatErrors);
-                reportGenerationResponseDTO.setFormatResults(formatResults);
+ const fetchSearchData=useCallback(async(type,term)=>{
+  if(!term||term.length<3)return;
+  try{
+   let circleValue="";
+   if(permissions?.wholebank===true)circleValue="null";
+   else if(user?.isCircle===true||permissions?.circle)circleValue=user?.circleCode;
+   const url=type==="branch"
+    ?`/CM/common-master/branches-code-name-only?q=${encodeURIComponent(term)}&circleCode=${circleValue||""}`
+    :`/CM/common-master/cgl-code-description-only?q=${encodeURIComponent(term)}`;
+   const res=await callApi(url,null,"GET");
+   if(type==="branch")setBranches((res?.data||[]).map(i=>`${i.code}-${i.name}`));
+   else setCgls((res?.data||[]).map(i=>`${i.cglNumber} - ${i.description}`));
+  }catch(e){console.error(e)}
+ },[callApi,permissions,user]);
 
-            }
+ const validateGlcc=async(value)=>{
+  try{
+   setGlccLoading(true);
+   const response=await callApi("/CM/common-master/validate-glcc",{glcc:value},"POST");
+   const data=response?.data;
+   if(data?.valid){
+    setBranch(`${data.branchCode}-${data.branchName?.trim()||""}`);
+    setBranchInput(`${data.branchCode}-${data.branchName?.trim()||""}`);
+    setCurrency(data.currencyCode);
+    setCurrencyInput(data.currencyCode);
+    setCgl(`${data.cglNumber} - ${data.cglDescription}`);
+    setCglInput(`${data.cglNumber} - ${data.cglDescription}`);
+    setGlccValidated(true);
+   }else{
+    setGlccValidated(false);setBranch("");setBranchInput("");setCurrency("");setCurrencyInput("");setCgl("");setCglInput("");
+    showSnackBar(data?.errors?.join(", ")||"Invalid GLCC","error");
+   }
+  }catch(error){
+   setGlccValidated(false);setBranch("");setBranchInput("");setCurrency("");setCurrencyInput("");setCgl("");setCglInput("");
+   const errors=error?.response?.data?.data?.errors||error?.response?.data?.errors;
+   showSnackBar(errors?.join(", ")||"Invalid GLCC","error");
+  }finally{setGlccLoading(false)}
+ };
 
-            catch (IOException | JRException e) {
-                log.error("Error generating {}: {}", reportName, e.getMessage());
+ useEffect(()=>{fetchCurrencies()},[fetchCurrencies]);
 
-            }
+ useEffect(()=>{
+  (async()=>{
+   try{
+    const res=await callApi("/PS/file/fincore-date",{},"GET");
+    const raw=res?.data?.userDate||res?.data?.etlDate||res?.date||"";
+    if(raw)setEtlDate(dayjs(raw.split("T")[0]));
+   }catch(e){console.error("ETL Date Error:",e)}
+  })();
+ },[callApi]);
 
-        } catch (SQLException | FileNotFoundException e) {
-            throw new RuntimeException(e);
-        }
-        return reportGenerationResponseDTO;
+ const fetchData=useCallback(async(page=0,size=25)=>{
+  if(!etlDate)return;
+  try{
+   setLoading(true);
+   const payload={fromDate:etlDate.format("YYYY-MM-DD"),toDate:etlDate.format("YYYY-MM-DD"),branchCode:branch?.split("-")[0]||null,currency:currency||null,cgl:cgl?.split(" - ")[0]||null};
+   const res=await callApi(`/ES/differences/search?page=${page}&size=${size}`,payload,"POST");
+   const content=res?.data?.content||res?.content||[];
+   setRows(content.map((item,index)=>({...item,id:item.id||`row-${page}-${index}`,GLCC_VAL:`${item.branchCode||""} ${item.currency||""} ${item.cgl||""}`})));
+   setRowCount(res?.data?.page?.totalElements||0);
+  }catch(e){
+   setRows([]);setRowCount(0);showSnackBar("No records found","error");
+  }finally{setLoading(false)}
+ },[callApi,etlDate,branch,currency,cgl,showSnackBar]);
 
+ const handleExport = async () => {
+  try {
+    setExportLoading(true);
+
+    const payload = {
+      reconRunDate: etlDate.format("YYYY-MM-DD"),
+      branchCode: branch?.split("-")[0],
+      currency: currency,
+      cgl: cgl?.split(" - ")[0],
+    };
+
+    const downloadResponse = await callApi(
+      "/ES/differences/export",
+      payload,
+      "POST",
+      "arraybuffer",
+    );
+
+    const fileName = `Balance_Difference_${payload.reconRunDate}`;
+
+    if (downloadResponse && downloadResponse?.byteLength > 0) {
+      downloadFile(downloadResponse, "excel", fileName);
+      return;
+    }
+  } catch (error) {
+    console.error("Something Went Wrong!!", error);
+    showSnackBar("Download Failed", "error");
+  } finally {
+    setExportLoading(false);
+  }
+};
+ const handleSearch=()=>{
+  setSearched(true);setFiltersExpanded(false);
+  setPaginationModel(p=>({...p,page:0}));
+ };
+
+ useEffect(()=>{
+  if(searched&&!filtersExpanded)fetchData(paginationModel.page,paginationModel.pageSize);
+ },[searched,filtersExpanded,paginationModel.page,paginationModel.pageSize,fetchData]);
+
+ const handleReset=()=>{
+  setRows([]);setRowCount(0);setGlcc("");setGlccValidated(false);setGlccLoading(false);
+  setBranch("");setBranchInput("");setCurrency("");setCurrencyInput("");setCgl("");setCglInput("");
+  setBranches([]);setCgls([]);setSearched(false);setFiltersExpanded(true);setPaginationModel({page:0,pageSize:25});
+ };
+
+ const chipSx={height:28,borderRadius:1.5,fontSize:"11px",fontWeight:600,color:"#58469f",borderColor:"rgba(88,70,159,.28)",bgcolor:"rgba(88,70,159,.035)"};
+
+ return(
+  <Box sx={{p:{xs:1,sm:2}}}>
+   <Paper elevation={0} sx={{p:{xs:1.5,sm:2.5},mt:{xs:-1,sm:-2},mb:3,bgcolor:"rgba(255,255,255,.4)",backdropFilter:"blur(4px)",border:"1px solid",borderColor:"divider",borderRadius:{xs:2,sm:3},overflow:"hidden"}}>
+    <Box sx={{p:{xs:1.5,sm:2},borderRadius:2,bgcolor:"background.paper",boxShadow:2,border:"1px solid",borderColor:"divider",borderLeft:"6px solid",borderLeftColor:"primary.main"}}>
+     <Stack direction={{xs:"column",sm:"row"}} alignItems={{xs:"flex-start",sm:"center"}} justifyContent="space-between" spacing={2}>
+      <Stack direction="row" spacing={2} alignItems="center">
+       <CalendarMonthIcon color="primary" sx={{fontSize:{xs:30,sm:36},flexShrink:0}}/>
+       <Box sx={{minWidth:0}}>
+        <Stack direction="row" spacing={1} alignItems="center">
+         <Typography variant="subtitle1" fontWeight={700} sx={{fontSize:{xs:".95rem",sm:"1rem",md:"1.05rem"}}}>Date Wise Balance Search</Typography>
+         <Typography sx={{px:1,py:.25,borderRadius:1.5,bgcolor:"rgba(88,70,159,.08)",color:"primary.main",fontSize:".7rem",fontWeight:700}}>Date Wise</Typography>
+        </Stack>
+        <Typography variant="body2" color="text.secondary" sx={{mt:.3,fontSize:{xs:".75rem",sm:".82rem"}}}>View balance differences for a selected date and track reconciliation history.</Typography>
+       </Box>
+      </Stack>
+
+      {searched&&<StyledButton variant="contained" startIcon={<ManageSearchOutlinedIcon/>} onClick={()=>setFiltersExpanded(true)} sx={{textTransform:"none",borderRadius:"8px",fontWeight:600,minWidth:{xs:"100%",sm:140},width:{xs:"100%",sm:"auto"},height:{xs:38,sm:32}}}>Edit Filters</StyledButton>}
+     </Stack>
+    </Box>
+
+    {searched&&
+     <Stack direction="row" spacing={.8} flexWrap="wrap" useFlexGap sx={{mt:1.5,px:.5}}>
+      <Chip label={`Date: ${etlDate?.format("DD-MM-YYYY")||"-"}`} variant="outlined" size="small" sx={chipSx}/>
+      {glcc&&<Chip label={`GLCC: ${glcc}`} variant="outlined" size="small" sx={chipSx}/>}
+      <Chip label={`Branch: ${branch||"-"}`} variant="outlined" size="small" sx={chipSx}/>
+      <Chip label={`Currency: ${currency||"-"}`} variant="outlined" size="small" sx={chipSx}/>
+      <Chip label={`CGL: ${cgl||"-"}`} variant="outlined" size="small" sx={chipSx}/>
+     </Stack>
     }
 
-    public void generateReportFile(
-            ReportFormat format,
-            JasperPrint jasperPrint,
-            Path reportDir,
-            String fileBaseName,
-            FileSystem hdfsFileSystem,
-            Map<ReportFormat, FormatStatus> formatResults,
-            Map<ReportFormat, String> formatErrors
+    {filtersExpanded&&
+     <Box sx={{mt:3}}>
+      <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,1fr)",md:"repeat(4,1fr)"},gap:2}}>
 
-    ) throws IOException {
-        log.info("Generating File {} with extension {} to place at {} ", fileBaseName, format,reportDir);
-        Path outputPath = new Path(reportDir, fileBaseName + format.ext());
-        try (FSDataOutputStream out = hdfsFileSystem.create(outputPath, true)) {
-            switch (format) {
-                case PDF -> {
-                    JasperExportManager
-                            .exportReportToPdfStream(jasperPrint, out);
-                }
-                case EXCEL -> {
-                    JRXlsxExporter exporter = new JRXlsxExporter();
-                    exporter.setExporterInput(
-                            new SimpleExporterInput(jasperPrint));
-                    exporter.setExporterOutput(
-                            new SimpleOutputStreamExporterOutput(out));
-                    exporter.exportReport();
+       {(permissions?.wholebank||user?.isCircle===true)&&
+        <TextField label="GLCC (Optional)" fullWidth value={glcc} placeholder="Enter 18 Characters GLCC" InputLabelProps={{shrink:true}} inputProps={{maxLength:18}} disabled={glccLoading} onChange={e=>{
+         const value=e.target.value.toUpperCase();
+         if(!/^[A-Z0-9]*$/.test(value)){showSnackBar("Invalid GLCC format. Only letters and numbers are allowed.","warning");return}
+         if(value.length<=5&&!/^\d*$/.test(value)){showSnackBar("Invalid GLCC format. Enter 5 digits, followed by 3 letters, and then 10 digits.","warning");return}
+         if(value.length>5&&value.length<=8&&!/^\d{5}[A-Z]*$/.test(value)){showSnackBar("Invalid GLCC format. Enter 5 digits, followed by 3 letters, and then 10 digits.","warning");return}
+         if(value.length>8&&!/^\d{5}[A-Z]{3}\d*$/.test(value)){showSnackBar("Invalid GLCC format. Enter 5 digits, followed by 3 letters, and then 10 digits.","warning");return}
+         setGlcc(value);setGlccValidated(false);setBranch("");setBranchInput("");setCurrency("");setCurrencyInput("");setCgl("");setCglInput("");
+         if(value.length===18)validateGlcc(value);
+        }}/>
+       }
 
-                }
-                case PSV -> {
-                    JRCsvExporter exporter = new JRCsvExporter();
-                    exporter.setExporterInput(
-                            new SimpleExporterInput(jasperPrint));
-                    exporter.setExporterOutput(
-                            new SimpleWriterExporterOutput(out));
-                    SimpleCsvExporterConfiguration config = new SimpleCsvExporterConfiguration();
-                    config.setFieldDelimiter("|");
-                    exporter.setConfiguration(config);
-                    exporter.exportReport();
+       <Autocomplete autoHighlight forcePopupIcon={false} disabled={glccValidated||(!permissions?.wholebank&&(user?.isCircle===false||permissions?.branch))} value={branch} inputValue={branchInput} options={branches} noOptionsText={branchInput.length<3?"Please enter at least 3 characters":"No Options"} onInputChange={(e,value,reason)=>{setBranchInput(value);if(reason==="input"&&value.length>=3)fetchSearchData("branch",value)}} onChange={(e,value)=>setBranch(value||"")} renderInput={params=><TextField {...params} label="Branch Code or Name*" placeholder="eg. 12345 or ABC" fullWidth InputLabelProps={{shrink:true}}/>}/>
 
-                }
-            }
-            formatResults.put(format, FormatStatus.GENERATED);
-        }
+       <Autocomplete autoHighlight disabled={glccValidated} options={currencies} value={currencies.find(c=>c.currencyCode===currency)||null} inputValue={currencyInput} getOptionLabel={o=>o?`${o.currencyCode} (${o.currencyName})`:""} onInputChange={(e,value)=>setCurrencyInput(value)} onChange={(e,value)=>{setCurrency(value?.currencyCode||"");setCurrencyInput(value?`${value.currencyCode} - ${value.currencyName}`:"")}} onOpen={fetchCurrencies} renderInput={params=><TextField {...params} label="Currency*" placeholder="Please select Currency" fullWidth InputLabelProps={{shrink:true}}/>}/>
 
-        catch (IOException | JRException e) {
-            formatResults.put(format, FormatStatus.FAILED);
-            formatErrors.put(format, e.getMessage());
-        }
+       <Autocomplete autoHighlight forcePopupIcon={false} disabled={glccValidated} value={cgl} inputValue={cglInput} options={cgls} noOptionsText={cglInput.length<3?"Please enter at least 3 characters":"No Options"} onInputChange={(e,value,reason)=>{setCglInput(value);if(reason==="input"&&value.length>=3)fetchSearchData("cgl",value)}} onChange={(e,value)=>{setCgl(value||"");setCglInput(value||"")}} renderInput={params=><TextField {...params} label="CGL*" placeholder="eg. 9999999999" fullWidth InputLabelProps={{shrink:true}}/>}/>
 
+       <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <DatePicker value={etlDate} format="DD-MM-YYYY" minDate={MIN_ALLOWED_DATE} maxDate={etlDate} onChange={setEtlDate} slotProps={{textField:{label:"ETL Date*",fullWidth:true,InputLabelProps:{shrink:true},placeholder:"DD-MM-YYYY"}}}/>
+       </LocalizationProvider>
+       
+      </Box>
+
+      <Box sx={{display:"flex",justifyContent:{xs:"stretch",sm:"flex-end"},gap:1.5,mt:-5}}>
+       <StyledButton variant="contained" startIcon={<RestartAltIcon/>} onClick={handleReset} sx={{flex:{xs:1,sm:"unset"},textTransform:"none"}}>Reset</StyledButton>
+       <StyledButton variant="contained" startIcon={<SearchIcon/>} disabled={!etlDate||!branch||!currency||!cgl} onClick={handleSearch} sx={{flex:{xs:1,sm:"unset"},textTransform:"none"}}>Search</StyledButton>
+      </Box>
+     </Box>
     }
+   </Paper>
 
-    private String extractLogoToTemp() {
-        try {
-            Resource resource = resourceLoader.getResource("classpath:/images/logo.png");
-            if (!resource.exists()) {
-                log.warn("Logo not found in classpath");
-                return null;
-            }
-            File tempFile = File.createTempFile("jasper-logo-", ".png");
-            tempFile.deleteOnExit();
-            try (InputStream in = resource.getInputStream();
-                 OutputStream out = new FileOutputStream(tempFile)) {
-                FileCopyUtils.copy(in, out);
-            }
-            return tempFile.getAbsolutePath();
-        } catch (ResourceNotFoundException | IOException e) {
-            log.error("Failed to extract logo", e);
-            return null;
-        }
-    }
-
-    public ReportBase64ResponseDTO generateReportBase64(
-            ReportBase64RequestDTO request) throws IOException {
-
-        ReportBase64ResponseDTO response = new ReportBase64ResponseDTO();
-
-        try {
-
-            if (request.getReportType() == null || request.getReportType().isBlank()) {
-                throw new IllegalArgumentException("Report type is mandatory");
-            }
-
-            LocalDate reportDate = request.getDate();
-
-            if (reportDate == null) {
-                reportDate = controlDateService.getEtlDate();
-            }
-
-            // JasperReports reportDetails = jasperReportTypeRepository.findByType(request.getReportType());
-
-            String reportName = request.getReportType();
-
-            if (reportName != null) {
-                response.setReportName(reportName);
-            }
-            response.setReportDate(reportDate);
-
-            JasperPrint jasperPrint = fillJasperReport(
-                    request.getReportType(),
-                    reportDate,
-                    request.getInputParams());
-
-            ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
-
-            JasperExportManager.exportReportToPdfStream(
-                    jasperPrint,
-                    pdfStream);
-
-            response.setPdfBase64(
-                    Base64.getEncoder().encodeToString(pdfStream.toByteArray()));
-
-            ByteArrayOutputStream excelStream = new ByteArrayOutputStream();
-
-            JRXlsxExporter exporter = new JRXlsxExporter();
-
-            exporter.setExporterInput(new SimpleExporterInput(jasperPrint));
-            exporter.setExporterOutput(new SimpleOutputStreamExporterOutput(excelStream));
-
-            exporter.exportReport();
-
-            response.setExcelBase64(
-                    Base64.getEncoder().encodeToString(excelStream.toByteArray()));
-
-            response.setStatus(Constants.SUCCESS);
-            response.setRemark("Report generated successfully");
-
-        } catch (JRException e) {
-
-            log.error("Jasper report generation error: {}", e.getMessage());
-
-            response.setStatus(Constants.FAILED);
-            response.setRemark("Error while generating report");
-
-        } catch (Exception e) {
-
-            log.error("Unexpected error during report generation", e);
-
-            response.setStatus(Constants.FAILED);
-            response.setRemark("Unexpected error occurred");
-        }
-
-        return response;
-    }
-
-    private JasperPrint fillJasperReport(
-            String reportType,
-            LocalDate reportDate,
-            Map<String, Object> inputParams) throws IOException {
-
-        // JasperReports reportDetails = jasperReportTypeRepository.findByType(reportType);
-
-        String jasperFileName = env.getProperty(reportType);
-
-        if (jasperFileName == null) {
-            throw new ResourceNotFoundException(
-                    "Invalid report type: " + reportType);
-        }
-        String logoPath = null;
-        try {
-            logoPath = extractLogoToTemp();
-        } catch (ResourceNotFoundException e) {
-            log.warn("Logo not found");
-        }
-
-        // String jasperFileName = reportDetails.getFileName();
-
-        String resourcePath = "classpath:jasper/" + jasperFileName;
-
-        Resource resource = resourceLoader.getResource(resourcePath);
-
-        if (!resource.exists()) {
-            throw new FileNotFoundException(
-                    "Jasper file missing: " + jasperFileName);
-        }
-
-        String formattedDate = reportDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-
-        try (Connection connection = dataSource.getConnection();
-             InputStream jasperStream = resource.getInputStream()) {
-
-            Map<String, Object> reportParams = new HashMap<>();
-            log.info("Formatted Date :{}",formattedDate);
-            reportParams.put("date", formattedDate);
-            reportParams.put("imagePath",logoPath);
-
-            if (inputParams != null) {
-                reportParams.putAll(inputParams);
-            }
-
-            log.info("Started Filling Jasper for {} Report", reportType);
-
-            JasperPrint jasperPrint = JasperFillManager.fillReport(
-                    jasperStream,
-                    reportParams,
-                    connection);
-
-            log.info("Completed Jasper Fill for {} Report", reportType);
-
-            return jasperPrint;
-
-        } catch (JRException e) {
-
-            log.error("Error filling Jasper report {}", reportType, e);
-
-            throw new RuntimeException(
-                    "Failed to generate report for type: " + reportType, e);
-        } catch (SQLException e) {
-
-            log.error("Database error while generating report {}", reportType, e);
-
-            throw new RuntimeException(
-                    "Database error during report generation", e);
-        }
-    }
-
+   {searched&&
+    <BalanceDateWiseTable
+     rows={rows}
+     loading={loading}
+     totalElements={rowCount}
+     paginationModel={paginationModel}
+     setPaginationModel={setPaginationModel}
+     onHistory={()=>{}}
+     onExport={handleExport}
+     exportLoading={exportLoading}
+    />
+   }
+  </Box>
+ );
 }
