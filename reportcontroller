@@ -1,330 +1,570 @@
-package com.fincore.ReportService.service;
+import React, { useState, useMemo, useEffect } from "react";
+import { Autocomplete, Box, MenuItem, TextField, Typography, Stack } from "@mui/material";
+import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import dayjs from "dayjs";
+import SearchIcon from "@mui/icons-material/Search";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import useCustomSnackbar from "../../../utils/useCustomSnackbar";
+import { calculateQuickFilterDates, getAvailableFilters } from "../../../utils/CommonUtilities";
+import { StyledButton } from "./BalanceDifferenceStyles";
 
-import com.fincore.ReportService.dto.AsciiFileRequest;
-import com.fincore.ReportService.dto.AsciiFileResponse;
-import com.fincore.ReportService.dto.AsciiTypeResponse;
-import com.fincore.ReportService.model.AsciiMaster;
-import com.fincore.ReportService.model.AsciiConfig;
-import com.fincore.ReportService.model.AsciiConfigTb;
-import com.fincore.ReportService.repository.AsciiMasterRepository;
-import com.fincore.ReportService.repository.AsciiConfigRepository;
-import com.fincore.ReportService.repository.AsciiConfigTbRepository;
-import com.fincore.ReportService.service.AsciiFileService;
-import com.fincore.ReportService.service.HdfsService;
+export default function BalanceDifferenceFilters({
+  branch,
+  setBranch,
+  currency,
+  setCurrency,
+  cgl,
+  setCgl,
+  start,
+  setStart,
+  end,
+  setEnd,
+  currencies,
+  branches,
+  cgls,
+  loading,
+  handleSearchChange,
+  fetchCurrencies,
+  handleSubmit,
+  resetState,
+  isNumeric,
+  req,
+  user,
+  permissions,
+  etlDate,
+  glcc,
+  setGlcc,
+  glccValidated,
+  setGlccValidated,
+  validateGlcc,
+}) {
+  const [fromDateError, setFromDateError] = useState(null);
+  const [toDateError, setToDateError] = useState(null);
+  const [quickFilter, setQuickFilter] = useState("custom");
+  const [branchInput, setBranchInput] = useState("");
+  const [cglInput, setCglInput] = useState("");
+  const [currencyInput, setCurrencyInput] = useState("");
+  const showSnackBar = useCustomSnackbar();
 
+  const { hasWholeBank } = permissions;
+  const isBranchUser = !hasWholeBank && !user?.isCircle;
+  const MIN_ALLOWED_DATE = useMemo(() => dayjs("2026-03-31"), []);
+  const baseDate = etlDate?.isValid?.() ? etlDate : dayjs();
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+  const GLCC_ALLOWED_REGEX = /^[A-Z0-9]*$/;
+  const BRANCH_REGEX = /^[A-Za-z0-9/&(), -]*$/;
+  const CGL_ALLOWED_REGEX = /^[A-Za-z0-9._<>/&()= -]*$/;
+  const CURRENCY_ALLOWED_REGEX = /^[A-Za-z ()]*$/;
 
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+  const availableFilters = useMemo(
+    () => getAvailableFilters(baseDate, MIN_ALLOWED_DATE),
+    [baseDate, MIN_ALLOWED_DATE]
+  );
 
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Service;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpStatus;
+  const handleQuickFilter = (e) => {
+    const option = e.target.value;
+    setQuickFilter(option);
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
+    if (option === "custom") return;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.regex.Pattern;
+    const { newStart, newEnd } = calculateQuickFilterDates(
+      option,
+      baseDate,
+      MIN_ALLOWED_DATE
+    );
 
+    setStart(newStart);
+    setEnd(newEnd);
+  };
 
-@Service
-@RequiredArgsConstructor
-@Slf4j
-public class AsciiFileServiceImpl implements AsciiFileService {
+  const getDateErrorMessage = (field, error) => {
+    switch (error) {
+      case "invalidDate":
+        return `Please enter a valid ${field}`;
+      case "minDate":
+        return `${field} cannot be earlier than ${MIN_ALLOWED_DATE.format(
+          "DD-MM-YYYY"
+        )}`;
+      case "maxDate":
+        return `${field} cannot exceed ${etlDate?.format("DD-MM-YYYY")}`;
+      case "fromGreaterThanTo":
+        return "From Date cannot be greater than To Date";
+      case "toLessThanFrom":
+        return "To Date cannot be less than From Date";
+      case "rangeExceeds12Months":
+        return "Date range cannot exceed 12 months";
+      case "afterEtlDate":
+        return `To Date cannot exceed Fincore ETL Date ${etlDate?.format(
+          "DD-MM-YYYY"
+        )}`;
+      default:
+        return "";
+    }
+  };
 
-    private final AsciiMasterRepository asciiMasterRepository;
+  useEffect(() => {
+    let fromErr = null;
+    let toErr = null;
 
-    private final AsciiConfigRepository asciiConfigRepository;
-
-    private final AsciiConfigTbRepository asciiConfigTbRepository;
-
-    private final HdfsService hdfsService;
-
-    private static final Pattern SAFE_PATH_PATTERN = Pattern.compile("^[a-zA-Z0-9/_\\-\\.]+$");
-
-    @Override
-    public List<AsciiTypeResponse> getAsciiTypes(){
-
-        log.info("API called - into service");
-        List<AsciiTypeResponse> response=asciiMasterRepository.findAll()
-            .stream()
-            .map(a->
-                    new AsciiTypeResponse(
-                        a.getId(),
-                        a.getReportName()
-                    ))
-                    .toList();
-                    if(response.isEmpty()){
-                        throw new IllegalArgumentException("No ASCII file types found");
-                    }
-                    return response;
+    if (start) {
+      if (!start.isValid?.()) fromErr = "invalidDate";
+      else if (start.isBefore(MIN_ALLOWED_DATE, "day")) fromErr = "minDate";
+      else if (etlDate?.isValid?.() && start.isAfter(etlDate, "day")) {
+        fromErr = "maxDate";
+      }
     }
 
-    // To view the ASCII file types
-    @Override
-    public AsciiFileResponse viewAscii(AsciiFileRequest request) {
-
-        try {
-
-            AsciiMaster master =
-                    asciiMasterRepository.findById(request.getId())
-                            .orElseThrow(() ->
-                                    new IllegalArgumentException("Invalid ASCII ID"));
-
-            String hdfsPath = buildFilePath(master, request);
-
-            FileSystem fs = hdfsService.getFs();
-
-            // Path path = new Path(hdfsPath);
-
-            Path path = Path.getPathWithoutSchemeAndAuthority(new Path(hdfsPath));
-
-            Path normalizedPath = Path.getPathWithoutSchemeAndAuthority(path);
-
-            if (!normalizedPath.equals(path)) {
-                throw new SecurityException("Invalid HDFS path");
-            }
-
-            // boolean fileExists=fs.exists(path);
-
-            if (!fs.exists(path)) {
-               throw new IllegalArgumentException("ASCII File not found");
-            }
-
-            StringBuilder content = new StringBuilder();
-
-            // try (FSDataInputStream inputStream = fs.open(path);
-            try (FSDataInputStream inputStream = fs.open(normalizedPath);
-                 BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
-
-                String line;
-
-                while ((line = reader.readLine()) != null) {
-                    content.append(line)
-                           .append(System.lineSeparator());
-                }
-            }
-
-            AsciiFileResponse response = new AsciiFileResponse();
-
-            response.setId(request.getId());
-            response.setReportDate(request.getReportDate());
-            response.setSearchBy(request.getSearchBy());
-
-            if ("branch".equalsIgnoreCase(request.getSearchBy())) {
-                response.setBranchCode(request.getBranchCode());
-            }
-
-            response.setContent(content.toString());
-
-            return response;
-
-        } catch (Exception e) {
-
-            log.error("Error while viewing ascii file", e);
-
-            throw new IllegalArgumentException("Invalid normalized path");
-        }
+    if (end) {
+      if (!end.isValid?.()) toErr = "invalidDate";
+      else if (end.isBefore(MIN_ALLOWED_DATE, "day")) toErr = "minDate";
+      else if (etlDate?.isValid?.() && end.isAfter(etlDate, "day")) {
+        toErr = "afterEtlDate";
+      }
     }
 
-    //To download the ASCII files
-    @Override
-    public ResponseEntity<byte[]> downloadAscii(AsciiFileRequest request) {
-        try {
-            AsciiMaster master = asciiMasterRepository.findById(request.getId())
-                    .orElseThrow(() -> new IllegalArgumentException("Invalid ASCII ID"));
-
-            String hdfsPath = buildFilePath(master, request);
-
-            FileSystem fs = hdfsService.getFs();
-            // Path path = new Path(hdfsPath);
-            Path path = Path.getPathWithoutSchemeAndAuthority(new Path(hdfsPath));
-
-            Path normalizedPath = Path.getPathWithoutSchemeAndAuthority(path);
-
-            if (!normalizedPath.equals(path)) {
-                throw new SecurityException("Invalid HDFS path");
-            }
-
-
-            if (!fs.exists(path)) {
-                throw new IllegalArgumentException("Failed to download. ASCII File not found");
-            }
-
-            // Sink: Fortify flags this line because hdfsPath contains DB data
-            // FSDataInputStream inputStream = fs.open(path);
-            
-            // FSDataInputStream inputStream = fs.open(normalizedPath);
-
-            // byte[] fileContent = inputStream.readAllBytes();
-            // inputStream.close();
-
-            byte[] fileContent;
-
-            try (FSDataInputStream inputStream = fs.open(normalizedPath)) {
-
-                fileContent = inputStream.readAllBytes();
-            }
-
-            String fileName = path.getName();
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.TEXT_PLAIN);
-            // headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + ".txt\"");
-
-            
-            headers.setContentDisposition(
-                    ContentDisposition.attachment()
-                            .filename(fileName + ".txt", StandardCharsets.UTF_8)
-                            .build());
-
-                            
-            headers.setContentLength(fileContent.length);
-            headers.add(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION);
-
-            return new ResponseEntity<>(fileContent, headers, HttpStatus.OK);
-
-        } catch (IllegalArgumentException | IOException e) {
-            // log.error("Error while downloading ascii file", e);
-            throw new IllegalArgumentException("Unable to view ASCII file.");
-        }
+    if (
+      start?.isValid?.() &&
+      end?.isValid?.() &&
+      !fromErr &&
+      !toErr
+    ) {
+      if (start.isAfter(end, "day")) {
+        fromErr = "fromGreaterThanTo";
+      } else if (end.isAfter(start.clone().add(1, "year"), "day")) {
+        toErr = "rangeExceeds12Months";
+      }
     }
 
-    // To build the final path
-    private String buildFilePath(AsciiMaster master,AsciiFileRequest request) {
+    setFromDateError(fromErr);
+    setToDateError(toErr);
+  }, [start, end, etlDate, MIN_ALLOWED_DATE]);
 
-        if("branch".equalsIgnoreCase(request.getSearchBy())
-        && (request.getBranchCode()==null
-        || request.getBranchCode().isBlank())){
-            throw new IllegalArgumentException("Branch code is mandatory for branch search");
-        }
+  const handleReset = () => {
+    setFromDateError(null);
+    setToDateError(null);
+    setQuickFilter("custom");
+    setBranchInput("");
+    setCglInput("");
+    setCurrencyInput("");
+    resetState();
+  };
 
-        
-        if (request.getReportDate() == null
-                || !request.getReportDate().matches("\\d{2}-\\d{2}-\\d{4}")) {
+  const validationMessages = [
+    fromDateError && getDateErrorMessage("From Date", fromDateError),
+    toDateError && getDateErrorMessage("To Date", toDateError),
+  ].filter(Boolean);
 
-            throw new IllegalArgumentException("Invalid report date");
-        }
+  return (
+    <Box sx={{ width: "100%", mt: 3 }}>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: {
+            xs: "1fr",
+            sm: "repeat(2, 1fr)",
+            md:
+              permissions?.wholebank || !isBranchUser
+                ? "repeat(4, 1fr)"
+                : "repeat(3, 1fr)",
+          },
+          gap: 2,
+          mb: 2,
+        }}
+      >
+        {(hasWholeBank || user?.isCircle === true) && (
+          <TextField
+            label="GLCC (Optional)"
+            fullWidth
+            value={glcc}
+            placeholder="Enter 18 Characters GLCC"
+            InputLabelProps={{ shrink: true }}
+            inputProps={{ maxLength: 18 }}
+            onChange={(e) => {
+              const value = e.target.value.toUpperCase();
 
+              if (!GLCC_ALLOWED_REGEX.test(value)) {
+                showSnackBar(
+                  "Invalid GLCC format. Only letters and numbers are allowed.",
+                  "warning"
+                );
+                return;
+              }
 
-        LocalDate reportDate=LocalDate.parse(request.getReportDate(),
-        DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+              if (
+                value.length <= 5 &&
+                !/^\d*$/.test(value)
+              ) {
+                showSnackBar(
+                  "Invalid GLCC format. Enter 5 digits, followed by 3 letters, and then 10 digits.",
+                  "warning"
+                );
+                return;
+              }
 
-        String dateFolder= reportDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+              if (
+                value.length > 5 &&
+                value.length <= 8 &&
+                !/^\d{5}[A-Z]*$/.test(value)
+              ) {
+                showSnackBar(
+                  "Invalid GLCC format. Enter 5 digits, followed by 3 letters, and then 10 digits.",
+                  "warning"
+                );
+                return;
+              }
 
-        String fileDate= reportDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+              if (
+                value.length > 8 &&
+                !/^\d{5}[A-Z]{3}\d*$/.test(value)
+              ) {
+                showSnackBar(
+                  "Invalid GLCC format. Enter 5 digits, followed by 3 letters, and then 10 digits.",
+                  "warning"
+                );
+                return;
+              }
 
-        // 1. Sanitize the location from DB
-        String rawLocation = master.getLocation().replace("{date}", dateFolder);
+              setGlcc(value);
+              setGlccValidated(false);
+              setBranch("");
+              setCurrency("");
+              setCgl("");
 
-        if (rawLocation.contains("..")) {
-            throw new SecurityException("Invalid report location");
-        }
+              if (value.length === 18) {
+                validateGlcc(value);
+              }
+            }}
+          />
+        )}
 
-
-        String safeLocation = sanitizePathSegment(rawLocation);
-        if (safeLocation.contains("..")) {
-            throw new SecurityException("Directory traversal detected");
-        }
-
-        String branchCode = "bank".equalsIgnoreCase(request.getSearchBy())
-                        ? "00000" : request.getBranchCode();
-
-                
-        if (!branchCode.matches("\\d{5}")) {
-            throw new IllegalArgumentException("Invalid branch code");
-        }
-              
-
-
-        String fileName;
-        if (!fileName.matches("[A-Za-z0-9._-]+")) {
-            throw new SecurityException("Invalid file name");
-        }
-
-        if (request.getId() >= 101 && request.getId() <= 104) {
-
-            AsciiConfig config = asciiConfigRepository.findById(request.getId())
-                            .orElseThrow(() ->
-                                    new IllegalArgumentException("ASCII Config not found"));
-
-            String safeOutputName = sanitizePathSegment(config.getOutputFileName());
-            String safeFileType = config.getFileType() != null && !config.getFileType().isBlank()
-                    ? sanitizePathSegment(config.getFileType())
-                    : null;
-
-            if (safeFileType != null) {
-                fileName = branchCode + "." + safeOutputName + "." + fileDate + "." + safeFileType;
-            } else {
-                fileName = branchCode + "." + safeOutputName + "." + fileDate;
+        <Autocomplete
+          autoHighlight
+          disabled={
+            glccValidated ||
+            (!permissions?.wholebank &&
+              (user?.isCircle === false || permissions?.branch))
+          }
+          value={branch}
+          forcePopupIcon={false}
+          clearIcon={branchInput ? undefined : null}
+          options={branches || []}
+          noOptionsText={
+            req.branch
+              ? "Please enter at least 3 characters"
+              : "No Options"
+          }
+          inputValue={branchInput}
+          loading={!req.branch && loading.branch}
+          onClose={(event, reason) => {
+            if (reason === "blur") {
+              handleSearchChange(branchInput, "blur", "branch");
+            }
+          }}
+          onInputChange={(event, value, reason) => {
+            if (
+              reason === "input" &&
+              !BRANCH_REGEX.test(value)
+            ) {
+              showSnackBar(
+                "Invalid Branch Code/Branch Name format.",
+                "warning"
+              );
+              return;
             }
 
-        }
-        else if (request.getId() >= 105 && request.getId() <= 107) {
+            setBranchInput(value);
+            handleSearchChange(value, reason, "branch");
+          }}
+          onChange={(event, value) => setBranch(value)}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Branch Code or Name*"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              placeholder="eg. 12345 or ABC"
+              slotProps={{
+                htmlInput: {
+                  ...params.inputProps,
+                  maxLength: isNumeric(params.inputProps.value)
+                    ? 5
+                    : 15,
+                },
+              }}
+            />
+          )}
+        />
 
-            AsciiConfigTb configTb = asciiConfigTbRepository.findById(request.getId())
-                            .orElseThrow(() ->
-                                    new IllegalArgumentException("ASCII Config TB not found"));
+        <Autocomplete
+          autoHighlight
+          disabled={glccValidated}
+          options={currencies || []}
+          value={
+            currencies?.find(
+              (item) => item.currencyCode === currency
+            ) || null
+          }
+          inputValue={currencyInput}
+          getOptionLabel={(option) =>
+            option
+              ? `${option.currencyCode} (${option.currencyName})`
+              : ""
+          }
+          onInputChange={(event, value, reason) => {
+            if (
+              reason === "input" &&
+              !CURRENCY_ALLOWED_REGEX.test(value)
+            ) {
+              showSnackBar(
+                "Invalid Currency format.",
+                "warning"
+              );
+              return;
+            }
 
-            String safeFileIdentifier = sanitizePathSegment(configTb.getFileIdentifier());
-            fileName = branchCode + "." + safeFileIdentifier + "." + fileDate;
-        }
-        else {
+            setCurrencyInput(value);
+          }}
+          onChange={(event, newValue) => {
+            setCurrency(
+              newValue ? newValue.currencyCode : ""
+            );
+            setCurrencyInput(
+              newValue
+                ? `${newValue.currencyCode} - ${newValue.currencyName}`
+                : ""
+            );
+          }}
+          onOpen={fetchCurrencies}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Currency*"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              placeholder={
+                !currency ? "Please select Currency" : ""
+              }
+            />
+          )}
+        />
 
-            throw new IllegalArgumentException("Invalid ASCII ID");
-        }
-        // String finalPath = "/" + safeLocation + "/" + fileName;
-                
-        Path finalHdfsPath = new Path("/" + safeLocation, fileName);
-        String finalPath = finalHdfsPath.toString();
-        if (!SAFE_PATH_PATTERN.matcher(finalPath).matches() || finalPath.contains("..")) {
-            throw new SecurityException("Invalid path detected: Path manipulation attempt blocked.");
-        }
+        <Autocomplete
+          disabled={glccValidated}
+          forcePopupIcon={false}
+          autoHighlight
+          value={cgl}
+          options={cgls || []}
+          inputValue={cglInput}
+          clearIcon={
+            cglInput || cgl ? undefined : null
+          }
+          noOptionsText={
+            cglInput.length < 3
+              ? "Please enter at least 3 characters"
+              : "No Options"
+          }
+          loading={!req.cgl && loading.cgl}
+          onClose={(event, reason) => {
+            if (reason === "blur") {
+              handleSearchChange(cglInput, "blur", "cgl");
+            }
+          }}
+          onInputChange={(event, value, reason) => {
+            if (
+              reason === "input" &&
+              !CGL_ALLOWED_REGEX.test(value)
+            ) {
+              showSnackBar(
+                "Invalid CGL format.",
+                "warning"
+              );
+              return;
+            }
 
-        log.info("final path: {}", finalPath);
-        return finalPath;
-    }
+            setCglInput(value);
+            handleSearchChange(value, reason, "cgl");
+          }}
+          onChange={(event, value) => {
+            setCgl(value);
+            setCglInput(value || "");
+          }}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="CGL*"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              placeholder="eg. 9999999999"
+              slotProps={{
+                htmlInput: {
+                  ...params.inputProps,
+                  maxLength: isNumeric(
+                    params.inputProps.value
+                  )
+                    ? 10
+                    : 30,
+                },
+              }}
+            />
+          )}
+        />
+      </Box>
 
-    /**
-     * Removes any character that is not explicitly allowed in a file path segment.
-     * This breaks any traversal sequences stored in the DB.
-     */
-    // private String sanitizePathSegment(String input) {
-    //     if (input == null || input.isBlank()) {
-    //         return "";
-    //     }
-    //     // Replace any invalid character with an underscore (or throw exception)
-    //     // This ensures Fortify sees the data as "sanitized"
-    //     return input.replaceAll("[^a-zA-Z0-9/_\\-\\.]", "_");
-    // }
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <Box
+          sx={{
+            display: "grid",
+            mt: 3,
+            mb: 0.5,
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: "repeat(2, 1fr)",
+              md: "repeat(4, 1fr)",
+            },
+            gap: 2,
+            alignItems: "start",
+          }}
+        >
+          <TextField
+            select
+            label="Date Range"
+            value={quickFilter}
+            onChange={handleQuickFilter}
+            InputLabelProps={{ shrink: true }}
+            fullWidth
+          >
+            {availableFilters.map((option) => (
+              <MenuItem
+                key={option.value}
+                value={option.value}
+              >
+                {option.label}
+              </MenuItem>
+            ))}
+          </TextField>
 
-    private String sanitizePathSegment(String input) {
+          <DatePicker
+            value={start}
+            format="DD-MM-YYYY"
+            minDate={MIN_ALLOWED_DATE}
+            maxDate={etlDate}
+            views={["year", "month", "day"]}
+            disableHighlightToday
+            onChange={(value) => {
+              setStart(value);
+              setQuickFilter("custom");
+            }}
+            slotProps={{
+              textField: {
+                label: "From Date*",
+                InputLabelProps: { shrink: true },
+                placeholder: "DD-MM-YYYY",
+                error: !!fromDateError,
+                fullWidth: true,
+              },
+            }}
+          />
 
-        if (input == null || input.isBlank()) {
-            throw new IllegalArgumentException("Invalid path");
-        }
+          <DatePicker
+            value={end}
+            format="DD-MM-YYYY"
+            minDate={
+              start || MIN_ALLOWED_DATE
+            }
+            maxDate={etlDate}
+            views={["year", "month", "day"]}
+            disableHighlightToday
+            disabled={!start}
+            onChange={(value) => {
+              setEnd(value);
+              setQuickFilter("custom");
+            }}
+            slotProps={{
+              textField: {
+                label: "To Date*",
+                InputLabelProps: { shrink: true },
+                placeholder: "DD-MM-YYYY",
+                error: !!toDateError,
+                fullWidth: true,
+              },
+            }}
+          />
 
-        String sanitized = input.trim();
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: {
+                xs: "stretch",
+                sm: "flex-end",
+              },
+              gap: 1.5,
+              height: "100%",
+              alignItems: "center",
+            }}
+          >
+            <StyledButton
+              variant="contained"
+              startIcon={<RestartAltIcon />}
+              onClick={handleReset}
+              sx={{
+                flex: {
+                  xs: 1,
+                  sm: "unset",
+                },
+              }}
+            >
+              Reset
+            </StyledButton>
 
-        if (sanitized.contains("..")) {
-            throw new SecurityException("Directory traversal detected");
-        }
+            <StyledButton
+              variant="contained"
+              startIcon={<SearchIcon />}
+              disabled={
+                !(cgl && currency && branch && start && end) ||
+                fromDateError !== null ||
+                toDateError !== null
+              }
+              onClick={handleSubmit}
+              sx={{
+                flex: {
+                  xs: 1,
+                  sm: "unset",
+                },
+              }}
+            >
+              Search
+            </StyledButton>
+          </Box>
+        </Box>
+      </LocalizationProvider>
 
-        if (!SAFE_PATH_PATTERN.matcher(sanitized).matches()) {
-            throw new SecurityException("Invalid characters in path");
-        }
-
-        return sanitized;
-    }
+      {validationMessages.length > 0 && (
+        <Box
+          sx={{
+            mt: 2,
+            p: 1.5,
+            borderRadius: 2,
+            border: "1px solid #ff4d4f",
+            bgcolor: "#fff1f0",
+          }}
+        >
+          <Stack spacing={0.5}>
+            {validationMessages.map((message, index) => (
+              <Typography
+                key={index}
+                variant="body2"
+                sx={{
+                  color: "#d32f2f",
+                  fontWeight: 600,
+                }}
+              >
+                • {message}
+              </Typography>
+            ))}
+          </Stack>
+        </Box>
+      )}
+    </Box>
+  );
 }
