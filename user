@@ -1,6 +1,258 @@
+import React from "react";
+import { Box, Typography, Chip, Button , CircularProgress} from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
+import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 
-email = madhavi.sabbisetty.cbstcs@sbi.co.in
-always-auth = true
-registry=https://artifactory.jfrog.sbi/artifactory/api/npm/cbops-npm-virtual/
-//artifactory.jfrog.sbi/artifactory/api/npm/cbops-npm-virtual/:_authToken=cmVmdGtuOjAxOjE4MTkwOTgyODg6UU4xa0tqZjU0c0xJUlphQ3NIYWhicmdQV3FN
-noproxy=https://artifactory.jfrog.sbi/ui/,sbi.co.in     
+const columns = [
+  { field: "errorDate", headerName: "Date", flex: 1 },
+  { field: "branchCode", headerName: "Branch", flex: 1 },
+  { field: "currency", headerName: "Currency", flex: 0.9 },
+  { field: "cgl", headerName: "CGL", flex: 1 },
+  { field: "cbsBalance", headerName: "CBS Balance", flex: 1.1 },
+  { field: "glBalance", headerName: "GL Balance", flex: 1.1 },
+  { field: "differenceAmount", headerName: "Difference Amount", flex: 1.2 },
+  { field: "diffYesterday", headerName: "Diff. Yesterday", flex: 1.1 },
+  { field: "type", headerName: "Type", flex: 0.8 },
+  { field: "head", headerName: "Head", flex: 0.8 },
+  { field: "firstErrorDate", headerName: "Error Date", flex: 1 },
+];
+
+export default function BalanceDateWiseTable({
+  rows = [],
+  loading = false,
+  totalElements = 0,
+  paginationModel,
+  setPaginationModel,
+  onExport,
+  exportLoading
+}) {
+  const data = rows.map((r, i) => ({
+    ...r,
+    id: r.id || `row-${i}`,
+    errorDate: r.reconRunDate ?? "-",
+    branchCode: r.branchCode || r.branch || "-",
+    currency: r.currency || "-",
+    cgl: r.cgl || r.cglNumber || "-",
+    cbsBalance: r.cbsBalance ?? "-",
+    glBalance: r.glBalance ?? "-",
+    differenceAmount: r.differenceAmount ?? r.difference ?? "-",
+    diffYesterday: r.diffBwYesterday ?? "-",
+    type: r.type || "-",
+    head: r.head || "-",
+    firstErrorDate: r.FIRST_ERROR_DATE || "-",
+  }));
+
+  return (
+    <Box sx={{ mt: 2.5, width: "100%" }}>
+      {/* OUTER BOX */}
+      <Box
+        sx={{
+          width: "100%",
+          height: 470,
+          p: 2,
+          borderRadius: 3,
+          bgcolor: "rgba(255,255,255,.45)",
+          border: "1px solid",
+          borderColor: "divider",
+          overflow: "hidden",
+        }}
+      >
+        {/* TABLE HEADING */}
+        <Box
+          sx={{
+            height: 48,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            px: 0.5,
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: "1.05rem",
+                fontWeight: 700,
+                color: "text.primary",
+              }}
+            >
+              Balance Difference Records
+            </Typography>
+
+            <Chip
+              label={
+                totalElements
+                  ? `${totalElements} Records`
+                  : "No Records"
+              }
+              size="small"
+              sx={{
+                height: 24,
+                fontSize: ".7rem",
+                fontWeight: 700,
+                color: "primary.main",
+                bgcolor: "rgba(88,70,159,.08)",
+                borderRadius: 1.5,
+              }}
+            />
+          </Box>
+
+          <Button
+            size="small"
+            variant="contained"
+            disabled={!data.length || exportLoading}
+            startIcon={exportLoading?(<CircularProgress size={16} color={"inherit"}/>):(<FileDownloadOutlinedIcon/>)}
+            onClick={onExport}
+            sx={{
+              textTransform: "none",
+              fontSize: ".75rem",
+              fontWeight: 600,
+              borderRadius: "8px",
+              boxShadow: "none",
+              minWidth: 82,
+              height: 32,
+            }}
+          >
+            {exportLoading?"Preparing...": "Export"}
+          </Button>
+        </Box>
+
+        {/* INNER TABLE BOX */}
+        <Box
+          sx={{
+            width: "100%",
+            height: 390,
+            bgcolor: "background.paper",
+            borderRadius: 2.5,
+            border: "1px solid",
+            borderColor: "divider",
+            overflow: "hidden",
+          }}
+        >
+          <DataGrid
+            rows={data}
+            columns={columns}
+            loading={loading}
+            rowCount={totalElements}
+            paginationMode="server"
+            paginationModel={paginationModel}
+            onPaginationModelChange={setPaginationModel}
+            pageSizeOptions={[25, 50, 100]}
+            disableRowSelectionOnClick
+            hideFooterSelectedRowCount
+            rowHeight={45}
+            columnHeaderHeight={52}
+            slots={{
+              noRowsOverlay: () => (
+                <Box
+                  sx={{
+                    height: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 1,
+                  }}
+                >
+                  <ErrorOutlineOutlinedIcon
+                    sx={{
+                      fontSize: 24,
+                      color: "text.secondary",
+                    }}
+                  />
+
+                  <Typography
+                    sx={{
+                      fontSize: ".9rem",
+                      fontWeight: 600,
+                      color: "text.secondary",
+                    }}
+                  >
+                    No difference records available for the selected criteria
+                  </Typography>
+                </Box>
+              ),
+            }}
+            sx={{
+              width: "100%",
+              height: "100%",
+              border: 0,
+
+              /* COLUMN HEADER */
+              "& .MuiDataGrid-columnHeaders": {
+                height: 52,
+                minHeight: 52,
+                bgcolor: "rgba(88,70,159,.035)",
+                borderBottom: "1px solid",
+                borderColor: "divider",
+              },
+
+              "& .MuiDataGrid-columnHeader": {
+                px: 1.5,
+                outline: "none",
+              },
+
+              "& .MuiDataGrid-columnHeaderTitle": {
+                fontSize: ".8rem",
+                fontWeight: 700,
+                color: "primary.dark",
+              },
+
+              /* SINGLE DEFAULT 3-DOT MENU */
+              "& .MuiDataGrid-menuIconButton": {
+                opacity: 1,
+                visibility: "visible",
+                width: 28,
+                height: 28,
+              },
+
+              /* TABLE CELLS */
+              "& .MuiDataGrid-cell": {
+                px: 1.5,
+                fontSize: ".8rem",
+                color: "text.primary",
+                borderBottom: "1px solid rgba(0,0,0,.06)",
+                outline: "none",
+              },
+
+              "& .MuiDataGrid-row:hover": {
+                bgcolor: "rgba(88,70,159,.025)",
+              },
+
+              /* NO RECORDS */
+              "& .MuiDataGrid-overlay": {
+                bgcolor: "transparent",
+              },
+
+              /* FOOTER */
+              "& .MuiDataGrid-footerContainer": {
+                height: 52,
+                minHeight: 52,
+                borderTop: "1px solid",
+                borderColor: "divider",
+                bgcolor: "background.paper",
+              },
+
+              "& .MuiTablePagination-root": {
+                fontSize: ".8rem",
+              },
+
+              "& .MuiTablePagination-selectLabel": {
+                fontSize: ".8rem",
+              },
+
+              "& .MuiTablePagination-displayedRows": {
+                fontSize: ".8rem",
+              },
+            }}
+          />
+        </Box>
+      </Box>
+    </Box>
+  );
+}
