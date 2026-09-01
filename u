@@ -1,123 +1,240 @@
-package com.fincore.ReportService.config;
+import React from "react";
+import { Box, Typography } from "@mui/material";
+import CustomChip from "../../../utils/CustomChip";
 
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+const formatAmount = (value) =>
+  value != null
+    ? Number(value).toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    : "-";
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.AuthorityUtils;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
-import org.springframework.web.filter.OncePerRequestFilter;
-import java.io.IOException;
-import lombok.extern.slf4j.Slf4j;
+export const balanceDifferenceColumns = [
+  {
+    field: "reconDate",
+    headerName: "Date",
+    flex: 0.8,
+    minWidth: 125,
+    sortable: true,
+    filterable: false,
+  },
 
-/**
- * Validates the internal token received from Communication Service.
- */
+  {
+    field: "cbsBalance",
+    headerName: "CBS Balance",
+    flex: 1,
+    minWidth: 180,
+    headerAlign: "right",
+    align: "right",
+    sortable: false,
 
-@Slf4j
-@Component
-public class InternalTokenFilter extends OncePerRequestFilter {
+    renderCell: (params) => {
+      const value = Number(params.value);
+      const negative = value < 0;
 
-    // Expected token configured in Report Service application.properties
-    @Value("${security.internal-token}")
-    private String expectedToken;
+      return (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            width: "100%",
+            height: "100%",
+            fontSize: "0.8rem",
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              color: negative ? "#d32f2f" : "#2e7d32",
+              mr: 1,
+            }}
+          >
+            {formatAmount(value)}
+          </Typography>
 
-    @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain)
-            throws ServletException, IOException {
+          <CustomChip
+            label={negative ? "Dr" : "Cr"}
+            size="small"
+            sx={{
+              height: 20,
+              fontSize: "0.68rem",
+              fontWeight: 700,
+              bgcolor: negative
+                ? "rgba(211,47,47,.08)"
+                : "rgba(46,125,50,.08)",
+              color: negative ? "#d32f2f" : "#2e7d32",
+              border: `1px solid ${
+                negative
+                  ? "rgba(211,47,47,.2)"
+                  : "rgba(46,125,50,.2)"
+              }`,
+            }}
+          />
+        </Box>
+      );
+    },
+  },
 
-        // Read the internal token from the request header
-        String token = request.getHeader("X-Internal-Token");
+  {
+    field: "glBalance",
+    headerName: "GL Balance",
+    flex: 1,
+    minWidth: 180,
+    headerAlign: "right",
+    align: "right",
+    sortable: false,
 
-        log.info("Internal token filter executed for URI: {}",request.getRequestURI());
-        log.info("Expected token configured: {}",expectedToken);
-        log.info("Token received: {}",token);
-        
-        // Reject the request if the token is missing or invalid
-        if (token != null && token.equals(expectedToken)) {
+    renderCell: (params) => {
+      const value = Number(params.value);
+      const negative = value < 0;
 
-            // Mark the request as authenticated
-            UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(
-                            "communication-service",
-                            null,
-                            AuthorityUtils.createAuthorityList(
-                                    "ROLE_INTERNAL_SERVICE"));
+      return (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            width: "100%",
+            height: "100%",
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              color: negative ? "#d32f2f" : "#2e7d32",
+              mr: 1,
+            }}
+          >
+            {formatAmount(value)}
+          </Typography>
 
-            SecurityContextHolder
-                    .getContext()
-                    .setAuthentication(authentication);
-        }
+          <CustomChip
+            label={negative ? "Dr" : "Cr"}
+            size="small"
+            sx={{
+              height: 20,
+              fontSize: "0.68rem",
+              fontWeight: 700,
+              bgcolor: negative
+                ? "rgba(211,47,47,.08)"
+                : "rgba(46,125,50,.08)",
+              color: negative ? "#d32f2f" : "#2e7d32",
+              border: `1px solid ${
+                negative
+                  ? "rgba(211,47,47,.2)"
+                  : "rgba(46,125,50,.2)"
+              }`,
+            }}
+          />
+        </Box>
+      );
+    },
+  },
 
-        // Continue to the next filter/controller
-        filterChain.doFilter(request, response);
-    }
-}package com.fincore.ReportService.config;
+  {
+    field: "differenceAmount",
+    headerName: "Difference Amount",
+    flex: 1,
+    minWidth: 190,
+    headerAlign: "right",
+    align: "right",
+    sortable: false,
 
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+    renderCell: (params) => {
+      const value = Number(params.value);
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.AuthorityUtils;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
-import org.springframework.web.filter.OncePerRequestFilter;
-import java.io.IOException;
-import lombok.extern.slf4j.Slf4j;
+      return (
+        <Typography
+          variant="body2"
+          sx={{
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            textAlign: "right",
+            fontWeight: 600,
+            fontSize: "0.8rem",
+            color:
+              value < 0
+                ? "#d32f2f"
+                : value > 0
+                ? "#2e7d32"
+                : "text.secondary",
+          }}
+        >
+          {formatAmount(value)}
+        </Typography>
+      );
+    },
+  },
 
-/**
- * Validates the internal token received from Communication Service.
- */
+  {
+    field: "diffYesterday",
+    headerName: "Diff. Yesterday",
+    flex: 1,
+    minWidth: 170,
+    headerAlign: "right",
+    align: "right",
+    sortable: false,
 
-@Slf4j
-@Component
-public class InternalTokenFilter extends OncePerRequestFilter {
+    renderCell: (params) => {
+      const value = Number(params.value);
 
-    // Expected token configured in Report Service application.properties
-    @Value("${security.internal-token}")
-    private String expectedToken;
+      return (
+        <Typography
+          variant="body2"
+          sx={{
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            textAlign: "right",
+            fontWeight: 600,
+            fontSize: "0.8rem",
+            color:
+              value < 0
+                ? "#d32f2f"
+                : value > 0
+                ? "#2e7d32"
+                : "text.secondary",
+          }}
+        >
+          {formatAmount(value)}
+        </Typography>
+      );
+    },
+  },
 
-    @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain)
-            throws ServletException, IOException {
+  {
+    field: "type",
+    headerName: "Type",
+    flex: 0.7,
+    minWidth: 100,
+    sortable: false,
+    filterable: false,
+  },
 
-        // Read the internal token from the request header
-        String token = request.getHeader("X-Internal-Token");
+  {
+    field: "head",
+    headerName: "Head",
+    flex: 0.8,
+    minWidth: 120,
+    sortable: false,
+    filterable: false,
+  },
 
-        log.info("Internal token filter executed for URI: {}",request.getRequestURI());
-        log.info("Expected token configured: {}",expectedToken);
-        log.info("Token received: {}",token);
-        
-        // Reject the request if the token is missing or invalid
-        if (token != null && token.equals(expectedToken)) {
-
-            // Mark the request as authenticated
-            UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(
-                            "communication-service",
-                            null,
-                            AuthorityUtils.createAuthorityList(
-                                    "ROLE_INTERNAL_SERVICE"));
-
-            SecurityContextHolder
-                    .getContext()
-                    .setAuthentication(authentication);
-        }
-
-        // Continue to the next filter/controller
-        filterChain.doFilter(request, response);
-    }
-}
+  {
+    field: "errorDate",
+    headerName: "Error Date",
+    flex: 0.8,
+    minWidth: 125,
+    sortable: true,
+    filterable: false,
+  },
+];
