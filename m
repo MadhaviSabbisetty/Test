@@ -1,795 +1,579 @@
-controller file
-package com.tcs.fincore.AsciiGenerationService.Controller;
+import React, { useEffect, useState, useCallback } from "react";
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import dayjs from "dayjs";
+import { Box, Paper, Typography, Stack, LinearProgress ,Chip} from "@mui/material";
+import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
+import ManageSearchOutlinedIcon from "@mui/icons-material/ManageSearchOutlined";
+import { useSelector } from "react-redux";
+import { getPermissions } from "../../utils/CommonUtilities";
+import BalanceDifferenceFilters from "./Components/BalanceDifferenceFilters";
+import BalanceDifferenceTable from "./Components/BalanceDifferenceTable";
+import { StyledButton } from "./Components/BalanceDifferenceStyles";
+import downloadFile from "../../utils/DownloadUtils";
 
-import com.tcs.fincore.AsciiGenerationService.DTO.ReportRequest;
-import com.tcs.fincore.AsciiGenerationService.Service.AsciiGenerationService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+export default function BalanceRengeSearchScreen() {
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  const user = useSelector((state) => state.auth.user);
+  const selectedMenu = useSelector((state) => state.menus.selectedMenuItem);
+  const permissions = getPermissions(selectedMenu);
+  const chipSx = {
+  height: 28,
+  borderRadius: 1.5,
+  fontSize: "11px",
+  fontWeight: 600,
+  color: "#58469f",
+  borderColor: "rgba(88,70,159,.28)",
+  bgcolor: "rgba(88,70,159,.035)",
+};
 
-@RestController
-@RequestMapping("/api/ascii")
-public class AsciiController {
+  const [data, setData] = useState(null);
+  const [branches, setBranches] = useState([]);
+  const [cgls, setCgls] = useState([]);
+  const [currencies, setCurrencies] = useState([]);
+  const [start, setStart] = useState(null);
+  const [end, setEnd] = useState(null);
+  const [currency, setCurrency] = useState("");
+  const [cgl, setCgl] = useState(null);
+   const [exportLoading,setExportLoading] =useState(false);
+  const branchCodeStr = String(user?.branch || "").padStart(5, "0");
+  const [branch, setBranch] = useState(
+    user?.isCircle === false ? `${branchCodeStr}-${user?.branchName || ""}` : ""
+  );
+  const [etlDate, setEtlDate] = useState(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [glcc, setGlcc] = useState("");
+  const [glccValidated, setGlccValidated] = useState(false);
+  const [glccLoading, setGlccLoading] = useState(false);
+  const [loading, setLoading] = useState({
+    branch: false,
+    cgl: false,
+    currency: false,
+    balance: false,
+  });
+  const [rowCount, setRowCount] = useState(0);
+  const [req] = useState({ branch: true, cgl: true });
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
+  const [paginationModel, setPaginationModel] = useState({
+    page: 0,
+    pageSize: 25,
+  });
 
-    @Autowired
-    private AsciiGenerationService service;
+  const isNumeric = (value) => (value ? /^\d+$/.test(value) : false);
 
-    @PostMapping("/generate")
-    public ResponseEntity<String> generate(@RequestBody ReportRequest request) {
-        try {
-            if (request.getId() == null) {
-                return ResponseEntity.badRequest().body("Error: 'id' is missing");
-            }
+  const fetchDifferences = useCallback(async () => {
+    try {
+      setLoading((prev) => ({ ...prev, balance: true }));
 
-            String status = service.initiateBatch(request.getId());
+      const matched = branch?.match(/^(\d{5})-/);
+      if (!matched || !start || !end) return;
 
-            return ResponseEntity.accepted().body("Success: " + status);
+      const payload = {
+        fromDate: start.format("YYYY-MM-DD"),
+        toDate: end.format("YYYY-MM-DD"),
+        branchCode: matched[1],
+        currency: currency || null,
+        cgl: cgl?.split(" - ")[0] || null,
+      };
 
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
-        }
+      const response = await callApi(
+        `/ES/differences/search?page=${paginationModel.page}&size=${paginationModel.pageSize}`,
+        payload,
+        "POST"
+      );
+
+      const content = response?.data?.content ?? response?.content ?? [];
+      const totalElements =
+        response?.data?.page?.totalElements || 0;
+
+      if (!Array.isArray(content)) {
+        throw new Error("Unexpected response format");
+      }
+
+      const mappedData = content.map((item, index) => ({
+        id: item.id ?? `difference-${paginationModel.page}-${index}`,
+        errorDate: item.FIRST_ERROR_DATE || "-",
+        reconDate: item.reconRunDate || "-",
+        branch: item.branchCode || "-",
+        branchName: item.branchName || "NA",
+        currency: item.currency || "-",
+        currencyName: item.currencyName || "NA",
+        cgl: item.cgl || "-",
+        cglDescription: item.cglDescription || item.description || "NA",
+        cbsBalance: item.cbsBalance ?? 0,
+        glBalance: item.glBalance ?? 0,
+        differenceAmount: item.differenceAmount ?? 0,
+        diffYesterday: item.diffBwYesterday ?? item.diffYesterday ?? 0,
+        type: item.type || "-",
+        head: item.head || "-",
+      }));
+
+      setData(mappedData);
+      setRowCount(totalElements);
+      setFiltersExpanded(false);
+
+      if (mappedData.length === 0) {
+        showSnackBar("No records found", "info");
+      }
+    } catch (error) {
+      console.error("Balance Difference API Error:", error);
+      setData([]);
+      setRowCount(0);
+      showSnackBar(
+        error?.message || "Failed to fetch balance difference records.",
+        "error"
+      );
+    } finally {
+      setLoading((prev) => ({ ...prev, balance: false }));
+      setSearchLoading(false);
     }
-}
-
-
-dto file 1 file job
-package com.tcs.fincore.AsciiGenerationService.DTO;
-
-import java.nio.file.Path;
-
-public class FileJob {
-    private Long configId;
-    private Path filePath;
-    private String batchId; // <--- This was missing
-
-    // The constructor must accept 3 arguments now
-    public FileJob(Long configId, Path filePath, String batchId) {
-        this.configId = configId;
-        this.filePath = filePath;
-        this.batchId = batchId;
-    }
-
-    public Long getConfigId() { return configId; }
-    public Path getFilePath() { return filePath; }
-    public String getBatchId() { return batchId; } // <--- This getter was missing
-}
-
-dto file 2 report request
-package com.tcs.fincore.AsciiGenerationService.DTO;
-
-import lombok.Data;
-
-@Data
-public class ReportRequest {
-    private Long id; // The user sends this in JSON
-}
-
-model file 
-package com.tcs.fincore.AsciiGenerationService.Model;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import lombok.Data;
-
-@Entity
-@Table(name = "ASCII_CONFIG")
-@Data
-public class AsciiConfig {
-
-    @Id
-    @Column(name = "ID")
-    private Long id;
-
-    @Column(name = "REPORT_ID")
-    private String reportId;
-
-    @Column(name = "FILE_TYPE")
-    private String fileType;
-
-    @Column(name = "INPUT_FILE_NAME")
-    private String inputFileName;
-
-    @Column(name = "OUTPUT_FIRST_LINE")
-    private String outputFirstLine;
-
-    @Column(name = "OUTPUT_END_LINE")
-    private String outputEndLine;
-
-    @Column(name = "INPUT_HEAD_COL")
-    private Integer inputHeadCol;
-
-    @Column(name = "INPUT_HEAD_REGEX")
-    private String inputHeadRegex;
-
-    @Column(name = "OUTPUT_HEAD_COL_PAD")
-    private String outputHeadColPad;
-
-    @Column(name = "AMOUNT_COL_SEQ")
-    private String amountColSeq;
-
-    @Column(name = "OUTPUT_AMT_COL_LOGIC")
-    private String outputAmtColLogic;
-
-    @Column(name = "OUTPUT_AMT_DECIMAL")
-    private String outputAmtDecimal;
-
-    @Column(name = "OUTPUT_AMT_COL_PAD")
-    private String outputAmtColPad;
-
-    @Column(name = "OUTPUT_AMT_SIGN")
-    private String outputAmtSign;
-
-    @Column(name = "OUTPUT_PER_LINE_HEAD")
-    private Integer outputPerLineHead;
-
-    @Column(name = "OUTPUT_INCLUDE_CONDITION")
-    private String outputIncludeCondition;
-}
-
-repository file
-package com.tcs.fincore.AsciiGenerationService.Repository;
-
-
-import com.tcs.fincore.AsciiGenerationService.Model.AsciiConfig;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
-@Repository
-public interface AsciiConfigRepository extends JpaRepository<AsciiConfig, Long> {
-}
-
-service files 1 asciigenservice 
-package com.tcs.fincore.AsciiGenerationService.Service;
-import com.tcs.fincore.AsciiGenerationService.DTO.FileJob;
-import com.tcs.fincore.AsciiGenerationService.Model.AsciiConfig;
-import com.tcs.fincore.AsciiGenerationService.Repository.AsciiConfigRepository;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.math.BigDecimal;
-import java.nio.file.DirectoryStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Stream;
-
-@Service
-@Slf4j
-public class AsciiGenerationService {
-
-    @Autowired
-    private AsciiConfigRepository configRepo;
-
-    @Autowired
-    private JobQueueManager jobQueueManager;
-
-    @Value("${app.input.base.path}")
-    private String baseDirectoryPath;
-
-    private static final Map<String, Pattern> INPUT_REGEX_CACHE = new ConcurrentHashMap<>();
-    private static final Map<String, BatchStats> batchTracker = new ConcurrentHashMap<>();
-
-    private static class BatchStats {
-        long startTime;
-        AtomicInteger remainingFiles;
-        int totalFiles;
-        BatchStats(int totalFiles) {
-            this.startTime = System.currentTimeMillis();
-            this.totalFiles = totalFiles;
-            this.remainingFiles = new AtomicInteger(totalFiles);
-        }
-    }
-
-    // --- 1. THE DISCOVERY PHASE (Unchanged) ---
-    public String initiateBatch(Long configId) {
-        try {
-            AsciiConfig config = configRepo.findById(configId)
-                    .orElseThrow(() -> new RuntimeException("Config not found: " + configId));
-
-            String reportId = config.getReportId();
-            String searchKeyword = reportId.contains("_") ? reportId.split("_")[0] : reportId;
-
-            Path baseDir = Paths.get(baseDirectoryPath);
-            if (!Files.exists(baseDir) || !Files.isDirectory(baseDir)) {
-                throw new RuntimeException("Base directory does not exist: " + baseDirectoryPath);
-            }
-
-            List<Path> foundFiles = new ArrayList<>();
-            try (DirectoryStream<Path> stream = Files.newDirectoryStream(baseDir, entry ->
-                    Files.isRegularFile(entry) && entry.getFileName().toString().contains(searchKeyword))) {
-                for (Path entry : stream) foundFiles.add(entry);
-            }
-
-            if (foundFiles.isEmpty()) return "No files found for keyword: " + searchKeyword;
-
-            String batchId = UUID.randomUUID().toString();
-            batchTracker.put(batchId, new BatchStats(foundFiles.size()));
-
-            log.info("Batch Started. Batch ID: {} | Total Files: {}", batchId, foundFiles.size());
-
-            for (Path entry : foundFiles) {
-                jobQueueManager.submitFileJob(new FileJob(configId, entry, batchId));
-            }
-
-            return "Batch Initiated. ID: " + batchId + " | Files: " + foundFiles.size();
-
-        } catch (Exception e) {
-            log.error("Error during Batch Initiation", e);
-            throw new RuntimeException("Failed to initiate batch: " + e.getMessage());
-        }
-    }
-
-    // --- 2. THE WORKER PHASE ---
-    public void processSingleFile(FileJob job) {
-        Path inputPath = job.getFilePath();
-        Long id = job.getConfigId();
-        String batchId = job.getBatchId();
-
-        try {
-            AsciiConfig config = configRepo.findById(id).orElseThrow();
-
-            // --- EDGE CASE FIX: Safe File Name Handling ---
-            String originalName = inputPath.getFileName().toString();
-            int dotIndex = originalName.lastIndexOf('.');
-            String baseName = (dotIndex == -1) ? originalName : originalName.substring(0, dotIndex);
-
-            String outputFileName = "GENERATED_" + config.getReportId() + "_" + baseName + "_" + System.currentTimeMillis() + config.getFileType();
-            Path outputPath = inputPath.getParent().resolve(outputFileName);
-
-            // --- STREAMING PROCESSING ---
-            try (Stream<String> lines = Files.lines(inputPath);
-                 BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
-
-                // Header
-                HeaderInfo headerInfo = parseHeaderEfficiently(inputPath);
-                String branchPadded = String.format("%5s", headerInfo.branchCode).replace(' ', '0');
-                String header = config.getOutputFirstLine() + branchPadded + headerInfo.reportDate + "F";
-
-                writer.write(header);
-                writer.newLine();
-
-                List<String> lineBuffer = new ArrayList<>();
-                int batchSize = config.getOutputPerLineHead();
-
-                lines.forEach(line -> {
-                    try {
-                        String processedRecord = transformLine(line, config);
-                        if (processedRecord != null) {
-                            lineBuffer.add(processedRecord);
-                            if (lineBuffer.size() == batchSize) {
-                                writer.write(String.join("", lineBuffer));
-                                writer.newLine();
-                                lineBuffer.clear();
-                            }
-                        }
-                    } catch (Exception e) {
-                        log.error("Row error in {}", inputPath.getFileName(), e);
-                    }
-                });
-
-                if (!lineBuffer.isEmpty()) {
-                    writer.write(String.join("", lineBuffer));
-                    writer.newLine();
-                }
-
-                if (config.getOutputEndLine() != null && !config.getOutputEndLine().isEmpty()) {
-                    writer.write(config.getOutputEndLine());
-                }
-            }
-
-            checkBatchCompletion(batchId);
-
-        } catch (Exception e) {
-            log.error("Failed to process file: {}", inputPath, e);
-            checkBatchCompletion(batchId);
-        }
-    }
-
-    private void checkBatchCompletion(String batchId) {
-        BatchStats stats = batchTracker.get(batchId);
-        if (stats != null) {
-            int remaining = stats.remainingFiles.decrementAndGet();
-            if (remaining == 0) {
-                long totalDuration = System.currentTimeMillis() - stats.startTime;
-                log.info("BATCH COMPLETED | ID: {} | Time: {} ms", batchId, totalDuration);
-                batchTracker.remove(batchId);
-            }
-        }
-    }
-
-    // --- 3. ROBUST EXTRACT LOGIC (The Core Logic) ---
-    private List<ProcessingItem> extractAmountColumns(String[] cols, AsciiConfig config) {
-        List<ProcessingItem> items = new ArrayList<>();
-        int headIdx = config.getInputHeadCol() - 1;
-        String head = (headIdx < cols.length) ? cols[headIdx].trim() : "";
-
-        String seq = config.getAmountColSeq();
-
-        // [3else4] Logic: Skips Zero/Null, Forces Primary Rules
-        if (seq.contains("else")) {
-            String[] parts = seq.split("else");
-            int primaryCol = Integer.parseInt(parts[0].trim()); // Target Rule Set (3)
-
-            for (String part : parts) {
-                int currentIdx = Integer.parseInt(part.trim()) - 1;
-
-                // Safe Parse with Bound Check
-                BigDecimal val = BigDecimal.ZERO;
-                if (currentIdx < cols.length) {
-                    val = parseAmount(cols[currentIdx]);
-                }
-
-                if (val.compareTo(BigDecimal.ZERO) != 0) {
-                    // FOUND IT: Use 'primaryCol' so correct padding/math rules apply
-                    items.add(new ProcessingItem(head, val, primaryCol));
-                    return items;
-                }
-            }
-            // Fallback: Return 0 for Primary Column
-            items.add(new ProcessingItem(head, BigDecimal.ZERO, primaryCol));
-        }
-
-        // [3and4] Logic: Keeps specific rules for each column
-        else if (seq.contains("and")) {
-            String[] parts = seq.split("and");
-            for (String part : parts) {
-                int idx = Integer.parseInt(part.trim()) - 1;
-                items.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
-            }
-        }
-
-        // Single Column
-        else {
-            int idx = Integer.parseInt(seq.trim()) - 1;
-            items.add(new ProcessingItem(head, parseAmount(cols, idx), idx + 1));
-        }
-        return items;
-    }
-
-    private String transformLine(String line, AsciiConfig config) {
-        String[] columns = line.split("\\|", -1);
-        if (!isValidRow(columns, config)) return null;
-
-        List<ProcessingItem> itemsToProcess = extractAmountColumns(columns, config);
-
-        StringBuilder amountsOnlyBuilder = new StringBuilder();
-        boolean hasValidContent = false;
-
-        for (ProcessingItem item : itemsToProcess) {
-            BigDecimal finalAmt = RuleParser.applyMathLogic(item.amount, item.head, item.colIndex, config.getOutputAmtColLogic());
-            finalAmt = RuleParser.applyDecimalLogic(finalAmt, item.head, item.colIndex, config.getOutputAmtDecimal());
-
-            if (RuleParser.shouldIncludeValue(finalAmt, item.head, item.colIndex, config.getOutputIncludeCondition())) {
-                String amountStr = RuleParser.applyAmountPadding(finalAmt, item.head, item.colIndex, config.getOutputAmtColPad());
-                String signedAmt = RuleParser.applySign(amountStr, finalAmt, item.head, item.colIndex, config.getOutputAmtSign());
-                amountsOnlyBuilder.append(signedAmt);
-                hasValidContent = true;
-            }
-        }
-
-        if (hasValidContent) {
-            String headPadded = RuleParser.applyHeadPadding(itemsToProcess.get(0).head, config.getOutputHeadColPad());
-            return headPadded + amountsOnlyBuilder.toString();
-        }
-        return null;
-    }
-
-    // --- Standard Helpers  ---
-    private BigDecimal parseAmount(String[] cols, int idx) {
-        if (idx >= cols.length) return BigDecimal.ZERO;
-        return parseAmount(cols[idx]);
-    }
-    private BigDecimal parseAmount(String val) {
-        try {
-            if(val == null || val.trim().isEmpty()) return BigDecimal.ZERO;
-            // Robust parsing: remove commas, trim spaces
-            return new BigDecimal(val.trim().replace(",", ""));
-        } catch (Exception e) { return BigDecimal.ZERO; }
-    }
-
-    private HeaderInfo parseHeaderEfficiently(Path path) {
-        HeaderInfo info = new HeaderInfo();
-        info.branchCode = "00000"; info.reportDate = "01012026";
-        Pattern branchPattern = Pattern.compile("(?i)(?:BRANCH|Branch)\\s*::\\s*(\\d+)");
-        Pattern datePattern1 = Pattern.compile("REPORT DATE\\s*::\\s*(\\S+)");
-        Pattern datePattern2 = Pattern.compile("Current Year Date\\s*::\\s*(\\S+)");
-
-        try (Stream<String> stream = Files.lines(path).limit(50)) {
-            stream.forEach(line -> {
-                Matcher mBranch = branchPattern.matcher(line);
-                if (mBranch.find()) info.branchCode = mBranch.group(1);
-                Matcher mDate1 = datePattern1.matcher(line);
-                if (mDate1.find()) info.reportDate = normalizeDate(mDate1.group(1));
-                Matcher mDate2 = datePattern2.matcher(line);
-                if (mDate2.find()) info.reportDate = normalizeDate(mDate2.group(1));
-            });
-        } catch (IOException e) { log.warn("Header read error", e); }
-        return info;
-    }
-
-
-    private boolean isValidRow(String[] cols, AsciiConfig config) {
-        if (cols.length < 2) return false;
-        int idx = config.getInputHeadCol() - 1;
-        if (cols.length <= idx) return false;
-        String head = cols[idx].trim();
-        if (head.isEmpty()) return false;
-        Pattern p = INPUT_REGEX_CACHE.computeIfAbsent(config.getInputHeadRegex(), Pattern::compile);
-        return p.matcher(head).lookingAt();
-    }
-
-    private String normalizeDate(String dateStr) {
-        if (dateStr == null) return "01012026";
-        List<DateTimeFormatter> formatters = Arrays.asList(
-                DateTimeFormatter.ofPattern("dd-MM-yyyy"), DateTimeFormatter.ofPattern("dd/MM/yyyy"),
-                DateTimeFormatter.ofPattern("yyyy-MM-dd"), DateTimeFormatter.ofPattern("dd.MM.yyyy"),
-                DateTimeFormatter.ofPattern("MM-dd-yyyy")
+  }, [
+    callApi,
+    branch,
+    currency,
+    cgl,
+    start,
+    end,
+    paginationModel,
+    showSnackBar,
+  ]);
+
+  const validateGlcc = async (value) => {
+    try {
+      setGlccLoading(true);
+
+      const response = await callApi(
+        "/CM/common-master/validate-glcc",
+        { glcc: value },
+        "POST"
+      );
+
+      const glccData = response?.data;
+
+      if (glccData?.valid) {
+        setBranch(
+          `${glccData.branchCode}-${glccData.branchName?.trim() || ""}`
         );
-        for (DateTimeFormatter formatter : formatters) {
-            try { return LocalDate.parse(dateStr, formatter).format(DateTimeFormatter.ofPattern("ddMMyyyy")); }
-            catch (DateTimeParseException e) {}
-        }
-        if (dateStr.contains("-") && dateStr.split("-").length == 3) {
-            String[] parts = dateStr.split("-");
-            if (parts[0].length() == 4) return parts[2] + parts[1] + parts[0];
-        }
-        return "01012026";
-    }
+        setCurrency(glccData.currencyCode);
+        setCgl(`${glccData.cglNumber} - ${glccData.cglDescription}`);
+        setGlccValidated(true);
+      } else {
+        setGlccValidated(false);
+        setBranch("");
+        setCurrency("");
+        setCgl("");
+        showSnackBar(
+          glccData?.errors?.join(", ") || "Invalid GLCC",
+          "error"
+        );
+      }
+    } catch (error) {
+      setGlccValidated(false);
+      setBranch("");
+      setCurrency("");
+      setCgl("");
 
-    private static class ProcessingItem {
-        String head; BigDecimal amount; int colIndex;
-        ProcessingItem(String h, BigDecimal a, int c) { head=h; amount=a; colIndex=c; }
+      const errors =
+        error?.response?.data?.data?.errors ||
+        error?.response?.data?.errors;
+
+      showSnackBar(errors?.join(", ") || "Invalid GLCC", "error");
+    } finally {
+      setGlccLoading(false);
     }
-    private static class HeaderInfo { String branchCode; String reportDate; }
+  };
+
+  const fetchCurrencies = async () => {
+    setLoading((prev) => ({ ...prev, currency: true }));
+
+    try {
+      const response = await callApi(
+        "/CM/common-master/currency-code-name-only",
+        null,
+        "GET"
+      );
+
+      const sortedData = (response?.data || []).sort((a, b) => {
+        if (a.currencyCode === "INR") return -1;
+        if (b.currencyCode === "INR") return 1;
+        return a.currencyName.localeCompare(b.currencyName);
+      });
+
+      setCurrencies(sortedData);
+    } catch {
+      showSnackBar("Currency data not available", "error");
+    } finally {
+      setLoading((prev) => ({ ...prev, currency: false }));
+    }
+  };
+
+  const fetchSearchData = useCallback(
+    async (type, term) => {
+      try {
+        setLoading((prev) => ({ ...prev, [type]: true }));
+
+        let circleValue = "";
+
+        if (permissions?.wholebank === true) {
+          circleValue = "null";
+        } else if (user?.isCircle === true || permissions?.circle) {
+          circleValue = user?.circleCode;
+        }
+
+        const url =
+          type === "branch"
+            ? `/CM/common-master/branches-code-name-only?q=${encodeURIComponent(
+                term
+              )}&circleCode=${circleValue || ""}`
+            : `/CM/common-master/cgl-code-description-only?q=${encodeURIComponent(
+                term
+              )}`;
+
+        const response = await callApi(url, null, "GET");
+
+        if (response?.data?.length > 0) {
+          if (type === "branch") {
+            setBranches(
+              response.data.map((item) => `${item.code}-${item.name}`)
+            );
+          } else {
+            setCgls(
+              response.data.map(
+                (item) => `${item.cglNumber} - ${item.description}`
+              )
+            );
+          }
+        } else {
+          showSnackBar("Data not available", "error");
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading((prev) => ({ ...prev, [type]: false }));
+      }
+    },
+    [callApi, permissions, user, showSnackBar]
+  );
+
+  const handleSearchChange = (value, reason, type) => {
+    if (reason === "input" && value?.length >= 3) {
+      fetchSearchData(type, value);
+    } else if (reason === "clear" || reason === "blur") {
+      if (type === "branch") setBranches([]);
+      if (type === "cgl") setCgls([]);
+    }
+  };
+
+  const handleSubmit = () => {
+    setSearchLoading(true);
+
+    if (paginationModel.page === 0) {
+      fetchDifferences();
+    } else {
+      setPaginationModel((prev) => ({ ...prev, page: 0 }));
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      setExportLoading(true);
+  
+      const payload = {
+        fromDate: start.format("YYYY-MM-DD"),
+        toDate: end.format("YYYY-MM-DD"),
+        branchCode: branch?.split("-")[0],
+        currency:currency,
+        cgl: cgl?.split(" - ")[0],
+      };
+  
+      const downloadResponse = await callApi(
+        "/ES/differences/export",
+        payload,
+        "POST",
+        "arraybuffer",
+      );
+  
+      const fileName = `Balance_Difference_${payload.reconRunDate}`;
+  
+      if (downloadResponse && downloadResponse?.byteLength > 0) {
+        downloadFile(downloadResponse, "excel", fileName);
+        return;
+      }
+    } catch (error) {
+      console.error("Something Went Wrong!!", error);
+      showSnackBar("Download Failed", "error");
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const resetState = () => {
+    setData(null);
+    setCgl(null);
+    setCgls([]);
+    setBranch(
+      user?.isCircle === false
+        ? `${branchCodeStr}-${user?.branchName || ""}`
+        : ""
+    );
+    setCurrency("");
+    setStart(null);
+    setEnd(null);
+    setBranches([]);
+    setGlcc("");
+    setGlccValidated(false);
+    setFiltersExpanded(true);
+    setPaginationModel({ page: 0, pageSize: 25 });
+  };
+
+  useEffect(() => {
+    if (data) {
+      fetchDifferences();
+    }
+  }, [paginationModel.page, paginationModel.pageSize]);
+
+  useEffect(() => {
+    fetchCurrencies();
+  }, []);
+
+  useEffect(() => {
+    const fetchSystemDate = async () => {
+      try {
+        const response = await callApi(
+          "/PS/file/fincore-date",
+          {},
+          "GET"
+        );
+        const etlRaw = response?.data?.userDate;
+        setEtlDate(
+          etlRaw ? dayjs(etlRaw.split("T")[0]) : dayjs()
+        );
+      } catch {
+        setEtlDate(dayjs());
+      }
+    };
+
+    fetchSystemDate();
+  }, [callApi]);
+
+  return (
+    <Box sx={{ p: 1 }}>
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 1.5, sm: 2, md: 2.5 },
+          mt: { xs: -1, sm: -2 },
+          mb: 3,
+          bgcolor: "rgba(255,255,255,0.4)",
+          backdropFilter: "blur(4px)",
+          border: "1px solid",
+          borderColor: "divider",
+          borderRadius: { xs: 2, sm: 3 },
+          overflow: "hidden",
+        }}
+      >
+       <Box
+  sx={{
+    mb: filtersExpanded ? 1 : 0.5,
+    p: { xs: 1.5, sm: 2 },
+    borderRadius: 2,
+    bgcolor: "background.paper",
+    boxShadow: 2,
+    border: "1px solid",
+    borderColor: "divider",
+  }}
+>
+  <Stack
+    direction={{ xs: "column", sm: "row" }}
+    alignItems={{ xs: "flex-start", sm: "center" }}
+    justifyContent="space-between"
+    spacing={2}
+  >
+    <Stack direction="row" spacing={2} alignItems="center">
+      <Box
+        sx={{
+          width: 44,
+          height: 44,
+          borderRadius: 2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          bgcolor: "rgba(88, 70, 159, 0.1)",
+          border: "1px solid rgba(88, 70, 159, 0.2)",
+          flexShrink: 0,
+        }}
+      >
+        <CompareArrowsIcon
+          sx={{
+            fontSize: 30,
+            color: "#58469f",
+          }}
+        />
+      </Box>
+
+      <Box>
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+          <Typography
+            variant="subtitle1"
+            fontWeight={700}
+            lineHeight={1.2}
+            sx={{
+              fontSize: { xs: "0.95rem", sm: "1rem", md: "1.05rem" },
+            }}
+          >
+            Balance Comparison
+          </Typography>
+
+          <Chip
+            label="CBS ↔ GL"
+            size="small"
+            sx={{
+              height: 22,
+              fontSize: "0.68rem",
+              fontWeight: 700,
+              color: "#58469f",
+              bgcolor: "rgba(88, 70, 159, 0.08)",
+              border: "1px solid rgba(88, 70, 159, 0.2)",
+            }}
+          />
+        </Stack>
+
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{
+            mt: 0.3,
+            fontSize: { xs: "0.75rem", sm: "0.82rem" },
+          }}
+        >
+          Compare CBS and GL balances to identify differences and discrepancies.
+        </Typography>
+      </Box>
+    </Stack>
+
+    
+{data && (
+  <StyledButton
+    variant="contained"
+    startIcon={<ManageSearchOutlinedIcon />}
+    onClick={() => setFiltersExpanded(true)}
+    sx={{
+      textTransform: "none",
+      borderRadius: "8px",
+      fontWeight: 600,
+      minWidth: { xs: "100%", sm: 140 },
+      width: { xs: "100%", sm: "auto" },
+      height: { xs: 38, sm: 32 },
+      px: 1.5,
+      fontSize: { xs: "0.8rem", sm: "0.82rem" },
+    }}
+  >
+    Edit Filters
+  </StyledButton>
+)}
+  </Stack>
+</Box>
+
+{data && (
+  <Stack
+    direction="row"
+    spacing={0.8}
+    flexWrap="wrap"
+    useFlexGap
+    sx={{
+      mt: 1.5,
+      px: 0.5,
+    }}
+  >
+    <Chip
+      label={`Branch: ${branch || "-"}`}
+      variant="outlined"
+      size="small"
+      sx={chipSx}
+    />
+
+    <Chip
+      label={`Currency: ${currency || "-"}`}
+      variant="outlined"
+      size="small"
+      sx={chipSx}
+    />
+
+    <Chip
+      label={`CGL: ${cgl || "-"}`}
+      variant="outlined"
+      size="small"
+      sx={chipSx}
+    />
+
+    <Chip
+      label={`Date: ${start?.format("DD MMM YYYY") || "-"} - ${
+        end?.format("DD MMM YYYY") || "-"
+      }`}
+      variant="outlined"
+      size="small"
+      sx={chipSx}
+    />
+  </Stack>
+)}
+
+{filtersExpanded && searchLoading && !data?.length && (
+          <LinearProgress
+            sx={{
+              height: 3,
+              borderRadius: 999,
+              mb: 2,
+            }}
+          />
+        )}
+
+        {filtersExpanded && (
+          <BalanceDifferenceFilters
+            branch={branch}
+            setBranch={setBranch}
+            currency={currency}
+            setCurrency={setCurrency}
+            cgl={cgl}
+            setCgl={setCgl}
+            start={start}
+            setStart={setStart}
+            end={end}
+            setEnd={setEnd}
+            currencies={currencies}
+            branches={branches}
+            cgls={cgls}
+            loading={loading}
+            req={req}
+            handleSearchChange={handleSearchChange}
+            fetchCurrencies={fetchCurrencies}
+            handleSubmit={handleSubmit}
+            resetState={resetState}
+            isNumeric={isNumeric}
+            user={user}
+            permissions={permissions}
+            etlDate={etlDate}
+            glcc={glcc}
+            setGlcc={setGlcc}
+            glccValidated={glccValidated}
+            setGlccValidated={setGlccValidated}
+            validateGlcc={validateGlcc}
+            glccLoading={glccLoading}
+          />
+        )}
+      </Paper>
+
+      {data && (
+        <BalanceDifferenceTable
+          data={data}
+          loading={loading.balance}
+          rowCount={rowCount}
+          paginationModel={paginationModel}
+          setPaginationModel={setPaginationModel}
+          exportLoading={exportLoading}
+          handleDownloadExcel={handleExport}
+        />
+      )}
+    </Box>
+  );
 }
-
-file 2 job queue manager
-package com.tcs.fincore.AsciiGenerationService.Service;
-
-
-import com.tcs.fincore.AsciiGenerationService.DTO.FileJob;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy; // <--- IMPORT THIS
-import org.springframework.stereotype.Service;
-
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-
-@Service
-@Slf4j
-public class JobQueueManager {
-
-    private final AsciiGenerationService asciiService;
-
-    // Use Constructor Injection with @Lazy to break the cycle
-    @Autowired
-    public JobQueueManager(@Lazy AsciiGenerationService asciiService) {
-        this.asciiService = asciiService;
-    }
-
-    // The Queue: Holds 'FileJob' (Config ID + Specific File Path)
-    private final BlockingQueue<FileJob> jobQueue = new LinkedBlockingQueue<>();
-
-    // 10 Threads processing files in parallel
-    private final ExecutorService executorService = Executors.newFixedThreadPool(10);
-
-    private volatile boolean running = true;
-
-    @PostConstruct
-    public void startWorkers() {
-        Thread dispatcher = new Thread(() -> {
-            while (running) {
-                try {
-                    FileJob job = jobQueue.take();
-                    executorService.submit(() -> asciiService.processSingleFile(job));
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        });
-        dispatcher.setName("Job-Dispatcher");
-        dispatcher.start();
-        log.info("Batch Processor Started. Waiting for jobs...");
-    }
-
-    public void submitFileJob(FileJob job) {
-        jobQueue.offer(job);
-    }
-
-    public int getQueueSize() {
-        return jobQueue.size();
-    }
-
-    @PreDestroy
-    public void shutdown() {
-        running = false;
-        executorService.shutdown();
-    }
-}
-
-file 3 rule parser
-package com.tcs.fincore.AsciiGenerationService.Service;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-public class RuleParser {
-
-    // Regex to capture: ["Content"] [Col] [Logic]
-    private static final Pattern RULE_PATTERN = Pattern.compile("\\[\"(.*?)\"\\]\\[(.*?)\\]\\[(.*?)\\]");
-
-    // CPU OPTIMIZATION: Cache compiled regex patterns to avoid re-compiling millions of times
-    private static final Map<String, Pattern> REGEX_CACHE = new ConcurrentHashMap<>();
-
-    // Helper to get cached pattern
-    private static Pattern getCachedPattern(String regex) {
-        return REGEX_CACHE.computeIfAbsent(regex, Pattern::compile);
-    }
-
-    // --- 1. MATH LOGIC (CHAINED) ---
-    public static BigDecimal applyMathLogic(BigDecimal amount, String head, int colIdx, String logicConfig) {
-        if (logicConfig == null) return amount;
-
-        Matcher m = RULE_PATTERN.matcher(logicConfig);
-        while (m.find()) {
-            String headRegex = m.group(1);
-            String colReq = m.group(2);
-            String logic = m.group(3);
-
-            boolean colMatch = colReq.isEmpty() || colReq.equals(String.valueOf(colIdx));
-            // OPTIMIZED: Use Cache
-            boolean headMatch = getCachedPattern(headRegex).matcher(head).lookingAt();
-
-            if (colMatch && headMatch) {
-                if (logic.contains("/")) {
-                    BigDecimal divisor = new BigDecimal(logic.replaceAll("[^0-9.]", ""));
-                    if (divisor.compareTo(BigDecimal.ZERO) != 0) {
-                        amount = amount.divide(divisor, 6, RoundingMode.HALF_UP);
-                    }
-                } else if (logic.contains("*")) {
-                    BigDecimal multiplier = new BigDecimal(logic.replace("*", "").replace("(", "").replace(")", ""));
-                    amount = amount.multiply(multiplier);
-                } else if (logic.contains("+")) {
-                    BigDecimal add = new BigDecimal(logic.replace("+", "").replace("(", "").replace(")", ""));
-                    amount = amount.add(add);
-                } else if (logic.contains("-")) {
-                    BigDecimal sub = new BigDecimal(logic.replace("-", "").replace("(", "").replace(")", ""));
-                    amount = amount.subtract(sub);
-                }
-            }
-        }
-        return amount;
-    }
-
-    // --- 2. DECIMAL LOGIC (CHAINED) ---
-    public static BigDecimal applyDecimalLogic(BigDecimal amount, String head, int colIdx, String decimalConfig) {
-        if (decimalConfig == null) return amount;
-
-        Matcher m = RULE_PATTERN.matcher(decimalConfig);
-        while (m.find()) {
-            String headRegex = m.group(1);
-            String colReq = m.group(2);
-            String rule = m.group(3);
-
-            boolean colMatch = colReq.isEmpty() || colReq.equals(String.valueOf(colIdx));
-            boolean headMatch = getCachedPattern(headRegex).matcher(head).lookingAt();
-
-            if (colMatch && headMatch) {
-                if (rule.equalsIgnoreCase("floor")) {
-                    amount = amount.setScale(0, RoundingMode.FLOOR);
-                } else if (rule.equalsIgnoreCase("ceil")) {
-                    amount = amount.setScale(0, RoundingMode.CEILING);
-                } else if (rule.equalsIgnoreCase("round")) {
-                    amount = amount.setScale(0, RoundingMode.HALF_UP);
-                } else if (rule.equalsIgnoreCase("down")) {
-                    amount = amount.setScale(0, RoundingMode.DOWN);
-                }
-                // Logic: Remove Decimal (123.29 -> 12329)
-                else if (rule.equalsIgnoreCase("remove_decimal") || rule.equalsIgnoreCase("remove")) {
-                    amount = amount.movePointRight(amount.scale());
-                }
-                else {
-                    try {
-                        int scale = Integer.parseInt(rule);
-                        amount = amount.setScale(scale, RoundingMode.HALF_UP);
-                    } catch (NumberFormatException e) {}
-                }
-            }
-        }
-        return amount;
-    }
-
-    // --- 3. PADDING LOGIC (CHAINED) ---
-    public static String applyAmountPadding(BigDecimal amount, String head, int colIdx, String padConfig) {
-        BigDecimal absAmount = amount.abs();
-        String currentStr = absAmount.toPlainString();
-
-        if (padConfig == null) return currentStr;
-
-        Matcher m = RULE_PATTERN.matcher(padConfig);
-        while (m.find()) {
-            String headRegex = m.group(1);
-            String colReq = m.group(2);
-            String rule = m.group(3);
-
-            boolean colMatch = colReq.isEmpty() || colReq.equals(String.valueOf(colIdx));
-            boolean headMatch = getCachedPattern(headRegex).matcher(head).lookingAt();
-
-            if (colMatch && headMatch) {
-                if (rule.contains(",")) {
-                    String[] parts = rule.split(",");
-                    int totalLen = Integer.parseInt(parts[0]);
-                    int decimalLen = Integer.parseInt(parts[1]);
-
-                    BigDecimal scaled = absAmount.setScale(decimalLen, RoundingMode.HALF_UP);
-                    currentStr = padLeft(scaled.toPlainString(), totalLen, '0');
-                } else {
-                    int totalLen = Integer.parseInt(rule);
-                    currentStr = padLeft(currentStr, totalLen, '0');
-                }
-            }
-        }
-        return currentStr;
-    }
-
-    // --- 4. SIGN LOGIC (CHAINED & TRIMMED) ---
-    public static String applySign(String fmtAmt, BigDecimal origAmt, String head, int colIdx, String signConfig) {
-        String currentStr = fmtAmt;
-
-        if (signConfig == null || signConfig.trim().isEmpty()) {
-            currentStr = currentStr.replace("+", "").replace("-", "");
-            return (origAmt.compareTo(BigDecimal.ZERO) < 0) ? currentStr + "-" : currentStr;
-        }
-
-        Matcher m = RULE_PATTERN.matcher(signConfig);
-        boolean anyRuleApplied = false;
-
-        while (m.find()) {
-            String headRegex = m.group(1);
-            String colReq = m.group(2);
-            String rule = m.group(3) != null ? m.group(3).trim() : "";
-
-            boolean colMatch = colReq.isEmpty() || colReq.equals(String.valueOf(colIdx));
-            boolean headMatch = getCachedPattern(headRegex).matcher(head).lookingAt();
-
-            if (colMatch && headMatch) {
-                anyRuleApplied = true;
-                currentStr = currentStr.replace("+", "").replace("-", "");
-
-                if ("NO_SIGN".equalsIgnoreCase(rule)) {
-                    // Do nothing
-                } else if ("SHOW_SIGN".equalsIgnoreCase(rule)) {
-                    if (origAmt.compareTo(BigDecimal.ZERO) >= 0) {
-                        currentStr = currentStr + "+";
-                    } else {
-                        currentStr = currentStr + "-";
-                    }
-                } else if ("POS_0".equalsIgnoreCase(rule)) {
-                    if (origAmt.compareTo(BigDecimal.ZERO) >= 0) {
-                        currentStr = currentStr + "0";
-                    } else {
-                        currentStr = currentStr + "-";
-                    }
-                }
-            }
-        }
-
-        if (!anyRuleApplied) {
-            currentStr = currentStr.replace("+", "").replace("-", "");
-            return (origAmt.compareTo(BigDecimal.ZERO) < 0) ? currentStr + "-" : currentStr;
-        }
-
-        return currentStr;
-    }
-
-    // --- 5. INCLUSION LOGIC (CHAINED) ---
-    public static boolean shouldIncludeValue(BigDecimal amount, String head, int colIdx, String includeConfig) {
-        if (includeConfig == null) return true;
-
-        boolean include = true;
-        Matcher m = RULE_PATTERN.matcher(includeConfig);
-
-        while (m.find()) {
-            String headRegex = m.group(1);
-            String colReq = m.group(2);
-            String rule = m.group(3);
-
-            boolean colMatch = colReq.isEmpty() || colReq.equals(String.valueOf(colIdx));
-            boolean headMatch = getCachedPattern(headRegex).matcher(head).lookingAt();
-
-            if (colMatch && headMatch) {
-                if ("ALWAYS".equalsIgnoreCase(rule)) { /* Pass */ }
-                else if (rule.equals(">0") && amount.compareTo(BigDecimal.ZERO) <= 0) include = false;
-                else if (rule.equals("<0") && amount.compareTo(BigDecimal.ZERO) >= 0) include = false;
-                else if ((rule.equals("=0") || rule.equals("0")) && amount.compareTo(BigDecimal.ZERO) != 0) include = false;
-                else if (rule.equals("!=0") && amount.compareTo(BigDecimal.ZERO) == 0) include = false;
-            }
-        }
-        return include;
-    }
-
-    // --- HEAD PADDING ---
-    public static String applyHeadPadding(String head, String padConfig) {
-        if (padConfig == null || padConfig.length() < 3) return head;
-        int len = Integer.parseInt(padConfig.substring(0, padConfig.length() - 2));
-        char dir = padConfig.charAt(padConfig.length() - 2);
-        char pad = padConfig.endsWith("\" \"") ? ' ' : padConfig.charAt(padConfig.length() - 1);
-        return dir == 'L' ? padLeft(head, len, pad) : padRight(head, len, pad);
-    }
-
-    private static String padLeft(String str, int len, char pad) {
-        StringBuilder sb = new StringBuilder();
-        while (sb.length() + str.length() < len) sb.append(pad);
-        return sb.append(str).toString();
-    }
-    private static String padRight(String str, int len, char pad) {
-        StringBuilder sb = new StringBuilder(str);
-        while (sb.length() < len) sb.append(pad);
-        return sb.toString();
-    }
-}
-
-application file 
-package com.tcs.fincore.AsciiGenerationService;
-
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-
-@SpringBootApplication
-public class AsciiGenerationServiceApplication {
-
-	public static void main(String[] args) {
-		SpringApplication.run(AsciiGenerationServiceApplication.class, args);
-	}
-
-}
-
-resource file 
-spring.application.name=AsciiGenerationService
-
-#spring.datasource.url=jdbc:oracle:thin:@10.191.216.58:1522:crsprod
-#spring.datasource.driver-class-name=oracle.jdbc.OracleDriver
-#spring.datasource.username=ftwoahm
-#spring.datasource.password=Password@123
-
-
-spring.datasource.url=jdbc:oracle:thin:@10.177.103.192:1523/fincorepdb1
-spring.datasource.username=fincore
-spring.datasource.password=Password#1234
-spring.datasource.driver-class-name=oracle.jdbc.OracleDriver
-server.port=8090
-
-
-# --- Redis Configuration ---
-spring.data.redis.host=10.0.17.242
-spring.data.redis.port=6379
-spring.cache.type=redis
-
-
-app.input.base.path=C:/Users/v1021253/Documents/Files/input/
-
