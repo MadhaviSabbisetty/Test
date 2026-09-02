@@ -1,580 +1,482 @@
-model files
-all
-package com.fincore.ReportService.model;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import lombok.Getter;
-import lombok.Setter;
-
-@Entity
-@Table(name = "APP_CONFIG")
-@Getter
-@Setter
-public class AppConfig {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private int id;
-
-    @Column(name = "CONFIG_KEY", nullable = false, unique = true)
-    private String configKey;
-
-    @Column(name = "CONFIG_VALUE", nullable = false)
-    private String configValue;
-
-    @Column(name = "DESCRIPTION")
-    private String description;
-
-}
 
 
-package com.fincore.ReportService.model;
+        String reportDisplayName = fileName; // temporary display name
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+        // Construct task id
+        String safeReportName = reportDisplayName.replaceAll("[^a-zA-Z0-9]", "_").toLowerCase().replaceAll("_", "_");
+        String safeDate = date.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        String taskId = String.format("%s_%s_%d", safeReportName, safeDate, System.currentTimeMillis());
 
-import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+        // 2. Prepare Paths with the CORRECT format "dd-MM-yyyy"
+        String formattedDate = date.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String fileNamePrefix = fileName + "_" + date.format(DateTimeFormatter.ofPattern("ddMMyyyy"));
 
-@Data
-@Entity
-@NoArgsConstructor
-@AllArgsConstructor
-@Getter
-@Setter
-@Table(name = "ASCII_CONFIG")
-public class AsciiConfig {
+        Path searchDirectory;
+        searchDirectory = new Path(tempReportsBasepath, formattedDate + "/" + runId);
+        log.info("Searching HDFS directory {} for temp reports with prefix '{}'...", searchDirectory,
+                fileNamePrefix);
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "ID")
-    private Long id;
-
-    @Column(name = "REPORT_ID")
-    private String reportId;
-
-    @Column(name = "FILE_TYPE")
-    private String fileType;
-
-    @Column(name = "OUTPUT_FILE_NAME")
-    private String outputFileName;
-}
-
-package com.fincore.ReportService.model;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-
-import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-
-@Data
-@Entity
-@NoArgsConstructor
-@AllArgsConstructor
-@Getter
-@Setter
-@Table(name = "ASCII_CONFIG_TB")
-public class AsciiConfigTb {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "ID")
-    private Long id;
-
-    @Column(name = "REPORT_ID")
-    private String reportId;
-
-    @Column(name = "FILE_IDENTIFIER")
-    private String fileIdentifier;
-
-}
-package com.fincore.ReportService.model;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-
-import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-
-@Data
-@Entity
-@NoArgsConstructor
-@AllArgsConstructor
-@Getter
-@Setter
-@Table(name = "ASCII_MASTER")
-public class AsciiMaster {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "ID")
-    private Long id;
-
-    @Column(name = "ASCII_NAME")
-    private String reportName;
-
-    @Column(name = "LOCATION")
-    private String location;
-
-    @Column(name = "FREQUENCY")
-    private String frequency;
-}
-package com.fincore.ReportService.model;
-
-import jakarta.persistence.*;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Entity
-@Data
-@NoArgsConstructor
-public class Difference {
-
-    @Id
-    @Column(name = "ID")
-    private Long id;
-
-    @Column(name = "RECON_RUN_DATE")
-    private LocalDate reconRunDate;
-
-    @Column(name = "BRANCH_CODE", length = 5)
-    private String branchCode;
-
-    @Column(name = "CURRENCY", length = 3)
-    private String currency;
-
-    @Column(name = "CGL", length = 10)
-    private String cgl;
-
-    @Column(name = "CBS_BALANCE", precision = 25, scale = 4)
-    private BigDecimal cbsBalance;
-
-    @Column(name = "GL_BALANCE", precision = 25, scale = 4)
-    private BigDecimal glBalance;
-
-    @Column(name = "DIFFERENCE_AMOUNT", precision = 25, scale = 4)
-    private BigDecimal differenceAmount;
-
-    @Column(name = "DIFF_BW_YESTERDAY", precision = 25, scale = 4)
-    private BigDecimal diffBwYesterday;
-
-    @Column(name = "TYPE", length = 40)
-    private String type;
-
-    @Column(name = "HEAD", length = 30)
-    private String head;
-
-    @Column(name = "FIRST_ERROR_DATE")
-    private LocalDate FIRST_ERROR_DATE;
-}
-package com.fincore.ReportService.model;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import lombok.Getter;
-import lombok.Setter;
-
-@Entity
-@Table(name = "JASPER_REPORTS")
-@Getter
-@Setter
-public class JasperReports {
-
-    @Id
-    private String type;
-
-    @Column(name = "FILENAME", nullable = false)
-    private String fileName;
-
-    @Column(name = "PARAMS")
-    private String params;
- }
-package com.fincore.ReportService.model;
-
-import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp; // Import this
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import java.io.Serializable;
-import java.time.Instant; // This is the correct type
-import java.util.Objects;
-import java.util.UUID;
-
-/**
- * Represents an event in the outbox system, intended for notification purposes.
- * UPDATED: Added @CreationTimestamp for automatic timestamping.
- */
-@Entity
-@Table(name = "Notifications")
-@Builder
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@EntityListeners(AuditingEntityListener.class)
-public class Notifications implements Serializable {
-
-    // Unique primary key for the outbox event.
-    // Using UUID strategy is correct for Oracle's SYS_GUID() or RAW(16)
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "EVENT_ID", updatable = false, nullable = false)
-    private UUID eventId;
-
-    // The ID of the user who should receive this notification (for 1-to-1).
-    @Column(name = "USER_ID", length = 255)
-    private String userId;
-
-    // The human-readable message to be displayed.
-    @Column(name = "MESSAGE", length = 1024, nullable = false)
-    private String message;
-
-    // The relative URL the user should be taken to when clicking the notification.
-    @Column(name = "LINK_URL", length = 1024)
-    private String linkUrl;
-
-    // The microservice that generated this event.
-    @Column(name = "EVENT_SOURCE", length = 100)
-    private String eventSource;
-
-    // The primary key of the business object (e.g., the CommonReq ID).
-    @Column(name = "AGGREGATE_ID", length = 255)
-    private String aggregateId;
-
-    // The timestamp when the event was created.
-    @CreationTimestamp
-    @Column(name = "EVENT_TIMESTAMP", nullable = false, updatable = false)
-    private Instant eventTimestamp;
-
-    // For 1-to-Many notifications. If USER_ID is null, this role is used.
-    @Column(name = "TARGET_ROLE", length = 100)
-    private String targetRole;
-
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Notifications that = (Notifications) o;
-        return Objects.equals(eventId, that.eventId);
+        // 3. Call the common stream Logic and return directly to the client
+        return streamReport(searchDirectory, taskId, userId, fileNamePrefix, reportDisplayName, date, fileName,
+                formattedDate);
     }
 
-    @Override
-    public int hashCode() {
-        return Objects.hash(eventId);
+    // ----------------------------------------------------------------------------------
+    // HELPER METHODS (Stream Logic + Redis)
+    // ----------------------------------------------------------------------------------
+    private ReportStreamResponse streamReport(Path searchDirectory, String taskId, String userId, String searchPattern,
+                                              String reportDisplayName, LocalDate date, String fileName, String formattedDate) {
+
+        StreamingResponseBody streamingBody = outputStream -> {
+            try (ZipOutputStream zipOut = new ZipOutputStream(outputStream)) {
+                if (!hdfsFileSystem.exists(searchDirectory)) {
+                    log.info("Directory not found in HDFS: {}", searchDirectory);
+                    // Throw immediately so a proper HTTP 404 is sent to the client
+                    throw new ResourceNotFoundException("Reports directory not found: " + searchDirectory);
+                }
+                Path globPath = new Path(searchDirectory, searchPattern + "*");
+                FileStatus[] fileStatuses = hdfsFileSystem.globStatus(globPath);
+                if (fileStatuses == null || fileStatuses.length == 0) {
+                    throw new ResourceNotFoundException("Report not found");
+                }
+                //FileStatus[] fileStatuses = hdfsFileSystem.listStatus(searchDirectory);
+                // 1. Calculate Total Size of all files to be downloaded
+                long calculatedTotalSize = 0;
+                for (FileStatus status : fileStatuses ) {
+                        calculatedTotalSize += status.getLen();
+                }
+                final long finalTotalSize = calculatedTotalSize; // Needed for lambda
+
+                // Atomic counter to track bytes read across multiple files (if multiple exist)
+                AtomicLong globalBytesRead = new AtomicLong(0);
+
+
+                boolean fileFound = false;
+
+                for (FileStatus status : fileStatuses) {
+                    if (!status.isFile())
+                        continue;
+                    String actualFileName = status.getPath().getName();
+                        fileFound = true;
+                        sendProgress(taskId, userId, 0, "Starting download...", "PROCESSING");
+                        ZipEntry zipEntry = new ZipEntry(actualFileName);
+                        zipOut.putNextEntry(zipEntry);
+
+                        try (FSDataInputStream hdfsStream = hdfsFileSystem.open(status.getPath())) {
+                            // --- REPLACED StreamUtils.copy WITH MANUAL LOOP ---
+                            byte[] buffer = new byte[32 * 1024]; // 32KB buffer
+                            int bytesRead;
+                            int lastPercent = 0;
+                            while ((bytesRead = hdfsStream.read(buffer)) != -1) {
+                                zipOut.write(buffer, 0, bytesRead);
+                                // Update global counter
+                                long currentTotal = globalBytesRead.addAndGet(bytesRead);
+                                // Calculate Percentage
+                                int percent = (int) ((currentTotal * 100) / finalTotalSize);
+                                // Cap at 99% so 100% is only sent when fully done
+                                if (percent > 99)
+                                    percent = 99;
+                                // Throttle: Send update only if percent changed by 5%
+                                if (percent >= lastPercent + 5) {
+                                    sendProgress(taskId, userId, percent, "Downloading... " + percent + "%",
+                                            "PROCESSING");
+                                    lastPercent = percent;
+                                }
+                            }
+                        } finally {
+                            zipOut.closeEntry();
+                        }
+                        log.info("Streamed file {} into zip response.", actualFileName);
+
+                }
+
+                if (!fileFound) {
+                    log.info("No report files found matching prefix: " + searchPattern);
+                    // Throw immediately so a proper HTTP 404 is sent to the client
+                    throw new ResourceNotFoundException("No report files found matching prefix: " + searchPattern);
+                }
+
+                // Notification is only sent AFTER all files are confirmed found and streamed
+                String successMsg = String.format("%s downloaded successfully.", reportDisplayName);
+
+                sendProgress(taskId, userId, 100, "Download Complete", "COMPLETED");
+
+                sendNotification(userId, successMsg, "/glif-reports", fileName + "_" + date);
+                // sendNotification(userId, "Report(s) downloaded successfully.",
+                // "/glif-reports", fileName + "_" + date);
+
+            } catch (ResourceNotFoundException e) {
+                // If a resource error happens before streaming starts, it's caught here
+                log.error("Resource not found error: {}", e.getMessage());
+                sendNotification(userId, reportDisplayName + " is not available.", "/glif-reports",
+                        fileName + "_" + date);
+                // Note: The controller must catch this exception to return a proper 404
+//                sendProgress(taskId, userId, 100, "Download Failed", "COMPLETED");
+            } catch (IOException e) {
+                // If an I/O error happens DURING streaming, the client will see a failed
+                // download
+                // Includes the internet/network-down , HDFS down and NameNode not reachable
+                // cases
+                log.error("Streaming I/O error for user {}: {}", userId, e.getMessage(), e);
+                sendNotification(userId,
+                        "Download failed due to a streaming or internet issue. Please check your connection and try again.",
+                        "/glif-reports", fileName + "_" + date);
+            }
+        };
+
+        String downloadName = fileName + "_" + formattedDate + ".zip";
+        return new ReportStreamResponse(downloadName, streamingBody);
     }
 
-
-    @Override
-    public String toString() {
-        return "NotificationTable{" +
-                "eventId='" + eventId + '\'' +
-                ", userId='" + userId + '\'' +
-                ", targetRole='" + targetRole + '\'' +
-                ", eventSource='" + eventSource + '\'' +
-                ", aggregateId='" + aggregateId + '\'' +
-                ", eventTimestamp=" + eventTimestamp +
-                '}';
+    private void sendProgress(String taskId, String userId, int percent, String msg, String status) {
+        try {
+            TaskProgressDto dto = TaskProgressDto.builder()
+                    .taskId(taskId)
+                    .userId(userId)
+                    .percentage(percent)
+                    .message(msg)
+                    .status(status)
+                    .build();
+            redisTemplate.convertAndSend(progressTopic, dto);
+        } catch (Exception e) {
+            log.warn("Redis notification failed: {}", e.getMessage());
+        }
     }
-}
-package com.fincore.ReportService.model;
+
+    private void sendNotification(String userId, String message, String url, String aggregateId) {
+        try {
+            notificationWriterService.createNotification(userId, null, message, url, aggregateId, "ReportService");
+        } catch (Exception e) {
+            log.warn("Persistent notification failed: {}", e.getMessage());
+        }
+    }
+
+    private LocalDate getStartDateFromAppConfig() {
+        return appConfigRepository.findByConfigKey(REPORTS_START_DATE_KEY)
+                .map(AppConfig::getConfigValue)
+                .map(LocalDate::parse)
+                .orElseThrow(() -> new ResourceNotFoundException("Configuration missing: " + REPORTS_START_DATE_KEY));
+    }
+
+    public ReportGenerationResponseDTO generateReports(ReportGenerationDTO parameters) throws IOException {
+
+        ReportGenerationResponseDTO reportGenerationResponseDTO = new ReportGenerationResponseDTO();
+        reportGenerationResponseDTO.setProcessRunId(parameters.getProcessRunId());
+        reportGenerationResponseDTO.setRunId(parameters.getRunId());
+        reportGenerationResponseDTO.setStageId(parameters.getStageId());
+        LocalDate reportDate = parameters.getDate();
+
+        if (reportDate == null) {
+            reportDate = controlDateService.getEtlDate();
+        }
+
+        reportGenerationResponseDTO.setDate(reportDate);
+        String formattedDate = reportDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        String jasperFormattedDate = reportDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+        String datePrefix = reportDate.format(DateTimeFormatter.ofPattern("ddMMyyyy"));
+        String runId = String.valueOf(parameters.getRunId());
+
+        if(!(runId != null && runId.matches("-?\\d+")))
+        {
+            throw  new IllegalArgumentException("Invalid Run ID");
+        }
+        Path dateDir = new Path(tempReportsBasepath, formattedDate);
+        Path reportDir = new Path(dateDir, runId);
+        if(!jasperTemplateRegistry.getAllReportNames().contains(parameters.getReportType()))
+        {
+            throw new IllegalArgumentException("Invalid Report type");
+        }
+        // jasperTemplateRegistry.getReport(reportName).getName() to skip path manipulation issue
+        String reportName =  jasperTemplateRegistry.getReport(parameters.getReportType()).getName();
+        Path mainReportDir = new Path(new Path(reportsBasePath, formattedDate),reportName);
+        try {
+            if (!hdfsFileSystem.exists(reportDir)) {
+                hdfsFileSystem.mkdirs(reportDir);
+            }if (!hdfsFileSystem.exists(mainReportDir)) {
+                hdfsFileSystem.mkdirs(mainReportDir);
+            }
+        } catch (IOException e) {
+            throw new IOException("Failed to Create Folder in HDFS "+e.getMessage());
+        }
+        String logoPath = null;
+        try {
+            // logoPath = new
+            // ClassPathResource("images/logo.png").getFile().getAbsolutePath();
+            logoPath = extractLogoToTemp();
+        } catch (ResourceNotFoundException e) {
+            log.warn("Logo not found");
+        }
+        try (Connection connection = dataSource.getConnection()) {
+            reportGenerationResponseDTO.setReportName(reportName);
+            reportGenerationResponseDTO.setRunId(parameters.getRunId());
+            reportGenerationResponseDTO.setExtensions(new ArrayList<>());
+            StringBuilder status = new StringBuilder();
+            String fileBaseName = reportName + "_" + datePrefix + "_" + "run" + "_" + runId;
+            String fileNamePrefix = reportName + "_" + datePrefix.formatted(DateTimeFormatter.ofPattern("ddMMyyyy"));
+            try  {
+                JasperReport jasperReport = jasperTemplateRegistry.getReport(reportName);
+                Map<String, Object> reportParams = new HashMap<>();
+                reportParams.put("imagePath", logoPath);
+                reportParams.put("date", jasperFormattedDate);
+                log.info("Started Filling Jasper for {} Report", parameters.getReportType());
+                JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, reportParams, connection);
+                log.info("Completed Jasper Fill  for {} Report", parameters.getReportType());
+                Map<ReportFormat, FormatStatus> formatResults = new LinkedHashMap<>();
+                Map<ReportFormat, String> formatErrors = new HashMap<>();
+                generateReportFile(ReportFormat.PDF, jasperPrint, reportDir, fileBaseName, hdfsFileSystem,
+                        formatResults, formatErrors);
+                generateReportFile(ReportFormat.EXCEL, jasperPrint, reportDir, fileBaseName, hdfsFileSystem,
+                        formatResults, formatErrors);
+                generateReportFile(ReportFormat.PSV, jasperPrint, reportDir, fileBaseName, hdfsFileSystem,
+                        formatResults, formatErrors);
+
+                //saving reports parallely in "/reports/date" path
+                generateReportFile(ReportFormat.PDF, jasperPrint, mainReportDir, fileNamePrefix, hdfsFileSystem,
+                        formatResults, formatErrors);
+                generateReportFile(ReportFormat.EXCEL, jasperPrint, mainReportDir, fileNamePrefix, hdfsFileSystem,
+                        formatResults, formatErrors);
+                generateReportFile(ReportFormat.PSV, jasperPrint, mainReportDir, fileNamePrefix, hdfsFileSystem,
+                        formatResults, formatErrors);
 
 
-import jakarta.persistence.*;
-import org.hibernate.annotations.CreationTimestamp;
+                long successCount = formatResults.values()
+                        .stream()
+                        .filter(v -> v == FormatStatus.GENERATED)
+                        .count();
+                String finalStatus;
+                String remark;
+                if (successCount == 0) {
+                    finalStatus = Constants.FAILED;
+                    remark = "Failed to generate all report formats.";
+                } else if (successCount == formatResults.size()) {
+                    finalStatus = Constants.SUCCESS;
+                    remark = "All formats generated successfully.";
+                } else {
+                    finalStatus = Constants.PARTIAL_SUCCESS;
+                    remark = "Generated: " +
+                            formatResults.entrySet().stream()
+                                    .filter(e -> e.getValue() == FormatStatus.GENERATED)
+                                    .map(e -> e.getKey().name())
+                                    .toList()
+                            + ", Failed: " +
+                            formatErrors.keySet();
+                }
 
-import java.time.Instant;
-import java.util.Set;
+                reportGenerationResponseDTO.setStatus(finalStatus);
+                reportGenerationResponseDTO.setRemark(remark);
+                reportGenerationResponseDTO.setFormatErrors(formatErrors);
+                reportGenerationResponseDTO.setFormatResults(formatResults);
 
-import lombok.Getter;
-import lombok.Setter;
+            }
 
-@Entity
-@Table(name = "REPORT_TYPES")
-@Getter
-@Setter
-public class ReportType {
+            catch (IOException | JRException e) {
+                log.error("Error generating {}: {}", reportName, e.getMessage());
+            }
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private int id;
+        } catch (SQLException  e) {
+            throw new RuntimeException(e);
+        }
+        return reportGenerationResponseDTO;
 
-    @Column(name = "REPORT_NAME", nullable = false, unique = true)
-    private String reportName;
+    }
 
-    @CreationTimestamp
-    @Column(name = "CREATED_AT", updatable = false)
-    private Instant createdAt;
+    public void generateReportFile(
+            ReportFormat format,
+            JasperPrint jasperPrint,
+            Path reportDir,
+            String fileBaseName,
+            FileSystem hdfsFileSystem,
+            Map<ReportFormat, FormatStatus> formatResults,
+            Map<ReportFormat, String> formatErrors
 
-    @Column(name = "FILE_NAME")    
-    private String fileName;
+    ) throws IOException {
+        log.info("Generating File {} with extension {} to place at {} ", fileBaseName, format,reportDir);
+        Path outputPath = new Path(reportDir, fileBaseName + format.ext());
+        try (FSDataOutputStream out = hdfsFileSystem.create(outputPath, true)) {
+            switch (format) {
+                case PDF -> {
+                    JasperExportManager
+                            .exportReportToPdfStream(jasperPrint, out);
+                }
+                case EXCEL -> {
+                    JRXlsxExporter exporter = new JRXlsxExporter();
+                    exporter.setExporterInput(
+                            new SimpleExporterInput(jasperPrint));
+                    exporter.setExporterOutput(
+                            new SimpleOutputStreamExporterOutput(out));
+                    exporter.exportReport();
 
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "REPORT_ROLE_MAPPING",
-            joinColumns = @JoinColumn(name = "report_type_id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id")
-    )
-    private Set<Role> roles;
+                }
+                case PSV -> {
+                    JRCsvExporter exporter = new JRCsvExporter();
+                    exporter.setExporterInput(
+                            new SimpleExporterInput(jasperPrint));
+                    exporter.setExporterOutput(
+                            new SimpleWriterExporterOutput(out));
+                    SimpleCsvExporterConfiguration config = new SimpleCsvExporterConfiguration();
+                    config.setFieldDelimiter("|");
+                    exporter.setConfiguration(config);
+                    exporter.exportReport();
 
-    @Column(name = "IS_BRANCH_LEVEL")    
-    private String isBranchLevel;
-}
-package com.fincore.ReportService.model;
+                }
+            }
+            formatResults.put(format, FormatStatus.GENERATED);
+        }
 
-import java.util.Set;
+        catch (IOException | JRException e) {
+            formatResults.put(format, FormatStatus.FAILED);
+            formatErrors.put(format, e.getMessage());
+        }
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.Table;
-import lombok.Data;
+    }
 
-@Entity
-@Data
-@Table(name = "ROLES")
-public class Role {
-    
-    @Id
-    @Column(name = "ROLE_ID" )
-    private Integer roleId;
+    private String extractLogoToTemp() {
+        try {
+            Resource resource = resourceLoader.getResource("classpath:/images/logo.png");
+            if (!resource.exists()) {
+                log.warn("Logo not found in classpath");
+                return null;
+            }
+            File tempFile = File.createTempFile("jasper-logo-", ".png");
+            tempFile.deleteOnExit();
+            try (InputStream in = resource.getInputStream();
+                 OutputStream out = new FileOutputStream(tempFile)) {
+                FileCopyUtils.copy(in, out);
+            }
+            return tempFile.getAbsolutePath();
+        } catch (ResourceNotFoundException | IOException e) {
+            log.error("Failed to extract logo", e);
+            return null;
+        }
+    }
 
-    @Column(name = "ROLE_NAME")
-    private String roleName;
+    public ReportBase64ResponseDTO generateReportBase64(
+            ReportBase64RequestDTO request) throws IOException {
 
-    @Column(name = "DESCRIPTION")
-    private String description;
+        ReportBase64ResponseDTO response = new ReportBase64ResponseDTO();
 
-    @Column(name = "ROLE_STATUS")
-    private String role_status;
+        try {
 
-    @ManyToMany(mappedBy = "roles")
-    private Set<ReportType> reportTypes;
-}
-repository files
-package com.fincore.ReportService.repository;
+            if (request.getReportType() == null || request.getReportType().isBlank()) {
+                throw new IllegalArgumentException("Report type is mandatory");
+            }
 
-import java.util.Optional;
+            LocalDate reportDate = request.getDate();
 
-import org.springframework.data.jpa.repository.JpaRepository;
+            if (reportDate == null) {
+                reportDate = controlDateService.getEtlDate();
+            }
 
-import com.fincore.ReportService.model.AppConfig;
+            // JasperReports reportDetails = jasperReportTypeRepository.findByType(request.getReportType());
 
-public interface AppConfigRepository extends JpaRepository<AppConfig, Integer> {
+            String reportName = request.getReportType();
 
-    Optional<AppConfig> findByConfigKey(String configKey);
+            if (reportName != null) {
+                response.setReportName(reportName);
+            }
+            response.setReportDate(reportDate);
 
-}
-package com.fincore.ReportService.repository;
+            JasperPrint jasperPrint = fillJasperReport(
+                    request.getReportType(),
+                    reportDate,
+                    request.getInputParams());
 
-import java.util.List;
-import java.util.Optional;
+            ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-import com.fincore.ReportService.model.AsciiConfig;
+            JasperExportManager.exportReportToPdfStream(
+                    jasperPrint,
+                    pdfStream);
 
+            response.setPdfBase64(
+                    Base64.getEncoder().encodeToString(pdfStream.toByteArray()));
 
+            ByteArrayOutputStream excelStream = new ByteArrayOutputStream();
 
-@Repository
-public interface AsciiConfigRepository
-        extends JpaRepository<AsciiConfig, Long> {
-}
-package com.fincore.ReportService.repository;
+            JRXlsxExporter exporter = new JRXlsxExporter();
 
-import java.util.List;
-import java.util.Optional;
+            exporter.setExporterInput(new SimpleExporterInput(jasperPrint));
+            exporter.setExporterOutput(new SimpleOutputStreamExporterOutput(excelStream));
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-import com.fincore.ReportService.model.AsciiConfigTb;
+            exporter.exportReport();
 
+            response.setExcelBase64(
+                    Base64.getEncoder().encodeToString(excelStream.toByteArray()));
 
+            response.setStatus(Constants.SUCCESS);
+            response.setRemark("Report generated successfully");
 
-@Repository
-public interface AsciiConfigTbRepository
-        extends JpaRepository<AsciiConfigTb, Long> {
-}
-package com.fincore.ReportService.repository;
+        } catch (JRException e) {
 
-import java.util.List;
-import java.util.Optional;
+            log.error("Jasper report generation error: {}", e.getMessage());
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-import com.fincore.ReportService.model.AsciiMaster;
+            response.setStatus(Constants.FAILED);
+            response.setRemark("Error while generating report");
 
+        } catch (Exception e) {
 
+            log.error("Unexpected error during report generation", e);
 
-@Repository
-public interface AsciiMasterRepository
-        extends JpaRepository<AsciiMaster, Long> {
-}
-package com.fincore.ReportService.repository;
+            response.setStatus(Constants.FAILED);
+            response.setRemark("Unexpected error occurred");
+        }
 
-import com.fincore.ReportService.dto.DifferenceDTO;
-import com.fincore.ReportService.model.Difference;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-import java.time.LocalDate;
+        return response;
+    }
 
-@Repository
-public interface DifferenceRepository extends JpaRepository<Difference, Long> {
-
-    // 1. Keep the original 'Find All' for basic listing
-    @Query("""
-        SELECT new com.fincore.ReportService.dto.DifferenceDTO(
-            d.reconRunDate, d.branchCode, d.currency, d.cgl,
-            d.cbsBalance, d.glBalance, d.differenceAmount,
-            d.diffBwYesterday, d.type, d.head, d.FIRST_ERROR_DATE
-        )
-        FROM Difference d
-    """)
-    Page<DifferenceDTO> findAllAsDto(Pageable pageable);
-
-    /**
-     * 2. MASTER DYNAMIC FILTER
-     * Handles: Date Range, Optional Branch, Optional Currency, Optional CGL
-     */
-    @Query("""
-        SELECT new com.fincore.ReportService.dto.DifferenceDTO(
-            d.reconRunDate, d.branchCode, d.currency, d.cgl,
-            d.cbsBalance, d.glBalance, d.differenceAmount,
-            d.diffBwYesterday, d.type, d.head, d.FIRST_ERROR_DATE
-        )
-        FROM Difference d
-        WHERE (d.reconRunDate BETWEEN :fromDate AND :toDate)
-        AND (:branchCode IS NULL OR d.branchCode = :branchCode)
-        AND (:currency IS NULL OR d.currency = :currency)
-        AND (:cgl IS NULL OR d.cgl = :cgl)
-    """)
-    Page<DifferenceDTO> searchDifferencesDynamic(
-            @Param("fromDate") LocalDate fromDate,
-            @Param("toDate") LocalDate toDate,
-            @Param("branchCode") String branchCode,
-            @Param("currency") String currency,
-            @Param("cgl") String cgl,
-            Pageable pageable
-    );
-}
-package com.fincore.ReportService.repository;
-
-import com.fincore.ReportService.model.JasperReports;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
-import java.util.List;
-
-@Repository
-public interface JasperReportTypeRepository extends JpaRepository<JasperReports,String> {
-    List<JasperReports> findAll();
+    private JasperPrint fillJasperReport(
+            String reportType,
+            LocalDate reportDate,
+            Map<String, Object> inputParams) throws IOException {
 
 
-    JasperReports findByType(@NotNull(message = "Report Type Cannot be null") @NotBlank(message = "Report Type Cannot be blank") String reportType);
-}
-package com.fincore.ReportService.repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
-import com.fincore.ReportService.model.Notifications;
 
-import java.util.UUID;
+        String logoPath = null;
+        try {
+            logoPath = extractLogoToTemp();
+        } catch (ResourceNotFoundException e) {
+            log.warn("Logo not found");
+        }
 
-/**
- * 
- */
-@Repository
-public interface NotificationRepository extends JpaRepository<Notifications, UUID>{
 
-}
-package com.fincore.ReportService.repository;
+        String formattedDate = reportDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
 
-import java.util.List;
-import java.util.Optional;
+        try (Connection connection = dataSource.getConnection()) {
+            JasperReport jasperReport = jasperTemplateRegistry.getReport(reportType);
+            Map<String, Object> reportParams = new HashMap<>();
+            log.info("Formatted Date :{}",formattedDate);
+            reportParams.put("date", formattedDate);
+            reportParams.put("imagePath",logoPath);
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
+            if (inputParams != null) {
+                reportParams.putAll(inputParams);
+            }
 
-import com.fincore.ReportService.model.ReportType;
+            log.info("Started Filling Jasper for {} Report", reportType);
 
-@Repository
-public interface ReportTypeRepository extends JpaRepository<ReportType, Integer> {
+            JasperPrint jasperPrint = JasperFillManager.fillReport(
+                    jasperReport,
+                    reportParams,
+                    connection);
 
-    /**
-     * Finds all report types and orders them by their REPORT_NAME for a better user experience.
-     * @return A list of ReportType entities.
-     */
-    // This method is still useful for admins or internal tools.
-    List<ReportType> findAllByOrderByReportNameAsc();
+            log.info("Completed Jasper Fill for {} Report", reportType);
 
-    /**
-     * Finds all report types accessible by a specific role ID.
-     * This query joins ReportType with its roles and filters by the role's primary key.
-     * The result is ordered by the reportName to ensure a consistent and user-friendly order in the dropdown.
-     *
-     * @param roleId The primary key ID of the role.
-     * @return A list of accessible ReportType entities.
-     */
-    @Query("SELECT rt FROM ReportType rt JOIN rt.roles r WHERE r.roleId = :roleId ORDER BY rt.reportName ASC")
-    List<ReportType> findByRoleId(@Param("roleId") int roleId);
+            return jasperPrint;
 
-    // Optional<ReportType> findByFileName(String fileName);
+        } catch (JRException e) {
 
-//    Optional<ReportType> findByFileNameAndRoles_roleId(String fileName, int roleId);
+            log.error("Error filling Jasper report {}", reportType, e);
 
-    Optional<ReportType> findByFileNameAndRoles_roleId(String fileName, int roleId);
+            throw new RuntimeException(
+                    "Failed to generate report for type: " + reportType, e);
+        } catch (SQLException e) {
 
-    @Query("SELECT rt FROM ReportType rt JOIN rt.roles r WHERE r.roleId = :roleId and rt.isBranchLevel='Y' ORDER BY rt.reportName ASC")
-    List<ReportType> findBranchWiseReports(@Param("roleId") int roleId );
+            log.error("Database error while generating report {}", reportType, e);
+
+            throw new RuntimeException(
+                    "Database error during report generation", e);
+        }
+    }
 
 }
