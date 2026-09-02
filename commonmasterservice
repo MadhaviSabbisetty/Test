@@ -1,396 +1,54 @@
-DTO files
-1.package com.fincore.ReportService.dto;
-
-import com.fasterxml.jackson.annotation.JsonInclude;
-import lombok.Getter;
-
-import java.time.Instant;
-
-@Getter
-@JsonInclude(JsonInclude.Include.NON_NULL) // Don't include null fields in the JSON response
-public class ApiResponse<T> {
-
-    private final boolean success;
-    private final String message;
-    private final T data;
-    private final Instant timestamp;
-
-    private ApiResponse(boolean success, String message, T data) {
-        this.success = success;
-        this.message = message;
-        this.data = data;
-        this.timestamp = Instant.now();
-    }
-
-    public static <T> ApiResponse<T> success(T data, String message) {
-        return new ApiResponse<>(true, message, data);
-    }
-
-    public static <T> ApiResponse<T> success(T data) {
-        return new ApiResponse<>(true, "Operation completed successfully.", data);
-    }
-
-    public static <T> ApiResponse<T> error(String message) {
-        return new ApiResponse<>(false, message, null);
-    }
-}
-2.package com.fincore.ReportService.dto;
-
-import lombok.Data;
-
-@Data
-public class AsciiFileRequest {
-
-    private Long id;
-
-    private String reportDate;
-
-    private String searchBy;
-
-    private String branchCode;
-}
-3.
-package com.fincore.ReportService.dto;
-
-import lombok.AllArgsConstructor;
-import lombok.Data;
-
-@Data
-public class AsciiFileResponse {
-
-    private Long id;
-
-    private String reportDate;
-
-    private String searchBy;
-
-    private String branchCode;
-
-    private String content;
-
-}
-
-
-
-4.
-package com.fincore.ReportService.dto;
-
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
-import lombok.Data;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class AsciiTypeResponse {
-
-    private Long id;
-
-    private String asciiName;
-
-}
-
-5.package com.fincore.ReportService.dto;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class DifferenceDTO {
-    private LocalDate reconRunDate;
-    private String branchCode;
-    private String currency;
-    private String cgl;
-    private BigDecimal cbsBalance;
-    private BigDecimal glBalance;
-    private BigDecimal differenceAmount;
-    private BigDecimal diffBwYesterday;
-    private String type;
-    private String head;
-    private LocalDate FIRST_ERROR_DATE;
-}
-6.package com.fincore.ReportService.dto;
-
-import java.time.LocalDate;
-import jakarta.validation.constraints.NotNull;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class DifferenceSearchDto {
-
-    // Mandatory: The start date (or the specific single date)
-    private LocalDate fromDate;
-
-    // Optional: If null, we assume the user wants data for ONLY the fromDate
-    private LocalDate toDate;
-
-    // Optional Filters (Send null or empty string to ignore)
-    private String branchCode;
-    private String currency;
-    private String cgl;
-
-    /**
-     * Helper method to standardize date range logic.
-     * If toDate is missing, we default it to fromDate (Single Day Search).
-     */
-    public LocalDate getEffectiveToDate() {
-        return (toDate == null) ? fromDate : toDate;
-    }
-}
-7.package com.fincore.ReportService.dto;
-
-import lombok.AllArgsConstructor;
-import lombok.Data;
-
-import java.time.LocalDateTime;
-
-
-
-@Data
-@AllArgsConstructor
-public class ErrorResponse {
-
-    private int statusCode;
-    private String message;
-    private LocalDateTime timestamp;
-    private String details;
-}
-
-8.package com.fincore.ReportService.dto;
-
-import java.time.LocalDate;
-import java.util.Map;
-
-import com.fasterxml.jackson.annotation.JsonFormat;
-import jakarta.validation.constraints.NotNull;
-import lombok.Data;
-
-@Data
-public class ReportBase64RequestDTO {
-
-    @NotNull(message = "ReportType Should not be Null")
-    private String reportType;
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
-    private LocalDate date; 
-
-    private Map<String, Object> inputParams; 
-}
-9.package com.fincore.ReportService.dto;
-
-import java.time.LocalDate;
-
-import lombok.Data;
-
-@Data
-public class ReportBase64ResponseDTO {
-
-    private String reportName;
-
-    private LocalDate reportDate;
-
-    private String pdfBase64;
-
-    private String excelBase64;
-
-    private String status;
-
-    private String remark;
-
-}
-10.package com.fincore.ReportService.dto;
-
-import jakarta.validation.constraints.NotNull;
-import lombok.Data;
-
-@Data
-public class ReportCreationDto {
-
-    @NotNull
-    private String date;
-    private String branch;
-    private String cgl;
-}
-11.package com.fincore.ReportService.dto;
-
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
-
-import org.springframework.format.annotation.DateTimeFormat;
-
-import java.time.LocalDate;
-
-import lombok.Data;
-
-/**
- * DTO for the request body of the "download report" endpoint.
- */
-@Data
-public class ReportDownloadRequest {
-    /**
-     * The unique name of the report.
-     * - @NotBlank: Ensures the string is not null and not just whitespace.
-     */
-    @NotBlank(message = "file name must not be blank")
-    private String fileName;
-
-    /**
-     * The date for which the report is requested.
-     * - @NotNull: Ensures the date field is present.
-     * - @DateTimeFormat: Ensures the string is in 'yyyy-MM-dd' format.
-     */
-    @NotNull(message = "date must not be null")
-    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-    private LocalDate date;
-
-    private String branchCode;
-
-    private String runId;
-}
-12.package com.fincore.ReportService.dto;
-
-import java.time.LocalDate;
-
-import com.fasterxml.jackson.annotation.JsonFormat;
-
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import lombok.Data;
-
-@Data
-public class ReportGenerationDTO {
-
-    @NotNull(message = "Process Run Id Cannot be null")
-    private Long processRunId;
-
-    @NotNull(message = "Run Id Cannot be null")
-    private Integer runId;
-
-    @NotNull(message = "Stage Id Cannot be null")
-    @NotBlank(message = "Stage Id Cannot be Blank")
-    private String stageId;
-
-    @NotNull(message = "Report Type Cannot be null")
-    @NotBlank(message = "Report Type Cannot be blank")
-    private String reportType;
-
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
-    private LocalDate date;
-
-    private String branch;
-
-    private String cgl;
-
-}
-13.package com.fincore.ReportService.dto;
-
-import com.fasterxml.jackson.annotation.JsonFormat;
-import com.fincore.ReportService.util.FormatStatus;
-import com.fincore.ReportService.util.ReportFormat;
-import lombok.Data;
-
-import java.time.LocalDate;
+package com.fincore.CommunicationService.attachment;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.List;
-import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
-@Data
-public class ReportGenerationResponseDTO {
+@Slf4j
+@Service
+public class ZipService {
 
-    private Long processRunId;
+    public File createZip(List<File> files) throws IOException {
 
-    private String stageId;
+        File zipFile = File.createTempFile("attachments_", ".zip");
 
-    private String reportName;
+        try (ZipOutputStream zos =
+                     new ZipOutputStream(new FileOutputStream(zipFile))) {
 
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
-    private LocalDate date;
+            for (File file : files) {
 
-    private List<String> extensions;
+                if (file == null || !file.exists()) {
+                    continue;
+                }
 
-    private Integer runId;
+                try (FileInputStream fis = new FileInputStream(file)) {
 
-    private String status;
+                    ZipEntry entry = new ZipEntry(file.getName());
 
-    private String remark;
+                    zos.putNextEntry(entry);
 
-    Map<ReportFormat, FormatStatus> formatResults;
-    Map<ReportFormat, String> formatErrors;
+                    byte[] buffer = new byte[8192];
 
-}
-14.package com.fincore.ReportService.dto;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
-@Data
-@AllArgsConstructor
-public class ReportStreamResponse {
-    private String downloadFileName;
-    private StreamingResponseBody streamBody;
-}
-16.package com.fincore.ReportService.dto;
+                    int length;
 
-import java.time.LocalDate;
+                    while ((length = fis.read(buffer)) > 0) {
+                        zos.write(buffer, 0, length);
+                    }
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+                    zos.closeEntry();
+                }
+            }
+        }
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class ReportTypeDto {
+        log.info("ZIP created successfully : {}", zipFile.getAbsolutePath());
 
-    private String reportName;
-
-    private String fileName;
-
-    private LocalDate selectedDate;
-}
-17.package com.fincore.ReportService.dto;
-
-
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
-import lombok.Data;
-
-/**
- * DTO (Data Transfer Object) for the request body of the "get report types" endpoint.
- * It uses validation annotations to ensure the payload is correct.
- */
-@Data
-public class ReportTypesRequest {
-    private String moduleType; // WHOLE_BANKS or BRANCH_WISE
-}
-18.
-package com.fincore.ReportService.dto;
-
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-import java.io.Serializable;
-
-/**
- * Standard DTO for sending progress updates to the Notification Service via Redis.
- * Matches the structure required by the Notification Platform.
- */
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class TaskProgressDto implements Serializable {
-    private String taskId;      // Unique Job ID (e.g., "download_123_456")
-    private String userId;      // The User ID to notify
-    private int percentage;     // 0 to 100
-    private String status;      // "PROCESSING", "COMPLETED", "FAILED"
-    private String message;     // User-facing text
+        return zipFile;
+    }
 }
