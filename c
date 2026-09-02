@@ -1,74 +1,39 @@
-@Override
-public Resource prepareAttachments(
-        List<AttachmentRef> attachments)
-        throws IOException {
+finally {
 
-    log.info("Preparing attachments");
+    if (attachment != null) {
 
-    if (attachments == null || attachments.isEmpty()) {
+        try {
 
-        log.info("No attachments received.");
+            attachment.getInputStream().close();
 
-        return null;
-    }
+            if (attachment instanceof org.springframework.core.io.FileSystemResource) {
 
-    if (attachments.size() != 3) {
+                java.io.File attachmentFile =
+                        ((org.springframework.core.io.FileSystemResource) attachment)
+                                .getFile();
 
-        log.info("Exactly 3 attachments are required");
+                if (attachmentFile.exists()) {
 
-        throw new IllegalArgumentException(
-                "Exactly 3 attachments are required");
-    }
+                    boolean deleted =
+                            attachmentFile.delete();
 
-    Set<String> actualFileNames =
-            new HashSet<>();
+                    log.info(
+                            "Deleted temporary attachment ZIP: {} Result: {}",
+                            attachmentFile.getName(),
+                            deleted);
+                }
+            }
 
-    for (AttachmentRef attachment : attachments) {
+            log.debug(
+                    "Successfully purged attachment resources for Event: {}",
+                    eventId);
 
-        if (attachment == null
-                || attachment.getFileName() == null) {
+        } catch (IOException e) {
 
-            log.info("Attachment filename is required");
-
-            throw new IllegalArgumentException(
-                    "Attachment filename is required");
+            log.error(
+                    "Failed to close/delete attachment resource for Event: {}",
+                    eventId,
+                    e);
         }
-
-        actualFileNames.add(
-                attachment.getFileName());
     }
-
-    if (actualFileNames.size() != 3
-            || !actualFileNames.equals(REQUIRED_FILENAMES)) {
-
-        log.info(
-                "Attachments must contain exactly these filenames: " +
-                "intr_report,balance_compare_report,cntr_report");
-
-        throw new IllegalArgumentException(
-                "Attachments must contain exactly these filenames: " +
-                "intr_report,balance_compare_report,cntr_report");
-    }
-
-    AttachmentDownloadRequest request =
-            AttachmentDownloadRequest.builder()
-                    .attachments(attachments)
-                    .build();
-
-    Resource attachment =
-            reportServiceClient.downloadAttachments(request);
-
-    if (attachment == null
-            || !attachment.exists()) {
-
-        log.info("No attachments downloaded.");
-
-        return null;
-    }
-
-    log.info(
-            "Attachment ZIP prepared successfully: {}",
-            attachment.getFilename());
-
-    return attachment;
 }
