@@ -1,69 +1,318 @@
-package com.fincore.CommunicationService.client;
+package com.fincore.ReportService.service;
 
-import com.fincore.CommunicationService.dto.ApiResponse;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-import lombok.RequiredArgsConstructor;
+import com.fincore.ReportService.config.JasperTemplateRegistry;
+import com.fincore.ReportService.dto.*;
+import com.fincore.ReportService.exception.ResourceNotFoundException;
+import com.fincore.ReportService.model.AppConfig;
+import com.fincore.ReportService.model.ReportType;
+import com.fincore.ReportService.repository.AppConfigRepository;
+import com.fincore.ReportService.repository.ReportTypeRepository;
+import com.fincore.ReportService.util.Constants;
+import com.fincore.ReportService.util.FormatStatus;
 import lombok.extern.slf4j.Slf4j;
+import com.fincore.ReportService.util.ReportFormat;
+import com.fincore.commonutilities.buisnessobject.ControlDateService;
+
+import net.sf.jasperreports.engine.*;
+import net.sf.jasperreports.engine.export.JRCsvExporter;
+import net.sf.jasperreports.engine.export.ooxml.JRXlsxExporter;
+import net.sf.jasperreports.export.SimpleCsvExporterConfiguration;
+import net.sf.jasperreports.export.SimpleExporterInput;
+import net.sf.jasperreports.export.SimpleOutputStreamExporterOutput;
+import net.sf.jasperreports.export.SimpleWriterExporterOutput;
+import org.apache.hadoop.fs.*;
+import org.apache.hadoop.fs.FileSystem;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
+import org.springframework.context.annotation.PropertySource;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.ResourceLoader;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.FileCopyUtils;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+import org.springframework.core.io.Resource;
+import javax.sql.DataSource;
+import java.io.*;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
+import java.util.Base64;
+import com.fincore.ReportService.dto.AttachmentDownloadRequest;
+import com.fincore.ReportService.dto.AttachmentDownloadResponse;
+import com.fincore.ReportService.dto.AttachmentRef;
+import com.fincore.ReportService.dto.DownloadedAttachment;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
+import java.util.Set;
+import java.util.HashSet;
+
+/**
+ * Service implementation for handling business logic related to GLIF reports.
+ */
+@Service
 @Slf4j
-@Component
-@RequiredArgsConstructor
-public class ReportServiceClient {
+@PropertySource("classpath:jasper-reports.properties")
+public class ReportServiceImpl implements ReportService {
 
-    private final RestClient restClient;
+    private static final int BUFFER_SIZE = 32 * 1024;
+    private static final Set<String> ALREADY_COMPRESSED_EXTS = Set.of("pdf", "xlsx", "xls", "zip", "gz", "png", "jpg",
+            "jpeg");
+    private final ReportTypeRepository reportTypeRepository;
+    private final String reportsBasePath;
+    private final AppConfigRepository appConfigRepository;
+    private final NotificationWriterService notificationWriterService;
+    private final FileSystem hdfsFileSystem;
+    private final String tempReportsBasepath;
+    private final ControlDateService controlDateService;
 
-    @Value("${report.service.url}")
-    private String reportServiceUrl;
+    // ================= Redis Template for Progress ===================
+    private final RedisTemplate<String, TaskProgressDto> redisTemplate;
+    private final String REPORTS_START_DATE_KEY = "REPORTS_START_DATE";
 
-    @Value("${report.service.internal-token}")
-    private String reportServiceInternalToken;
+    
+    private static final Pattern ATTACHMENT_PATTERN=Pattern.compile("^[A-Za-z0-9._-]{1,100}$");
 
-    public AttachmentDownloadResponse downloadAttachments(
-            AttachmentDownloadRequest request) {
+    @Autowired
+    private DataSource dataSource;
+
+
+
+    @Value("${notification.progress.topic}")
+    private String progressTopic;
+
+    @Autowired
+    private ResourceLoader resourceLoader;
+
+    @Autowired
+    private ReportPathBuilderService reportPathBuilderService;
+
+
+
+    @Autowired
+    private JasperTemplateRegistry jasperTemplateRegistry;
+
+    public ReportServiceImpl(ReportTypeRepository reportTypeRepository,
+                             @Value("${glif.reports.base-path}") String basePath,
+                             AppConfigRepository appConfigRepository,
+                             NotificationWriterService notificationWriterService,
+                             FileSystem hdfsFileSystem,
+                             @Qualifier("progressRedisTemplate") RedisTemplate<String, TaskProgressDto> redisTemplate,
+                             @Value("${glif.temp-reports.base-path}") String tempReportsBasepath,
+                             ControlDateService controlDateService) {
+        this.reportTypeRepository = reportTypeRepository;
+        this.reportsBasePath = basePath;
+        this.appConfigRepository = appConfigRepository;
+        this.notificationWriterService = notificationWriterService;
+        this.hdfsFileSystem = hdfsFileSystem;
+        this.redisTemplate = redisTemplate;
+        this.tempReportsBasepath = tempReportsBasepath;
+        this.controlDateService = controlDateService;
+    }
+
+    /**
+     * Retrieves a list of report types that are explicitly mapped to the given
+     * roleId AND start date from app_config table.
+     *
+     * @param roleId The ID of the user's role.
+     * @return A list of DTOs representing the available reports and start date.
+     */
+    @Override
+    public List<ReportTypeDto> getReportTypes(int roleId, String moduleType) {
+        if (moduleType == null || moduleType.isBlank()) {
+            throw new IllegalArgumentException("Module Type can not be empty.");
+        }
+        //
+        // if(!moduleType.equalsIgnoreCase("BRANCH_WISE") ||
+        // !moduleType.equalsIgnoreCase("WHOLE_BANK")) {
+        // throw new IllegalArgumentException("Invalid Module Type.");
+        // }
+
+        // Fetch the date from appConfig to validate the start date of date-picker
+        LocalDate startDate = getStartDateFromAppConfig();
+
+        if (Constants.BRANCH_WISE.equalsIgnoreCase(moduleType)) {
+            return reportTypeRepository.findBranchWiseReports(roleId).stream()
+                    .map(reportType -> new ReportTypeDto(reportType.getReportName(), reportType.getFileName(),
+                            startDate,reportType.getReportDescription()))
+                    .collect(Collectors.toList());
+        }
+
+        return reportTypeRepository.findByRoleId(roleId).stream()
+                .map(reportType -> new ReportTypeDto(reportType.getReportName(), reportType.getFileName(),startDate,reportType.getReportDescription() ))
+                .collect(Collectors.toList());
+    }
+    @Override
+    public List<ReportTypeDto> getAdhocReportTypes(int roleId)
+    {
+        LocalDate startDate = getStartDateFromAppConfig();
+        return reportTypeRepository.findAdhocReportByRoleId(roleId).stream()
+                .map(reportType -> new ReportTypeDto(reportType.getReportName(), reportType.getFileName(), startDate , reportType.getReportDescription()))
+                .collect(Collectors.toList());
+    }
+    // ----------------------------------------------------------------------------------
+    // 1. DOWNLOAD STREAM WITH PROGRESS
+    // ----------------------------------------------------------------------------------
+    @Transactional
+    @Override
+    public ReportStreamResponse downloadReportStream(String fileName, LocalDate date, int userRoleId, String userId,
+                                                     String branchCode)  {
+        // 1. Authorization Check
+        ReportType reportType = reportTypeRepository.findByFileNameAndRoles_roleId(fileName, userRoleId)
+                .orElseThrow(() -> {
+                    log.warn("Access Denied: User {} -> Report {}", userId, fileName);
+                    sendNotification(userId, "Access Denied for report: " + fileName, "/glif-reports",
+                            fileName + "_" + date);
+                    return new AccessDeniedException("Access Denied for report: " + fileName);
+                });
+
+        log.info("Fetched report from db : {}", reportType.getReportName());
+        // This is the human-readable name (e.g., "Daily Balance Sheet")
+        String reportDisplayName = reportType.getReportName();
+        //reportPathBuilderService.testReportPath();
+        ReportPath reportPath = reportPathBuilderService.buildReportPath(reportType,date,branchCode);
+
+        // Construct task id
+        String safeReportName = reportDisplayName.replaceAll("[^a-zA-Z0-9]", "_").toLowerCase().replaceAll("_", "_");
+        String safeDate = date.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        String taskId = String.format("%s_%s_%d", safeReportName, safeDate, System.currentTimeMillis());
+
+        // 2. Prepare Paths with the CORRECT format "dd-MM-yyyy"
+        String formattedDate = date.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        Path searchDirectory = reportPath.searchDirectory();
+        String searchPattern = reportPath.searchPattern();
+
+
+        return streamReport(searchDirectory, taskId, userId, searchPattern, reportDisplayName, date, fileName,
+                formattedDate);
+
+    }
+
+    // ----------------------------------------------------------------------------------
+    // 2. CREATE REPORT WITH PROGRESS
+    // ----------------------------------------------------------------------------------
+    @Override
+    public Map<String, String> createReports(ReportCreationDto parameters, String userId) throws IOException {
+        Map<String, String> reportStat = new HashMap<>();
+        String taskId = "gen_" + System.currentTimeMillis();
+
+        LocalDate reportDate = LocalDate.parse(parameters.getDate(), DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+        String jasperFormattedDate = reportDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+        String formattedDate = reportDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String datePrefix = reportDate.format(DateTimeFormatter.ofPattern("ddMMyyyy"));
+        Path reportDir = new Path(reportsBasePath, formattedDate);
+
+        Set<String> reportList = jasperTemplateRegistry.getAllReportNames();
+        if(reportList.isEmpty()) {
+            throw new ResourceNotFoundException("Failed to create reports");
+        }
 
         try {
-
-            log.info("Calling Report Service : {}",
-                    reportServiceUrl + "/api/reports/attachment/download");
-
-            ApiResponse<AttachmentDownloadResponse> response =
-                    restClient.post()
-                            .uri(reportServiceUrl + "/api/reports/attachment/download")
-                            .header("X-Internal-Token", reportServiceInternalToken)
-                            .body(request)
-                            .retrieve()
-                            .body(new ParameterizedTypeReference<ApiResponse<AttachmentDownloadResponse>>() {});
-
-            if (response == null) {
-                throw new RuntimeException("No response received from Report Service");
+            if (!hdfsFileSystem.exists(reportDir)) {
+                hdfsFileSystem.mkdirs(reportDir);
             }
-
-            if (!response.isSuccess()) {
-                throw new RuntimeException(response.getMessage());
-            }
-
-            if (response.getData() == null) {
-                throw new RuntimeException("Attachment response is empty");
-            }
-
-            log.info("Report Service returned {} attachment(s)",
-                    response.getData().getAttachments().size());
-
-            return response.getData();
-
-        } catch (Exception ex) {
-
-            log.error("Error while downloading attachments from Report Service", ex);
-
-            throw ex;
+        } catch (IOException e) {
+            throw new IOException("Unable to create folder in hdfs");
         }
+
+        log.info("Report List : {}",reportList);
+        int totalReports = reportList.size();
+        int processedCount = 0;
+
+        sendProgress(taskId, userId, 0, "Starting report generation...", "PROCESSING");
+        String logoPath = null;
+        try {
+            logoPath = new ClassPathResource("images/logo.png").getFile().getAbsolutePath();
+        } catch (ResourceNotFoundException e) {
+            log.warn("Logo not found");
+        }
+
+        // Use a single connection for the batch, but handle failures gracefully
+        try (Connection connection = dataSource.getConnection()) {
+            for (String reportName : reportList) {
+                processedCount++;
+
+//                 jasperFileName = jasperTemplateRegistry.getReport(reportName);
+
+                // Calculate base percentage for this report
+                int basePercent = (int) (((double) (processedCount - 1) / totalReports) * 100);
+                sendProgress(taskId, userId, basePercent, "Generating " + reportName + "...", "PROCESSING");
+                log.info("Generating report: {}", reportName);
+                StringBuilder status = new StringBuilder();
+                try {
+
+                    JasperReport jasperReport = jasperTemplateRegistry.getReport(reportName);
+                        Map<String, Object> reportParams = new HashMap<>();
+                        reportParams.put("imagePath", logoPath);
+                        reportParams.put("date", parameters.getDate());
+
+                        JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, reportParams, connection);
+
+                        // --- PDF ---
+                        Path pdfPath = new Path(reportDir, reportName + "_" + datePrefix + ".pdf");
+                        try (FSDataOutputStream pdfOut = hdfsFileSystem.create(pdfPath, true)) {
+                            JasperExportManager.exportReportToPdfStream(jasperPrint, pdfOut);
+                            status.append("PDF generated");
+                        }
+
+                        // --- EXCEL ---
+                        Path xlsxPath = new Path(reportDir, reportName + "_" + datePrefix + ".xlsx");
+                        try (FSDataOutputStream xlsxOut = hdfsFileSystem.create(xlsxPath, true)) {
+                            JRXlsxExporter xlsxExporter = new JRXlsxExporter();
+                            xlsxExporter.setExporterInput(new SimpleExporterInput(jasperPrint));
+                            xlsxExporter.setExporterOutput(new SimpleOutputStreamExporterOutput(xlsxOut));
+                            xlsxExporter.exportReport();
+                            status.append(", Excel generated");
+                        }
+
+                        // --- PSV ---
+                        Path psvPath = new Path(reportDir, reportName + "_" + datePrefix + ".psv");
+                        try (FSDataOutputStream psvOut = hdfsFileSystem.create(psvPath, true)) {
+                            JRCsvExporter csvExporter = new JRCsvExporter();
+                            csvExporter.setExporterInput(new SimpleExporterInput(jasperPrint));
+                            csvExporter.setExporterOutput(new SimpleWriterExporterOutput(psvOut));
+                            SimpleCsvExporterConfiguration csvConfig = new SimpleCsvExporterConfiguration();
+                            csvConfig.setFieldDelimiter("|");
+                            csvExporter.setConfiguration(csvConfig);
+                            csvExporter.exportReport();
+                            status.append(", PSV generated");
+                        }
+
+                        reportStat.put(reportName, status.toString());
+                    }
+
+                catch (JRException e)
+                {
+                    log.error("Unable to create report");
+                }
+            }
+        } catch (SQLException e) {
+            log.error("Unable to fetch records from db");
+        }
+
+        sendProgress(taskId, userId, 100, "All reports generated.", "COMPLETED");
+        log.info("All reports generated.");
+        return reportStat;
     }
-}               @Override
+
+
+
+    /**
+     * Handles report attachment retrieval from HDFS
+     * for Communication Service requests
+     */
+
+    @Override
     public AttachmentDownloadResponse downloadAttachments(
             AttachmentDownloadRequest request) throws IOException {
 
@@ -237,19 +486,13 @@ public class ReportServiceClient {
         log.info("Total Reports Downloaded : {}", downloadedFiles.size());
 
         return response;
-    }  @PostMapping("/attachment/download")
-        public ResponseEntity<ApiResponse<AttachmentDownloadResponse>> downloadAttachments(@RequestBody AttachmentDownloadRequest request){
-                              
-                               try{
-                                        log.info("inside report controller attachment endpoint");
-                                        AttachmentDownloadResponse response=reportService.downloadAttachments(request); 
-                                        return ResponseEntity.ok(ApiResponse.success(response,"Attachment downloaded successfully"));
-                               }
-                               catch(IOException e){
-                                        log.error("Attachment download failed",e); 
-                                        return ResponseEntity.ok(
-                                                ApiResponse.error(e.getMessage() == null ?"Attachment download failed.":e.getMessage())
-                                );
-                               }
+    }
+    
 
-        }
+    // ----------------------------------------------------------------------------------
+    // DOWNLOAD REPORTS FOR TEMP-REPORTS PATH (/temp-reports/date/runId/)
+    // ----------------------------------------------------------------------------------
+    @Transactional
+    @Override
+    public ReportStreamResponse downloadTempReportStream(String fileName, LocalDate date, int userRoleId, String userId,
+                                                         String runId) throws IOException {
