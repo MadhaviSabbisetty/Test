@@ -1,83 +1,74 @@
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
-import org.springframework.web.client.RestClientException;
+@Override
+public Resource prepareAttachments(
+        List<AttachmentRef> attachments)
+        throws IOException {
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
+    log.info("Preparing attachments");
 
+    if (attachments == null || attachments.isEmpty()) {
 
+        log.info("No attachments received.");
 
+        return null;
+    }
 
+    if (attachments.size() != 3) {
 
-public Resource downloadAttachments(
-        AttachmentDownloadRequest request) {
+        log.info("Exactly 3 attachments are required");
 
-    File tempZip = null;
+        throw new IllegalArgumentException(
+                "Exactly 3 attachments are required");
+    }
 
-    try {
+    Set<String> actualFileNames =
+            new HashSet<>();
 
-        log.info("Calling Report Service : {}",
-                reportServiceUrl +
-                        "/api/reports/attachment/download");
+    for (AttachmentRef attachment : attachments) {
 
-        tempZip = File.createTempFile(
-                "attachments_",
-                ".zip");
+        if (attachment == null
+                || attachment.getFileName() == null) {
 
-        File finalTempZip = tempZip;
+            log.info("Attachment filename is required");
 
-        restClient.post()
-                .uri(reportServiceUrl +
-                        "/api/reports/attachment/download")
-                .header(
-                        "X-Internal-Token",
-                        reportServiceInternalToken)
-                .body(request)
-                .exchange((clientRequest, clientResponse) -> {
-
-                    if (!clientResponse.getStatusCode()
-                            .is2xxSuccessful()) {
-
-                        throw new RestClientException(
-                                "Report Service returned HTTP status: "
-                                        + clientResponse.getStatusCode());
-                    }
-
-                    try (InputStream inputStream =
-                                 clientResponse.getBody()) {
-
-                        java.nio.file.Files.copy(
-                                inputStream,
-                                finalTempZip.toPath(),
-                                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                    }
-
-                    return null;
-                });
-
-        log.info(
-                "Attachment ZIP downloaded successfully: {}",
-                tempZip.getAbsolutePath());
-
-        return new FileSystemResource(tempZip);
-
-    } catch (Exception ex) {
-
-        if (tempZip != null && tempZip.exists()) {
-            boolean deleted = tempZip.delete();
-
-            log.info(
-                    "Deleted temporary ZIP after failure: {}",
-                    deleted);
+            throw new IllegalArgumentException(
+                    "Attachment filename is required");
         }
 
-        log.error(
-                "Error while downloading attachments from Report Service",
-                ex);
-
-        throw new RuntimeException(
-                "Unable to download attachments from Report Service",
-                ex);
+        actualFileNames.add(
+                attachment.getFileName());
     }
+
+    if (actualFileNames.size() != 3
+            || !actualFileNames.equals(REQUIRED_FILENAMES)) {
+
+        log.info(
+                "Attachments must contain exactly these filenames: " +
+                "intr_report,balance_compare_report,cntr_report");
+
+        throw new IllegalArgumentException(
+                "Attachments must contain exactly these filenames: " +
+                "intr_report,balance_compare_report,cntr_report");
+    }
+
+    AttachmentDownloadRequest request =
+            AttachmentDownloadRequest.builder()
+                    .attachments(attachments)
+                    .build();
+
+    Resource attachment =
+            reportServiceClient.downloadAttachments(request);
+
+    if (attachment == null
+            || !attachment.exists()) {
+
+        log.info("No attachments downloaded.");
+
+        return null;
+    }
+
+    log.info(
+            "Attachment ZIP prepared successfully: {}",
+            attachment.getFilename());
+
+    return attachment;
 }
