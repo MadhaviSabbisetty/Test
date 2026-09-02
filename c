@@ -1,61 +1,170 @@
-wn completed.","stack_trace":""}
-2026-08-04 16:50:59.231 INFO  [main] o.a.j.l.DirectJDKLog: Stopping service [Tomcat] 
-{"@timestamp":"2026-08-04T16:50:59.2316921+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.apache.catalina.core.StandardService","message":"Stopping service [Tomcat]","stack_trace":""}
-2026-08-04 16:50:59.265 INFO  [main] o.s.b.a.l.ConditionEvaluationReportLogger: 
+@Override
+public ReportStreamResponse downloadAttachments(
+        AttachmentDownloadRequest request) throws IOException {
 
-Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled. 
-{"@timestamp":"2026-08-04T16:50:59.2650715+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.b.a.l.ConditionEvaluationReportLogger","message":"\r\n\r\nError starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.","stack_trace":""}
-2026-08-04 16:50:59.283 ERROR [main] o.s.b.SpringApplication: Application run failed 
-org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'hadoopConfig': Injection of autowired dependencies failed
-        at org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor.postProcessProperties(AutowiredAnnotationBeanPostProcessor.java:499)
-        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.populateBean(AbstractAutowireCapableBeanFactory.java:1444)
-        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:602)
-        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:525)
-        at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:333)
-        at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:371)
-        at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:331)
-        at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:196)
-        at org.springframework.beans.factory.support.DefaultListableBeanFactory.instantiateSingleton(DefaultListableBeanFactory.java:1225)
-        at org.springframework.beans.factory.support.DefaultListableBeanFactory.preInstantiateSingleton(DefaultListableBeanFactory.java:1191)
-        at org.springframework.beans.factory.support.DefaultListableBeanFactory.preInstantiateSingletons(DefaultListableBeanFactory.java:1121)
-        at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:994)
-        at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:621)
-        at org.springframework.boot.web.server.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:143)
-        at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:756)
-        at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:445)
-        at org.springframework.boot.SpringApplication.run(SpringApplication.java:321)
-        at org.springframework.boot.SpringApplication.run(SpringApplication.java:1365)
-        at org.springframework.boot.SpringApplication.run(SpringApplication.java:1354)
-        at com.fincore.ReportService.ReportServiceApplication.main(ReportServiceApplication.java:10)
-Caused by: org.springframework.util.PlaceholderResolutionException: Could not resolve placeholder 'hadoop.fs.uri' in value "${hadoop.fs.uri}"
-        at org.springframework.util.PlaceholderResolutionException.withValue(PlaceholderResolutionException.java:81)
-        at org.springframework.util.PlaceholderParser$ParsedValue.resolve(PlaceholderParser.java:296)
-        at org.springframework.util.PlaceholderParser.replacePlaceholders(PlaceholderParser.java:129)
-        at org.springframework.util.PropertyPlaceholderHelper.replacePlaceholders(PropertyPlaceholderHelper.java:96)
-        at org.springframework.core.env.AbstractPropertyResolver.doResolvePlaceholders(AbstractPropertyResolver.java:286)
-        at org.springframework.core.env.AbstractPropertyResolver.resolveRequiredPlaceholders(AbstractPropertyResolver.java:257)
-        at org.springframework.context.support.PropertySourcesPlaceholderConfigurer.lambda$processProperties$0(PropertySourcesPlaceholderConfigurer.java:184)
-        at org.springframework.beans.factory.support.AbstractBeanFactory.resolveEmbeddedValue(AbstractBeanFactory.java:959)
-        at org.springframework.beans.factory.support.DefaultListableBeanFactory.doResolveDependency(DefaultListableBeanFactory.java:1679)
-        at org.springframework.beans.factory.support.DefaultListableBeanFactory.resolveDependency(DefaultListableBeanFactory.java:1658)
-        at org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor$AutowiredFieldElement.resolveFieldValue(AutowiredAnnotationBeanPostProcessor.java:764)
-        at org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor$AutowiredFieldElement.inject(AutowiredAnnotationBeanPostProcessor.java:748)
-        at org.springframework.beans.factory.annotation.InjectionMetadata.inject(InjectionMetadata.java:146)
-        at org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor.postProcessProperties(AutowiredAnnotationBeanPostProcessor.java:493)
-        ... 19 common frames omitted
-{"@timestamp":"2026-08-04T16:50:59.2837188+05:30","level":"ERROR","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.springframework.boot.SpringApplication","message":"Application run failed","stack_trace":"org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'hadoopConfig': Injection of autowired dependencies failed\r\n\tat org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor.postProcessProperties(AutowiredAnnotationBeanPostProcessor.java:499)\r\n\tat org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.populateBean(AbstractAutowireCapableBeanFactory.java:1444)\r\n\tat org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:602)\r\n\tat org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:525)\r\n\tat org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:333)\r\n\tat org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:371)\r\n\tat org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:331)\r\n\tat org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:196)\r\n\tat org.springframework.beans.factory.support.DefaultListableBeanFactory.instantiateSingleton(DefaultListableBeanFactory.java:1225)\r\n\tat org.springframework.beans.factory.support.DefaultListableBeanFactory.preInstantiateSingleton(DefaultListableBeanFactory.java:1191)\r\nCaused by: org.springframework.util.PlaceholderResolutionException: Could not resolve placeholder 'hadoop.fs.uri' in value \"${hadoop.fs.uri}\"\r\n\tat org.springframework.util.PlaceholderResolutionException.withValue(PlaceholderResolutionException.java:81)\r\n\tat org.springframework.util.PlaceholderParser$ParsedValue.resolve(PlaceholderParser.java:296)\r\n\tat org.springframework.util.PlaceholderParser.replacePlaceholders(PlaceholderParser.java:129)\r\n\tat org.springframework.util.PropertyPlaceholderHelper.replacePlaceholders(PropertyPlaceholderHelper.java:96)\r\n\tat org.springframework.core.env.AbstractPropertyResolver.doResolvePlaceholders(AbstractPropertyResolver.java:286)\r\n\tat org.springframework.core.env.AbstractPropertyResolver.resolveRequiredPlaceholders(AbstractPropertyResolver.java:257)\r\n\tat org.springframework.context.support.PropertySourcesPlaceholderConfigurer.lambda$processProperties$0(PropertySourcesPlaceholderConfigurer.java:184)\r\n\tat org.springframework.beans.factory.support.AbstractBeanFactory.resolveEmbeddedValue(AbstractBeanFactory.java:959)\r\n\tat org.springframework.beans.factory.support.DefaultListableBeanFactory.doResolveDependency(DefaultListableBeanFactory.java:1679)\r\n\tat org.springframework.beans.factory.support.DefaultListableBeanFactory.resolveDependency(DefaultListableBeanFactory.java:1658)\r\n"}
-[INFO] ------------------------------------------------------------------------
-[INFO] BUILD FAILURE
-[INFO] ------------------------------------------------------------------------
-[INFO] Total time:  38.976 s
-[INFO] Finished at: 2026-08-04T16:51:00+05:30
-[INFO] ------------------------------------------------------------------------
-[ERROR] Failed to execute goal org.springframework.boot:spring-boot-maven-plugin:4.1.0:run (default-cli) on project ReportService: Process terminated with exit code: 1 -> [Help 1]
-[ERROR] 
-[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
-[ERROR] Re-run Maven using the -X switch to enable full debug logging.
-[ERROR] 
-[ERROR] For more information about the errors and possible solutions, please read the following articles:
-[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
+    log.info("Inside the report service attachment download method");
 
-D:\Workspace\Git\Fincore\Backend\fincore_report_service
+    if (request == null
+            || request.getAttachments() == null
+            || request.getAttachments().size() != 3) {
+
+        throw new IllegalArgumentException(
+                "Exactly 3 attachments are required");
+    }
+
+    Set<String> requiredFileNames = Set.of(
+            "intr_report",
+            "balance_compare_report",
+            "cntr_report"
+    );
+
+    Set<String> actualFileNames = new HashSet<>();
+
+    for (AttachmentRef attachment : request.getAttachments()) {
+
+        if (attachment == null
+                || attachment.getFileName() == null) {
+
+            throw new IllegalArgumentException(
+                    "Attachment filename is required");
+        }
+
+        actualFileNames.add(attachment.getFileName());
+    }
+
+    if (actualFileNames.size() != 3
+            || !actualFileNames.equals(requiredFileNames)) {
+
+        throw new IllegalArgumentException(
+                "Attachments must contain exactly these filenames: " +
+                "intr_report, balance_compare_report, cntr_report");
+    }
+
+    List<Path> attachmentPaths = new ArrayList<>();
+
+    for (AttachmentRef attachment : request.getAttachments()) {
+
+        String attachmentId = attachment.getAttachmentId();
+
+        log.info("Attachment Id: {}", attachmentId);
+        log.info("Report Name: {}", attachment.getFileName());
+        log.info("Attachment Type: {}", attachment.getAttachmentType());
+
+        if (attachmentId == null
+                || !ATTACHMENT_PATTERN.matcher(attachmentId).matches()) {
+
+            throw new IllegalArgumentException(
+                    "Invalid attachment Id");
+        }
+
+        String date = attachmentId.substring(
+                attachmentId.lastIndexOf("_") + 1);
+
+        if (!date.matches("\\d{8}")) {
+            throw new IllegalArgumentException(
+                    "Invalid report date");
+        }
+
+        String folderDate =
+                date.substring(4, 8) + "-"
+                + date.substring(2, 4) + "-"
+                + date.substring(0, 2);
+
+        String actualFileName = attachmentId + ".xlsx";
+
+        if (!ATTACHMENT_PATTERN.matcher(actualFileName).matches()) {
+            throw new SecurityException(
+                    "Invalid file name");
+        }
+
+        if (reportsBasePath.contains("..")) {
+            throw new SecurityException(
+                    "Invalid base path");
+        }
+
+        Path base = new Path(reportsBasePath);
+        Path datePath = new Path(base, folderDate);
+        Path filePath = new Path(datePath, actualFileName);
+
+        String finalPath = filePath.toString();
+
+        if (finalPath.contains("..")) {
+            throw new SecurityException(
+                    "Directory traversal detected");
+        }
+
+        Path normalizedPath =
+                Path.getPathWithoutSchemeAndAuthority(filePath);
+
+        if (!normalizedPath.equals(filePath)) {
+            throw new SecurityException(
+                    "Invalid HDFS path");
+        }
+
+        log.info("Checking HDFS file: {}", normalizedPath);
+
+        if (!hdfsFileSystem.exists(normalizedPath)) {
+
+            log.info("Attachment not found: {}", normalizedPath);
+
+            throw new ResourceNotFoundException(
+                    "Attachment not found: " + normalizedPath);
+        }
+
+        attachmentPaths.add(normalizedPath);
+    }
+
+    StreamingResponseBody streamingBody = outputStream -> {
+
+        try (ZipOutputStream zipOut =
+                     new ZipOutputStream(outputStream)) {
+
+            byte[] buffer = new byte[BUFFER_SIZE];
+
+            for (Path filePath : attachmentPaths) {
+
+                String fileName = filePath.getName();
+
+                log.info(
+                        "Streaming attachment into ZIP: {}",
+                        fileName);
+
+                ZipEntry zipEntry =
+                        new ZipEntry(fileName);
+
+                zipOut.putNextEntry(zipEntry);
+
+                try (FSDataInputStream inputStream =
+                             hdfsFileSystem.open(filePath)) {
+
+                    int bytesRead;
+
+                    while ((bytesRead =
+                            inputStream.read(buffer)) != -1) {
+
+                        zipOut.write(
+                                buffer,
+                                0,
+                                bytesRead);
+                    }
+
+                } finally {
+                    zipOut.closeEntry();
+                }
+
+                log.info(
+                        "Attachment streamed successfully: {}",
+                        fileName);
+            }
+
+            zipOut.finish();
+
+            log.info(
+                    "All 3 attachments streamed successfully");
+        }
+    };
+
+    return new ReportStreamResponse(
+            "attachments.zip",
+            streamingBody);
+}
