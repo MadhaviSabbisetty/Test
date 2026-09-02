@@ -1,18 +1,362 @@
-@PostMapping("/attachment/download")
-public ResponseEntity<StreamingResponseBody> downloadAttachments(
-        @RequestBody AttachmentDownloadRequest request) {
+package com.fincore.CommunicationService.orchestrator;
 
-    log.info("Received attachment download request");
+import com.fincore.CommunicationService.dto.GenericCommunicationEvent;
+import com.fincore.CommunicationService.dto.ResolvedRecipient;
+import com.fincore.CommunicationService.exception.CommunicationExceptions.VendorDeliveryException;
+import com.fincore.CommunicationService.model.CommAuditLog;
+import com.fincore.CommunicationService.recipient.RecipientResolver;
+import com.fincore.CommunicationService.service.CommunicationAuditService;
+import com.fincore.CommunicationService.service.EmailService;
+import com.fincore.CommunicationService.service.SmsService;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
+import com.fincore.CommunicationService.attachment.AttachmentPreparationService; 
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
 
-    ReportStreamResponse response =
-            reportService.downloadAttachments(request);
+import java.io.IOException;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 
-    return ResponseEntity.ok()
-            .header(
-                    HttpHeaders.CONTENT_DISPOSITION,
-                    "attachment; filename=\"" +
-                            response.getDownloadFileName() +
-                            "\"")
-            .contentType(MediaType.APPLICATION_OCTET_STREAM)
-            .body(response.getStreamBody());
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class CommunicationOrchestrator {
+
+    private final RecipientResolver recipientResolver;
+    private final CommunicationAuditService auditService;
+    private final EmailService emailService;
+    private final SmsService smsService;
+    private final StringRedisTemplate redisTemplate;
+    private final AttachmentPreparationService attachmentPreparationService;
+
+    /**
+     * Partitions large recipient arrays into manageable chunks (e.g., 500).
+     * Protects the JVM Heap from OutOfMemoryErrors (OOM) during massive EOD processing.
+     */
+    @Value("${communication.chunk.size:500}")
+    private int chunkSize;
+
+    /**
+     * Rate Limiter.
+     * Prevents 10,000 Virtual Threads from simultaneously opening socket connections to the vendor.
+     * Permits exactly 50 concurrent outbound HTTP dispatches.
+     */
+    private final Semaphore vendorRateLimiter = new Semaphore(50);
+
+    /**
+     * Primary entry point invoked by the Kafka Consumer.
+     *
+     * @param event The deserialized, validated communication event.
+     * @throws VendorDeliveryException if chunk processing encounters a high volume of failures, triggering a Kafka NACK.
+     */
+    public void process(GenericCommunicationEvent event) {
+        final String eventId = event.getEventId();
+        log.info("Orchestrator executing Event: {} | Personalized Flag: {}", eventId, event.isPersonalized());
+
+        // 1. Resolve Recipients (Abstracts away Roles, UserIds into raw Contacts)
+        List<ResolvedRecipient> recipients = recipientResolver.resolveRecipients(event.getRecipients());
+        if (recipients.isEmpty()) {
+            log.warn("Recipient Resolution yielded 0 contacts for Event: {}. Dropping payload gracefully.", eventId);
+            return;
+        }
+
+        Resource attachment = null;
+        try {
+            // 2. Prepare Attachments (Fetch HDFS, Zip, and wrap in AutoDeletingResource)
+            AttachmentDownloadResponse attachmentResponse = null;
+            if (event.getAttachments() != null
+                    && !event.getAttachments().isEmpty()) {
+
+                log.info("Preparing {} attachment(s).",event.getAttachments().size());
+                try{
+                    attachmentResponse =
+                        attachmentPreparationService.prepareAttachments(event.getAttachments());
+                        log.info("Downloaded {} attachments",attachmentResponse.getAttachments().size());
+                }
+                catch(Exception e){
+                    log.error("attachment preparation failes",e);
+                    throw new RuntimeException("Unable to prepare attachments",e);
+                }
+            }
+
+            // 3. Chunking logic to cap memory per processing cycle
+            List<List<ResolvedRecipient>> chunks = partitionList(recipients, chunkSize);
+            AtomicInteger failureCount = new AtomicInteger(0);
+
+            log.info("Event {} requires {} total recipients. Partitioned into {} execution chunks.",
+                    eventId, recipients.size(), chunks.size());
+
+            // 4. Spin up Virtual Threads to execute chunks concurrently
+            try (ExecutorService virtualExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
+                List<Callable<Void>> tasks = new ArrayList<>();
+
+                for (List<ResolvedRecipient> chunk : chunks) {
+                    final Resource currentAttachment = attachment;
+
+                    tasks.add(() -> {
+                        if (event.isPersonalized()) {
+                            processPersonalizedChunk(chunk, event, failureCount, currentAttachment);
+                        } else {
+                            processBulkChunk(chunk, event, failureCount, currentAttachment);
+                        }
+                        return null;
+                    });
+                }
+
+                // Block orchestrator thread until all chunk virtual threads complete
+                List<Future<Void>> futures = virtualExecutor.invokeAll(tasks);
+                for (Future<Void> future : futures) {
+                    future.get(); // Re-throws any internal Virtual Thread exception
+                }
+
+            } catch (InterruptedException | ExecutionException e) {
+                log.error("CRITICAL: Concurrency error during chunk dispatch for Event: {}", eventId, e);
+                throw new VendorDeliveryException("Threading error during dispatch loop", e);
+            }
+
+            // 5. Aggregate failures. Throwing here utilizes Spring Kafka's native retry backoff policy.
+            if (failureCount.get() > 0) {
+                log.error("Event {} encountered {} partial dispatch failures. Routing to Retry Topic.", eventId, failureCount.get());
+                throw new VendorDeliveryException("Partial Vendor Dispatch Failure. Check DLQ/Audit Logs.", null);
+            }
+
+            log.info("Event {} processed successfully across all chunks.", eventId);
+
+        } catch (Exception e) {
+            log.error("Fatal orchestrator failure for Event: {}", eventId, e);
+            throw new VendorDeliveryException("Orchestrator execution halted", e);
+        } finally {
+            // 6. PREVENT LEAK
+            // Closes S3/HDFS InputStream connections and forces deletion of local /tmp ZIP files.
+            if (attachment != null) {
+                try {
+                    attachment.getInputStream().close();
+                    log.debug("Successfully purged attachment I/O resources for Event: {}", eventId);
+                } catch (IOException e) {
+                    log.error("MEMORY LEAK ALERT: Failed to close attachment resource for Event: {}", eventId, e);
+                }
+            }
+        }
+    }
+
+    /**
+     * Executes the standard 1-by-1 dispatch pipeline.
+     * Optimal for highly dynamic templates (e.g., containing user account balances).
+     */
+    private void processPersonalizedChunk(List<ResolvedRecipient> chunk, GenericCommunicationEvent event, AtomicInteger failureCount, Resource attachment) {
+        log.debug("Initiating Personalized Pipeline for chunk of size {}", chunk.size());
+
+        try (ExecutorService ioExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Callable<Void>> dispatchTasks = new ArrayList<>();
+
+            for (ResolvedRecipient recipient : chunk) {
+                for (String channel : event.getChannels()) {
+                    dispatchTasks.add(() -> {
+                        dispatchToChannel(recipient, channel, event, failureCount, attachment);
+                        return null;
+                    });
+                }
+            }
+            ioExecutor.invokeAll(dispatchTasks);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("Personalized chunk processing was interrupted by the OS.", e);
+        }
+    }
+
+    /**
+     * Executes the highly optimized Bulk Pipeline.
+     * Replaces 500 network calls with single Redis Pipelined operations and JDBC Batches.
+     */
+    private void processBulkChunk(List<ResolvedRecipient> chunk, GenericCommunicationEvent event, AtomicInteger failureCount, Resource attachment) {
+        log.debug("Initiating Bulk Pipeline for chunk of size {}", chunk.size());
+
+        for (String channel : event.getChannels()) {
+
+            // DEGRADATION: SMS providers typically reject 500-number arrays.
+            // We transparently step down to Virtual-Thread per-user processing for SMS.
+            if ("SMS".equalsIgnoreCase(channel)) {
+                log.info("SMS Degradation Triggered: Routing bulk SMS traffic to personalized pipeline for Event: {}", event.getEventId());
+                processPersonalizedChunk(chunk, event, failureCount, attachment);
+                continue;
+            }
+
+            // Extract valid emails
+            List<String> validEmails = chunk.stream()
+                    .map(ResolvedRecipient::getEmail)
+                    .filter(Objects::nonNull)
+                    .filter(e -> !e.isBlank())
+                    .toList();
+
+            if (validEmails.isEmpty()) continue;
+
+            // Generate deterministic idempotency keys
+            List<String> idempotencyKeys = validEmails.stream()
+                    .map(email -> "COMM_IDEMP:" + event.getEventId() + ":EMAIL:" + email)
+                    .toList();
+
+            // 1. REDIS PIPELINING: Send 500 SETNX commands in ONE physical TCP packet.
+            List<Object> redisResults = redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+                for (String key : idempotencyKeys) {
+                    connection.stringCommands().setNX(key.getBytes(), "PROCESSING".getBytes());
+                    connection.keyCommands().expire(key.getBytes(), Duration.ofHours(24).getSeconds());
+                }
+                return null;
+            });
+
+            List<String> emailsToProcess = new ArrayList<>();
+            List<String> auditIds = new ArrayList<>();
+            List<CommAuditLog> auditLogs = new ArrayList<>();
+
+            // 2. Evaluate Pipelined Results
+            for (int i = 0; i < redisResults.size(); i++) {
+                // TRUE means we successfully acquired the processing lock. FALSE means it was already processed.
+                if (Boolean.TRUE.equals(redisResults.get(i))) {
+                    String email = validEmails.get(i);
+                    emailsToProcess.add(email);
+
+                    String auditId = event.getEventId() + "_EMAIL_" + Math.abs(email.hashCode());
+                    auditIds.add(auditId);
+
+                    auditLogs.add(CommAuditLog.builder()
+                            .auditId(auditId)
+                            .eventId(event.getEventId())
+                            .traceId(event.getTraceId())
+                            .producerService(event.getProducerService() != null ? event.getProducerService() : "GENERIC_EVENT")
+                            .eventType(event.getEventType())
+                            .templateId(event.getTemplateId())
+                            .channel("EMAIL")
+                            .maskedRecipient(email)
+                            .status("PROCESSING")
+                            .build());
+                }
+            }
+
+            if (emailsToProcess.isEmpty()) {
+                log.debug("Idempotency Shield: All {} emails in chunk already processed.", chunk.size());
+                continue;
+            }
+
+            // 3. JDBC BATCH INSERT: Writes all PROCESSING rows in one DB hit.
+            auditService.logBulkAttempt(auditLogs);
+
+            try {
+                // 4. Only wrap the actual Vendor API call.
+                vendorRateLimiter.acquire();
+                try {
+                    // Send 1 API call containing up to 500 BCC addresses.
+                    // emailService.sendBulkEmail(event.getTemplateId(), emailsToProcess, event.getPayload(), attachment);
+                    log.info("STUB: Triggered Vendor sendBulkEmail for {} recipients.", emailsToProcess.size());
+                } finally {
+                    vendorRateLimiter.release();
+                }
+
+                // 5. JDBC BATCH UPDATE: Updates all to SUCCESS in one DB hit.
+                auditService.logBulkSuccess(auditIds);
+
+                // 6. REDIS PIPELINE UPDATE: Marks keys as permanently successful.
+                redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+                    for (String email : emailsToProcess) {
+                        connection.stringCommands().set(
+                                ("COMM_IDEMP:" + event.getEventId() + ":EMAIL:" + email).getBytes(),
+                                "SUCCESS".getBytes()
+                        );
+                    }
+                    return null;
+                });
+
+            } catch (Exception e) {
+                log.error("VENDOR OUTAGE: Bulk dispatch failed for Event: {}. Rolling back locks.", event.getEventId(), e);
+
+                // Rollback database status to failed, and DELETE redis keys so Kafka retry can pick them up.
+                auditService.logBulkFailure(auditIds, e.getMessage());
+                redisTemplate.delete(idempotencyKeys);
+
+                failureCount.addAndGet(emailsToProcess.size());
+            }
+        }
+    }
+
+    /**
+     * Core processing logic for an individual recipient (Personalized Flow).
+     */
+    private void dispatchToChannel(ResolvedRecipient recipient, String channel, GenericCommunicationEvent event, AtomicInteger failureCount, Resource attachment) {
+        String recipientIdentifier = "EMAIL".equalsIgnoreCase(channel) ? recipient.getEmail() : recipient.getMobile();
+
+        // Defensive drop: Producer requested SMS, but recipient user account has no mobile number.
+        if (recipientIdentifier == null || recipientIdentifier.isBlank()) {
+            return;
+        }
+
+        String auditId = event.getEventId() + "_" + channel + "_" + Math.abs(recipientIdentifier.hashCode());
+        String idempotencyKey = "COMM_IDEMP:" + auditId + ":" + channel + ":" + recipientIdentifier;
+
+        // Atomic Set-If-Absent prevents duplicate SMS/Emails if Kafka replays an event.
+        Boolean isNew = redisTemplate.opsForValue().setIfAbsent(idempotencyKey, "PROCESSING", Duration.ofHours(24));
+        if (Boolean.FALSE.equals(isNew)) {
+            log.trace("Idempotency Lock Active for {}. Skipping.", recipientIdentifier);
+            return;
+        }
+
+        auditService.logAttempt(auditId, event.getEventId(), event.getTraceId(), event.getTemplateId(), channel, recipientIdentifier);
+
+        try {
+            if ("EMAIL".equalsIgnoreCase(channel)) {
+                vendorRateLimiter.acquire();
+                try {
+                    // emailService.sendEmail(event.getTemplateId(), recipient.getEmail(), event.getPayload(), attachment);
+                    log.info("STUB: Triggered Vendor sendEmail for {}", auditService.maskSensitiveData(recipient.getEmail(), "EMAIL"));
+                } finally {
+                    vendorRateLimiter.release();
+                }
+            } else if ("SMS".equalsIgnoreCase(channel)) {
+                vendorRateLimiter.acquire();
+                try {
+                    smsService.sendSms(event.getTemplateId(), recipient.getMobile(), event.getPayload());
+                } finally {
+                    vendorRateLimiter.release();
+                }
+            }
+
+            auditService.logSuccess(auditId);
+
+            // Mark as definitively complete.
+            redisTemplate.opsForValue().set(idempotencyKey, "SUCCESS", Duration.ofHours(24));
+
+        } catch (Exception e) {
+            log.error("Delivery Exception for {} via {}. Reverting idempotency lock.", auditService.maskSensitiveData(recipientIdentifier, channel), channel, e);
+            auditService.logFailure(auditId, e.getMessage());
+
+            // REVERT: If we hit a timeout, remove the lock so the retry consumer can attempt delivery again.
+            redisTemplate.delete(idempotencyKey);
+            failureCount.incrementAndGet();
+        }
+    }
+
+    /**
+     * Utility method to safely partition a massive list into smaller sub-lists.
+     */
+    private <T> List<List<T>> partitionList(List<T> list, int size) {
+        List<List<T>> partitions = new ArrayList<>();
+        if (list == null || list.isEmpty()) return partitions;
+
+        for (int i = 0; i < list.size(); i += size) {
+            partitions.add(new ArrayList<>(list.subList(i, Math.min(i + size, list.size()))));
+        }
+        return partitions;
+    }
 }
