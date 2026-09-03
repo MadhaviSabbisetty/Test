@@ -1,56 +1,88 @@
-2026-09-03 12:19:37.313 ERROR [http-nio-9005-exec-4] o.s.b.w.a.e.ErrorMvcAutoConfiguration$StaticView: Cannot render error page for request [null] as the response has already been committed. As a result, the response may have the wrong status code. 
-{"@timestamp":"2026-09-03T12:19:37.3130161+05:30","level":"ERROR","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"o.s.b.w.a.e.ErrorMvcAutoConfiguration$StaticView","message":"Cannot render error page for request [null] as the response has already been committed. As a result, the response may have the wrong status code.","stack_trace":""}
-2026-09-03 12:19:37.599 INFO  [org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1] o.a.k.c.NetworkClient: [Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Node -1 disconnected. 
-{"@timestamp":"2026-09-03T12:19:37.5992598+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"org.apache.kafka.clients.NetworkClient","message":"[Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Node -1 disconnected.","stack_trace":""}
-2026-09-03 12:19:37.599 WARN  [org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1] o.a.k.c.NetworkClient: [Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Connection to node -1 (localhost/127.0.0.1:9092) could not be established. Node may not be available. 
-{"@timestamp":"2026-09-03T12:19:37.5992598+05:30","level":"WARN","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"org.apache.kafka.clients.NetworkClient","message":"[Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Connection to node -1 (localhost/127.0.0.1:9092) could not be established. Node may not be available.","stack_trace":""}
-2026-09-03 12:19:37.600 WARN  [org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1] o.a.k.c.NetworkClient$DefaultMetadataUpdater: [Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected 
-{"@timestamp":"2026-09-03T12:19:37.6002695+05:30","level":"WARN","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"org.apache.kafka.clients.NetworkClient","message":"[Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected","stack_trace":""}
-2026-09-03 12:19:37.651 INFO  [org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1] o.a.k.c.Metadata: [Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Rebootstrapping with [localhost/127.0.0.1:9092] 
-{"@timestamp":"2026-09-03T12:19:37.6512748+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"org.apache.kafka.clients.Metadata","message":"[Consumer clientId=consumer-Airflow_ETL-1, groupId=Airflow_ETL] Rebootstrapping with [localhost/127.0.0.1:9092]","stack_trace":""}
-2026-09-03 12:19:37.827 INFO  [http-nio-9005-exec-5] c.f.R.c.ReportController: Received attachment download request 
-{"@timestamp":"2026-09-03T12:19:37.8276896+05:30","level":"INFO","service":"ReportService","traceId":"45330ffe-26c7-4607-a44e-c828d06f1b31","userId":"CommunicationService","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.controller.ReportController","message":"Received attachment download request","stack_trace":""}
-2026-09-03 12:19:37.827 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Inside the report service attachment download method 
-{"@timestamp":"2026-09-03T12:19:37.8276896+05:30","level":"INFO","service":"ReportService","traceId":"45330ffe-26c7-4607-a44e-c828d06f1b31","userId":"CommunicationService","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Inside the report service attachment download method","stack_trace":""}
-2026-09-03 12:19:37.827 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Id: intr_report_31032026 
-{"@timestamp":"2026-09-03T12:19:37.8276896+05:30","level":"INFO","service":"ReportService","traceId":"45330ffe-26c7-4607-a44e-c828d06f1b31","userId":"CommunicationService","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Id: intr_report_31032026","stack_trace":""}
-2026-09-03 12:19:37.828 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Report Name: intr_report 
-{"@timestamp":"2026-09-03T12:19:37.8286799+05:30","level":"INFO","service":"ReportService","traceId":"45330ffe-26c7-4607-a44e-c828d06f1b31","userId":"CommunicationService","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Report Name: intr_report","stack_trace":""}
-2026-09-03 12:19:37.828 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Type: INTR_SUMMARY 
-{"@timestamp":"2026-09-03T12:19:37.8286799+05:30","level":"INFO","service":"ReportService","traceId":"45330ffe-26c7-4607-a44e-c828d06f1b31","userId":"CommunicationService","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Type: INTR_SUMMARY","stack_trace":""}
-2026-09-03 12:19:37.828 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Checking HDFS file: /reports/2026-03-31/intr_report_31032026.xlsx 
-{"@timestamp":"2026-09-03T12:19:37.8286799+05:30","level":"INFO","service":"ReportService","traceId":"45330ffe-26c7-4607-a44e-c828d06f1b31","userId":"CommunicationService","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Checking HDFS file: /reports/2026-03-31/intr_report_31032026.xlsx","stack_trace":""}
-2026-09-03 12:19:37.850 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Id: balance_compare_report_31032026 
-{"@timestamp":"2026-09-03T12:19:37.8506802+05:30","level":"INFO","service":"ReportService","traceId":"45330ffe-26c7-4607-a44e-c828d06f1b31","userId":"CommunicationService","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Id: balance_compare_report_31032026","stack_trace":""}
-2026-09-03 12:19:37.850 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Report Name: balance_compare_report 
-{"@timestamp":"2026-09-03T12:19:37.8506802+05:30","level":"INFO","service":"ReportService","traceId":"45330ffe-26c7-4607-a44e-c828d06f1b31","userId":"CommunicationService","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Report Name: balance_compare_report","stack_trace":""}
-2026-09-03 12:19:37.851 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Type: BAL_COMP_SUMMARY 
-{"@timestamp":"2026-09-03T12:19:37.8516801+05:30","level":"INFO","service":"ReportService","traceId":"45330ffe-26c7-4607-a44e-c828d06f1b31","userId":"CommunicationService","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Type: BAL_COMP_SUMMARY","stack_trace":""}
-2026-09-03 12:19:37.851 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Checking HDFS file: /reports/2026-03-31/balance_compare_report_31032026.xlsx 
-{"@timestamp":"2026-09-03T12:19:37.8516801+05:30","level":"INFO","service":"ReportService","traceId":"45330ffe-26c7-4607-a44e-c828d06f1b31","userId":"CommunicationService","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Checking HDFS file: /reports/2026-03-31/balance_compare_report_31032026.xlsx","stack_trace":""}
-2026-09-03 12:19:37.872 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Id: cntr_report_31032026 
-{"@timestamp":"2026-09-03T12:19:37.8727329+05:30","level":"INFO","service":"ReportService","traceId":"45330ffe-26c7-4607-a44e-c828d06f1b31","userId":"CommunicationService","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Id: cntr_report_31032026","stack_trace":""}
-2026-09-03 12:19:37.873 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Report Name: cntr_report 
-{"@timestamp":"2026-09-03T12:19:37.8737344+05:30","level":"INFO","service":"ReportService","traceId":"45330ffe-26c7-4607-a44e-c828d06f1b31","userId":"CommunicationService","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Report Name: cntr_report","stack_trace":""}
-2026-09-03 12:19:37.873 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Attachment Type: CNTR_SUMMARY 
-{"@timestamp":"2026-09-03T12:19:37.8737344+05:30","level":"INFO","service":"ReportService","traceId":"45330ffe-26c7-4607-a44e-c828d06f1b31","userId":"CommunicationService","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Attachment Type: CNTR_SUMMARY","stack_trace":""}
-2026-09-03 12:19:37.874 INFO  [http-nio-9005-exec-5] c.f.R.s.ReportServiceImpl: Checking HDFS file: /reports/2026-03-31/cntr_report_31032026.xlsx 
-{"@timestamp":"2026-09-03T12:19:37.8747342+05:30","level":"INFO","service":"ReportService","traceId":"45330ffe-26c7-4607-a44e-c828d06f1b31","userId":"CommunicationService","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.R.service.ReportServiceImpl","message":"Checking HDFS file: /reports/2026-03-31/cntr_report_31032026.xlsx","stack_trace":""}
-2026-09-03 12:19:37.897 INFO  [http-nio-9005-exec-5] c.f.c.l.MdcLoggingFilter: API Execution Completed - Method: POST | URL: http://localhost:9005/api/reports/attachment/download | Status: 200 
-2026-09-03 12:19:37.897 INFO  [task-3] c.f.R.s.ReportServiceImpl: Streaming attachment into ZIP: intr_report_31032026.xlsx 
-{"@timestamp":"2026-09-03T12:19:37.8970147+05:30","level":"INFO","service":"ReportService","traceId":"45330ffe-26c7-4607-a44e-c828d06f1b31","userId":"CommunicationService","clientIp":"127.0.0.1","apiPath":"/api/reports/attachment/download","class":"c.f.c.logging.MdcLoggingFilter","message":"API Execution Completed - Method: POST | URL: http://localhost:9005/api/reports/attachment/download | Status: 200","stack_trace":""}
-{"@timestamp":"2026-09-03T12:19:37.8970147+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Streaming attachment into ZIP: intr_report_31032026.xlsx","stack_trace":""}
-2026-09-03 12:19:37.961 INFO  [task-3] c.f.R.s.ReportServiceImpl: Attachment streamed successfully: intr_report_31032026.xlsx 
-{"@timestamp":"2026-09-03T12:19:37.9617739+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment streamed successfully: intr_report_31032026.xlsx","stack_trace":""}
-2026-09-03 12:19:37.961 INFO  [task-3] c.f.R.s.ReportServiceImpl: Streaming attachment into ZIP: balance_compare_report_31032026.xlsx 
-{"@timestamp":"2026-09-03T12:19:37.9617739+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Streaming attachment into ZIP: balance_compare_report_31032026.xlsx","stack_trace":""}
-2026-09-03 12:19:38.055 INFO  [task-3] c.f.R.s.ReportServiceImpl: Attachment streamed successfully: balance_compare_report_31032026.xlsx 
-{"@timestamp":"2026-09-03T12:19:38.0555038+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment streamed successfully: balance_compare_report_31032026.xlsx","stack_trace":""}
-2026-09-03 12:19:38.056 INFO  [task-3] c.f.R.s.ReportServiceImpl: Streaming attachment into ZIP: cntr_report_31032026.xlsx 
-{"@timestamp":"2026-09-03T12:19:38.0564967+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Streaming attachment into ZIP: cntr_report_31032026.xlsx","stack_trace":""}
-2026-09-03 12:19:38.103 INFO  [task-3] c.f.R.s.ReportServiceImpl: Attachment streamed successfully: cntr_report_31032026.xlsx 
-{"@timestamp":"2026-09-03T12:19:38.1033035+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"Attachment streamed successfully: cntr_report_31032026.xlsx","stack_trace":""}
-2026-09-03 12:19:38.103 INFO  [task-3] c.f.R.s.ReportServiceImpl: All 3 attachments streamed successfully 
-{"@timestamp":"2026-09-03T12:19:38.1033035+05:30","level":"INFO","service":"ReportService","traceId":"","userId":"","clientIp":"","apiPath":"","class":"c.f.R.service.ReportServiceImpl","message":"All 3 attachments streamed successfully","stack_trace":""}
-2026-09-03 12:19:38.105 ERROR [http-nio-9005-exec-6] o.a.j.l.DirectJDKLog: Servlet.service() for servlet [dispatcherServlet] threw exception 
-org.springframework.security.authorization.AuthorizationDeniedException: Access Denied
+public File downloadAttachments(
+        AttachmentDownloadRequest request) {
+
+    File zipFile = null;
+
+    try {
+
+        log.debug(
+                "Initiating upstream request to Report Service: {}",
+                reportServiceUrl +
+                        "/api/reports/attachment/download");
+
+        zipFile = File.createTempFile(
+                "attachments_",
+                ".zip");
+
+        File finalZipFile = zipFile;
+
+        restClient.post()
+                .uri(
+                        reportServiceUrl +
+                                "/api/reports/attachment/download")
+                .header(
+                        "X-Internal-Token",
+                        reportServiceInternalToken)
+                .body(request)
+                .exchange((clientRequest, clientResponse) -> {
+
+                    if (!clientResponse
+                            .getStatusCode()
+                            .is2xxSuccessful()) {
+
+                        throw new RuntimeException(
+                                "Report Service returned HTTP status: "
+                                        + clientResponse.getStatusCode());
+                    }
+
+                    try (InputStream inputStream =
+                                 clientResponse.getBody();
+                         OutputStream outputStream =
+                                 new FileOutputStream(finalZipFile)) {
+
+                        byte[] buffer =
+                                new byte[32 * 1024];
+
+                        int bytesRead;
+
+                        while ((bytesRead =
+                                inputStream.read(buffer)) != -1) {
+
+                            outputStream.write(
+                                    buffer,
+                                    0,
+                                    bytesRead);
+                        }
+                    }
+
+                    return null;
+                });
+
+        log.info(
+                "Attachment ZIP downloaded successfully: {}",
+                zipFile.getAbsolutePath());
+
+        return zipFile;
+
+    } catch (Exception ex) {
+
+        if (zipFile != null && zipFile.exists()) {
+            zipFile.delete();
+        }
+
+        log.error(
+                "Unable to download attachments from Report Service",
+                ex);
+
+        throw new RuntimeException(
+                "Unable to download attachments from Report Service",
+                ex);
+    }
+}
+
+
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
