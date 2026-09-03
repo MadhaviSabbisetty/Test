@@ -1,73 +1,62 @@
-@Override
-public File prepareAttachments(
-        List<AttachmentRef> attachments)
-        throws IOException {
-
-    log.info("Preparing attachments");
-
-    if (attachments == null
-            || attachments.isEmpty()) {
-
-        log.info("No attachments received.");
-
-        throw new IllegalArgumentException(
-                "Exactly 3 attachments are required");
-    }
-
-    if (attachments.size() != 3) {
-
-        log.info(
-                "Exactly 3 attachments are required");
-
-        throw new IllegalArgumentException(
-                "Exactly 3 attachments are required");
-    }
-
-    Set<String> actualFileNames =
-            new HashSet<>();
-
-    for (AttachmentRef attachment :
-            attachments) {
-
-        if (attachment == null
-                || attachment.getFileName() == null) {
-
-            log.info(
-                    "Attachment filename is required");
-
-            throw new IllegalArgumentException(
-                    "Attachment filename is required");
-        }
-
-        actualFileNames.add(
-                attachment.getFileName());
-    }
-
-    if (actualFileNames.size() != 3
-            || !actualFileNames.equals(
-                    REQUIRED_FILENAMES)) {
-
-        log.info(
-                "Attachments must contain exactly these filenames: " +
-                        "intr_report,balance_compare_report,cntr_report");
-
-        throw new IllegalArgumentException(
-                "Attachments must contain exactly these filenames: " +
-                        "intr_report,balance_compare_report,cntr_report");
-    }
-
-    AttachmentDownloadRequest request =
-            AttachmentDownloadRequest.builder()
-                    .attachments(attachments)
-                    .build();
-
-    File zipFile =
-            reportServiceClient
-                    .downloadAttachments(request);
+@PostMapping("/attachment/download")
+public ResponseEntity<ApiResponse<List<String>>> download(
+        @RequestBody AttachmentDownloadRequest request) {
 
     log.info(
-            "Attachments ZIP prepared successfully: {}",
-            zipFile.getAbsolutePath());
+            "Download request received from controller call to test download");
 
-    return zipFile;
+    File zipFile = null;
+
+    try {
+
+        zipFile =
+                attachmentPreparationService
+                        .prepareAttachments(
+                                request.getAttachments());
+
+        List<String> attachmentNames =
+                request.getAttachments()
+                        .stream()
+                        .map(attachment ->
+                                attachment.getAttachmentId()
+                                        + ".xlsx")
+                        .toList();
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        attachmentNames,
+                        "Attachments downloaded successfully"));
+
+    } catch (IllegalArgumentException ex) {
+
+        return ResponseEntity.badRequest()
+                .body(
+                        ApiResponse.error(
+                                ex.getMessage()));
+
+    } catch (Exception ex) {
+
+        log.error(
+                "Error while downloading attachments",
+                ex);
+
+        return ResponseEntity
+                .internalServerError()
+                .body(
+                        ApiResponse.error(
+                                "Unable to download attachments"));
+
+    } finally {
+
+        if (zipFile != null
+                && zipFile.exists()) {
+
+            boolean deleted =
+                    zipFile.delete();
+
+            log.debug(
+                    "Temporary ZIP deleted: {}",
+                    deleted);
+        }
+    }
 }
