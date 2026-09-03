@@ -1,258 +1,316 @@
-import React from "react";
-import { Box, Typography, Chip, Button , CircularProgress} from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
-import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
-import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
+package com.fincore.CommunicationService.client;
 
-const columns = [
-  { field: "errorDate", headerName: "Date", flex: 1 },
-  { field: "branchCode", headerName: "Branch", flex: 1 },
-  { field: "currency", headerName: "Currency", flex: 0.9 },
-  { field: "cgl", headerName: "CGL", flex: 1 },
-  { field: "cbsBalance", headerName: "CBS Balance", flex: 1.1 },
-  { field: "glBalance", headerName: "GL Balance", flex: 1.1 },
-  { field: "differenceAmount", headerName: "Difference Amount", flex: 1.2 },
-  { field: "diffYesterday", headerName: "Diff. Yesterday", flex: 1.1 },
-  { field: "type", headerName: "Type", flex: 0.8 },
-  { field: "head", headerName: "Head", flex: 0.8 },
-  { field: "firstErrorDate", headerName: "Error Date", flex: 1 },
-];
+import com.fincore.CommunicationService.dto.ApiResponse;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
-export default function BalanceDateWiseTable({
-  rows = [],
-  loading = false,
-  totalElements = 0,
-  paginationModel,
-  setPaginationModel,
-  onExport,
-  exportLoading
-}) {
-  const data = rows.map((r, i) => ({
-    ...r,
-    id: r.id || `row-${i}`,
-    errorDate: r.reconRunDate ?? "-",
-    branchCode: r.branchCode || r.branch || "-",
-    currency: r.currency || "-",
-    cgl: r.cgl || r.cglNumber || "-",
-    cbsBalance: r.cbsBalance ?? "-",
-    glBalance: r.glBalance ?? "-",
-    differenceAmount: r.differenceAmount ?? r.difference ?? "-",
-    diffYesterday: r.diffBwYesterday ?? "-",
-    type: r.type || "-",
-    head: r.head || "-",
-    firstErrorDate: r.FIRST_ERROR_DATE || "-",
-  }));
+/**
+ * <p>HTTP Client for upstream Report Service interactions.</p>
+ *
+ * @author MADHAVI, SHUBHANKAR
+ * @since 2026-07
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class ReportServiceClient {
 
-  return (
-    <Box sx={{ mt: 2.5, width: "100%" }}>
-      {/* OUTER BOX */}
-      <Box
-        sx={{
-          width: "100%",
-          height: 470,
-          p: 2,
-          borderRadius: 3,
-          bgcolor: "rgba(255,255,255,.45)",
-          border: "1px solid",
-          borderColor: "divider",
-          overflow: "hidden",
-        }}
-      >
-        {/* TABLE HEADING */}
-        <Box
-          sx={{
-            height: 48,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            px: 0.5,
-          }}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1.5,
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize: "1.05rem",
-                fontWeight: 700,
-                color: "text.primary",
-              }}
-            >
-              Balance Difference Records
-            </Typography>
+    // Injected automatically from common-utilities (S2SRestClientConfig)
+    private final RestClient interServiceClient;
 
-            <Chip
-              label={
-                totalElements
-                  ? `${totalElements} Records`
-                  : "No Records"
-              }
-              size="small"
-              sx={{
-                height: 24,
-                fontSize: ".7rem",
-                fontWeight: 700,
-                color: "primary.main",
-                bgcolor: "rgba(88,70,159,.08)",
-                borderRadius: 1.5,
-              }}
-            />
-          </Box>
+    @Value("${report.service.url}")
+    private String reportServiceUrl;
 
-          <Button
-            size="small"
-            variant="contained"
-            disabled={!data.length || exportLoading}
-            startIcon={exportLoading?(<CircularProgress size={16} color={"inherit"}/>):(<FileDownloadOutlinedIcon/>)}
-            onClick={onExport}
-            sx={{
-              textTransform: "none",
-              fontSize: ".75rem",
-              fontWeight: 600,
-              borderRadius: "8px",
-              boxShadow: "none",
-              minWidth: 82,
-              height: 32,
-            }}
-          >
-            {exportLoading?"Preparing...": "Export"}
-          </Button>
-        </Box>
+    @Value("${security.internal.report-service-token:TEST_TOKEN_123}")
+    private String internalServiceToken;
 
-        {/* INNER TABLE BOX */}
-        <Box
-          sx={{
-            width: "100%",
-            height: 390,
-            bgcolor: "background.paper",
-            borderRadius: 2.5,
-            border: "1px solid",
-            borderColor: "divider",
-            overflow: "hidden",
-          }}
-        >
-          <DataGrid
-            rows={data}
-            columns={columns}
-            loading={loading}
-            rowCount={totalElements}
-            paginationMode="server"
-            paginationModel={paginationModel}
-            onPaginationModelChange={setPaginationModel}
-            pageSizeOptions={[25, 50, 100]}
-            disableRowSelectionOnClick
-            hideFooterSelectedRowCount
-            rowHeight={45}
-            columnHeaderHeight={52}
-            slots={{
-              noRowsOverlay: () => (
-                <Box
-                  sx={{
-                    height: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 1,
-                  }}
-                >
-                  <ErrorOutlineOutlinedIcon
-                    sx={{
-                      fontSize: 24,
-                      color: "text.secondary",
-                    }}
-                  />
+    public AttachmentDownloadResponse downloadAttachments(AttachmentDownloadRequest request) {
+        String endpoint = reportServiceUrl + "/api/reports/attachment/download";
+        log.debug("Initiating upstream request to Report Service: {}", endpoint);
 
-                  <Typography
-                    sx={{
-                      fontSize: ".9rem",
-                      fontWeight: 600,
-                      color: "text.secondary",
-                    }}
-                  >
-                    No difference records available for the selected criteria
-                  </Typography>
-                </Box>
-              ),
-            }}
-            sx={{
-              width: "100%",
-              height: "100%",
-              border: 0,
+        try {
+            ApiResponse<AttachmentDownloadResponse> response = interServiceClient.post()
+                    .uri(endpoint)
+                    .body(request)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<ApiResponse<AttachmentDownloadResponse>>() {
+                    });
 
-              /* COLUMN HEADER */
-              "& .MuiDataGrid-columnHeaders": {
-                height: 52,
-                minHeight: 52,
-                bgcolor: "rgba(88,70,159,.035)",
-                borderBottom: "1px solid",
-                borderColor: "divider",
-              },
+            if (response == null || !response.isSuccess()) {
+                String errorMsg = (response != null && response.getMessage() != null) ? response.getMessage() : "Unknown upstream error";
+                throw new RestClientException("Report Service rejected request: " + errorMsg);
+            }
 
-              "& .MuiDataGrid-columnHeader": {
-                px: 1.5,
-                outline: "none",
-              },
+            return response.getData();
 
-              "& .MuiDataGrid-columnHeaderTitle": {
-                fontSize: ".8rem",
-                fontWeight: 700,
-                color: "primary.dark",
-              },
+        } catch (RestClientException ex) {
+            log.error("Upstream HTTP failure communicating with Report Service.", ex);
+            throw ex;
+        }
+    }
+}
+package com.fincore.CommunicationService.attachment;
 
-              /* SINGLE DEFAULT 3-DOT MENU */
-              "& .MuiDataGrid-menuIconButton": {
-                opacity: 1,
-                visibility: "visible",
-                width: 28,
-                height: 28,
-              },
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
-              /* TABLE CELLS */
-              "& .MuiDataGrid-cell": {
-                px: 1.5,
-                fontSize: ".8rem",
-                color: "text.primary",
-                borderBottom: "1px solid rgba(0,0,0,.06)",
-                outline: "none",
-              },
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
-              "& .MuiDataGrid-row:hover": {
-                bgcolor: "rgba(88,70,159,.025)",
-              },
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
-              /* NO RECORDS */
-              "& .MuiDataGrid-overlay": {
-                bgcolor: "transparent",
-              },
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
-              /* FOOTER */
-              "& .MuiDataGrid-footerContainer": {
-                height: 52,
-                minHeight: 52,
-                borderTop: "1px solid",
-                borderColor: "divider",
-                bgcolor: "background.paper",
-              },
+/**
+ * <p>Compression service.</p>
+ *
+ * <p>Utilizes {@link BufferedOutputStream} and {@link BufferedInputStream} to maximize
+ * disk throughput without pinning Virtual Threads for excessive durations.</p>
+ *
+ * @author MADHAVI, SHUBHANKAR
+ * @since 2026-07
+ */
+@Slf4j
+@Service
+public class ZipService {
 
-              "& .MuiTablePagination-root": {
-                fontSize: ".8rem",
-              },
+    /**
+     * Compresses a list of ephemeral files into a single ZIP archive.
+     *
+     * @param files List of paths to compress.
+     * @return Path to the generated ZIP file.
+     * @throws IOException if disk exhaustion or permission issues occur.
+     */
+    public Path createZip(List<Path> files) throws IOException {
+        Path zipFile = Files.createTempFile("fincore_bulk_", ".zip");
 
-              "& .MuiTablePagination-selectLabel": {
-                fontSize: ".8rem",
-              },
+        // Buffering is very important to avoid massive context-switching overhead in Virtual Threads during file I/O
+        try (ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(zipFile)))) {
 
-              "& .MuiTablePagination-displayedRows": {
-                fontSize: ".8rem",
-              },
-            }}
-          />
-        </Box>
-      </Box>
-    </Box>
-  );
+            for (Path file : files) {
+                if (file == null || !Files.exists(file)) {
+                    log.warn("Skipping missing file during ZIP creation: {}", file);
+                    continue;
+                }
+
+                try (InputStream fis = new BufferedInputStream(Files.newInputStream(file))) {
+                    ZipEntry entry = new ZipEntry(file.getFileName().toString());
+                    zos.putNextEntry(entry);
+
+                    fis.transferTo(zos);
+                    zos.closeEntry();
+                }
+            }
+        } catch (IOException e) {
+            log.error("Failed to construct ZIP archive. Cleaning up partial file {}", zipFile);
+            Files.deleteIfExists(zipFile);
+            throw e;
+        }
+
+        log.debug("ZIP archive created successfully at {}", zipFile);
+        return zipFile;
+    }
+}package com.fincore.CommunicationService.attachment;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.FileSystemResource;
+
+import java.io.File;
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+
+/**
+ * <p>A self-cleaning Spring Resource extension.</p>
+ *
+ * <p>When Spring's {@link org.springframework.web.client.RestClient} finishes transmitting
+ * the multipart/form-data payload over the socket, it automatically calls {@code .close()}
+// * on the Resource's InputStream. This wrapper hooks into that event to instantly delete
+ * the ephemeral file from disk, guaranteeing zero file descriptor/storage leaks.</p>
+ *
+ * @author SHUBHANKAR
+ * @since 2026-07
+ */
+@Slf4j
+public class AutoDeletingResource extends FileSystemResource {
+
+    public AutoDeletingResource(File file) {
+        super(file);
+    }
+
+    @Override
+    public InputStream getInputStream() throws IOException {
+        return new FilterInputStream(super.getInputStream()) {
+            @Override
+            public void close() throws IOException {
+                try {
+                    super.close();
+                } finally {
+                    try {
+                        Files.deleteIfExists(getFile().toPath());
+                        log.trace("Auto-deleted ephemeral file post-transmission: {}", getFile().getName());
+                    } catch (IOException | SecurityException e) {
+                        log.error("LEAK WARNING: Could not auto-delete file: {}", getFile().getName(), e);
+                    }
+                }
+            }
+        };
+    }
+}
+package com.fincore.CommunicationService.attachment;
+
+import com.fincore.CommunicationService.client.ReportServiceClient;
+import com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
+import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
+import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.stereotype.Service;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.List;
+
+/**
+ * <p>UPDATED Attachment Preparation Service.</p>
+ *
+ * <p>
+ * This service explicitly avoids loading entire files into the JVM heap.
+ * It decodes Base64 streams chunk-by-chunk and writes directly to ephemeral disk storage.
+ * The resulting payload is returned as a Spring {@link Resource} to allow downstream
+ * REST clients to stream the bytes directly over the socket.</p>
+ *
+ * @author MADHAVI, SHUBHANKAR
+ * @since 2026-07
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class AttachmentPreparationServiceImpl
+        implements AttachmentPreparationService {
+
+    private final ReportServiceClient reportServiceClient;
+
+    private final ZipService zipService;
+
+    @Value("${attachment.max.count:10}")
+    private int maxAttachmentCount;
+
+    @Value("${attachment.max.size.mb:20}")
+    private long maxAttachmentSizeMb;
+
+    @Override
+    public Resource prepareAttachments(List<AttachmentRef> attachments) throws IOException {
+        log.debug("Initiating attachment preparation for {} items.", attachments.size());
+
+        if (attachments == null || attachments.isEmpty()) {
+            return null;
+        }
+
+        AttachmentDownloadRequest request = AttachmentDownloadRequest.builder()
+                .attachments(attachments)
+                .build();
+
+        // !!note: If ReportService returns massive JSON Base64 arrays, we have to consider migrating to a true multipart streaming API upstream.
+        AttachmentDownloadResponse response = reportServiceClient.downloadAttachments(request);
+
+        if (response == null || response.getAttachments() == null || response.getAttachments().isEmpty()) {
+            log.warn("Report Service returned empty attachment array.");
+            return null;
+        }
+
+        long totalSizeBytes = response.getAttachments().stream()
+                .mapToLong(DownloadedAttachment::getFileSize)
+                .sum();
+
+        boolean zipRequired = response.getAttachments().size() > maxAttachmentCount ||
+                totalSizeBytes > (maxAttachmentSizeMb * 1024 * 1024);
+
+        // Track files to ensure guaranteed cleanup
+        List<Path> tempFiles = new ArrayList<>();
+
+        try {
+            for (DownloadedAttachment attachment : response.getAttachments()) {
+                Path tempFile = Files.createTempFile("fincore_attach_", "_" + attachment.getFileName());
+                tempFiles.add(tempFile);
+
+                // Stream decode to disk instead of full heap allocation
+                try (OutputStream os = Files.newOutputStream(tempFile)) {
+                    byte[] decodedBytes = Base64.getDecoder().decode(attachment.getBase64());
+                    os.write(decodedBytes);
+                }
+            }
+
+            if (zipRequired) {
+                log.info("ZIP required. Compressing {} files (Total Size: {} bytes).", tempFiles.size(), totalSizeBytes);
+                Path zipFile = zipService.createZip(tempFiles);
+
+                // Once zipped, immediately delete the raw temp files to free disk space
+                deleteTemporaryFiles(tempFiles);
+
+                return new AutoDeletingResource(zipFile.toFile());
+            } else {
+                log.debug("ZIP not required. Returning single file resource.");
+                // Return the single file. AutoDeletingResource guarantees deletion after HTTP dispatch.
+                return new AutoDeletingResource(tempFiles.get(0).toFile());
+            }
+
+        } catch (IllegalArgumentException e) {
+            log.error("Corrupted Base64 payload received from Report Service.", e);
+            deleteTemporaryFiles(tempFiles);
+            throw new IOException("Corrupted Base64 attachment payload", e);
+        } catch (IOException e) {
+            log.error("Disk I/O failure during attachment preparation.", e);
+            deleteTemporaryFiles(tempFiles);
+            throw e;
+        }
+    }
+
+    private void deleteTemporaryFiles(List<Path> paths) {
+        if (paths == null) return;
+        for (Path path : paths) {
+            try {
+                Files.deleteIfExists(path);
+                log.trace("Deleted ephemeral file: {}", path);
+            } catch (IOException | SecurityException e) {
+                log.error("MEMORY LEAK WARNING: Failed to delete ephemeral file at {}", path, e);
+            }
+        }
+    }
+}package com.fincore.CommunicationService.attachment;
+import com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef;
+import org.springframework.core.io.Resource;
+import java.util.List;
+import java.io.IOException;
+
+public interface AttachmentPreparationService {
+    Resource prepareAttachments(List<AttachmentRef> attachments) throws IOException;
 }
