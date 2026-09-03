@@ -1,62 +1,71 @@
-@PostMapping("/attachment/download")
-public ResponseEntity<ApiResponse<List<String>>> download(
-        @RequestBody AttachmentDownloadRequest request) {
-
-    log.info(
-            "Download request received from controller call to test download");
-
-    File zipFile = null;
+public File downloadAttachments(
+        AttachmentDownloadRequest request) {
 
     try {
 
-        zipFile =
-                attachmentPreparationService
-                        .prepareAttachments(
-                                request.getAttachments());
+        log.debug(
+                "Initiating upstream request to Report Service: {}",
+                reportServiceUrl + "/api/reports/attachment/download");
 
-        List<String> attachmentNames =
-                request.getAttachments()
-                        .stream()
-                        .map(attachment ->
-                                attachment.getAttachmentId()
-                                        + ".xlsx")
-                        .toList();
+        return restClient.post()
+                .uri(reportServiceUrl + "/api/reports/attachment/download")
+                .header(
+                        "X-Internal-Token",
+                        reportServiceInternalToken)
+                .body(request)
+                .exchange((clientRequest, clientResponse) -> {
 
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        attachmentNames,
-                        "Attachments downloaded successfully"));
+                    if (!clientResponse.getStatusCode().is2xxSuccessful()) {
 
-    } catch (IllegalArgumentException ex) {
+                        throw new RuntimeException(
+                                "Report Service returned HTTP status: "
+                                        + clientResponse.getStatusCode());
+                    }
 
-        return ResponseEntity.badRequest()
-                .body(
-                        ApiResponse.error(
-                                ex.getMessage()));
+                    File tempZip =
+                            File.createTempFile(
+                                    "attachments_",
+                                    ".zip");
+
+                    try (
+                            InputStream inputStream =
+                                    clientResponse.getBody();
+
+                            OutputStream outputStream =
+                                    new FileOutputStream(tempZip)
+                    ) {
+
+                        byte[] buffer = new byte[32 * 1024];
+
+                        int bytesRead;
+
+                        while ((bytesRead =
+                                inputStream.read(buffer)) != -1) {
+
+                            outputStream.write(
+                                    buffer,
+                                    0,
+                                    bytesRead);
+                        }
+
+                        outputStream.flush();
+                    }
+
+                    log.info(
+                            "Attachment ZIP received successfully: {}",
+                            tempZip.getAbsolutePath());
+
+                    return tempZip;
+                });
 
     } catch (Exception ex) {
 
         log.error(
-                "Error while downloading attachments",
+                "Upstream HTTP failure communicating with Report Service.",
                 ex);
 
-        return ResponseEntity
-                .internalServerError()
-                .body(
-                        ApiResponse.error(
-                                "Unable to download attachments"));
-
-    } finally {
-
-        if (zipFile != null
-                && zipFile.exists()) {
-
-            boolean deleted =
-                    zipFile.delete();
-
-            log.debug(
-                    "Temporary ZIP deleted: {}",
-                    deleted);
-        }
+        throw new RuntimeException(
+                "Unable to download attachments from Report Service",
+                ex);
     }
 }
