@@ -1,66 +1,124 @@
-@PostMapping("/attachment/download")
-public ResponseEntity<?> download(
-        @RequestBody AttachmentDownloadRequest request) {
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class AttachmentPreparationServiceImpl
+        implements AttachmentPreparationService {
 
-    try {
+    private final ReportServiceClient reportServiceClient;
+
+    private static final Set<String> REQUIRED_FILENAMES =
+            Set.of(
+                    "intr_report",
+                    "balance_compare_report",
+                    "cntr_report"
+            );
+
+    @Override
+    public File prepareAttachments(
+            List<AttachmentRef> attachments)
+            throws IOException {
 
         log.info(
-                "Download request received from controller call to test download");
+                "Initiating attachment preparation for {} items.",
+                attachments == null ? 0 : attachments.size());
+
+        /*
+         * Exactly 3 attachments are required.
+         */
+        if (attachments == null
+                || attachments.size() != 3) {
+
+            log.info("Exactly 3 attachments are required.");
+
+            throw new IllegalArgumentException(
+                    "Exactly 3 attachments are required");
+        }
+
+        /*
+         * Validate that all attachment filenames are present.
+         */
+        Set<String> actualFileNames = new HashSet<>();
+
+        for (AttachmentRef attachment : attachments) {
+
+            if (attachment == null
+                    || attachment.getFileName() == null
+                    || attachment.getFileName().isBlank()) {
+
+                log.info("Attachment filename is required.");
+
+                throw new IllegalArgumentException(
+                        "Attachment filename is required");
+            }
+
+            actualFileNames.add(
+                    attachment.getFileName());
+        }
+
+        /*
+         * Validate that only the required 3 reports are requested.
+         */
+        if (actualFileNames.size() != 3
+                || !actualFileNames.equals(REQUIRED_FILENAMES)) {
+
+            log.info(
+                    "Attachments must contain exactly these filenames: " +
+                    "intr_report, balance_compare_report, cntr_report");
+
+            throw new IllegalArgumentException(
+                    "Attachments must contain exactly these filenames: " +
+                    "intr_report, balance_compare_report, cntr_report");
+        }
+
+        /*
+         * Send the request to Report Service.
+         *
+         * Report Service will:
+         * 1. Validate the attachments.
+         * 2. Read the files from HDFS.
+         * 3. Create attachments.zip.
+         * 4. Stream the ZIP back to Communication Service.
+         *
+         * ReportServiceClient stores that stream in a temporary File.
+         */
+        AttachmentDownloadRequest request =
+                AttachmentDownloadRequest.builder()
+                        .attachments(attachments)
+                        .build();
 
         File zipFile =
-                attachmentPreparationService.prepareAttachments(
-                        request.getAttachments());
+                reportServiceClient.downloadAttachments(request);
 
-        return ResponseEntity.ok()
-                .header(
-                        HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"attachments.zip\"")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .body(new FileSystemResource(zipFile));
+        if (zipFile == null
+                || !zipFile.exists()
+                || zipFile.length() == 0) {
 
-    } catch (IllegalArgumentException ex) {
+            log.error(
+                    "Report Service returned an empty attachment ZIP.");
 
-        log.error(
-                "Invalid attachment download request: {}",
-                ex.getMessage());
+            throw new IOException(
+                    "Attachment ZIP was not received from Report Service");
+        }
 
-        return ResponseEntity.badRequest()
-                .body(
-                        ApiResponse.error(
-                                ex.getMessage()));
+        log.info(
+                "Attachment ZIP prepared successfully: {}",
+                zipFile.getAbsolutePath());
 
-    } catch (ResourceNotFoundException ex) {
+        log.info(
+                "Attachment ZIP size: {} bytes",
+                zipFile.length());
 
-        log.error(
-                "Attachment not found: {}",
-                ex.getMessage());
-
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(
-                        ApiResponse.error(
-                                ex.getMessage()));
-
-    } catch (Exception ex) {
-
-        log.error(
-                "Attachment download failed",
-                ex);
-
-        return ResponseEntity.status(
-                        HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(
-                        ApiResponse.error(
-                                "Attachment download failed"));
+        return zipFile;
     }
 }
 
-
-.
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
