@@ -1,88 +1,73 @@
-public File downloadAttachments(
-        AttachmentDownloadRequest request) {
+@Override
+public File prepareAttachments(
+        List<AttachmentRef> attachments)
+        throws IOException {
 
-    File zipFile = null;
+    log.info("Preparing attachments");
 
-    try {
+    if (attachments == null
+            || attachments.isEmpty()) {
 
-        log.debug(
-                "Initiating upstream request to Report Service: {}",
-                reportServiceUrl +
-                        "/api/reports/attachment/download");
+        log.info("No attachments received.");
 
-        zipFile = File.createTempFile(
-                "attachments_",
-                ".zip");
+        throw new IllegalArgumentException(
+                "Exactly 3 attachments are required");
+    }
 
-        File finalZipFile = zipFile;
-
-        restClient.post()
-                .uri(
-                        reportServiceUrl +
-                                "/api/reports/attachment/download")
-                .header(
-                        "X-Internal-Token",
-                        reportServiceInternalToken)
-                .body(request)
-                .exchange((clientRequest, clientResponse) -> {
-
-                    if (!clientResponse
-                            .getStatusCode()
-                            .is2xxSuccessful()) {
-
-                        throw new RuntimeException(
-                                "Report Service returned HTTP status: "
-                                        + clientResponse.getStatusCode());
-                    }
-
-                    try (InputStream inputStream =
-                                 clientResponse.getBody();
-                         OutputStream outputStream =
-                                 new FileOutputStream(finalZipFile)) {
-
-                        byte[] buffer =
-                                new byte[32 * 1024];
-
-                        int bytesRead;
-
-                        while ((bytesRead =
-                                inputStream.read(buffer)) != -1) {
-
-                            outputStream.write(
-                                    buffer,
-                                    0,
-                                    bytesRead);
-                        }
-                    }
-
-                    return null;
-                });
+    if (attachments.size() != 3) {
 
         log.info(
-                "Attachment ZIP downloaded successfully: {}",
-                zipFile.getAbsolutePath());
+                "Exactly 3 attachments are required");
 
-        return zipFile;
+        throw new IllegalArgumentException(
+                "Exactly 3 attachments are required");
+    }
 
-    } catch (Exception ex) {
+    Set<String> actualFileNames =
+            new HashSet<>();
 
-        if (zipFile != null && zipFile.exists()) {
-            zipFile.delete();
+    for (AttachmentRef attachment :
+            attachments) {
+
+        if (attachment == null
+                || attachment.getFileName() == null) {
+
+            log.info(
+                    "Attachment filename is required");
+
+            throw new IllegalArgumentException(
+                    "Attachment filename is required");
         }
 
-        log.error(
-                "Unable to download attachments from Report Service",
-                ex);
-
-        throw new RuntimeException(
-                "Unable to download attachments from Report Service",
-                ex);
+        actualFileNames.add(
+                attachment.getFileName());
     }
+
+    if (actualFileNames.size() != 3
+            || !actualFileNames.equals(
+                    REQUIRED_FILENAMES)) {
+
+        log.info(
+                "Attachments must contain exactly these filenames: " +
+                        "intr_report,balance_compare_report,cntr_report");
+
+        throw new IllegalArgumentException(
+                "Attachments must contain exactly these filenames: " +
+                        "intr_report,balance_compare_report,cntr_report");
+    }
+
+    AttachmentDownloadRequest request =
+            AttachmentDownloadRequest.builder()
+                    .attachments(attachments)
+                    .build();
+
+    File zipFile =
+            reportServiceClient
+                    .downloadAttachments(request);
+
+    log.info(
+            "Attachments ZIP prepared successfully: {}",
+            zipFile.getAbsolutePath());
+
+    return zipFile;
 }
-
-
-
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
