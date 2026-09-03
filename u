@@ -1,71 +1,55 @@
-public File downloadAttachments(
-        AttachmentDownloadRequest request) {
+@PostMapping("/attachment/download")
+public ResponseEntity<?> download(
+        @RequestBody AttachmentDownloadRequest request) {
 
     try {
 
-        log.debug(
-                "Initiating upstream request to Report Service: {}",
-                reportServiceUrl + "/api/reports/attachment/download");
+        log.info(
+                "Download request received from controller call to test download");
 
-        return restClient.post()
-                .uri(reportServiceUrl + "/api/reports/attachment/download")
+        File zipFile =
+                attachmentPreparationService.prepareAttachments(
+                        request.getAttachments());
+
+        return ResponseEntity.ok()
                 .header(
-                        "X-Internal-Token",
-                        reportServiceInternalToken)
-                .body(request)
-                .exchange((clientRequest, clientResponse) -> {
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"attachments.zip\"")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(new FileSystemResource(zipFile));
 
-                    if (!clientResponse.getStatusCode().is2xxSuccessful()) {
+    } catch (IllegalArgumentException ex) {
 
-                        throw new RuntimeException(
-                                "Report Service returned HTTP status: "
-                                        + clientResponse.getStatusCode());
-                    }
+        log.error(
+                "Invalid attachment download request: {}",
+                ex.getMessage());
 
-                    File tempZip =
-                            File.createTempFile(
-                                    "attachments_",
-                                    ".zip");
+        return ResponseEntity.badRequest()
+                .body(
+                        ApiResponse.error(
+                                ex.getMessage()));
 
-                    try (
-                            InputStream inputStream =
-                                    clientResponse.getBody();
+    } catch (ResourceNotFoundException ex) {
 
-                            OutputStream outputStream =
-                                    new FileOutputStream(tempZip)
-                    ) {
+        log.error(
+                "Attachment not found: {}",
+                ex.getMessage());
 
-                        byte[] buffer = new byte[32 * 1024];
-
-                        int bytesRead;
-
-                        while ((bytesRead =
-                                inputStream.read(buffer)) != -1) {
-
-                            outputStream.write(
-                                    buffer,
-                                    0,
-                                    bytesRead);
-                        }
-
-                        outputStream.flush();
-                    }
-
-                    log.info(
-                            "Attachment ZIP received successfully: {}",
-                            tempZip.getAbsolutePath());
-
-                    return tempZip;
-                });
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(
+                        ApiResponse.error(
+                                ex.getMessage()));
 
     } catch (Exception ex) {
 
         log.error(
-                "Upstream HTTP failure communicating with Report Service.",
+                "Attachment download failed",
                 ex);
 
-        throw new RuntimeException(
-                "Unable to download attachments from Report Service",
-                ex);
+        return ResponseEntity.status(
+                        HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(
+                        ApiResponse.error(
+                                "Attachment download failed"));
     }
 }
