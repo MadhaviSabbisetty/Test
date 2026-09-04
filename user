@@ -1,316 +1,277 @@
-package com.fincore.CommunicationService.client;
-
-import com.fincore.CommunicationService.dto.ApiResponse;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
-
-/**
- * <p>HTTP Client for upstream Report Service interactions.</p>
- *
- * @author MADHAVI, SHUBHANKAR
- * @since 2026-07
- */
-@Slf4j
-@Component
-@RequiredArgsConstructor
-public class ReportServiceClient {
-
-    // Injected automatically from common-utilities (S2SRestClientConfig)
-    private final RestClient interServiceClient;
-
-    @Value("${report.service.url}")
-    private String reportServiceUrl;
-
-    @Value("${security.internal.report-service-token:TEST_TOKEN_123}")
-    private String internalServiceToken;
-
-    public AttachmentDownloadResponse downloadAttachments(AttachmentDownloadRequest request) {
-        String endpoint = reportServiceUrl + "/api/reports/attachment/download";
-        log.debug("Initiating upstream request to Report Service: {}", endpoint);
-
-        try {
-            ApiResponse<AttachmentDownloadResponse> response = interServiceClient.post()
-                    .uri(endpoint)
-                    .body(request)
-                    .retrieve()
-                    .body(new ParameterizedTypeReference<ApiResponse<AttachmentDownloadResponse>>() {
-                    });
-
-            if (response == null || !response.isSuccess()) {
-                String errorMsg = (response != null && response.getMessage() != null) ? response.getMessage() : "Unknown upstream error";
-                throw new RestClientException("Report Service rejected request: " + errorMsg);
-            }
-
-            return response.getData();
-
-        } catch (RestClientException ex) {
-            log.error("Upstream HTTP failure communicating with Report Service.", ex);
-            throw ex;
-        }
-    }
-}
-package com.fincore.CommunicationService.attachment;
-
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
-
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
-
-/**
- * <p>Compression service.</p>
- *
- * <p>Utilizes {@link BufferedOutputStream} and {@link BufferedInputStream} to maximize
- * disk throughput without pinning Virtual Threads for excessive durations.</p>
- *
- * @author MADHAVI, SHUBHANKAR
- * @since 2026-07
- */
-@Slf4j
-@Service
-public class ZipService {
-
-    /**
-     * Compresses a list of ephemeral files into a single ZIP archive.
-     *
-     * @param files List of paths to compress.
-     * @return Path to the generated ZIP file.
-     * @throws IOException if disk exhaustion or permission issues occur.
-     */
-    public Path createZip(List<Path> files) throws IOException {
-        Path zipFile = Files.createTempFile("fincore_bulk_", ".zip");
-
-        // Buffering is very important to avoid massive context-switching overhead in Virtual Threads during file I/O
-        try (ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(zipFile)))) {
-
-            for (Path file : files) {
-                if (file == null || !Files.exists(file)) {
-                    log.warn("Skipping missing file during ZIP creation: {}", file);
-                    continue;
-                }
-
-                try (InputStream fis = new BufferedInputStream(Files.newInputStream(file))) {
-                    ZipEntry entry = new ZipEntry(file.getFileName().toString());
-                    zos.putNextEntry(entry);
-
-                    fis.transferTo(zos);
-                    zos.closeEntry();
-                }
-            }
-        } catch (IOException e) {
-            log.error("Failed to construct ZIP archive. Cleaning up partial file {}", zipFile);
-            Files.deleteIfExists(zipFile);
-            throw e;
-        }
-
-        log.debug("ZIP archive created successfully at {}", zipFile);
-        return zipFile;
-    }
-}package com.fincore.CommunicationService.attachment;
-
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.FileSystemResource;
-
-import java.io.File;
-import java.io.FilterInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-
-/**
- * <p>A self-cleaning Spring Resource extension.</p>
- *
- * <p>When Spring's {@link org.springframework.web.client.RestClient} finishes transmitting
- * the multipart/form-data payload over the socket, it automatically calls {@code .close()}
-// * on the Resource's InputStream. This wrapper hooks into that event to instantly delete
- * the ephemeral file from disk, guaranteeing zero file descriptor/storage leaks.</p>
- *
- * @author SHUBHANKAR
- * @since 2026-07
- */
-@Slf4j
-public class AutoDeletingResource extends FileSystemResource {
-
-    public AutoDeletingResource(File file) {
-        super(file);
-    }
-
-    @Override
-    public InputStream getInputStream() throws IOException {
-        return new FilterInputStream(super.getInputStream()) {
-            @Override
-            public void close() throws IOException {
-                try {
-                    super.close();
-                } finally {
-                    try {
-                        Files.deleteIfExists(getFile().toPath());
-                        log.trace("Auto-deleted ephemeral file post-transmission: {}", getFile().getName());
-                    } catch (IOException | SecurityException e) {
-                        log.error("LEAK WARNING: Could not auto-delete file: {}", getFile().getName(), e);
-                    }
-                }
-            }
-        };
-    }
-}
-package com.fincore.CommunicationService.attachment;
-
-import com.fincore.CommunicationService.client.ReportServiceClient;
-import com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadRequest;
-import com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse;
-import com.fincore.CommunicationService.dto.attachment.DownloadedAttachment;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource;
-import org.springframework.stereotype.Service;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
-
-/**
- * <p>UPDATED Attachment Preparation Service.</p>
- *
- * <p>
- * This service explicitly avoids loading entire files into the JVM heap.
- * It decodes Base64 streams chunk-by-chunk and writes directly to ephemeral disk storage.
- * The resulting payload is returned as a Spring {@link Resource} to allow downstream
- * REST clients to stream the bytes directly over the socket.</p>
- *
- * @author MADHAVI, SHUBHANKAR
- * @since 2026-07
- */
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class AttachmentPreparationServiceImpl
-        implements AttachmentPreparationService {
-
-    private final ReportServiceClient reportServiceClient;
-
-    private final ZipService zipService;
-
-    @Value("${attachment.max.count:10}")
-    private int maxAttachmentCount;
-
-    @Value("${attachment.max.size.mb:20}")
-    private long maxAttachmentSizeMb;
-
-    @Override
-    public Resource prepareAttachments(List<AttachmentRef> attachments) throws IOException {
-        log.debug("Initiating attachment preparation for {} items.", attachments.size());
-
-        if (attachments == null || attachments.isEmpty()) {
-            return null;
-        }
-
-        AttachmentDownloadRequest request = AttachmentDownloadRequest.builder()
-                .attachments(attachments)
-                .build();
-
-        // !!note: If ReportService returns massive JSON Base64 arrays, we have to consider migrating to a true multipart streaming API upstream.
-        AttachmentDownloadResponse response = reportServiceClient.downloadAttachments(request);
-
-        if (response == null || response.getAttachments() == null || response.getAttachments().isEmpty()) {
-            log.warn("Report Service returned empty attachment array.");
-            return null;
-        }
-
-        long totalSizeBytes = response.getAttachments().stream()
-                .mapToLong(DownloadedAttachment::getFileSize)
-                .sum();
-
-        boolean zipRequired = response.getAttachments().size() > maxAttachmentCount ||
-                totalSizeBytes > (maxAttachmentSizeMb * 1024 * 1024);
-
-        // Track files to ensure guaranteed cleanup
-        List<Path> tempFiles = new ArrayList<>();
-
-        try {
-            for (DownloadedAttachment attachment : response.getAttachments()) {
-                Path tempFile = Files.createTempFile("fincore_attach_", "_" + attachment.getFileName());
-                tempFiles.add(tempFile);
-
-                // Stream decode to disk instead of full heap allocation
-                try (OutputStream os = Files.newOutputStream(tempFile)) {
-                    byte[] decodedBytes = Base64.getDecoder().decode(attachment.getBase64());
-                    os.write(decodedBytes);
-                }
-            }
-
-            if (zipRequired) {
-                log.info("ZIP required. Compressing {} files (Total Size: {} bytes).", tempFiles.size(), totalSizeBytes);
-                Path zipFile = zipService.createZip(tempFiles);
-
-                // Once zipped, immediately delete the raw temp files to free disk space
-                deleteTemporaryFiles(tempFiles);
-
-                return new AutoDeletingResource(zipFile.toFile());
-            } else {
-                log.debug("ZIP not required. Returning single file resource.");
-                // Return the single file. AutoDeletingResource guarantees deletion after HTTP dispatch.
-                return new AutoDeletingResource(tempFiles.get(0).toFile());
-            }
-
-        } catch (IllegalArgumentException e) {
-            log.error("Corrupted Base64 payload received from Report Service.", e);
-            deleteTemporaryFiles(tempFiles);
-            throw new IOException("Corrupted Base64 attachment payload", e);
-        } catch (IOException e) {
-            log.error("Disk I/O failure during attachment preparation.", e);
-            deleteTemporaryFiles(tempFiles);
-            throw e;
-        }
-    }
-
-    private void deleteTemporaryFiles(List<Path> paths) {
-        if (paths == null) return;
-        for (Path path : paths) {
-            try {
-                Files.deleteIfExists(path);
-                log.trace("Deleted ephemeral file: {}", path);
-            } catch (IOException | SecurityException e) {
-                log.error("MEMORY LEAK WARNING: Failed to delete ephemeral file at {}", path, e);
-            }
-        }
-    }
-}package com.fincore.CommunicationService.attachment;
-import com.fincore.CommunicationService.dto.GenericCommunicationEvent.AttachmentRef;
-import org.springframework.core.io.Resource;
-import java.util.List;
-import java.io.IOException;
-
-public interface AttachmentPreparationService {
-    Resource prepareAttachments(List<AttachmentRef> attachments) throws IOException;
-}
+Running with gitlab-runner 19.0.2 (02fcb2d7)
+  on Test_runner_29 hVnk0c0nb, system ID: s_37748334dac5
+Resolving secrets
+Preparing the "docker" executor
+00:01
+Using Docker executor with image artifactory.jfrog.sbi:443/dso-base-image/java-maven-images/rhel-jdk-21-maven3.8.9:0.0.1 ...
+Using helper image:  artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.0.2 )
+Using effective pull policy of [if-not-present] for container artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2
+Using locally found image version due to "if-not-present" pull policy
+Using docker image sha256:367b33510658f246aa5bff686272dde897576eec01c436f0a0e4ce31a594815e for artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2 with digest artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper@sha256:660e3634504b66e0ae3ad165131d9fc3fd05b2ac31ebf332b7fa8d93f4ed9682 ...
+Using helper image:  artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.0.2 )
+Using effective pull policy of [if-not-present] for container artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2
+Using docker image sha256:367b33510658f246aa5bff686272dde897576eec01c436f0a0e4ce31a594815e for artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2 with digest artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper@sha256:660e3634504b66e0ae3ad165131d9fc3fd05b2ac31ebf332b7fa8d93f4ed9682 ...
+Using effective pull policy of [if-not-present] for container artifactory.jfrog.sbi:443/dso-base-image/java-maven-images/rhel-jdk-21-maven3.8.9:0.0.1
+Using locally found image version due to "if-not-present" pull policy
+Using docker image sha256:f870f1645e13e94b09e946dd2bf52c9e7a1a39b5c85b245ad8e1927e82fb313a for artifactory.jfrog.sbi:443/dso-base-image/java-maven-images/rhel-jdk-21-maven3.8.9:0.0.1 with digest artifactory.jfrog.sbi:443/dso-base-image/java-maven-images/rhel-jdk-21-maven3.8.9@sha256:26834e2b7839f7d5d440948c8d561124b44bd5305be9669b455ccff74eade7ed ...
+Preparing environment
+00:00
+Using helper image:  artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2  (overridden, default would be  registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.0.2 )
+Using effective pull policy of [if-not-present] for container artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2
+Using docker image sha256:367b33510658f246aa5bff686272dde897576eec01c436f0a0e4ce31a594815e for artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper:x86_64-v19.0.2 with digest artifactory.jfrog.sbi:443/dso-base-image/gitlab/gitlab-runner-helper@sha256:660e3634504b66e0ae3ad165131d9fc3fd05b2ac31ebf332b7fa8d93f4ed9682 ...
+Using effective pull policy of [if-not-present] for container sha256:367b33510658f246aa5bff686272dde897576eec01c436f0a0e4ce31a594815e
+Running on runner-hvnk0c0nb-project-1768-concurrent-0 via PE3DSOPGRunners7App07...
+Getting source from Git repository
+00:02
+Gitaly correlation ID: 01M1NKN6ZECKMD8AYD6JWVK00M
+Fetching changes with git depth set to 20...
+Reinitialized existing Git repository in /builds/cb-ops/fincore/fincorebackend/fincore_report_service/.git/
+Created fresh repository.
+Checking out 3978894c as detached HEAD (ref is feature_report_update)...
+Removing target/
+Skipping Git submodules setup
+Downloading artifacts
+00:06
+Downloading artifacts for build_job (1565268)...
+Downloading artifacts from coordinator... ok        correlation_id=01M1NKNB4QRT6Q1V2W5FMS5JS4 id=1565268 status=200 token=eyJraWQiO
+Executing "step_script" stage of the job script
+00:49
+Using effective pull policy of [if-not-present] for container artifactory.jfrog.sbi:443/dso-base-image/java-maven-images/rhel-jdk-21-maven3.8.9:0.0.1
+Using docker image sha256:f870f1645e13e94b09e946dd2bf52c9e7a1a39b5c85b245ad8e1927e82fb313a for artifactory.jfrog.sbi:443/dso-base-image/java-maven-images/rhel-jdk-21-maven3.8.9:0.0.1 with digest artifactory.jfrog.sbi:443/dso-base-image/java-maven-images/rhel-jdk-21-maven3.8.9@sha256:26834e2b7839f7d5d440948c8d561124b44bd5305be9669b455ccff74eade7ed ...
+$ jf config add \--url="$JF_URL" \--xray-url="$JF_XRAY_URL" \--user="$JF_USER" \--access-token="$JF_TOKEN" \--interactive=false
+$ ls target
+ReportService-0.0.1-SNAPSHOT.jar
+$ jf scan target/*.jar --watches=CB-OPS --fail=true
+07:03:32 [Info] JFrog Xray Indexer 3.124.21 is not cached locally. Downloading it now...
+2026/09/04 07:03:33 maxprocs: Leaving GOMAXPROCS=16: CPU quota undefined
+07:03:34 [Info] The downloaded Xray Indexer version is 3.124.21
+07:03:34 [Info] [Thread 2] Indexing file: target/ReportService-0.0.1-SNAPSHOT.jar
+07:04:10 [Info] 2026/09/04 07:03:34 maxprocs: Leaving GOMAXPROCS=16: CPU quota undefined
+2026-09-04T07:03:44.395Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.slf4j:slf4j-api to :logback-classic: dependency again as already in list
+2026-09-04T07:03:44.395Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ch.qos.logback:logback-core to :logback-classic: dependency again as already in list
+2026-09-04T07:03:44.593Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ch.qos.logback:logback-core to :log4j-to-slf4j:2.25.4 dependency again as already in list
+2026-09-04T07:03:46.608Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-resolver-dns: dependency again as already in list
+2026-09-04T07:03:51.327Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ch.qos.logback:logback-core to commons-logging:commons-logging:1.3.6 dependency again as already in list
+2026-09-04T07:03:52.303Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.commons:commons-collections4 to :commons-beanutils2:2.0.0-M2 dependency again as already in list
+2026-09-04T07:03:56.143Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding com.ibm.icu:core to :collate: dependency again as already in list
+2026-09-04T07:03:56.198Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding com.ibm.icu:core to :translit: dependency again as already in list
+2026-09-04T07:03:58.449Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-auth to :hadoop-common:3.5.0 dependency again as already in list
+2026-09-04T07:03:58.449Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.zookeeper:zookeeper to :hadoop-common:3.5.0 dependency again as already in list
+2026-09-04T07:04:03.352Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.curator:curator-framework to :curator-recipes:5.2.0 dependency again as already in list
+2026-09-04T07:04:03.384Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-handler: dependency again as already in list
+2026-09-04T07:04:03.489Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-base: dependency again as already in list
+2026-09-04T07:04:03.496Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-epoll: dependency again as already in list
+2026-09-04T07:04:04.309Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-common to :hadoop-hdfs-client:3.5.0 dependency again as already in list
+2026-09-04T07:04:04.450Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-common to :hadoop-yarn-api:3.5.0 dependency again as already in list
+2026-09-04T07:04:04.465Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-hdfs to :hadoop-yarn-client:3.5.0 dependency again as already in list
+2026-09-04T07:04:04.465Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-common to :hadoop-yarn-client:3.5.0 dependency again as already in list
+2026-09-04T07:04:04.465Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-yarn-common to :hadoop-yarn-client:3.5.0 dependency again as already in list
+2026-09-04T07:04:04.465Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-yarn-server-resourcemanager to :hadoop-yarn-client:3.5.0 dependency again as already in list
+2026-09-04T07:04:04.475Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.eclipse.jetty.websocket:websocket-common to :websocket-client: dependency again as already in list
+2026-09-04T07:04:04.773Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.jline:jline-reader to :jline-builtins: dependency again as already in list
+2026-09-04T07:04:04.822Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.jline:jline-terminal to :jline-reader: dependency again as already in list
+2026-09-04T07:04:05.118Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-common to :hadoop-yarn-common:3.5.0 dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-kqueue to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-resolver-dns-native-macos to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-kqueue to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-kqueue to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-resolver-dns-native-macos to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-resolver-dns-native-macos to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-epoll to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport-native-io_uring to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.235Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.236Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-all:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.245Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-dns: dependency again as already in list
+2026-09-04T07:04:05.251Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-haproxy: dependency again as already in list
+2026-09-04T07:04:05.258Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-compression: dependency again as already in list
+2026-09-04T07:04:05.291Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-http: dependency again as already in list
+2026-09-04T07:04:05.312Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-http2: dependency again as already in list
+2026-09-04T07:04:05.324Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.324Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.324Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.324Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.325Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.325Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.325Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.325Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.325Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-codec-native-quic to io.netty:netty-codec-http3:4.2.17.Final dependency again as already in list
+2026-09-04T07:04:05.385Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-memcache: dependency again as already in list
+2026-09-04T07:04:05.393Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-mqtt: dependency again as already in list
+2026-09-04T07:04:05.401Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-redis: dependency again as already in list
+2026-09-04T07:04:05.407Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-smtp: dependency again as already in list
+2026-09-04T07:04:05.414Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-socks: dependency again as already in list
+2026-09-04T07:04:05.422Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-stomp: dependency again as already in list
+2026-09-04T07:04:05.427Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-xml: dependency again as already in list
+2026-09-04T07:04:05.432Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-protobuf: dependency again as already in list
+2026-09-04T07:04:05.437Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-codec-marshalling: dependency again as already in list
+2026-09-04T07:04:05.441Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-handler-proxy: dependency again as already in list
+2026-09-04T07:04:05.485Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding ${project.groupId}:netty-transport to :netty-transport-sctp: dependency again as already in list
+2026-09-04T07:04:05.533Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-epoll: dependency again as already in list
+2026-09-04T07:04:05.540Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-epoll: dependency again as already in list
+2026-09-04T07:04:05.546Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-epoll: dependency again as already in list
+2026-09-04T07:04:05.553Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-io_uring: dependency again as already in list
+2026-09-04T07:04:05.559Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-io_uring: dependency again as already in list
+2026-09-04T07:04:05.565Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-io_uring: dependency again as already in list
+2026-09-04T07:04:05.571Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-kqueue: dependency again as already in list
+2026-09-04T07:04:05.576Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding io.netty:netty-transport to :netty-transport-native-kqueue: dependency again as already in list
+2026-09-04T07:04:07.039Z [jfxia] [WARN ] [] [archive_mgr:1143              ] [UnnamedContext                  ] large metadata file, skip scanning, file: libnetty_quiche42_linux_x86_64.so, size: 6777872, limit: 5242880
+2026-09-04T07:04:07.210Z [jfxia] [WARN ] [] [archive_mgr:1143              ] [UnnamedContext                  ] large metadata file, skip scanning, file: libnetty_quiche42_linux_aarch_64.so, size: 6768192, limit: 5242880
+2026-09-04T07:04:07.289Z [jfxia] [WARN ] [] [archive_mgr:1143              ] [UnnamedContext                  ] large metadata file, skip scanning, file: libnetty_quiche42_osx_x86_64.jnilib, size: 6774400, limit: 5242880
+2026-09-04T07:04:07.338Z [jfxia] [WARN ] [] [archive_mgr:1143              ] [UnnamedContext                  ] large metadata file, skip scanning, file: libnetty_quiche42_osx_aarch_64.jnilib, size: 6490704, limit: 5242880
+2026-09-04T07:04:07.431Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-mapreduce-client-app to :hadoop-mapreduce-client-jobclient:3.5.0 dependency again as already in list
+2026-09-04T07:04:07.431Z [jfxia] [WARN ] [] [maven_extractor:97            ] [UnnamedContext                  ] skipping adding org.apache.hadoop:hadoop-yarn-server-resourcemanager to :hadoop-mapreduce-client-jobclient:3.5.0 dependency again as already in list
+07:04:10 [Info] Waiting for scan to complete on JFrog Xray...
+Security Violations
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE            | SEVERITY   | DIRECT                    | DIRECT  | AFFECTED                  | AFFECTED  | FIXED     | TYPE  |
+|                |            | PACKAGE                   | PACKAGE | COMPONENT                 | COMPONENT | VERSIONS  |       |
+|                |            |                           | VERSION | NAME                      | VERSION   |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-59313 | 💀Critical | org.springframework:sprin | 7.0.8   | org.springframework:sprin | 7.0.8     | [7.0.9]   | Maven |
+|                |            | g-webmvc                  |         | g-webmvc                  |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-68525 | 💀Critical | org.apache.tomcat.embed:t | 11.0.24 | org.apache.tomcat.embed:t | 11.0.24   | [10.1.58] | Maven |
+|                |            | omcat-embed-core          |         | omcat-embed-core          |           | [11.0.25] |       |
+|                |            |                           |         |                           |           | [9.0.121] |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-65905 | 💀Critical | org.apache.tomcat.embed:t | 11.0.24 | org.apache.tomcat.embed:t | 11.0.24   | [10.1.58] | Maven |
+|                |            | omcat-embed-core          |         | omcat-embed-core          |           | [11.0.25] |       |
+|                |            |                           |         |                           |           | [9.0.121] |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-65637 | 💀Critical | org.apache.tomcat.embed:t | 11.0.24 | org.apache.tomcat.embed:t | 11.0.24   | [10.1.58] | Maven |
+|                |            | omcat-embed-core          |         | omcat-embed-core          |           | [11.0.25] |       |
+|                |            |                           |         |                           |           | [9.0.121] |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-65182 | 💀Critical | org.apache.tomcat.embed:t | 11.0.24 | org.apache.tomcat.embed:t | 11.0.24   | [10.1.58] | Maven |
+|                |            | omcat-embed-core          |         | omcat-embed-core          |           | [11.0.25] |       |
+|                |            |                           |         |                           |           | [9.0.121] |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-59650 | 💀Critical | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-8763  | 💀Critical | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-58062 | 💀Critical | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-68763 | 🔥High     | org.apache.tomcat.embed:t | 11.0.24 | org.apache.tomcat.embed:t | 11.0.24   | [10.1.58] | Maven |
+|                |            | omcat-embed-core          |         | omcat-embed-core          |           | [11.0.25] |       |
+|                |            |                           |         |                           |           | [9.0.121] |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-68569 | 🔥High     | org.apache.tomcat.embed:t | 11.0.24 | org.apache.tomcat.embed:t | 11.0.24   | [10.1.58] | Maven |
+|                |            | omcat-embed-core          |         | omcat-embed-core          |           | [11.0.25] |       |
+|                |            |                           |         |                           |           | [9.0.121] |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-66422 | 🔥High     | org.apache.tomcat.embed:t | 11.0.24 | org.apache.tomcat.embed:t | 11.0.24   | [10.1.58] | Maven |
+|                |            | omcat-embed-core          |         | omcat-embed-core          |           | [11.0.25] |       |
+|                |            |                           |         |                           |           | [9.0.121] |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-65927 | 🔥High     | org.apache.tomcat.embed:t | 11.0.24 | org.apache.tomcat.embed:t | 11.0.24   | [10.1.58] | Maven |
+|                |            | omcat-embed-core          |         | omcat-embed-core          |           | [11.0.25] |       |
+|                |            |                           |         |                           |           | [9.0.121] |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-65183 | 🔥High     | org.apache.tomcat.embed:t | 11.0.24 | org.apache.tomcat.embed:t | 11.0.24   | [10.1.58] | Maven |
+|                |            | omcat-embed-core          |         | omcat-embed-core          |           | [11.0.25] |       |
+|                |            |                           |         |                           |           | [9.0.121] |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-68497 | 🔥High     | tools.jackson.core:jackso | 3.1.4   | tools.jackson.core:jackso | 3.1.4     | [3.1.6]   | Maven |
+|                |            | n-databind                |         | n-databind                |           | [3.2.2]   |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-68497 | 🔥High     | com.fasterxml.jackson.cor | 2.21.4  | com.fasterxml.jackson.cor | 2.21.4    | [2.18.10] | Maven |
+|                |            | e:jackson-databind        |         | e:jackson-databind        |           | [2.21.6]  |       |
+|                |            |                           |         |                           |           | [2.22.2]  |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-58061 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-59644 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-59651 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-58059 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-12185 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-13506 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-59646 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-14682 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-59639 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-12852 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-59645 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-12803 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-59643 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-12817 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-12802 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-12816 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-58060 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-59642 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+| CVE-2026-59649 | 🔥High     | org.bouncycastle:bcprov-j | 1.84    | org.bouncycastle:bcprov-j | 1.84      | [1.85]    | Maven |
+|                |            | dk18on                    |         | dk18on                    |           |           |       |
++----------------+------------+---------------------------+---------+---------------------------+-----------+-----------+-------+
+License Compliance Violations
++---------------------------------------------+
+| No license compliance violations were found |
++---------------------------------------------+
+Operational Risk Violations
++-------------------------------------------+
+| No operational risk violations were found |
++-------------------------------------------+
+07:04:16 [Info] Trace ID for JFrog Platform logs: 0d458d61088f5d71
+07:04:16 [Error] One or more of the detected violations are configured to fail the build that including them
+Cleaning up project directory and file based variables
+00:00
+ERROR: Job failed: exit code 3
