@@ -1,270 +1,423 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xmlns="http://maven.apache.org/POM/4.0.0"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
-    <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.0</version>
-        <relativePath/>
-    </parent>
-    <groupId>com.fincore</groupId>
-    <artifactId>ReportService</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-    <packaging>jar</packaging>
-    <name>report-service</name>
-    <description>Service to manage and retrieve different reports</description>
-    <properties>
-        <java.version>21</java.version>
-        <lombok.version>1.18.38</lombok.version>
-        <tomcat.version>11.0.24</tomcat.version>
-        <!-- Override Netty to fix critical vulnerabilities -->
-        <netty.version>4.2.17.Final</netty.version>
-    </properties>
-    <dependencies>
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Stack,
+  Typography,
+  Tooltip,
+  IconButton,
+  Chip,
+} from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+import { useEffect, useMemo, useState } from "react";
+import InfoIcon from "@mui/icons-material/Info";
+import useApi from "../../hooks/useApi";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
+import DateRangeIcon from "@mui/icons-material/DateRange";
+import CancelIcon from "@mui/icons-material/Cancel";
+import { useSelector } from "react-redux";
+import CustomChip from "../../utils/CustomChip";
+import GppBadIcon from "@mui/icons-material/GppBad";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import AddBoxIcon from "@mui/icons-material/AddBox";
+import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
+import EditDocumentIcon from "@mui/icons-material/EditDocument";
+import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
+import { getPermissions } from "../../utils/CommonUtilities";
 
+function CustomNoRowsOverlay() {
+  return (
+    <Stack height="100%" alignItems="center" justifyContent="center">
+      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+      <Typography variant="h6">No Circle Requests Found</Typography>
+      <Typography>You have not created any Circle requests.</Typography>
+    </Stack>
+  );
+}
+export default function MyCircleRequestsTab() {
+  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
+  const [rows, setRows] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState(false);
+  const { callApi } = useApi();
+  const snackbar = useCustomSnackbar();
+  const permissions = getPermissions(selectedMenuItem);
+  const [requestId, setRequestId] = useState(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [zones, setZones] = useState([]);
+  const [viewData, setViewData] = useState(null);
 
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const payload = { requestType: "CIRCLE" };
+      const [zonesRes, response] = await Promise.all([
+        callApi("/CM/common-master/zone-codes", null, "GET"),
+        callApi("/CR/my-requests", payload, "POST"),
+      ]);
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-redis</artifactId>
-        </dependency>
-        <!-- Recommended for connection pooling -->
-        <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-pool2</artifactId>
-        </dependency>
+      setZones(zonesRes?.data ?? []);
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-security</artifactId>
-        </dependency>
+      if (response?.data) {
+        const result = response.data.map((row) => {
+          let parsedPayload = {};
+          parsedPayload = row.payload ? row.payload : {};
+          parsedPayload = {
+            ...parsedPayload,
+            id: row.id,
+            reqStatus: row.reqStatus,
+            reqDate: row.reqDate,
+            creatorId: row.creatorId,
+            executorId: row.executorId,
+            executionDate: row.executionDate,
+            executorRemarks: row.executorRemarks,
+            changeType: row.changeType,
+          };
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
+          return {
+            ...parsedPayload,
+          };
+        });
+        result.sort((a, b) => {
+          if (a.reqStatus === "PENDING" && b.reqStatus !== "PENDING") return -1;
+          if (a.reqStatus !== "PENDING" && b.reqStatus === "PENDING") return 1;
+          return new Date(b.reqDate) - new Date(a.reqDate);
+        });
+        setRows(result);
+      } else {
+        setRows([]);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <optional>true</optional>
-        </dependency>
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
+  const handleCancelRequest = async () => {
+    try {
+      const payload = {
+        requestId,
+        remarks: "User canceled this Request",
+      };
 
-        <dependency>
-            <groupId>net.sf.jasperreports</groupId>
-            <artifactId>jasperreports</artifactId>
-            <version>7.0.7</version>
-        </dependency>
+      const response = await callApi("/CR/cancel-request", payload, "PATCH");
+      if (response?.success) {
+        snackbar(`Request Id ${requestId} Cancelled Successfully.`, "success");
+      } else {
+        snackbar(
+          response?.message
+            ? response?.message
+            : "Failed to process your cancel request, Kindly try again",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      fetchData();
+      setConfirmDialog(false);
+    }
+  };
+  const handleViewClick = (data) => {
+    const { circleCode, circleName, zoneDescription } = data;
+    const showData = {
+      circleCode,
+      circleName,
+      zone: zoneDescription,
+    };
 
+    data.showData = showData;
+    setViewData(data);
+    setViewOpen(true);
+  };
 
-        <!-- REQUIRED for PDF generation (Replaces iText) -->
-        <dependency>
-            <groupId>net.sf.jasperreports</groupId>
-            <artifactId>jasperreports-pdf</artifactId>
-            <version>7.0.7</version>
-        </dependency>
-        <!-- Optional: Required if you export to Excel (Common missing dependency) -->
-        <dependency>
-            <groupId>net.sf.jasperreports</groupId>
-            <artifactId>jasperreports-excel-poi</artifactId>
-            <version>7.0.7</version>
-        </dependency>
-        <!-- Fonts (Optional but recommended to match v6 behavior) -->
-        <dependency>
-            <groupId>net.sf.jasperreports</groupId>
-            <artifactId>jasperreports-fonts</artifactId>
-            <version>7.0.7</version>
-        </dependency>
+  const columns = useMemo(
+    () => [
+      { field: "id", headerName: "Request Id", flex: 0.6, minWidth: 150 },
+      {
+        field: "circleCode",
+        headerName: "Circle Code",
+        flex: 0.6,
+        sortable: true,
+        minWidth: 160,
+      },
 
-                <!-- Need to  Add the JDT compiler module explicitly  to compiler reports at run time-->
-        <dependency>
-            <groupId>net.sf.jasperreports</groupId>
-            <artifactId>jasperreports-jdt</artifactId>
-            <version>7.0.7</version>
-        </dependency>
+      {
+        field: "circleName",
+        headerName: "Circle Name",
+        flex: 1.2,
+        sortable: true,
+        minWidth: 150,
+      },
+      {
+        field: "zoneCode",
+        headerName: "Zone",
+        filterable: false,
+        minWidth: 160,
+        flex: 1,
+        renderCell: (params) => {
+          const zone = zones.find((z) => String(z.id) === String(params.value));
+          return zone ? zone.description : "N/A";
+        },
+      },
 
-        <!-- Add ECJ compiler (Required by jasperreports-jdt in  container/JAR setups) -->
-        <dependency>
-            <groupId>org.eclipse.jdt</groupId>
-            <artifactId>ecj</artifactId>
-            <version>3.35.0</version>
-        </dependency>
+      {
+        field: "changeType",
+        headerName: "Request Type",
+        flex: 1,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          const val = params.value;
+          const color =
+            val === "ADD" ? "success" : val === "DELETE" ? "error" : "warning";
+          const icon =
+            val === "ADD" ? (
+              <AddBoxIcon />
+            ) : val === "DELETE" ? (
+              <AutoDeleteIcon />
+            ) : (
+              <EditDocumentIcon />
+            );
+          return (
+            <CustomChip
+              icon={icon}
+              label={
+                val === "ADD"
+                  ? "Added"
+                  : val === "DELETE"
+                    ? "Deleted"
+                    : "Modified"
+              }
+              color={color}
+              variant="outlined"
+            />
+          );
+        },
+      },
 
+      {
+        field: "reqDate",
+        headerName: "Date of Submission",
+        flex: 1,
+        filterable: false,
+        minWidth: 160,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Box>
+            <Chip
+              sx={{ color: "text.secondary" }}
+              icon={<DateRangeIcon />}
+              label={params.value.split("T")[0]}
+            />
+          </Box>
+        ),
+      },
+      {
+        field: "reqStatus",
+        headerName: "Status",
+        flex: 0.7,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Box
+            sx={{
+              color:
+                params.value === "REJECTED"
+                  ? "error.main"
+                  : params.value === "ACCEPTED"
+                    ? "success.dark"
+                    : "warning.main",
+              // fontWeight: "bold",
+            }}
+          >
+            <CustomChip
+              variant="outlined"
+              icon={
+                params.value === "REJECTED" ? (
+                  <BlockFlippedIcon />
+                ) : params.value === "ACCEPTED" ? (
+                  <CheckCircleIcon />
+                ) : params.value === "CANCELLED" ? (
+                  <GppBadIcon />
+                ) : (
+                  <PendingActionsIcon />
+                )
+              }
+              label={
+                params.value === "REJECTED"
+                  ? "Rejected"
+                  : params.value === "ACCEPTED"
+                    ? "Approved"
+                    : params.value === "CANCELLED"
+                      ? "Cancelled"
+                      : "Pending"
+              }
+              sx={{
+                color:
+                  params.value === "REJECTED"
+                    ? "error.dark"
+                    : params.value === "ACCEPTED"
+                      ? "success.dark"
+                      : params.value === "CANCELLED"
+                        ? "primary.dark"
+                        : "warning.light",
 
-        <dependency>
-            <groupId>com.oracle.database.jdbc</groupId>
-            <artifactId>ojdbc11</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.json</groupId>
-            <artifactId>json</artifactId>
-            <version>20240303</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
+                "& .MuiChip-icon": {
+                  color:
+                    params.value === "REJECTED"
+                      ? "error.dark"
+                      : params.value === "ACCEPTED"
+                        ? "success.dark"
+                        : params.value === "CANCELLED"
+                          ? "primary.dark"
+                          : "warning.light",
+                },
+              }}
+            />
+          </Box>
+        ),
+      },
+      {
+        field: "action",
+        headerName: "Action",
+        flex: 1,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          return (
+            <Stack
+              direction="row"
+              spacing={1}
+              justifyContent="center"
+              alignItems="center"
+              sx={{ height: "100%" }}
+            >
+              {permissions.view && (
+                <Tooltip title="View">
+                  <IconButton
+                    // color="primary"
+                    onClick={() => handleViewClick(params.row)}
+                  >
+                    <VisibilityIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
 
-         <!-- health metrics -->
-        <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-registry-prometheus</artifactId>
-        </dependency>
+              {params.row.reqStatus === "PENDING" && permissions.cancel && (
+                <Tooltip title={"Cancel Request"}>
+                  <IconButton
+                    onClick={() => {
+                      setConfirmDialog(true);
+                      setRequestId(params.row.id);
+                    }}
+                  >
+                    <CancelIcon fontSize="inherit" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Stack>
+          );
+        },
+      },
+    ],
+    [permissions.cancel, permissions.view, zones],
+  );
+  const filteredColumns = useMemo(() => {
+    if (permissions.view || permissions.cancel) {
+      return columns;
+    }
+    // Otherwise, filter out the column where field name is 'action'.
+    else {
+      return columns.filter((column) => column.field !== "action");
+    }
+  }, [columns, permissions]);
 
-        <dependency>
-            <groupId>com.ibm.icu</groupId>
-            <artifactId>icu4j</artifactId>
-            <version>75.1</version>
-        </dependency>
+  return (
+    <>
+      <Box>
+        <Box>
+          <DataGrid
+            loading={loading}
+            rows={rows}
+            columns={filteredColumns}
+            disableRowSelectionOnClick
+            pageSizeOptions={[5, 10, 25, 50]}
+            initialState={{
+              pagination: { paginationModel: { pageSize: 10, page: 0 } },
+              // sorting: { sortModel: [{ field: "circleCode", sort: "asc" }] },
+            }}
+            slots={{
+              noRowsOverlay: CustomNoRowsOverlay,
+            }}
+            getRowId={(row) => row.id}
+          />
+        </Box>
+      </Box>
+      <ViewMyRequestDialog
+        open={viewOpen}
+        handleClose={() => setViewOpen(false)}
+        data={viewData}
+      />
 
-
-        <dependency>
-            <groupId>org.jetbrains</groupId>
-            <artifactId>annotations</artifactId>
-            <version>25.0.0</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>jakarta.validation</groupId>
-            <artifactId>jakarta.validation-api</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-kafka</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>at.yawk.lz4</groupId>
-            <artifactId>lz4-java</artifactId>
-            <version>1.10.1</version>
-        </dependency>
-
-
-                <dependency>
-            <groupId>com.fincore</groupId>
-            <artifactId>common-utilities</artifactId>
-            <version>1.1.0</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.hadoop</groupId>
-            <artifactId>hadoop-client</artifactId>
-            <version>3.5.0</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-reload4j</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-
-        <dependency>
-            <groupId>net.logstash.logback</groupId>
-            <artifactId>logstash-logback-encoder</artifactId>
-            <version>7.4</version>
-        </dependency>
-
-        <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-validation</artifactId>
-        </dependency>
-
-
-        <!-- JAXB API -->
-        <dependency>
-            <groupId>javax.xml.bind</groupId>
-            <artifactId>jaxb-api</artifactId>
-            <version>2.3.1</version>
-        </dependency>
-        <!-- JAXB Runtime Implementation -->
-        <dependency>
-            <groupId>org.glassfish.jaxb</groupId>
-            <artifactId>jaxb-core</artifactId>
-            <version>2.3.0.1</version>
-        </dependency>
-        <dependency>
-            <groupId>org.glassfish.jaxb</groupId>
-            <artifactId>jaxb-runtime</artifactId>
-            <version>2.3.1</version>
-        </dependency>
-
-
-    </dependencies>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>org.apache.avro</groupId>
-                <artifactId>avro</artifactId>
-                <version>1.12.1</version>
-            </dependency>
-            <dependency>
-                <groupId>org.bouncycastle</groupId>
-                <artifactId>bcprov-jdk18on</artifactId>
-                <version>1.84</version>
-            </dependency>
-            <!-- Force JLine to 3.30.14 (High Fix) -->
-            <dependency>
-                <groupId>org.jline</groupId>
-                <artifactId>jline</artifactId>
-                <version>4.3.1</version>
-            </dependency>
-
-            <dependency>
-                <groupId>io.jsonwebtoken</groupId>
-                <artifactId>jjwt-impl</artifactId>
-                <version>0.12.6</version>
-            </dependency>
-
-
-
-
-        </dependencies>
-    </dependencyManagement>
-
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                        </path>
-                    </annotationProcessorPaths>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <excludes>
-                        <exclude>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                        </exclude>
-                    </excludes>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
-
-</project>
+      {/* Cancel Dialog */}
+      <Dialog
+        open={confirmDialog}
+        onClose={() => {
+          setConfirmDialog(false);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>
+          Cancel Request ID: {requestId}
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ p: 1 }}>
+            Are you sure you want to cancel this request Please confirm ?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setConfirmDialog(false);
+            }}
+            variant="outlined"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCancelRequest}
+            color="error"
+            variant="contained"
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+}
