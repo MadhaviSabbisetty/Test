@@ -1,105 +1,54 @@
-import {
-  styled,
-  Box,
-  Button,
-  Stack,
-  FormControl,
-  Typography,
-} from "@mui/material";
+<Box
+  sx={{
+    width: "100%",
+  }}
+>
+  <CircleMasterDataGrid
+    loading={loading}
+    rows={rows}
+    columns={columns}
+    disableRowSelectionOnClick
+    getRowId={(row) => row.circleCode}
+    pageSizeOptions={[5, 10, 25, 50]}
+    initialState={{
+      pagination: { paginationModel: { pageSize: 10, page: 0 } },
+      sorting: { sortModel: [{ field: "circleCode", sort: "asc" }] },
+    }}
+    sx={{
+      width: "100%",
+      minHeight: 560,
+      "& .MuiDataGrid-columnHeaders": {
+        outline: "none",
+      },
+    }}
+    localeText={{
+      noRowsLabel: "No Circle Records Found",
+    }}
+    slots={{
+      noRowsOverlay: CustomNoRowsOverlay,
+    }}
+  />
 
-export const OverlayBox = styled(Box)(() => ({
-  display: "flex",
-  flexDirection: "column",
-  height: "100%",
-  justifyContent: "center",
-  alignItems: "center",
-}));
-
-export const StyledBox = styled(Box)(({ theme }) => ({
-  backgroundColor: "rgba(255, 255, 255, 0.15)",
-  backdropFilter: "blur(20px)",
-  padding: "2%",
-  borderRadius: "15px",
-  marginBottom: "2%",
-  border: `0.5px solid ${theme.palette.primary.light}`,
-}));
-
-export const StyledFormBox = styled(Box)(() => ({
-  padding: "10px",
-  flexGrow: 1,
-  minWidth: "18%",
-  alignItems: "end",
-  flexBasis: "200px",
-}));
-
-export const StyledDataBox = styled(Box)(({ theme }) => ({
-  backgroundColor: "rgba(255, 255, 255, 0.15)",
-  backdropFilter: "blur(20px)",
-  padding: "2%",
-  borderRadius: "15px",
-  marginBottom: "2%",
-  height: "50%",
-  zIndex: -1,
-  border: `0.5px solid ${theme.palette.primary.light}`,
-}));
-
-export const StyledFormHeader = styled(Typography)(
-  ({ theme }) => ({
-    fontSize: "1.18rem",
-    marginBottom: theme.spacing(3),
-    borderBottom: `2px solid ${theme.palette.divider}`,
-    paddingBottom: theme.spacing(1),
-  }),
-);
-
-export const ButtonBox = styled(Box)(() => ({
-  marginTop: "1%",
-  display: "flex",
-  justifyContent: "flex-end",
-  alignItems: "center",
-}));
-
-export const StyledButton = styled(Button)(
-  ({ theme, bgColor }) => ({
-    borderRadius: "10px",
-    fontSize: "0.96rem",
-
-    background:
-      bgColor === "success"
-        ? `linear-gradient(90deg,${theme.palette.success.main},${theme.palette.success.light})`
-        : "",
-
-    "&:hover": {
-      background:
-        bgColor === "success"
-          ? `linear-gradient(90deg,${theme.palette.success.dark},${theme.palette.success.main})`
-          : "",
-    },
-
-    "&.Mui-disabled": {
-      background:
-        bgColor === "success"
-          ? `linear-gradient(90deg, ${theme.palette.success.light})`
-          : "",
-      color: "#ffffff",
-      opacity: 0.8,
-      cursor: "not-allowed",
-    },
-  }),
-);
-
-export const StyledStack = styled(Stack)(() => ({
-  margin: 1,
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "16px",
-}));
-
-export const StyledFormControl = styled(FormControl)(
-  () => ({
-    padding: "10px",
-    flex: "1 1 200px",
-    minWidth: "200px",
-    maxWidth: "250px",
-  }),
-);
+  {/* Create Button - below DataGrid pagination */}
+  <Box
+    sx={{
+      display: "flex",
+      justifyContent: "flex-end",
+      alignItems: "center",
+      mt: 1.5,
+      mb: 1,
+    }}
+  >
+    <CircleTab1Fab
+      onClick={() => {
+        setEditingId(null);
+        setOpen(true);
+      }}
+      color="primary"
+      variant="contained"
+      startIcon={<CircleTab1Addicon />}
+    >
+      Create
+    </CircleTab1Fab>
+  </Box>
+</Box>
