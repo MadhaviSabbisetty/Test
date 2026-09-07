@@ -1,155 +1,145 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
-	<parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.0</version>
-        <relativePath/> <!-- lookup parent from repository -->
-    </parent>
-	<groupId>com.fincore</groupId>
-	<artifactId>CommunicationService</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
-	<packaging>jar</packaging>
-	<name>communication-service</name>
-	<description>Service to send emails and sms to recipients</description>
-	<url/>
-	<licenses>
-		<license/>
-	</licenses>
-	<developers>
-		<developer/>
-	</developers>
-	<scm>
-		<connection/>
-		<developerConnection/>
-		<tag/>
-		<url/>
-	</scm>
-	<properties>
-		<java.version>21</java.version>
-        <tomcat.version>11.0.23</tomcat.version>
-	</properties>
-	<dependencies>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
+import * as React from "react";
+import Tabs from "@mui/material/Tabs";
+import Box from "@mui/material/Box";
+import { styled } from "@mui/material/styles";
+import { DataGrid } from "@mui/x-data-grid";
+import { Chip, Fab, Grid, Stack, DialogTitle } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
 
-        <dependency>
-    		<groupId>org.springframework.boot</groupId>
-    		<artifactId>spring-boot-starter-validation</artifactId>
-		</dependency>
+export const CircleMastermainBox = styled(Box)(({ theme }) => ({
+  py: 2,
+}));
 
-		<dependency>
-    		<groupId>org.springframework.boot</groupId>
-    		<artifactId>spring-boot-starter-mail</artifactId>
-		</dependency>
-		
-		<dependency>
-    		<groupId>org.springframework.boot</groupId>
-    		<artifactId>spring-boot-starter-data-redis</artifactId>
-		</dependency>
+export const CircleTabContainer = styled(Box)(({ theme }) => ({
+  borderBottom: 1,
+  borderColor: "divider",
+}));
 
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <optional>true</optional>
-        </dependency>
-        
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
+export const CircleMasterTabs = styled(Tabs)(({ theme }) => ({
+  width: "100%",
+}));
 
-        <dependency>
-            <groupId>jakarta.validation</groupId>
-            <artifactId>jakarta.validation-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.oracle.database.jdbc</groupId>
-            <artifactId>ojdbc11</artifactId>
-        </dependency>
-        <dependency>
-    		<groupId>com.fasterxml.jackson.core</groupId>
-    		<artifactId>jackson-databind</artifactId>
-		</dependency>
-        
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-kafka</artifactId>
-        </dependency> 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-restclient</artifactId>
-        </dependency>   
-        
-        
-        <dependency>
-            <groupId>commons-configuration</groupId>
-            <artifactId>commons-configuration</artifactId>
-            <version>1.6</version>
-        </dependency>
-        
-        <dependency>
-        <groupId>org.apache.commons</groupId>
-        <artifactId>commons-text</artifactId>
-        <version>1.12.0</version>
-      </dependency>
-      
-      <dependency>
-            <groupId>org.json</groupId>
-            <artifactId>json</artifactId>
-        <version>20231013</version>
-        </dependency>
+////tab1
+export const CircleTab1Container = styled(Box)(({ theme }) => ({
+  p: 2,
+}));
 
-        <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
-        </dependency>
+export const CircleTab1Stack = styled(Stack)(({ theme }) => ({
+  alignItems: "center",
+  justifyContent: "center",
+  height: "60vh",
+}));
 
-        <dependency>
-            <groupId>com.fincore</groupId>
-            <artifactId>common-utilities</artifactId>
-            <version>1.1.0</version>
-        </dependency>
+export const CircleMasterDataGrid = styled(DataGrid)(({ theme }) => ({}));
 
-        <!-- 4. Force safe versions of Beanutils/Collections if transitive deps try to pull old ones -->
-        <dependency>
-            <groupId>commons-beanutils</groupId>
-            <artifactId>commons-beanutils</artifactId>
-            <version>1.11.0</version>
-        </dependency>
-        <dependency>
-            <groupId>commons-collections</groupId>
-            <artifactId>commons-collections</artifactId>
-            <version>3.2.2</version>
-        </dependency>
+export const CircleTab1Addicon = styled(AddIcon)(({ theme }) => ({
+  mr: 1,
+}));
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-freemarker</artifactId>
-        </dependency>
+export const CircleTab1Fab = styled(Fab)(({ theme }) => ({
+  position: "fixed",
+  borderRadius: 1,
+  fontSize: "15px",
+  bottom: theme.spacing(8),
+  right: theme.spacing(4),
+  zIndex: 1200,
+}));
 
-        <dependency>
-            <groupId>com.github.ben-manes.caffeine</groupId>
-            <artifactId>caffeine</artifactId>
-        </dependency>
+export const CircleTab1Grid = styled(Grid)(({ theme }) => ({
+  mt: 1,
+}));
+export const CircleTab1chip = styled(Chip)(({ theme }) => ({
+  fontWeight: 500,
+}));
 
-    </dependencies>
+export const Circletab1DialogTitle = styled(DialogTitle)(({ theme }) => ({
+  m: 0,
+  p: 2,
+}));
 
-    <build>
-        <finalName>${project.artifactId}</finalName>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
-</project>
+
+import * as React from "react";
+import PropTypes from "prop-types";
+import Tab from "@mui/material/Tab";
+import CircleMasterTab1 from "./CircleMasterTab";
+import CircleMasterTab2 from "./MyCircleRequestsTab";
+import ConnectWithoutContactIcon from "@mui/icons-material/ConnectWithoutContact";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+
+import {
+  CircleMasterTabs,
+  CircleTabContainer,
+  CircleMastermainBox,
+} from "./CircleMasterStyle";
+import { Box, Paper } from "@mui/material";
+
+function CustomTabPanel(props) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`simple-tabpanel-${index}`}
+      aria-labelledby={`simple-tab-${index}`}
+      {...other}
+    >
+      {value === index && <CircleMastermainBox>{children}</CircleMastermainBox>}
+    </div>
+  );
+}
+
+CustomTabPanel.propTypes = {
+  children: PropTypes.node,
+  index: PropTypes.number.isRequired,
+  value: PropTypes.number.isRequired,
+};
+
+function a11yProps(index) {
+  return {
+    id: `simple-tab-${index}`,
+    "aria-controls": `simple-tabpanel-${index}`,
+  };
+}
+
+export default function CircleMaster() {
+  const [value, setValue] = React.useState(0);
+
+  const handleChange = (event, newValue) => {
+    setValue(newValue);
+  };
+
+  return (
+    <>
+      <CircleTabContainer fullWidth={"true"}>
+        <CircleMasterTabs
+          value={value}
+          onChange={handleChange}
+          aria-label="basic tabs example"
+          variant="fullWidth"
+        >
+          <Tab
+            label="Manage Circles"
+            icon={<ConnectWithoutContactIcon />}
+            iconPosition="start"
+            {...a11yProps(0)}
+          />
+          <Tab
+            icon={<PendingActionsIcon />}
+            iconPosition="start"
+            label="My Requests"
+            {...a11yProps(1)}
+          />
+        </CircleMasterTabs>
+      </CircleTabContainer>
+      <CustomTabPanel value={value} index={0}>
+        <CircleMasterTab1 />
+      </CustomTabPanel>
+      <CustomTabPanel value={value} index={1}>
+        <CircleMasterTab2 />
+      </CustomTabPanel>
+    </>
+  );
+}
+
+
