@@ -1,380 +1,553 @@
-import React, { useMemo } from "react";
-import { Box, Typography, Stack, Chip } from "@mui/material";
-
+import { Check, Clear, Visibility } from "@mui/icons-material";
+import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import AddBoxIcon from "@mui/icons-material/AddBox";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
+import EditDocumentIcon from "@mui/icons-material/EditDocument";
+import HourglassBottomIcon from "@mui/icons-material/HourglassBottom";
+import InfoIcon from "@mui/icons-material/Info";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
 import {
-  PieChart,
-  Pie,
-  Cell,
+  Box,
+  Button,
+  Card, // Imported Card
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  IconButton,
+  Stack,
+  TextField,
   Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from "recharts";
+  Typography,
+} from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 
-const COLORS = {
-  add: "#d87093",
-  modify: "#6a5acd",
-  delete: "#7A0B0D",
-  bar: "#6296cf",
-};
+import useApi from "../../hooks/useApi";
+import { timeStampFormatter } from "../../utils/CommonUtilities";
+import CustomChip from "../../utils/CustomChip";
+import downloadFile from "../../utils/DownloadUtils";
+import LoadingOverlay from "../../utils/LoadingOverlay";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import { COMMON_REQ_SCREEN_CONFIGS } from "../common/CommonConstants";
+import { styles } from "./CommonRequestScreenStyles";
+import RequestAnalytics from "./RequestAnalytics";
+import ViewRequestDialog from "./ViewRequestDailog";
 
-const s = {
-  container: {
-    p: { xs: 2, sm: 3 },
-    width: "100%",
-  },
-  headerTitle: {
-    fontSize: { xs: "1.1rem", sm: "1.15rem" },
-    fontWeight: "bold",
-    textAlign: { xs: "center", md: "left" },
-  },
-  headerSubtitle: {
-    color: "text.secondary",
-    display: "block",
-    textAlign: { xs: "center", md: "left" },
-    mb: { xs: 1.5, md: 2 },
-  },
-  wrapper: {
-    display: "flex",
-    flexDirection: { xs: "column", md: "row" },
-    gap: { xs: 3, md: 2 },
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  pieWrapper: {
-    width: { xs: "100%", md: "40%" },
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-  },
-  pieChartBox: {
-    position: "relative",
-    width: "100%",
-    height: { xs: 180, md: 200 },
-  },
-  pieCenterBox: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%, -50%)",
-    textAlign: "center",
-    pointerEvents: "none",
-  },
-  pieCenterSubtitle: {
-    fontSize: "0.7rem",
-    color: "text.secondary",
-  },
-  pieCenterValue: {
-    fontSize: "1.25rem",
-    fontWeight: "bold",
-  },
-  legendColorDot: (color) => ({
-    width: 10,
-    height: 10,
-    borderRadius: "50%",
-    bgcolor: color,
-  }),
-  // FIX: Wrapper handles width, Box handles height
-  barChartWrapper: {
-    width: { xs: "100%", md: "60%" },
-    display: "flex",
-    flexDirection: "column",
-  },
-  barChartBox: {
-    width: "100%",
-    height: { xs: 180, md: 200 },
-  },
-};
+const REMARKS_REGEX = /^(?!.* {2})[a-zA-Z0-9\s/&(),.-]*$/;
+const PENDING_REQUESTS_URL = "/CR/pending-requests";
+const PATCH_URL = "/CR/update-request";
+const DOWNLOAD_URL = "/RS/reports/generate/base64";
+const ACTIVE_DOWNLOAD_URL = "/CR/active-requests";
 
-const RequestAnalytics = ({ data = [], showDeleteRequest = false }) => {
-  const { total, pieData } = useMemo(() => {
-    const counts = { add: 0, modify: 0, delete: 0 };
+export default function CommonRequestScreen() {
+  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
+  const requestType = selectedMenuItem?.requestType || "";
+  const navigate = useNavigate();
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
 
-    data.forEach((d) => {
-      if (d.changeType === "ADD") counts.add++;
-      if (d.changeType === "UPDATE") counts.modify++;
-      if (d.changeType === "DELETE") counts.delete++;
-    });
+  const screenConfig = COMMON_REQ_SCREEN_CONFIGS[selectedMenuItem?.id];
+  const {
+    columns,
+    transformData,
+    processViewData,
+    requestsUrl,
+    patchUrl,
+    downloadUrl,
+    showDeleteRequest = false,
+  } = screenConfig || {};
 
-    const basePieData = [
-      { name: "Add Requests", value: counts.add, color: COLORS.add, id: 0 },
-      {
-        name: "Modify Requests",
-        value: counts.modify,
-        color: COLORS.modify,
-        id: 1,
-      },
-    ];
+  const [loading, setLoading] = useState(false);
+  const [dataGridLoading, setDataGridLoading] = useState(true);
+  const [rows, setRows] = useState([]);
+  const [remarks, setRemarks] = useState("");
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewData, setViewData] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(false);
+  const [selectedType, setSelectedType] = useState(null);
+  const [selectedRequestId, setSelectedRequestId] = useState(null);
 
-    if (showDeleteRequest) {
-      basePieData.push({
-        name: "Delete Requests",
-        value: counts.delete,
-        color: COLORS.delete,
-        id: 2,
-      });
-    }
+  const exemptions = ["YEAR_END_PROFIT_TRANSFER"];
 
-    return { total: data.length, pieData: basePieData };
-  }, [data, showDeleteRequest]);
+  const fetchData = useCallback(async () => {
+    if (!requestType) return;
+    try {
+      let url = requestsUrl ? requestsUrl : PENDING_REQUESTS_URL;
+      const payload = { requestType };
 
-  const histogramData = useMemo(() => {
-    const map = {};
-
-    data.forEach((item) => {
-      console.log(item);
-      if (item.reqDate) {
-        const date = new Date(item.reqDate).toLocaleDateString("en-GB");
-
-        if (!map[date]) {
-          map[date] = {
-            date,
-            pendingRequests: 0,
-            addRequests: 0,
-            updateRequests: 0,
-            deleteRequests: 0,
-            totalRequests: 0,
-          };
-        }
-
-        if (item.reqStatus === "PENDING") {
-          map[date].pendingRequests += 1;
-          if (item.changeType === "ADD") map[date].addRequests += 1;
-          if (item.changeType === "UPDATE") map[date].updateRequests += 1;
-          if (item.changeType === "DELETE") map[date].deleteRequests += 1;
-        }
-
-        map[date].totalRequests += 1;
+      if (exemptions.includes(requestType)) {
+        url = ACTIVE_DOWNLOAD_URL;
       }
-    });
 
-    return Object.values(map).sort((a, b) => {
-      const [d1, m1, y1] = a.date.split("/").map(Number);
-      const [d2, m2, y2] = b.date.split("/").map(Number);
-      return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
-    });
-  }, [data]);
+      const response = await callApi(url, payload, "POST");
+      const result = response?.data || [];
 
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload?.length) {
-      const d = payload[0].payload;
-      return (
-        <Box
-          sx={{
-            bgcolor: "#1e1e2f",
-            p: 1.5,
-            borderRadius: 1,
-            color: "#fff",
-            fontSize: 12,
-            boxShadow: 3,
-          }}
-        >
-          <div>
-            <b>Date:</b> {label}
-          </div>
-          <div>
-            <b>Pending Requests:</b> {d.pendingRequests}
-          </div>
-          <div>
-            <b>Add Requests:</b> {d.addRequests}
-          </div>
-          <div>
-            <b>Modify Requests:</b> {d.updateRequests}
-          </div>
-          {showDeleteRequest && (
-            <div>
-              <b>Delete Requests:</b> {d.deleteRequests}
-            </div>
-          )}
-        </Box>
-      );
+      const data = result.map((row) => ({
+        ...row,
+        ...(typeof row.payload === "object" ? row.payload : {}),
+      }));
+
+      setRows(transformData ? transformData(data) : data);
+    } catch (err) {
+      console.error(err);
+      showSnackBar("Error fetching data", "error");
+    } finally {
+      setRemarks("");
+      setDataGridLoading(false);
+      setConfirmDialog(false);
     }
-    return null;
+  }, [requestType, requestsUrl, callApi, transformData, showSnackBar]);
+
+  useEffect(() => {
+    if (!screenConfig || !requestType) {
+      return;
+    }
+    setRows([]);
+    setRemarks("");
+    setConfirmDialog(false);
+    fetchData();
+  }, [selectedMenuItem?.id, fetchData, screenConfig, requestType, navigate]);
+
+  const closeConfirmDialog = useCallback(() => {
+    setRemarks("");
+    setConfirmDialog(false);
+  }, []);
+
+  const handleConfirm = async () => {
+    if (selectedType === "reject" && remarks.trim().length < 5) {
+      showSnackBar(
+        "Please provide minimum 5 characters remarks before rejecting",
+        "warning",
+      );
+      return;
+    }
+    setLoading(true);
+
+    try {
+      const payload = {
+        requestId: selectedRequestId,
+        status: selectedType === "reject" ? "REJECTED" : "ACCEPTED",
+        remarks: selectedType === "reject" ? remarks : "No Remarks",
+      };
+      const url = patchUrl ? patchUrl : PATCH_URL;
+      const res = await callApi(url, payload, "PATCH");
+
+      if (res?.success || res) {
+        showSnackBar(
+          selectedType === "accept"
+            ? `Request Id ${selectedRequestId} Approved Successfully`
+            : `Request Id ${selectedRequestId} Rejected Successfully`,
+          "success",
+        );
+        fetchData();
+      } else {
+        showSnackBar("Failed to process request: " + res?.message, "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showSnackBar(err.message || "Error while processing request", "error");
+    } finally {
+      closeConfirmDialog();
+      setLoading(false);
+    }
   };
 
-  return (
-    <Box sx={s.container}>
-      <Typography sx={s.headerTitle}>Request Analytics Overview</Typography>
-      <Typography variant="caption" sx={s.headerSubtitle}>
-        Requests comparison by type and daily frequency
-      </Typography>
+  const handleViewClick = useCallback(
+    (data) => {
+      const view = processViewData ? processViewData(data) : data;
+      setViewData(view);
+      setViewOpen(true);
+    },
+    [processViewData],
+  );
 
-      {total > 0 ? (
-        <Box sx={s.wrapper}>
-          {/* PIE SECTION */}
-          <Box sx={s.pieWrapper}>
-            <Box sx={s.pieChartBox}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <defs>
-                    {pieData.map((p) => (
-                      <linearGradient
-                        key={p.id}
-                        id={`gradient-${p.id}`}
-                        x1="0"
-                        y1="0"
-                        x2="1"
-                        y2="1"
-                      >
-                        <stop
-                          stopColor={p.color}
-                          stopOpacity={0.9}
-                          offset="0%"
-                        />
-                        <stop
-                          stopColor={p.color}
-                          stopOpacity={0.5}
-                          offset="100%"
-                        />
-                      </linearGradient>
-                    ))}
-                    <linearGradient
-                      id="gradient-bar"
-                      x1="0"
-                      y1="0"
-                      x2="1"
-                      y2="1"
-                    >
-                      <stop
-                        stopColor={COLORS.bar}
-                        stopOpacity={0.9}
-                        offset="0%"
-                      />
-                      <stop
-                        stopColor={COLORS.bar}
-                        stopOpacity={0.5}
-                        offset="100%"
-                      />
-                    </linearGradient>
-                  </defs>
+  const openConfirmDialog = useCallback((type, id) => {
+    setConfirmDialog(true);
+    setSelectedType(type);
+    setSelectedRequestId(id);
+  }, []);
 
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius="60%"
-                    outerRadius="90%"
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {pieData.map((p) => (
-                      <Cell key={p.id} fill={`url(#gradient-${p.id})`} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+  const handleRemarksChange = useCallback(
+    (e) => {
+      const value = e.target.value;
 
-              <Box sx={s.pieCenterBox}>
-                <Typography variant="caption" sx={s.pieCenterSubtitle}>
-                  Total
-                </Typography>
-                <Typography sx={s.pieCenterValue}>{total}</Typography>
-              </Box>
-            </Box>
+      if (value && !/^[A-Za-z0-9]$/.test(value[0])) {
+        showSnackBar("Should not start with a special character", "error");
+        return;
+      }
 
-            <Stack
-              direction="row"
-              useFlexGap
-              flexWrap="wrap"
-              spacing={1.5}
-              justifyContent="center"
-              sx={{ mt: { xs: 0.5, md: 1 } }}
-            >
-              {pieData.map((p) => (
-                <Stack
-                  key={p.name}
-                  direction="row"
-                  alignItems="center"
-                  spacing={0.5}
-                >
-                  <Box sx={s.legendColorDot(p.color)} />
-                  <Typography variant="caption">{p.name}</Typography>
-                  <Chip
-                    label={p.value}
-                    sx={{
-                      bgcolor: p.color,
-                      color: "white",
-                      ml: 0.5,
-                      height: 20,
-                      fontSize: "0.7rem",
-                    }}
+      const error = REMARKS_REGEX.test(value)
+        ? ""
+        : "Invalid Format. Only alphabets, numbers, spaces (single spaces between words), and ,()&/-. are allowed!";
+
+      if (error) {
+        showSnackBar(error, "warning");
+        return;
+      }
+
+      setRemarks(value);
+    },
+    [showSnackBar],
+  );
+
+  const handleDownload = async () => {
+    setLoading(true);
+    try {
+      const url = downloadUrl ? downloadUrl : DOWNLOAD_URL;
+      const date = viewData.payload.date || viewData.reportDate;
+      let reportType = viewData.reportType;
+
+      if (requestType === "YEAR_END_PROFIT_TRANSFER") {
+        if (
+          viewData.reqStatus === "PENDING" ||
+          viewData.reqStatus === "QUEUED"
+        ) {
+          reportType = "profit_transfer_report";
+        }
+      }
+
+      const payload = { requestType, reportType, date };
+      const responseData = await callApi(url, payload, "POST");
+      const { reportName, reportDate, pdfBase64, excelBase64 } = responseData;
+
+      let fileName = `${reportName}_${reportDate}`;
+
+      if (!excelBase64) {
+        showSnackBar("Failed to download file", "error");
+        setLoading(false);
+        return;
+      }
+
+      if (
+        reportType === "profit_transactions" ||
+        reportType === "profit_transfer_report"
+      ) {
+        downloadFile(responseData?.excelBase64, "excel", fileName, true);
+        showSnackBar("File downloaded successfully", "success");
+        return;
+      } else if (!pdfBase64) {
+        showSnackBar("Failed to download file", "error");
+        setLoading(false);
+        return;
+      }
+
+      downloadFile(responseData?.pdfBase64, "pdf", fileName, true);
+      downloadFile(responseData?.excelBase64, "excel", fileName, true);
+      showSnackBar("Files downloaded successfully", "success");
+    } catch (err) {
+      console.error(err);
+      showSnackBar("Error while processing request", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const allColumns = useMemo(() => {
+    return [
+      { field: "id", headerName: "Request Id", flex: 0.5, minWidth: 130 },
+
+      // Dynamic columns from configs are injected here
+      ...(columns || []),
+
+      ...(selectedMenuItem?.id === 43
+        ? [
+            {
+              field: "reqStatus",
+              headerName: "Status",
+              flex: 0.6,
+              minWidth: 140,
+              align: "center",
+              headerAlign: "center",
+              filterable: false,
+              sortable: false,
+              disableColumnMenu: true,
+              renderCell: (p) => {
+                const val = p.value;
+                return (
+                  <CustomChip
+                    icon={
+                      val === "QUEUE" ? (
+                        <HourglassBottomIcon />
+                      ) : val === "ACCEPTED" ? (
+                        <CheckCircleIcon />
+                      ) : (
+                        <PendingActionsIcon />
+                      )
+                    }
+                    label={
+                      val === "QUEUE"
+                        ? "In Queue"
+                        : val === "ACCEPTED"
+                          ? "Accepted"
+                          : "Pending"
+                    }
+                    color={
+                      val === "QUEUE"
+                        ? "error"
+                        : val === "ACCEPTED"
+                          ? "success"
+                          : "warning"
+                    }
                     size="small"
+                    variant="outlined"
                   />
-                </Stack>
-              ))}
-            </Stack>
-          </Box>
+                );
+              },
+            },
+          ]
+        : []),
 
-          {/* BAR SECTION */}
-          <Box sx={s.barChartWrapper}>
-            <Box sx={s.barChartBox}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={histogramData}
-                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="rgba(255,255,255,0.3)"
-                  />
-                  <XAxis
-                    dataKey="date"
-                    stroke="gray"
-                    fontSize={10}
-                    tickMargin={4}
-                  />
-                  <YAxis
-                    stroke="gray"
-                    fontSize={10}
-                    allowDecimals={false}
-                    label={{
-                      value: "Requests",
-                      angle: -90,
-                      position: "insideLeft",
-                      fill: "gray",
-                      fontSize: 11,
-                    }}
-                  />
-                  <Tooltip
-                    content={<CustomTooltip />}
-                    cursor={{ fill: "rgba(255,255,255,0.1)" }}
-                  />
-                  <Bar
-                    dataKey="pendingRequests"
-                    fill="url(#gradient-bar)"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={30}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </Box>
+      {
+        field: "changeType",
+        headerName: "Request type",
+        flex: 0.6,
+        minWidth: 150,
+        align: "center",
+        headerAlign: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (p) => {
+          const val = p.value;
+          return (
+            <CustomChip
+              icon={
+                val === "ADD" ? (
+                  <AddBoxIcon />
+                ) : val === "DELETE" ? (
+                  <AutoDeleteIcon />
+                ) : (
+                  <EditDocumentIcon />
+                )
+              }
+              label={
+                val === "ADD"
+                  ? "Added"
+                  : val === "DELETE"
+                    ? "Deleted"
+                    : "Modified"
+              }
+              color={
+                val === "ADD"
+                  ? "success"
+                  : val === "DELETE"
+                    ? "error"
+                    : "warning"
+              }
+              size="small"
+              variant="outlined"
+            />
+          );
+        },
+      },
 
-            <Typography
-              variant="caption"
-              sx={{
-                display: "block",
-                fontStyle: "italic",
-                textAlign: "center",
-                color: "warning.main",
-                mt: 1,
-                fontSize: "0.65rem",
+      {
+        field: "creatorId",
+        headerName: "Creator",
+        flex: 0.8,
+        minWidth: 160,
+        align: "center",
+        headerAlign: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (p) => (
+          <CustomChip
+            icon={<AccountCircleIcon />}
+            size="small"
+            color="info"
+            label={p.value}
+            variant="outlined"
+          />
+        ),
+      },
+
+      {
+        field: "reqDate",
+        headerName: "Requested Date",
+        flex: 1,
+        minWidth: 210,
+        disableColumnMenu: true,
+        renderCell: (p) => (
+          <Typography variant="body1" component="span" sx={styles.requestDate}>
+            {timeStampFormatter(p.value)}
+          </Typography>
+        ),
+      },
+
+      {
+        field: "actions",
+        headerName: "Actions",
+        flex: 0.7,
+        minWidth: 160,
+        headerAlign: "center",
+        align: "center",
+        sortable: false,
+        filterable: false,
+        disableColumnMenu: true,
+        renderCell: (p) => (
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            justifyContent="center"
+            style={styles.StackStyle}
+          >
+            <Tooltip title="View">
+              <IconButton onClick={() => handleViewClick(p.row)}>
+                <Visibility />
+              </IconButton>
+            </Tooltip>
+
+            {p.row.reqStatus === "PENDING" && (
+              <>
+                <Tooltip title="Approve">
+                  <IconButton
+                    color="success"
+                    onClick={() => openConfirmDialog("accept", p.row.id)}
+                  >
+                    <Check />
+                  </IconButton>
+                </Tooltip>
+
+                <Tooltip title="Reject">
+                  <IconButton
+                    color="error"
+                    onClick={() => openConfirmDialog("reject", p.row.id)}
+                  >
+                    <Clear />
+                  </IconButton>
+                </Tooltip>
+              </>
+            )}
+          </Stack>
+        ),
+      },
+    ];
+  }, [columns, handleViewClick, openConfirmDialog, selectedMenuItem?.id]);
+
+  return (
+    <Box sx={styles.container}>
+      {/* 
+        Wrapped Both Components in a unified Card 
+      */}
+      <Card
+        sx={{
+          width: "100%",
+          boxShadow: 3,
+          borderRadius: 2,
+          bgcolor: "background.paper",
+          overflow: "hidden", // Prevents DataGrid from spilling over rounded corners
+        }}
+      >
+        <RequestAnalytics data={rows} showDeleteRequest={showDeleteRequest} />
+
+        {/* Divider provides a clean separation between the charts and the grid */}
+        <Divider />
+
+        <DataGrid
+          rows={rows}
+          columns={allColumns}
+          loading={dataGridLoading}
+          disableRowSelectionOnClick
+          pageSizeOptions={[5, 10, 25, 50]}
+          initialState={{
+            pagination: { paginationModel: { pageSize: 5 } },
+            sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] },
+          }}
+          getRowId={(row) => row.id}
+          sx={{
+            ...styles.dataGrid,
+            border: "none", // Remove standard borders so it flows with the card
+            "& .MuiDataGrid-columnHeaders": {
+              borderTop: "none",
+            },
+          }}
+          slots={{
+            noRowsOverlay: () => (
+              <Stack height="100%" alignItems="center" justifyContent="center">
+                <InfoIcon
+                  sx={{ fontSize: 48, color: "text.secondary", mb: 2 }}
+                />
+                <Typography variant="h6">No Pending Requests Found</Typography>
+                <Typography>
+                  All {selectedMenuItem?.title} have been processed.
+                </Typography>
+              </Stack>
+            ),
+          }}
+        />
+      </Card>
+
+      {/* View Dialog */}
+      <ViewRequestDialog
+        open={viewOpen}
+        handleClose={() => setViewOpen(false)}
+        data={viewData}
+        screenConfig={screenConfig}
+        handleDownload={handleDownload}
+      />
+
+      {/* Confirm Dialog */}
+      <Dialog
+        maxWidth="sm"
+        fullWidth
+        open={confirmDialog}
+        onClose={closeConfirmDialog}
+      >
+        <DialogTitle>
+          {selectedType === "accept" ? "Confirm Approval" : "Confirm Rejection"}
+        </DialogTitle>
+        <Divider />
+        <DialogContent>
+          <Typography>
+            {selectedType === "accept"
+              ? "Are you sure you want to approve the request?"
+              : "Please provide remarks to reject this request."}
+          </Typography>
+
+          {selectedType === "reject" && (
+            <TextField
+              fullWidth
+              label="Remarks*"
+              value={remarks}
+              multiline
+              rows={4}
+              onChange={handleRemarksChange}
+              margin="dense"
+              slotProps={{
+                htmlInput: {
+                  maxLength: 200,
+                },
               }}
-            >
-              * Represents the number of pending requests for that date and the
-              classification of request type.
-            </Typography>
-          </Box>
-        </Box>
-      ) : (
-        <Typography sx={{ p: 3, textAlign: "center", color: "text.secondary" }}>
-          No data to display
-        </Typography>
-      )}
+              helperText={
+                remarks?.length > 0 && remarks?.length < 5
+                  ? "Enter at least 5 characters"
+                  : "Allowed 5-200 characters (alphabets, numbers, spaces,()&,/-.)"
+              }
+              error={remarks?.length > 0 && remarks?.length < 5}
+            />
+          )}
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={closeConfirmDialog}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirm}
+            color={selectedType === "accept" ? "success" : "error"}
+          >
+            {selectedType === "accept" ? "Approve" : "Reject"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <LoadingOverlay loading={loading} />
     </Box>
   );
-};
-
-export default RequestAnalytics;
+}
