@@ -1,382 +1,458 @@
-import React, { useMemo } from "react";
-import { Box, Typography, Stack, Chip } from "@mui/material";
-
+import React, { useState, useMemo, useEffect } from "react";
 import {
-  PieChart,
-  Pie,
-  Cell,
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Stack,
+  Typography,
   Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from "recharts";
+  IconButton,
+} from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+import CancelIcon from "@mui/icons-material/Cancel";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import AddBoxIcon from "@mui/icons-material/AddBox";
+import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
+import EditDocumentIcon from "@mui/icons-material/EditDocument";
+import GppBadIcon from "@mui/icons-material/GppBad";
+import useApi from "../../hooks/useApi";
+import CustomChip from "../../utils/CustomChip";
+import {
+  getPermissions,
+  timeStampFormatter,
+} from "../../utils/CommonUtilities";
+import InfoIcon from "@mui/icons-material/Info";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import { useSelector } from "react-redux";
+import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
+import DatasetIcon from "@mui/icons-material/Dataset";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import TrendingDownIcon from "@mui/icons-material/TrendingDown";
+import NoteIcon from "@mui/icons-material/Note";
 
-const COLORS = {
-  add: "#d87093",
-  modify: "#6a5acd",
-  delete: "#7A0B0D",
-  bar: "#6296cf",
-};
+function CustomNoRowsOverlay() {
+  return (
+    <Stack height="100%" alignItems="center" justifyContent="center">
+      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+      <Typography variant="h6">No CGL Requests Found</Typography>
+      <Typography>You have not created any CGL requests.</Typography>
+    </Stack>
+  );
+}
 
-const s = {
-  container: {
-    p: { xs: 2, sm: 3 },
-    width: "100%",
+const ACCOUNT_CLASSIFICATIONS = [
+  { value: "A", label: "Asset", icon: <DatasetIcon fontSize="small" /> },
+  {
+    value: "L",
+    label: "Liability",
+    icon: <AccountBalanceWalletIcon fontSize="small" />,
   },
-  headerTitle: {
-    fontSize: { xs: "1.1rem", sm: "1.15rem" },
-    fontWeight: "bold",
-    textAlign: { xs: "center", md: "left" },
-  },
-  headerSubtitle: {
-    color: "text.secondary",
-    display: "block",
-    textAlign: { xs: "center", md: "left" },
-    mb: { xs: 1.5, md: 2 },
-  },
-  wrapper: {
-    display: "flex",
-    flexDirection: { xs: "column", md: "row" },
-    gap: { xs: 3, md: 2 },
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  pieWrapper: {
-    width: { xs: "100%", md: "40%" },
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-  },
-  pieChartBox: {
-    position: "relative",
-    width: "100%",
-    height: { xs: 180, md: 200 },
-  },
-  pieCenterBox: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%, -50%)",
-    textAlign: "center",
-    pointerEvents: "none",
-  },
-  pieCenterSubtitle: {
-    fontSize: "0.7rem",
-    color: "text.secondary",
-  },
-  pieCenterValue: {
-    fontSize: "1.25rem",
-    fontWeight: "bold",
-  },
-  legendColorDot: (color) => ({
-    width: 10,
-    height: 10,
-    borderRadius: "50%",
-    bgcolor: color,
-  }),
-  // FIX: Wrapper handles width, Box handles height
-  barChartWrapper: {
-    width: { xs: "100%", md: "60%" },
-    display: "flex",
-    flexDirection: "column",
-  },
-  barChartBox: {
-    width: "100%",
-    height: { xs: 180, md: 200 },
-  },
-};
+  { value: "I", label: "Income", icon: <TrendingUpIcon fontSize="small" /> },
+  { value: "E", label: "Expense", icon: <TrendingDownIcon fontSize="small" /> },
+  { value: "M", label: "Memo A/c", icon: <NoteIcon fontSize="small" /> },
+];
 
-const RequestAnalytics = ({ data = [], showDeleteRequest = false }) => {
-  const { total, pieData } = useMemo(() => {
-    const counts = { add: 0, modify: 0, delete: 0 };
+export default function MyCGLRequestsTab() {
+  const [cglList, setCglList] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState(false);
+  const [requestId, setRequestId] = useState(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewData, setViewData] = useState(null);
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  const selectedMenuItem = useSelector((state) => state.menus.selectedMenuItem);
+  const permissions = getPermissions(selectedMenuItem);
 
-    data.forEach((d) => {
-      if (d.changeType === "ADD") counts.add++;
-      if (d.changeType === "UPDATE") counts.modify++;
-      if (d.changeType === "DELETE") counts.delete++;
-    });
-
-    const basePieData = [
-      { name: "Add Requests", value: counts.add, color: COLORS.add, id: 0 },
-      {
-        name: "Modify Requests",
-        value: counts.modify,
-        color: COLORS.modify,
-        id: 1,
-      },
-    ];
-
-    if (showDeleteRequest) {
-      basePieData.push({
-        name: "Delete Requests",
-        value: counts.delete,
-        color: COLORS.delete,
-        id: 2,
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const payload = { requestType: "CGL_CODE" };
+      const response = await callApi("/CR/my-requests", payload, "POST");
+      const result = response.data?.map((row) => {
+        let parsedPayload = {};
+        parsedPayload = row.payload ? row.payload : {};
+        const { comp1 = "", segmentCode = "", comp2 = "" } = parsedPayload;
+        parsedPayload = {
+          ...parsedPayload,
+          ...row,
+        };
+        return {
+          ...parsedPayload,
+          cglNumber: `${comp1}${segmentCode}${comp2}`,
+        };
       });
-    }
-
-    return { total: data.length, pieData: basePieData };
-  }, [data, showDeleteRequest]);
-
-  const histogramData = useMemo(() => {
-    const map = {};
-
-    data.forEach((item) => {
-      console.log(item);
-      if (item.reqDate) {
-        const date = new Date(item.reqDate).toLocaleDateString("en-GB");
-
-        if (!map[date]) {
-          map[date] = {
-            date,
-            pendingRequests: 0,
-            addRequests: 0,
-            updateRequests: 0,
-            deleteRequests: 0,
-            totalRequests: 0,
-          };
-        }
-
-        if (item.reqStatus === "PENDING") {
-          map[date].pendingRequests += 1;
-          if (item.changeType === "ADD") map[date].addRequests += 1;
-          if (item.changeType === "UPDATE") map[date].updateRequests += 1;
-          if (item.changeType === "DELETE") map[date].deleteRequests += 1;
-        }
-
-        map[date].totalRequests += 1;
-      }
-    });
-
-    return Object.values(map).sort((a, b) => {
-      const [d1, m1, y1] = a.date.split("/").map(Number);
-      const [d2, m2, y2] = b.date.split("/").map(Number);
-      return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
-    });
-  }, [data]);
-
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload?.length) {
-      const d = payload[0].payload;
-      return (
-        <Box
-          sx={{
-            bgcolor: "#1e1e2f",
-            p: 1.5,
-            borderRadius: 1,
-            color: "#fff",
-            fontSize: 12,
-            boxShadow: 3,
-          }}
-        >
-          <div>
-            <b>Date:</b> {label}
-          </div>
-          <div>
-            <b>Pending Requests:</b> {d.pendingRequests}
-          </div>
-          <div>
-            <b>Add Requests:</b> {d.addRequests}
-          </div>
-          <div>
-            <b>Modify Requests:</b> {d.updateRequests}
-          </div>
-          {showDeleteRequest && (
-            <div>
-              <b>Delete Requests:</b> {d.deleteRequests}
-            </div>
-          )}
-        </Box>
+      setCglList(result);
+    } catch (error) {
+      console.error(
+        "Something went wrong, Kindly try again after sometime.",
+        error,
       );
+    } finally {
+      setIsLoading(false);
     }
-    return null;
   };
 
-  return (
-    <Box sx={s.container}>
-      <Typography sx={s.headerTitle}>Request Analytics Overview</Typography>
-      <Typography variant="caption" sx={s.headerSubtitle}>
-        Requests comparison by type and daily frequency
-      </Typography>
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-      {total > 0 ? (
-        <Box sx={s.wrapper}>
-          {/* PIE SECTION */}
-          <Box sx={s.pieWrapper}>
-            <Box sx={s.pieChartBox}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <defs>
-                    {pieData.map((p) => (
-                      <linearGradient
-                        key={p.id}
-                        id={`gradient-${p.id}`}
-                        x1="0"
-                        y1="0"
-                        x2="1"
-                        y2="1"
-                      >
-                        <stop
-                          stopColor={p.color}
-                          stopOpacity={1}
-                          offset="0%"
-                        />
-                        <stop
-                          stopColor={p.color}
-                          stopOpacity={1}
-                          offset="100%"
-                        />
-                      </linearGradient>
-                    ))}
-                    <linearGradient
-                      id="gradient-bar"
-                      x1="0"
-                      y1="0"
-                      x2="1"
-                      y2="1"
-                    >
-                      <stop
-                        stopColor={COLORS.bar}
-                        stopOpacity={1}
-                        offset="0%"
-                      />
-                      <stop
-                        stopColor={COLORS.bar}
-                        stopOpacity={1}
-                        offset="100%"
-                      />
-                    </linearGradient>
-                  </defs>
+  const handleCancelRequest = async () => {
+    try {
+      const payload = {
+        requestId,
+        remarks: "User canceled this Request",
+      };
 
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius="60%"
-                    outerRadius="90%"
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {pieData.map((p) => (
-                      <Cell key={p.id} fill={`url(#gradient-${p.id})`} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+      const response = await callApi("/CR/cancel-request", payload, "PATCH");
+      if (response?.success) {
+        showSnackBar(
+          `Request Id ${requestId} Cancelled Successfully.`,
+          "success",
+        );
+      } else {
+        showSnackBar(
+          response?.message
+            ? response?.message
+            : "Failed to process your cancel request, Kindly try again",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      fetchData();
+      setConfirmDialog(false);
+    }
+  };
 
-              <Box sx={s.pieCenterBox}>
-                <Typography variant="caption" sx={s.pieCenterSubtitle}>
-                  Total
-                </Typography>
-                <Typography sx={s.pieCenterValue}>{total}</Typography>
-              </Box>
-            </Box>
+  const handleViewClick = (data) => {
+    const {
+      comp1,
+      segmentCode,
+      comp2,
+      description,
+      acClassification,
+      balFwd,
+      defBalType,
+      status,
+      balCompare,
+      manualPosting,
+    } = data;
 
+    const accountClassifications = ACCOUNT_CLASSIFICATIONS.find(
+      (x) => x.value === acClassification,
+    );
+
+    const balanceForward = balFwd == "1" ? "Yes" : "No";
+
+    const defaultBalanceType =
+      defBalType == "C" ? "Credit" : defBalType == "D" ? "Debit" : "Memo";
+
+    const cglStatus = status == "1" ? "Active" : "Inactive";
+
+    const balanceCompare = balCompare == "1" ? "Include" : "Exclude";
+
+    const manualPostingAllowed = manualPosting == "1" ? "Yes" : "No";
+
+    const showData = {
+      cglCode: comp1 + segmentCode + comp2,
+      description,
+      accountClassification: accountClassifications.label,
+      comp1,
+      segmentCode,
+      comp2,
+      balanceForward,
+      // defaultBalanceType,
+      cglStatus,
+      balanceCompare,
+      manualPostingAllowed,
+    };
+
+    data.showData = showData;
+    setViewData(data);
+    setViewOpen(true);
+  };
+
+  const columns = useMemo(
+    () => [
+      { field: "id", headerName: "Request Id", flex: 0.5, minWidth: 150 },
+      {
+        field: "cglNumber",
+        headerName: "CGL Code",
+        flex: 1,
+        minWidth: 150,
+        renderCell: (params) => (
+          <Box
+            // sx={{
+            //   fontFamily: "Monospace",
+            //   letterSpacing: "0.08em",
+            //   fontWeight: 700,
+            // }}
+          >
+            {params.value}
+          </Box>
+        ),
+      },
+      {
+        field: "description",
+        headerName: "Description",
+        flex: 2,
+        minWidth: 300,
+        sortable: true,
+      },
+      {
+        field: "changeType",
+        headerName: "Request Type",
+        flex: 0.5,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          const val = params.value;
+          const color =
+            val === "ADD" ? "success" : val === "DELETE" ? "error" : "warning";
+          const icon =
+            val === "ADD" ? (
+              <AddBoxIcon />
+            ) : val === "DELETE" ? (
+              <AutoDeleteIcon />
+            ) : (
+              <EditDocumentIcon />
+            );
+          return (
+            <CustomChip
+            sx={{
+              width:105,
+              justifyContent:"flex-start",
+            }}
+              icon={icon}
+              label={
+                val === "ADD"
+                  ? "Added"
+                  : val === "DELETE"
+                    ? "Deleted"
+                    : "Modified"
+              }
+              color={color}
+              variant="outlined"
+            />
+          );
+        },
+      },
+
+      {
+        field: "reqDate",
+        headerName: "Requested Date",
+        flex: 1,
+        minWidth: 200,
+        filterable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => timeStampFormatter(params.value),
+      },
+      {
+        field: "reqStatus",
+        headerName: "Status",
+        flex: 1,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Box
+            sx={{
+              color:
+                params.value === "REJECTED"
+                  ? "error.main"
+                  : params.value === "ACCEPTED"
+                    ? "success.dark"
+                    : "warning.main",
+              // fontWeight: "bold",
+            }}
+          >
+            <CustomChip
+              variant="outlined"
+              icon={
+                params.value === "REJECTED" ? (
+                  <BlockFlippedIcon />
+                ) : params.value === "ACCEPTED" ? (
+                  <CheckCircleIcon />
+                ) : params.value === "CANCELLED" ? (
+                  <GppBadIcon />
+                ) : (
+                  <PendingActionsIcon />
+                )
+              }
+              label={
+                params.value === "REJECTED"
+                  ? "Rejected"
+                  : params.value === "ACCEPTED"
+                    ? "Approved"
+                    : params.value === "CANCELLED"
+                      ? "Cancelled"
+                      : "Pending"
+              }
+              sx={{
+                color:
+                  params.value === "REJECTED"
+                    ? "error.dark"
+                    : params.value === "ACCEPTED"
+                      ? "success.dark"
+                      : params.value === "CANCELLED"
+                        ? "primary.dark"
+                        : "warning.light",
+
+                "& .MuiChip-icon": {
+                  color:
+                    params.value === "REJECTED"
+                      ? "error.dark"
+                      : params.value === "ACCEPTED"
+                        ? "success.dark"
+                        : params.value === "CANCELLED"
+                          ? "primary.dark"
+                          : "warning.light",
+                },
+              }}
+            />
+          </Box>
+        ),
+      },
+      {
+        field: "action",
+        headerName: "Action",
+        flex: 0.6,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          return (
             <Stack
               direction="row"
-              useFlexGap
-              flexWrap="wrap"
-              spacing={1.5}
+              spacing={1}
               justifyContent="center"
-              sx={{ mt: { xs: 0.5, md: 1 } }}
+              alignItems="center"
+              height="100%"
             >
-              {pieData.map((p) => (
-                <Stack
-                  key={p.name}
-                  direction="row"
-                  alignItems="center"
-                  spacing={0.5}
-                >
-                  <Box sx={s.legendColorDot(p.color)} />
-                  <Typography variant="caption">{p.name}</Typography>
-                  <Chip
-                    label={p.value}
-                    sx={{
-                      bgcolor: p.color,
-                      color: "white",
-                      ml: 0.5,
-                      height: 20,
-                      fontSize: "0.7rem",
-                      borderRadius:"5px",
+              {permissions.view && (
+                <Tooltip title="View">
+                  <IconButton
+                    // color="primary"
+                    onClick={() => handleViewClick(params.row)}
+                  >
+                    <VisibilityIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              {params.row.reqStatus === "PENDING" && permissions.cancel && (
+                <Tooltip title={"Cancel Request"}>
+                  <IconButton
+                    onClick={() => {
+                      setConfirmDialog(true);
+                      setRequestId(params.row.id);
                     }}
-                    size="small"
-                  />
-                </Stack>
-              ))}
+                  >
+                    <CancelIcon fontSize="inherit" />
+                  </IconButton>
+                </Tooltip>
+              )}
             </Stack>
-          </Box>
-
-          {/* BAR SECTION */}
-          <Box sx={s.barChartWrapper}>
-            <Box sx={s.barChartBox}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={histogramData}
-                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="rgba(255,255,255,0.3)"
-                  />
-                  <XAxis
-                    dataKey="date"
-                    stroke="black"
-                    fontSize={10}
-                    tickMargin={4}
-                  />
-                  <YAxis
-                    stroke="black"
-                    fontSize={10}
-                    allowDecimals={false}
-                    label={{
-                      value: "Requests",
-                      angle: -90,
-                      position: "insideLeft",
-                      fill: "gray",
-                      fontSize: 11,
-                    }}
-                  />
-                  <Tooltip
-                    content={<CustomTooltip />}
-                    cursor={{ fill: "rgba(255,255,255,0.1)" }}
-                  />
-                  <Bar
-                    dataKey="pendingRequests"
-                    fill="url(#gradient-bar)"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={30}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </Box>
-
-            <Typography
-              variant="caption"
-              sx={{
-                display: "block",
-                fontStyle: "italic",
-                textAlign: "center",
-                color: "#e65100",
-                mt: 1,
-                fontSize: "1 rem",
-                fontWeight:550,
-              }}
-            >
-              * Represents the number of pending requests for that date and the
-              classification of request type.
-            </Typography>
-          </Box>
-        </Box>
-      ) : (
-        <Typography sx={{ p: 3, textAlign: "center", color: "text.secondary" }}>
-          No data to display
-        </Typography>
-      )}
-    </Box>
+          );
+        },
+      },
+    ],
+    [permissions.cancel, permissions.view],
   );
-};
 
-export default RequestAnalytics;
+  const filteredColumns = useMemo(() => {
+    if (permissions.view || permissions.cancel) {
+      return columns;
+    }
+    // Otherwise, filter out the column where field name is 'action'.
+    else {
+      return columns.filter((column) => column.field !== "action");
+    }
+  }, [columns, permissions]);
+
+  return (
+    <>
+      <Box>
+        <Box>
+          <DataGrid
+            loading={isLoading}
+            rows={cglList}
+            columns={filteredColumns}
+            getRowId={(row) => row.id}
+            disableRowSelectionOnClick
+            pageSizeOptions={[5, 10, 25, 50]}
+            initialState={{
+              pagination: { paginationModel: { pageSize: 10, page: 0 } },
+              sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] },
+            }}
+            slots={{
+              noRowsOverlay: CustomNoRowsOverlay,
+            }}
+          />
+        </Box>
+      </Box>
+
+      {/* View Dialog */}
+      <ViewMyRequestDialog
+        open={viewOpen}
+        handleClose={() => setViewOpen(false)}
+        data={viewData}
+      />
+
+      {/* Cancel Dialog */}
+      <Dialog
+        open={confirmDialog}
+        // onClose={() => {
+        //   setConfirmDialog(false);
+        // }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>
+          Cancel Request ID: {requestId}
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ p: 1 }}>
+            Are you sure you want to cancel this request, please confirm ?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setConfirmDialog(false);
+            }}
+            variant="outlined"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCancelRequest}
+            color="error"
+            variant="contained"
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+}
