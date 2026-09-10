@@ -1,387 +1,427 @@
-import _ from "lodash";
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Stack,
+  Typography,
+  Tooltip,
+  IconButton,
+  Chip,
+} from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+import { useEffect, useMemo, useState } from "react";
+import InfoIcon from "@mui/icons-material/Info";
+import useApi from "../../hooks/useApi";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
+import DateRangeIcon from "@mui/icons-material/DateRange";
+import CancelIcon from "@mui/icons-material/Cancel";
+import { useSelector } from "react-redux";
+import CustomChip from "../../utils/CustomChip";
+import GppBadIcon from "@mui/icons-material/GppBad";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import AddBoxIcon from "@mui/icons-material/AddBox";
+import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
+import EditDocumentIcon from "@mui/icons-material/EditDocument";
+import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
+import { getPermissions } from "../../utils/CommonUtilities";
 
-/**
- * Common utilities
- *
- * @author v1018404
- */
+function CustomNoRowsOverlay() {
+  return (
+    <Stack height="100%" alignItems="center" justifyContent="center">
+      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+      <Typography variant="h6">No Circle Requests Found</Typography>
+      <Typography>You have not created any Circle requests.</Typography>
+    </Stack>
+  );
+}
+export default function MyCircleRequestsTab() {
+  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
+  const [rows, setRows] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState(false);
+  const { callApi } = useApi();
+  const snackbar = useCustomSnackbar();
+  const permissions = getPermissions(selectedMenuItem);
+  const [requestId, setRequestId] = useState(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [zones, setZones] = useState([]);
+  const [viewData, setViewData] = useState(null);
 
-export const safeParseFloat = (value) => {
-  const parsed = parseFloat(value);
-  return isNaN(parsed) ? 0.0 : parsed;
-};
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const payload = { requestType: "CIRCLE" };
+      const [zonesRes, response] = await Promise.all([
+        callApi("/CM/common-master/zone-codes", null, "GET"),
+        callApi("/CR/my-requests", payload, "POST"),
+      ]);
 
-export const formatDecimal = (value) => {
-  const num = safeParseFloat(value);
-  return num.toFixed(2);
-};
+      setZones(zonesRes?.data ?? []);
 
-export const convertToKebabCase = (inputValue) => {
-  if (inputValue && inputValue.length) {
-    return _.chain(inputValue.toString()).toLower().kebabCase().value();
-  }
-  return "";
-};
+      if (response?.data) {
+        const result = response.data.map((row) => {
+          let parsedPayload = {};
+          parsedPayload = row.payload ? row.payload : {};
+          parsedPayload = {
+            ...parsedPayload,
+            id: row.id,
+            reqStatus: row.reqStatus,
+            reqDate: row.reqDate,
+            creatorId: row.creatorId,
+            executorId: row.executorId,
+            executionDate: row.executionDate,
+            executorRemarks: row.executorRemarks,
+            changeType: row.changeType,
+          };
 
-export const kebabToPascalCase = (kebabStr) => {
-  return _.startCase(kebabStr.replace(/-/g, " "));
-};
+          return {
+            ...parsedPayload,
+          };
+        });
+        result.sort((a, b) => {
+          if (a.reqStatus === "PENDING" && b.reqStatus !== "PENDING") return -1;
+          if (a.reqStatus !== "PENDING" && b.reqStatus === "PENDING") return 1;
+          return new Date(b.reqDate) - new Date(a.reqDate);
+        });
+        setRows(result);
+      } else {
+        setRows([]);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-export const toPascalKebabCase = (str) => {
-  if (!str) return "";
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleCancelRequest = async () => {
+    try {
+      const payload = {
+        requestId,
+        remarks: "User canceled this Request",
+      };
+
+      const response = await callApi("/CR/cancel-request", payload, "PATCH");
+      if (response?.success) {
+        snackbar(`Request Id ${requestId} Cancelled Successfully.`, "success");
+      } else {
+        snackbar(
+          response?.message
+            ? response?.message
+            : "Failed to process your cancel request, Kindly try again",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      fetchData();
+      setConfirmDialog(false);
+    }
+  };
+  const handleViewClick = (data) => {
+    const { circleCode, circleName, zoneDescription } = data;
+    const showData = {
+      circleCode,
+      circleName,
+      zone: zoneDescription,
+    };
+
+    data.showData = showData;
+    setViewData(data);
+    setViewOpen(true);
+  };
+
+  const columns = useMemo(
+    () => [
+      { field: "id", headerName: "Request Id", flex: 0.6, minWidth: 150 },
+      {
+        field: "circleCode",
+        headerName: "Circle Code",
+        flex: 0.6,
+        sortable: true,
+        minWidth: 160,
+      },
+
+      {
+        field: "circleName",
+        headerName: "Circle Name",
+        flex: 1.2,
+        sortable: true,
+        minWidth: 150,
+      },
+      {
+        field: "zoneCode",
+        headerName: "Zone",
+        filterable: false,
+        minWidth: 160,
+        flex: 1,
+        renderCell: (params) => {
+          const zone = zones.find((z) => String(z.id) === String(params.value));
+          return zone ? zone.description : "N/A";
+        },
+      },
+
+      {
+        field: "changeType",
+        headerName: "Request Type",
+        flex: 1,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          const val = params.value;
+          const color =
+            val === "ADD" ? "success" : val === "DELETE" ? "error" : "warning";
+          const icon =
+            val === "ADD" ? (
+              <AddBoxIcon />
+            ) : val === "DELETE" ? (
+              <AutoDeleteIcon />
+            ) : (
+              <EditDocumentIcon />
+            );
+          return (
+            <CustomChip
+            sx={{
+              width:105,
+              justifyContent:"flex-start",
+            }}
+              icon={icon}
+              label={
+                val === "ADD"
+                  ? "Added"
+                  : val === "DELETE"
+                    ? "Deleted"
+                    : "Modified"
+              }
+              color={color}
+              variant="outlined"
+            />
+          );
+        },
+      },
+
+      {
+        field: "reqDate",
+        headerName: "Date of Submission",
+        flex: 1,
+        filterable: false,
+        minWidth: 160,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Box>
+            <Chip
+              sx={{ color: "text.secondary" }}
+              icon={<DateRangeIcon />}
+              label={params.value.split("T")[0]}
+            />
+          </Box>
+        ),
+      },
+      {
+        field: "reqStatus",
+        headerName: "Status",
+        flex: 0.7,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Box
+            // sx={{
+            //   color:
+            //     params.value === "REJECTED"
+            //       ? "error.main"
+            //       : params.value === "ACCEPTED"
+            //         ? "success.dark"
+            //         : "warning.main",
+            //   // fontWeight: "bold",
+            // }}
+          >
+            <CustomChip
+              variant="outlined"
+              icon={
+                params.value === "REJECTED" ? (
+                  <BlockFlippedIcon />
+                ) : params.value === "ACCEPTED" ? (
+                  <CheckCircleIcon />
+                ) : params.value === "CANCELLED" ? (
+                  <GppBadIcon />
+                ) : (
+                  <PendingActionsIcon />
+                )
+              }
+              label={
+                params.value === "REJECTED"
+                  ? "Rejected"
+                  : params.value === "ACCEPTED"
+                    ? "Approved"
+                    : params.value === "CANCELLED"
+                      ? "Cancelled"
+                      : "Pending"
+              }
+              sx={{
+                color:
+                  params.value === "REJECTED"
+                    ? "error.dark"
+                    : params.value === "ACCEPTED"
+                      ? "success.dark"
+                      : params.value === "CANCELLED"
+                        ? "primary.dark"
+                        : "warning.main",
+
+                "& .MuiChip-icon": {
+                  color:
+                    params.value === "REJECTED"
+                      ? "error.dark"
+                      : params.value === "ACCEPTED"
+                        ? "success.dark"
+                        : params.value === "CANCELLED"
+                          ? "primary.dark"
+                          : "warning.main",
+                },
+              }}
+            />
+          </Box>
+        ),
+      },
+      {
+        field: "action",
+        headerName: "Action",
+        flex: 1,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          return (
+            <Stack
+              direction="row"
+              spacing={1}
+              justifyContent="center"
+              alignItems="center"
+              sx={{ height: "100%" }}
+            >
+              {permissions.view && (
+                <Tooltip title="View">
+                  <IconButton
+                    // color="primary"
+                    onClick={() => handleViewClick(params.row)}
+                  >
+                    <VisibilityIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              {params.row.reqStatus === "PENDING" && permissions.cancel && (
+                <Tooltip title={"Cancel Request"}>
+                  <IconButton
+                    onClick={() => {
+                      setConfirmDialog(true);
+                      setRequestId(params.row.id);
+                    }}
+                  >
+                    <CancelIcon fontSize="inherit" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Stack>
+          );
+        },
+      },
+    ],
+    [permissions.cancel, permissions.view, zones],
+  );
+  const filteredColumns = useMemo(() => {
+    if (permissions.view || permissions.cancel) {
+      return columns;
+    }
+    // Otherwise, filter out the column where field name is 'action'.
+    else {
+      return columns.filter((column) => column.field !== "action");
+    }
+  }, [columns, permissions]);
 
   return (
-    str
-      // Use match to break the string into words, handling various separators and cases
-      .match(
-        /[A-Z]{2,}(?=[A-Z][a-z]+[0-9]*|\b)|[A-Z]?[a-z]+[0-9]*|[A-Z]|[0-9]+/g,
-      )
-      // Capitalize the first letter of each word and lowercase the rest
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      // Join words with hyphens
-      .join(" ")
+    <>
+      <Box>
+        <Box>
+          <DataGrid
+            loading={loading}
+            rows={rows}
+            columns={filteredColumns}
+            disableRowSelectionOnClick
+            pageSizeOptions={[5, 10, 25, 50]}
+            initialState={{
+              pagination: { paginationModel: { pageSize: 10, page: 0 } },
+              // sorting: { sortModel: [{ field: "circleCode", sort: "asc" }] },
+            }}
+            slots={{
+              noRowsOverlay: CustomNoRowsOverlay,
+            }}
+            getRowId={(row) => row.id}
+          />
+        </Box>
+      </Box>
+      <ViewMyRequestDialog
+        open={viewOpen}
+        handleClose={() => setViewOpen(false)}
+        data={viewData}
+      />
+
+      {/* Cancel Dialog */}
+      <Dialog
+        open={confirmDialog}
+        onClose={() => {
+          setConfirmDialog(false);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>
+          Cancel Request ID: {requestId}
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ p: 1 }}>
+            Are you sure you want to cancel this request Please confirm ?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setConfirmDialog(false);
+            }}
+            variant="outlined"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCancelRequest}
+            color="error"
+            variant="contained"
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
-};
-
-export const getParentMenu = (item, menus = []) => {
-  for (const menu of menus) {
-    // 1. Check if the current menu item is the parent of the item we're looking for
-    if (
-      menu.children &&
-      menu.children.some((child) => child?.id === item?.id)
-    ) {
-      return menu;
-    }
-
-    // 2. If not the parent, and it has children, recursively search within its children
-    if (menu.children && menu.children.length > 0) {
-      const foundParent = getParentMenu(item, menu.children);
-      if (foundParent) {
-        return foundParent;
-      }
-    }
-  }
-
-  return undefined;
-};
-
-/** Relative time formatter */
-export const formatRelativeTime = (dateString) => {
-  if (!dateString) return "Invalid Date";
-
-  const date = new Date(dateString);
-  const now = new Date();
-  const secondsAgo = Math.floor((now - date) / 1000);
-  const minutesAgo = Math.floor(secondsAgo / 60);
-  const hoursAgo = Math.floor(minutesAgo / 60);
-  const daysAgo = Math.floor(hoursAgo / 24);
-  const monthsAgo = Math.floor(daysAgo / 30);
-  const yearsAgo = Math.floor(monthsAgo / 12);
-
-  if (secondsAgo < 10) return "just now";
-  if (secondsAgo < 60) return `${secondsAgo}s ago`;
-  if (minutesAgo < 60) return `${minutesAgo}m ago`;
-  if (hoursAgo < 24) return `${hoursAgo}h ago`;
-  if (daysAgo < 30) return `${daysAgo}d ago`;
-  if (monthsAgo < 12) return `${monthsAgo}mo ago`;
-  return `${yearsAgo}y ago`;
-};
-
-export const timeStampFormatter = (param) => {
-  const isoString = param || "";
-  if (!isoString) return null;
-  let formattedDate = isoString;
-  try {
-    const date = new Date(isoString);
-    formattedDate = date.toLocaleString("en-IN", {
-      year: "numeric",
-      month: "short", // for shortDate use short
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-      timeZone: "Asia/Kolkata",
-    });
-  } catch (error) {
-    console.error("Error formatting date:", error);
-  }
-  return formattedDate;
-};
-
-export const formatProcessTime = (dateString) => {
-  if (!dateString) return "-";
-
-  try {
-    const date = new Date(dateString);
-
-    // Check if date is valid
-    if (isNaN(date.getTime())) return dateString;
-
-    return date.toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-      timeZone: "UTC", // Use UTC to keep the clock time exactly as it appears in  API string
-    });
-  } catch (error) {
-    console.error("Error formatting date:", error);
-    return dateString;
-  }
-};
-
-export const formatKeyForDisplay = (key) => {
-  const result = key.replace(/([A-Z])/g, " $1").trim();
-  return result.charAt(0).toUpperCase() + result.slice(1);
-};
-
-export const getPermissions = (menu) => {
-  let selectedMenu = menu;
-  if (menu.hasChildren) {
-    const menuID = menu.id;
-    const childMenus = menu?.children || [];
-    const matchedMenu = childMenus?.find((item) => item.id === menuID);
-    selectedMenu = matchedMenu;
-  }
-  const actions =
-    selectedMenu?.menuAction?.split("|").map((act) => act.trim()) || [];
-
-  // Define the master list of all possible permissions
-  const allPermissions = [
-    "view",
-    "create",
-    "modify",
-    "cancel",
-    "delete",
-    "download",
-    "approve",
-    "reject",
-    "block",
-    "unblock",
-    "start",
-    "stop",
-    "terminate",
-    "restart",
-    "restarteod",
-    "finish",
-    "wholebank",
-    "circle",
-    "branch",
-  ];
-
-  // Create the final object by checking inclusion for each permission type
-  const permissions = Object.fromEntries(
-    allPermissions.map((permission) => [
-      permission,
-      actions.includes(permission),
-    ]),
-  );
-
-  return permissions;
-};
-
-export const getParentMenu1 = (item, menus = []) => {
-  for (const menu of menus) {
-    // 1. Check if the current menu item is the parent of the item we're looking for
-    if (
-      menu.children &&
-      menu.children.some((child) => child?.id === item?.id)
-    ) {
-      return menu;
-    }
-
-    // 2. If not the parent, and it has children, recursively search within its children
-    if (menu.children && menu.children.length > 0) {
-      const foundParent = getParentMenu(item, menu.children);
-      if (foundParent) {
-        return foundParent;
-      }
-    }
-  }
-
-  return undefined;
-};
-
-export const formatDuration = (startTime, endTime) => {
-  const start = new Date(startTime).getTime();
-  const end = new Date(endTime).getTime();
-
-  if (isNaN(start) || isNaN(end) || end < start) return null;
-  // Calculate the absolute difference in milliseconds
-  const diff = end - start;
-  const s = Math.floor(diff / 1000) % 60;
-  const m = Math.floor(diff / (1000 * 60)) % 60;
-  const h = Math.floor(diff / (1000 * 60 * 60));
-
-  const formattedDiff = [h && `${h} hr`, m && `${m} min`, s && `${s} sec`]
-    .filter(Boolean)
-    .join(", ");
-
-  return formattedDiff || "less than 1 sec";
-};
-
-export const capitalizeAfterUnderscore = (str) => {
-  // Split the string into an array of words using '_' as the separator
-  const words = str.split("_");
-
-  // Map over the words array to capitalize the first letter of each word
-  const capitalizedWords = words.map((word) => {
-    // Check if the word is not empty to prevent errors with consecutive underscores
-    if (word.length > 0) {
-      // Capitalize the first letter and concatenate with the rest of the word
-      return word.charAt(0).toUpperCase() + word.slice(1);
-    }
-    return ""; // Return empty string for empty words (from consecutive underscores)
-  });
-
-  // Join the array back into a single string using a space as the separator
-  return capitalizedWords.join("_");
-};
-
-
-
-
-// Returns Menu from ID
-export const findMenuById = (menus, targetId) => {
-  if (!menus) return null;
-
-  for (const item of menus) {
-    // 1. Check if the current item matches
-    if (item.id === targetId) {
-      return item;
-    }
-
-    // 2. If not, recursively search inside its children
-    if (item.children && item.children.length > 0) {
-      const found = findMenuById(item.children, targetId);
-      if (found) return found;
-    }
-  }
-
-  return null;
-};
-
-/**
- * Generates available date filter options based on a base date and minimum allowed date.
- */
-export const getAvailableFilters = (baseDate, minLimit) => {
-  const isValid = (calcDate) => !calcDate.isBefore(minLimit, "day");
-
-  return [
-    { value: "custom", label: "Custom Range", show: true },
-    { value: "currentDay", label: "Current Day", show: isValid(baseDate) },
-    {
-      value: "previousDay",
-      label: "Previous Day",
-      show: isValid(baseDate.subtract(1, "day")),
-    },
-    {
-      value: "currentWeek",
-      label: "Current Week",
-      show: isValid(baseDate.startOf("week")),
-    },
-    {
-      value: "previousWeek",
-      label: "Previous Week",
-      show: isValid(baseDate.subtract(1, "week").startOf("week")),
-    },
-    {
-      value: "currentMonth",
-      label: "Current Month",
-      show: isValid(baseDate.startOf("month")),
-    },
-    {
-      value: "previousMonth",
-      label: "Previous Month",
-      show: isValid(baseDate.subtract(1, "month").startOf("month")),
-    },
-    {
-      value: "last3Months",
-      label: "Last 3 Months",
-      show: isValid(baseDate.subtract(3, "month")),
-    },
-    {
-      value: "last6Months",
-      label: "Last 6 Months",
-      show: isValid(baseDate.subtract(6, "month")),
-    },
-    {
-      value: "currentYear",
-      label: "Current Year",
-      show: isValid(baseDate.startOf("year")),
-    },
-    {
-      value: "previousYear",
-      label: "Previous Year",
-      show: isValid(baseDate.subtract(1, "year").startOf("year")),
-    },
-    // Added All Time option here. It is always shown because it represents the max possible range.
-    {
-      value: "allTime",
-      label: "All Time",
-      show: true,
-    },
-  ].filter((option) => option.show);
-};
-
-/**
- * Calculates start and end dates based on the selected quick filter option.
- */
-export const calculateQuickFilterDates = (option, baseDate, minLimit) => {
-  let newStart = baseDate;
-  let newEnd = baseDate;
-
-  switch (option) {
-    case "allTime": // Sets the range from your absolute minimum date to the current base date
-      newStart = minLimit;
-      newEnd = baseDate;
-      break;
-    case "currentDay":
-      break;
-    case "previousDay":
-      newStart = baseDate.subtract(1, "day");
-      newEnd = baseDate.subtract(1, "day");
-      break;
-    case "currentWeek":
-      newStart = baseDate.startOf("week");
-      break;
-    case "previousWeek":
-      newStart = baseDate.subtract(1, "week").startOf("week");
-      newEnd = baseDate.subtract(1, "week").endOf("week");
-      break;
-    case "currentMonth":
-      newStart = baseDate.startOf("month");
-      break;
-    case "previousMonth":
-      newStart = baseDate.subtract(1, "month").startOf("month");
-      newEnd = baseDate.subtract(1, "month").endOf("month");
-      break;
-    case "last3Months":
-      newStart = baseDate.subtract(3, "month");
-      break;
-    case "last6Months":
-      newStart = baseDate.subtract(6, "month");
-      break;
-    case "currentYear":
-      newStart = baseDate.startOf("year");
-      break;
-    case "previousYear":
-      newStart = baseDate.subtract(1, "year").startOf("year");
-      newEnd = baseDate.subtract(1, "year").endOf("year");
-      break;
-    default:
-      break;
-  }
-
-  // Force strict bounds before returning
-  if (newStart.isBefore(minLimit)) newStart = minLimit;
-  if (newEnd.isBefore(minLimit)) newEnd = minLimit;
-  if (newEnd.isAfter(baseDate)) newEnd = baseDate;
-
-  return { newStart, newEnd };
-};
-
+}
