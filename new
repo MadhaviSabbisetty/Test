@@ -1,319 +1,387 @@
-import React from "react";
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Typography,
-  Grid,
-  Box,
-  Divider,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-} from "@mui/material";
+import _ from "lodash";
 
-import {
-  timeStampFormatter,
-  toPascalKebabCase,
-  formatKeyForDisplay,
-} from "../../utils/CommonUtilities";
+/**
+ * Common utilities
+ *
+ * @author v1018404
+ */
 
-import { ViewCommonDynamicTable } from "./ViewCommonDynamicTable";
+export const safeParseFloat = (value) => {
+  const parsed = parseFloat(value);
+  return isNaN(parsed) ? 0.0 : parsed;
+};
 
-const ViewMyRequestDialog = ({ open, handleClose, data }) => {
-  if (!data) return null;
-  console.log("data", data?.requestType);
+export const formatDecimal = (value) => {
+  const num = safeParseFloat(value);
+  return num.toFixed(2);
+};
 
-  const viewData = data?.showData || {};
+export const convertToKebabCase = (inputValue) => {
+  if (inputValue && inputValue.length) {
+    return _.chain(inputValue.toString()).toLower().kebabCase().value();
+  }
+  return "";
+};
 
-  const payload = data?.payload;
-  const mainDetails = [
-    { label: "Creator ID", value: data.creatorId, size: 2 },
-    {
-      label: "Change Type",
-      value: data.changeType === "ADD" ? "Added" : "Modified",
-      size: 2.5,
-    },
-    {
-      label: "Request Status",
-      value:
-        data.reqStatus === "QUEUE"
-          ? "In Queue"
-          : toPascalKebabCase(data.reqStatus),
-      size: 2.5,
-    },
-    {
-      label: "Requested Date",
-      value: timeStampFormatter(data.reqDate),
-      size: 5,
-    },
-  ];
+export const kebabToPascalCase = (kebabStr) => {
+  return _.startCase(kebabStr.replace(/-/g, " "));
+};
 
-  /** Should custom table render */
-  const showTable =
-    payload?.ShowCustomTable && payload?.summaryData?.data?.length > 0;
-
-  /** Should download button render */
-  const showDownload = payload?.ShowDownload;
-
-  /** Should action section render */
-  const showActions = showDownload;
+export const toPascalKebabCase = (str) => {
+  if (!str) return "";
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth="true">
-      {/* Header */}
-      <DialogTitle>
-        Request Details - <b>ID: {data.id}</b>
-      </DialogTitle>
-      <Divider />
-
-      {/* Content */}
-      <DialogContent>
-        {/* Main Details Section */}
-        <Grid container spacing={2}>
-          {mainDetails.map((item) => (
-            <Grid size={{ xs: 12, sm: item.size }} key={item.label}>
-              <Box sx={{ display: "flex", flexDirection: "column" }}>
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    fontWeight: 800,
-                    color: "text.secondary",
-                  }}
-                >
-                  {item.label}
-                </Typography>
-                <Typography variant="body1" sx={{ color: "text.primary" }}>
-                  {item.value ?? "N/A"}
-                </Typography>
-              </Box>
-            </Grid>
-          ))}
-        </Grid>
-        {data.reqStatus !== "PENDING" && (
-          <Grid container spacing={2} sx={{ mt: 1.5 }}>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <Box sx={{ display: "flex", flexDirection: "column" }}>
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    fontWeight: 800,
-                    color: "text.secondary",
-                  }}
-                >
-                  {`${toPascalKebabCase(data.reqStatus)} By`}
-                </Typography>
-                <Typography variant="body1" sx={{ color: "text.primary" }}>
-                  {data.executorId ?? "N/A"}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid size={{ xs: 12, md: 5 }}>
-              <Box sx={{ display: "flex", flexDirection: "column" }}>
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    fontWeight: 800,
-                    color: "text.secondary",
-                  }}
-                >
-                  {`${toPascalKebabCase(data.reqStatus)} Date`}
-                </Typography>
-                <Typography variant="body1" sx={{ color: "text.primary" }}>
-                  {timeStampFormatter(data.executionDate) || "N/A"}
-                </Typography>
-              </Box>
-            </Grid>
-            {data.reqStatus === "REJECTED" && (
-              <Grid size={{ xs: 12, md: 5 }} sx={{ minWidth: 0 }}>
-                <Box sx={{ display: "flex", flexDirection: "column" }}>
-                  <Typography
-                    variant="subtitle2"
-                    sx={{
-                      fontWeight: 800,
-                      color: "text.secondary",
-                    }}
-                  >
-                    Rejection Remarks
-                  </Typography>
-                  <Typography
-                    variant="body1"
-                    sx={{
-                      color: "text.primary",
-                      wordBreak: "break-word",
-                      overflowWrap: "anywhere",
-                      whiteSpace: "pre-wrap",
-                    }}
-                  >
-                    {data.executorRemarks || "N/A"}
-                  </Typography>
-                </Box>
-              </Grid>
-            )}
-          </Grid>
-        )}
-
-        {/* <Divider sx={{ m: 2 }} /> */}
-
-        {/* Payload Section */}
-
-        {/* <Grid container spacing={2}>
-          {Object.entries(viewData).map(([key, value]) => (
-            <Grid size={{ xs: 12, sm: 4 }} key={key}>
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  //   width: "calc(50% - 1px)",
-                }}
-              >
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    fontWeight: 800,
-                    color: "text.secondary",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {formatKeyForDisplay(key)}
-                </Typography>
-                <Typography
-                  variant="body1"
-                  sx={{
-                    color: "text.primary",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {String(value || "N/A")}
-                </Typography>
-              </Box>
-            </Grid>
-          ))}
-        </Grid> */}
-
-        {/* Payload Section */}
-
-        <Divider sx={{ my: 2 }} />
-
-        {showTable && (
-          <>
-            <Divider sx={{ my: 2 }} />
-
-            {/* Table rendering handled by reusable component */}
-            <ViewCommonDynamicTable data={payload} />
-          </>
-        )}
-
-        {data.requestType === "MAIN_DATA_PARAMETERS" ? (
-          <>
-            {/* File Type Section */}
-            <Grid container spacing={2} sx={{ mb: 2 }}>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <Box sx={{ display: "flex", flexDirection: "column" }}>
-                  <Typography
-                    variant="subtitle2"
-                    sx={{ fontWeight: 800, color: "text.secondary" }}
-                  >
-                    File Type
-                  </Typography>
-                  <Typography variant="body1">
-                    {data.fileType ?? "N/A"}
-                  </Typography>
-                </Box>
-              </Grid>
-            </Grid>
-
-            {/* Rows Table */}
-            {Array.isArray(data.rows) && data.rows.length > 0 && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  Data Parameters
-                </Typography>
-
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Column Id</TableCell>
-                      <TableCell>Column Name</TableCell>
-                      <TableCell>Start</TableCell>
-                      <TableCell>End</TableCell>
-                      <TableCell>Included</TableCell>
-                      <TableCell>Data Type</TableCell>
-                      <TableCell>Decimal</TableCell>
-                    </TableRow>
-                  </TableHead>
-
-                  <TableBody>
-                    {data.rows.map((row, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{row.columnId || "-"}</TableCell>
-                        <TableCell>{row.columnName}</TableCell>
-                        <TableCell>{row.startValue}</TableCell>
-                        <TableCell>{row.endValue}</TableCell>
-                        <TableCell>
-                          {row.toBeIncluded === true ||
-                          row.toBeIncluded === "true"
-                            ? "YES"
-                            : "NO"}
-                        </TableCell>
-                        <TableCell>{row.dataType}</TableCell>
-                        <TableCell>{row.decimalCount ?? "-"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </Box>
-            )}
-          </>
-        ) : (
-          /* ===== DEFAULT GENERIC VIEW FOR OTHER SCREENS ===== */
-
-          <Grid container spacing={2}>
-            {Object.entries(viewData).map(([key, value]) => (
-              <Grid size={{ xs: 12, sm: 4 }} key={key}>
-                <Box sx={{ display: "flex", flexDirection: "column" }}>
-                  <Typography
-                    variant="subtitle2"
-                    sx={{
-                      fontWeight: 800,
-                      color: "text.secondary",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {formatKeyForDisplay(key)}
-                  </Typography>
-                  <Typography variant="body1" sx={{ wordBreak: "break-word" }}>
-                    {String(value ?? "N/A")}
-                  </Typography>
-                </Box>
-              </Grid>
-            ))}
-          </Grid>
-        )}
-      </DialogContent>
-
-      {/* Footer */}
-      <Divider />
-      <DialogActions sx={{ p: 2, justifyContent: "flex-end" }}>
-        <Button
-          onClick={handleClose}
-          variant="contained"
-          color="primary"
-          sx={{ textTransform: "none", borderRadius: 2, px: 3 }}
-        >
-          Close
-        </Button>
-      </DialogActions>
-    </Dialog>
+    str
+      // Use match to break the string into words, handling various separators and cases
+      .match(
+        /[A-Z]{2,}(?=[A-Z][a-z]+[0-9]*|\b)|[A-Z]?[a-z]+[0-9]*|[A-Z]|[0-9]+/g,
+      )
+      // Capitalize the first letter of each word and lowercase the rest
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      // Join words with hyphens
+      .join(" ")
   );
 };
 
-export default ViewMyRequestDialog;
+export const getParentMenu = (item, menus = []) => {
+  for (const menu of menus) {
+    // 1. Check if the current menu item is the parent of the item we're looking for
+    if (
+      menu.children &&
+      menu.children.some((child) => child?.id === item?.id)
+    ) {
+      return menu;
+    }
+
+    // 2. If not the parent, and it has children, recursively search within its children
+    if (menu.children && menu.children.length > 0) {
+      const foundParent = getParentMenu(item, menu.children);
+      if (foundParent) {
+        return foundParent;
+      }
+    }
+  }
+
+  return undefined;
+};
+
+/** Relative time formatter */
+export const formatRelativeTime = (dateString) => {
+  if (!dateString) return "Invalid Date";
+
+  const date = new Date(dateString);
+  const now = new Date();
+  const secondsAgo = Math.floor((now - date) / 1000);
+  const minutesAgo = Math.floor(secondsAgo / 60);
+  const hoursAgo = Math.floor(minutesAgo / 60);
+  const daysAgo = Math.floor(hoursAgo / 24);
+  const monthsAgo = Math.floor(daysAgo / 30);
+  const yearsAgo = Math.floor(monthsAgo / 12);
+
+  if (secondsAgo < 10) return "just now";
+  if (secondsAgo < 60) return `${secondsAgo}s ago`;
+  if (minutesAgo < 60) return `${minutesAgo}m ago`;
+  if (hoursAgo < 24) return `${hoursAgo}h ago`;
+  if (daysAgo < 30) return `${daysAgo}d ago`;
+  if (monthsAgo < 12) return `${monthsAgo}mo ago`;
+  return `${yearsAgo}y ago`;
+};
+
+export const timeStampFormatter = (param) => {
+  const isoString = param || "";
+  if (!isoString) return null;
+  let formattedDate = isoString;
+  try {
+    const date = new Date(isoString);
+    formattedDate = date.toLocaleString("en-IN", {
+      year: "numeric",
+      month: "short", // for shortDate use short
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Kolkata",
+    });
+  } catch (error) {
+    console.error("Error formatting date:", error);
+  }
+  return formattedDate;
+};
+
+export const formatProcessTime = (dateString) => {
+  if (!dateString) return "-";
+
+  try {
+    const date = new Date(dateString);
+
+    // Check if date is valid
+    if (isNaN(date.getTime())) return dateString;
+
+    return date.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+      timeZone: "UTC", // Use UTC to keep the clock time exactly as it appears in  API string
+    });
+  } catch (error) {
+    console.error("Error formatting date:", error);
+    return dateString;
+  }
+};
+
+export const formatKeyForDisplay = (key) => {
+  const result = key.replace(/([A-Z])/g, " $1").trim();
+  return result.charAt(0).toUpperCase() + result.slice(1);
+};
+
+export const getPermissions = (menu) => {
+  let selectedMenu = menu;
+  if (menu.hasChildren) {
+    const menuID = menu.id;
+    const childMenus = menu?.children || [];
+    const matchedMenu = childMenus?.find((item) => item.id === menuID);
+    selectedMenu = matchedMenu;
+  }
+  const actions =
+    selectedMenu?.menuAction?.split("|").map((act) => act.trim()) || [];
+
+  // Define the master list of all possible permissions
+  const allPermissions = [
+    "view",
+    "create",
+    "modify",
+    "cancel",
+    "delete",
+    "download",
+    "approve",
+    "reject",
+    "block",
+    "unblock",
+    "start",
+    "stop",
+    "terminate",
+    "restart",
+    "restarteod",
+    "finish",
+    "wholebank",
+    "circle",
+    "branch",
+  ];
+
+  // Create the final object by checking inclusion for each permission type
+  const permissions = Object.fromEntries(
+    allPermissions.map((permission) => [
+      permission,
+      actions.includes(permission),
+    ]),
+  );
+
+  return permissions;
+};
+
+export const getParentMenu1 = (item, menus = []) => {
+  for (const menu of menus) {
+    // 1. Check if the current menu item is the parent of the item we're looking for
+    if (
+      menu.children &&
+      menu.children.some((child) => child?.id === item?.id)
+    ) {
+      return menu;
+    }
+
+    // 2. If not the parent, and it has children, recursively search within its children
+    if (menu.children && menu.children.length > 0) {
+      const foundParent = getParentMenu(item, menu.children);
+      if (foundParent) {
+        return foundParent;
+      }
+    }
+  }
+
+  return undefined;
+};
+
+export const formatDuration = (startTime, endTime) => {
+  const start = new Date(startTime).getTime();
+  const end = new Date(endTime).getTime();
+
+  if (isNaN(start) || isNaN(end) || end < start) return null;
+  // Calculate the absolute difference in milliseconds
+  const diff = end - start;
+  const s = Math.floor(diff / 1000) % 60;
+  const m = Math.floor(diff / (1000 * 60)) % 60;
+  const h = Math.floor(diff / (1000 * 60 * 60));
+
+  const formattedDiff = [h && `${h} hr`, m && `${m} min`, s && `${s} sec`]
+    .filter(Boolean)
+    .join(", ");
+
+  return formattedDiff || "less than 1 sec";
+};
+
+export const capitalizeAfterUnderscore = (str) => {
+  // Split the string into an array of words using '_' as the separator
+  const words = str.split("_");
+
+  // Map over the words array to capitalize the first letter of each word
+  const capitalizedWords = words.map((word) => {
+    // Check if the word is not empty to prevent errors with consecutive underscores
+    if (word.length > 0) {
+      // Capitalize the first letter and concatenate with the rest of the word
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    }
+    return ""; // Return empty string for empty words (from consecutive underscores)
+  });
+
+  // Join the array back into a single string using a space as the separator
+  return capitalizedWords.join("_");
+};
+
+
+
+
+// Returns Menu from ID
+export const findMenuById = (menus, targetId) => {
+  if (!menus) return null;
+
+  for (const item of menus) {
+    // 1. Check if the current item matches
+    if (item.id === targetId) {
+      return item;
+    }
+
+    // 2. If not, recursively search inside its children
+    if (item.children && item.children.length > 0) {
+      const found = findMenuById(item.children, targetId);
+      if (found) return found;
+    }
+  }
+
+  return null;
+};
+
+/**
+ * Generates available date filter options based on a base date and minimum allowed date.
+ */
+export const getAvailableFilters = (baseDate, minLimit) => {
+  const isValid = (calcDate) => !calcDate.isBefore(minLimit, "day");
+
+  return [
+    { value: "custom", label: "Custom Range", show: true },
+    { value: "currentDay", label: "Current Day", show: isValid(baseDate) },
+    {
+      value: "previousDay",
+      label: "Previous Day",
+      show: isValid(baseDate.subtract(1, "day")),
+    },
+    {
+      value: "currentWeek",
+      label: "Current Week",
+      show: isValid(baseDate.startOf("week")),
+    },
+    {
+      value: "previousWeek",
+      label: "Previous Week",
+      show: isValid(baseDate.subtract(1, "week").startOf("week")),
+    },
+    {
+      value: "currentMonth",
+      label: "Current Month",
+      show: isValid(baseDate.startOf("month")),
+    },
+    {
+      value: "previousMonth",
+      label: "Previous Month",
+      show: isValid(baseDate.subtract(1, "month").startOf("month")),
+    },
+    {
+      value: "last3Months",
+      label: "Last 3 Months",
+      show: isValid(baseDate.subtract(3, "month")),
+    },
+    {
+      value: "last6Months",
+      label: "Last 6 Months",
+      show: isValid(baseDate.subtract(6, "month")),
+    },
+    {
+      value: "currentYear",
+      label: "Current Year",
+      show: isValid(baseDate.startOf("year")),
+    },
+    {
+      value: "previousYear",
+      label: "Previous Year",
+      show: isValid(baseDate.subtract(1, "year").startOf("year")),
+    },
+    // Added All Time option here. It is always shown because it represents the max possible range.
+    {
+      value: "allTime",
+      label: "All Time",
+      show: true,
+    },
+  ].filter((option) => option.show);
+};
+
+/**
+ * Calculates start and end dates based on the selected quick filter option.
+ */
+export const calculateQuickFilterDates = (option, baseDate, minLimit) => {
+  let newStart = baseDate;
+  let newEnd = baseDate;
+
+  switch (option) {
+    case "allTime": // Sets the range from your absolute minimum date to the current base date
+      newStart = minLimit;
+      newEnd = baseDate;
+      break;
+    case "currentDay":
+      break;
+    case "previousDay":
+      newStart = baseDate.subtract(1, "day");
+      newEnd = baseDate.subtract(1, "day");
+      break;
+    case "currentWeek":
+      newStart = baseDate.startOf("week");
+      break;
+    case "previousWeek":
+      newStart = baseDate.subtract(1, "week").startOf("week");
+      newEnd = baseDate.subtract(1, "week").endOf("week");
+      break;
+    case "currentMonth":
+      newStart = baseDate.startOf("month");
+      break;
+    case "previousMonth":
+      newStart = baseDate.subtract(1, "month").startOf("month");
+      newEnd = baseDate.subtract(1, "month").endOf("month");
+      break;
+    case "last3Months":
+      newStart = baseDate.subtract(3, "month");
+      break;
+    case "last6Months":
+      newStart = baseDate.subtract(6, "month");
+      break;
+    case "currentYear":
+      newStart = baseDate.startOf("year");
+      break;
+    case "previousYear":
+      newStart = baseDate.subtract(1, "year").startOf("year");
+      newEnd = baseDate.subtract(1, "year").endOf("year");
+      break;
+    default:
+      break;
+  }
+
+  // Force strict bounds before returning
+  if (newStart.isBefore(minLimit)) newStart = minLimit;
+  if (newEnd.isBefore(minLimit)) newEnd = minLimit;
+  if (newEnd.isAfter(baseDate)) newEnd = baseDate;
+
+  return { newStart, newEnd };
+};
+
