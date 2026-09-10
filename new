@@ -1,794 +1,557 @@
-import React, { useState, useMemo, useEffect } from "react";
-import {
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Stack,
-  Typography,
-  Tooltip,
-  IconButton,
-} from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
-import CancelIcon from "@mui/icons-material/Cancel";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import GppBadIcon from "@mui/icons-material/GppBad";
-import useApi from "../../hooks/useApi";
-import CustomChip from "../../utils/CustomChip";
-import {
-  getPermissions,
-  timeStampFormatter,
-} from "../../utils/CommonUtilities";
-import InfoIcon from "@mui/icons-material/Info";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import { useSelector } from "react-redux";
-import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
-import DatasetIcon from "@mui/icons-material/Dataset";
-import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import TrendingDownIcon from "@mui/icons-material/TrendingDown";
-import NoteIcon from "@mui/icons-material/Note";
+/**
+ * -------------------------------------------------------------
+ * Common Request Screen Configurations
+ * -------------------------------------------------------------
+ *
+ * Backend sends only `screenId`.
+ * This file resolves:
+ *
+ * screenId -> screenName -> screenConfig
+ *
+ * Developers maintain configs using readable screen names.
+ *
+ * Example:
+ *
+ * const config = COMMON_REQ_SCREEN_CONFIGS[screenId];
+ *
+ * Internally:
+ *
+ * 10 -> BRANCH -> branchConfig
+ *
+ * -------------------------------------------------------------
+ */
 
-function CustomNoRowsOverlay() {
-  return (
-    <Stack height="100%" alignItems="center" justifyContent="center">
-      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-      <Typography variant="h6">No CGL Requests Found</Typography>
-      <Typography>You have not created any CGL requests.</Typography>
-    </Stack>
-  );
-}
+import { currencyFormatterWith6Decimals } from "../../utils/NumberFormat";
 
+/**
+ * -------------------------------------------------------------
+ * LOOKUP CONSTANTS
+ * -------------------------------------------------------------
+ */
 const ACCOUNT_CLASSIFICATIONS = [
-  { value: "A", label: "Asset", icon: <DatasetIcon fontSize="small" /> },
-  {
-    value: "L",
-    label: "Liability",
-    icon: <AccountBalanceWalletIcon fontSize="small" />,
-  },
-  { value: "I", label: "Income", icon: <TrendingUpIcon fontSize="small" /> },
-  { value: "E", label: "Expense", icon: <TrendingDownIcon fontSize="small" /> },
-  { value: "M", label: "Memo A/c", icon: <NoteIcon fontSize="small" /> },
+  { value: "A", label: "Asset" },
+  { value: "L", label: "Liability" },
+  { value: "I", label: "Income" },
+  { value: "E", label: "Expense" },
+  { value: "M", label: "Memo A/c" },
 ];
 
-export default function MyCGLRequestsTab() {
-  const [cglList, setCglList] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [confirmDialog, setConfirmDialog] = useState(false);
-  const [requestId, setRequestId] = useState(null);
-  const [viewOpen, setViewOpen] = useState(false);
-  const [viewData, setViewData] = useState(null);
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
-  const selectedMenuItem = useSelector((state) => state.menus.selectedMenuItem);
-  const permissions = getPermissions(selectedMenuItem);
+/**
+ * -------------------------------------------------------------
+ * SCREEN ID → SCREEN NAME MAP
+ * -------------------------------------------------------------
+ *
+ * Maps backend screen IDs to readable screen names.
+ */
 
-  const fetchData = async () => {
-    try {
-      setIsLoading(true);
-      const payload = { requestType: "CGL_CODE" };
-      const response = await callApi("/CR/my-requests", payload, "POST");
-      const result = response.data?.map((row) => {
-        let parsedPayload = {};
-        parsedPayload = row.payload ? row.payload : {};
-        const { comp1 = "", segmentCode = "", comp2 = "" } = parsedPayload;
-        parsedPayload = {
-          ...parsedPayload,
-          ...row,
-        };
-        return {
-          ...parsedPayload,
-          cglNumber: `${comp1}${segmentCode}${comp2}`,
-        };
-      });
-      setCglList(result);
-    } catch (error) {
-      console.error(
-        "Something went wrong, Kindly try again after sometime.",
-        error,
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
+export const SCREEN_ID_NAME_MAP = {
+  2: "CIRCLE",
+  6: "CGL_CODE",
+  8: "SEGMENT_CODE",
+  10: "BRANCH",
+  15: "CALENDER",
+  17: "STATE",
+  19: "CURRENCY",
+  21: "CURRENCY_RATE_CHANGE",
+  41: "FILE_TYPE_MASTER",
+  42: "YEAR_END_PROFIT_TRANSFER",
+  43: "YEAR_END_PROFIT_TRANSFER",
+  45: "MAIN_DATA_PARAMETERS",
+};
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+/**
+ * -------------------------------------------------------------
+ * SCREEN CONFIGS (DEFINED USING SCREEN NAMES)
+ * -------------------------------------------------------------
+ */
 
-  const handleCancelRequest = async () => {
-    try {
-      const payload = {
-        requestId,
-        remarks: "User canceled this Request",
-      };
-
-      const response = await callApi("/CR/cancel-request", payload, "PATCH");
-      if (response?.success) {
-        showSnackBar(
-          `Request Id ${requestId} Cancelled Successfully.`,
-          "success",
-        );
-      } else {
-        showSnackBar(
-          response?.message
-            ? response?.message
-            : "Failed to process your cancel request, Kindly try again",
-          "error",
-        );
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      fetchData();
-      setConfirmDialog(false);
-    }
-  };
-
-  const handleViewClick = (data) => {
-    const {
-      comp1,
-      segmentCode,
-      comp2,
-      description,
-      acClassification,
-      balFwd,
-      defBalType,
-      status,
-      balCompare,
-      manualPosting,
-    } = data;
-
-    const accountClassifications = ACCOUNT_CLASSIFICATIONS.find(
-      (x) => x.value === acClassification,
-    );
-
-    const balanceForward = balFwd == "1" ? "Yes" : "No";
-
-    const defaultBalanceType =
-      defBalType == "C" ? "Credit" : defBalType == "D" ? "Debit" : "Memo";
-
-    const cglStatus = status == "1" ? "Active" : "Inactive";
-
-    const balanceCompare = balCompare == "1" ? "Include" : "Exclude";
-
-    const manualPostingAllowed = manualPosting == "1" ? "Yes" : "No";
-
-    const showData = {
-      cglCode: comp1 + segmentCode + comp2,
-      description,
-      accountClassification: accountClassifications.label,
-      comp1,
-      segmentCode,
-      comp2,
-      balanceForward,
-      // defaultBalanceType,
-      cglStatus,
-      balanceCompare,
-      manualPostingAllowed,
-    };
-
-    data.showData = showData;
-    setViewData(data);
-    setViewOpen(true);
-  };
-
-  const columns = useMemo(
-    () => [
-      { field: "id", headerName: "Request Id", flex: 0.5, minWidth: 150 },
+export const SCREEN_CONFIGS_BY_NAME = {
+  /**
+   * -------------------------------------------------------------
+   * CIRCLE SCREEN
+   * -------------------------------------------------------------
+   */
+  CIRCLE: {
+    columns: [
       {
-        field: "cglNumber",
-        headerName: "CGL Code",
-        flex: 1,
-        minWidth: 150,
-        renderCell: (params) => (
-          <Box
-            // sx={{
-            //   fontFamily: "Monospace",
-            //   letterSpacing: "0.08em",
-            //   fontWeight: 700,
-            // }}
-          >
-            {params.value}
-          </Box>
-        ),
+        field: "circleCode",
+        headerName: "Circle Code",
+        flex: 0.5,
+        minWidth: 130,
+      },
+      {
+        field: "circleName",
+        headerName: "Circle Name",
+        flex: 1.2,
+        minWidth: 220,
+      },
+      {
+        field: "zoneDescription",
+        headerName: "Zone",
+        flex: 0.8,
+        minWidth: 160,
+      },
+    ],
+
+    processViewData: (data) => {
+      if (!data || typeof data !== "object") return data;
+
+      return {
+        ...data,
+        payload: {
+          circleCode: data.circleCode,
+          circleName: data.circleName,
+          zone: data.zoneDescription,
+        },
+      };
+    },
+  },
+
+  /**
+   * -------------------------------------------------------------
+   * CGL CODE SCREEN
+   * -------------------------------------------------------------
+   */
+  CGL_CODE: {
+    columns: [
+      { field: "cglCode", headerName: "CGL Code", flex: 0.5, minWidth: 140 },
+      {
+        field: "description",
+        headerName: "CGL Description",
+        flex: 1.3,
+        minWidth: 250,
+      },
+    ],
+
+    transformData: (data) =>
+      data.map((row) => {
+        const parsed = row.payload || {};
+
+        return {
+          ...row,
+          ...parsed,
+          cglCode: `${parsed.comp1 || ""}${parsed.segmentCode || ""}${parsed.comp2 || ""}`,
+        };
+      }),
+
+    processViewData: (data) => {
+      if (!data || typeof data !== "object") return data;
+
+      const {
+        comp1 = "",
+        segmentCode = "",
+        comp2 = "",
+        description = "",
+        acClassification = "",
+        balFwd = "",
+        balCompare = "",
+        manualPosting = "",
+        status = "",
+      } = data;
+
+      const accountClassificationLabel =
+        ACCOUNT_CLASSIFICATIONS.find((x) => x.value === acClassification)
+          ?.label || "N/A";
+
+      const yesNo = (val) => (val == "1" ? "Yes" : "No");
+      const includeExclude = (val) => (val == "1" ? "Include" : "Exclude");
+      const cglStatus = status == "1" ? "Active" : "Inactive";
+
+      return {
+        ...data,
+        payload: {
+          comp1,
+          segmentCode,
+          comp2,
+          "CGL Code": [comp1, segmentCode, comp2].filter(Boolean).join(""),
+          Description: description || "-",
+          "Account Classification": accountClassificationLabel,
+          "CGL Status": cglStatus,
+          "Balance Carry Forward": yesNo(balFwd),
+          "Balance Compare": includeExclude(balCompare),
+          "Manual Posting Allowed": yesNo(manualPosting),
+        },
+      };
+    },
+
+    processSummaryData: (data) => data,
+  },
+
+  /**
+   * -------------------------------------------------------------
+   * SEGMENT CODE
+   * -------------------------------------------------------------
+   */
+  SEGMENT_CODE: {
+    columns: [
+      {
+        field: "segmentCode",
+        headerName: "Segment Code",
+        flex: 0.5,
+        minWidth: 140,
       },
       {
         field: "description",
-        headerName: "Description",
-        flex: 2,
-        minWidth: 300,
-        sortable: true,
+        headerName: "Segment Description",
+        flex: 1.2,
+        minWidth: 250,
+      },
+    ],
+  },
+
+  /**
+   * -------------------------------------------------------------
+   * BRANCH
+   * -------------------------------------------------------------
+   */
+  BRANCH: {
+    columns: [
+      { field: "code", headerName: "Branch Code", flex: 0.5, minWidth: 140 },
+      { field: "name", headerName: "Branch Name", flex: 1.2, minWidth: 220 },
+    ],
+
+    processViewData: (data) => {
+      if (!data || typeof data !== "object") return data;
+
+      const {
+        code = "",
+        name = "",
+        circleCode = "",
+        circleName = "",
+        stateName = "",
+        city = "",
+        address = "",
+        pinCode = "",
+        phoneNumber = "",
+        emailId = "",
+        nmrCode = "",
+        status = "",
+        openDate = "",
+        closeDate = "",
+        mergeDate = "",
+        mergedWithBranch = "",
+        cpcFlag = "",
+        foodCreditFlag = "",
+        currChestFlag = "",
+        branchType = "",
+      } = data;
+
+      return {
+        ...data,
+        payload: {
+          branchCode: code,
+          branchName: name,
+          circle: `${circleCode} - ${circleName}`,
+          state: stateName,
+          city,
+          address,
+          pinCode,
+          phoneNumber,
+          emailId,
+          networkModuleRegion: nmrCode,
+          BranchStatusAsPerCBS: status ? "Live" : "Closed",
+          openDate,
+          closeDate,
+          mergeDate,
+          mergedWithBranch,
+          "CPC (centralized processing cell)": cpcFlag
+            ? "Allowed"
+            : "Not Allowed",
+          foodCredit: foodCreditFlag ? "Allowed" : "Not Allowed",
+          currencyChest: currChestFlag ? "Allowed" : "Not Allowed",
+          branchType: branchType === "A" ? "Automated" : "Manual",
+        },
+      };
+    },
+  },
+
+  /**
+   * -------------------------------------------------------------
+   * STATE
+   * -------------------------------------------------------------
+   */
+  STATE: {
+    columns: [
+      {
+        field: "stateCode",
+        headerName: "State Code",
+        flex: 0.5,
+        minWidth: 130,
       },
       {
-        field: "changeType",
-        headerName: "Request Type",
+        field: "stateName",
+        headerName: "State Name",
+        flex: 1.2,
+        minWidth: 200,
+      },
+    ],
+  },
+
+  /**
+   * -------------------------------------------------------------
+   * CURRENCY
+   * -------------------------------------------------------------
+   */
+  CURRENCY: {
+    columns: [
+      {
+        field: "currencyCode",
+        headerName: "Currency Code",
+        flex: 0.5,
+        minWidth: 130,
+      },
+      {
+        field: "currencyName",
+        headerName: "Currency Name",
+        flex: 1,
+        minWidth: 180,
+      },
+      {
+        field: "currencyRate",
+        headerName: "Currency Rate",
+        flex: 1,
+        minWidth: 150,
+        align: "right",
+        headerAlign: "right",
+        sortable: true,
+        renderCell: (params) =>
+          currencyFormatterWith6Decimals("INR").format(params.value),
+      },
+    ],
+
+    processViewData: (data) => {
+      if (!data || typeof data !== "object") return data;
+
+      return {
+        ...data,
+        payload: {
+          currencyCode: data.currencyCode,
+          currencyName: data.currencyName,
+          currencyRate:
+            data.currencyRate !== null && data.currencyRate !== undefined
+              ? currencyFormatterWith6Decimals("INR").format(data.currencyRate)
+              : "",
+        },
+      };
+    },
+  },
+
+  /**
+   * -------------------------------------------------------------
+   * CURRENCY RATE CHANGE
+   * -------------------------------------------------------------
+   */
+  CURRENCY_RATE_CHANGE: {
+    columns: [
+      {
+        field: "currencyCode",
+        headerName: "Currency Code",
+        flex: 0.5,
+        minWidth: 140,
+      },
+      {
+        field: "currencyRate",
+        headerName: "Currency Rate",
+        flex: 1,
+        minWidth: 160,
+        align: "right",
+        headerAlign: "right",
+        sortable: true,
+        renderCell: (params) =>
+          currencyFormatterWith6Decimals("INR").format(params.value),
+      },
+    ],
+
+    processViewData: (data) => {
+      if (!data || typeof data !== "object") return data;
+
+      return {
+        ...data,
+        payload: {
+          currencyCode: data.currencyCode,
+          existingCurrencyRate:
+            data.currencyRate !== null && data.currencyRate !== undefined
+              ? currencyFormatterWith6Decimals("INR").format(
+                  data.existingCurrencyRate || 0,
+                )
+              : "",
+          updatedCurrencyRate:
+            data.currencyRate !== null && data.currencyRate !== undefined
+              ? currencyFormatterWith6Decimals("INR").format(
+                  data.currencyRate || 0,
+                )
+              : "",
+        },
+      };
+    },
+  },
+
+  /**
+   * -------------------------------------------------------------
+   * CALENDER
+   * -------------------------------------------------------------
+   */
+  CALENDER: {
+    columns: [
+      {
+        field: "yearStartDate",
+        headerName: "Year Start Date",
         flex: 0.5,
         minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => {
-          const val = params.value;
-          const color =
-            val === "ADD" ? "success" : val === "DELETE" ? "error" : "warning";
-          const icon =
-            val === "ADD" ? (
-              <AddBoxIcon />
-            ) : val === "DELETE" ? (
-              <AutoDeleteIcon />
-            ) : (
-              <EditDocumentIcon />
-            );
-          return (
-            <CustomChip
-            sx={{
-              width:105,
-              justifyContent:"flex-start",
-            }}
-              icon={icon}
-              label={
-                val === "ADD"
-                  ? "Added"
-                  : val === "DELETE"
-                    ? "Deleted"
-                    : "Modified"
-              }
-              color={color}
-              variant="outlined"
-            />
-          );
-        },
       },
-
       {
-        field: "reqDate",
-        headerName: "Requested Date",
-        flex: 1,
+        field: "yearEndDate",
+        headerName: "Year End Date",
+        flex: 0.5,
+        minWidth: 150,
+      },
+      { field: "remarks", headerName: "Remarks", flex: 0.8, minWidth: 200 },
+    ],
+  },
+
+  /**
+   * -------------------------------------------------------------
+   * FILE TYPE MASTER
+   * -------------------------------------------------------------
+   */
+  FILE_TYPE_MASTER: {
+    showDeleteRequest: true,
+    columns: [
+      { field: "type", headerName: "File Type", flex: 0.5, minWidth: 150 },
+      {
+        field: "filePattern",
+        headerName: "File Name",
+        flex: 0.5,
         minWidth: 200,
-        filterable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => timeStampFormatter(params.value),
       },
-      {
-        field: "reqStatus",
-        headerName: "Status",
-        flex: 1,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          // <Box
-          //   sx={{
-          //     color:
-          //       params.value === "REJECTED"
-          //         ? "error.main"
-          //         : params.value === "ACCEPTED"
-          //           ? "success.dark"
-          //           : "warning.main",
-          //     // fontWeight: "bold",
-          //   }}
-          // >
-            <CustomChip
-              variant="outlined"
-              icon={
-                params.value === "REJECTED" ? (
-                  <BlockFlippedIcon />
-                ) : params.value === "ACCEPTED" ? (
-                  <CheckCircleIcon />
-                ) : params.value === "CANCELLED" ? (
-                  <GppBadIcon />
-                ) : (
-                  <PendingActionsIcon />
-                )
-              }
-              label={
-                params.value === "REJECTED"
-                  ? "Rejected"
-                  : params.value === "ACCEPTED"
-                    ? "Approved"
-                    : params.value === "CANCELLED"
-                      ? "Cancelled"
-                      : "Pending"
-              }
-              sx={{
-                color:
-                  params.value === "REJECTED"
-                    ? "error.dark"
-                    : params.value === "ACCEPTED"
-                      ? "success.dark"
-                      : params.value === "CANCELLED"
-                        ? "primary.dark"
-                        : "warning.main",
+      { field: "includeFile", headerName: "Include", flex: 0.8, minWidth: 130 },
+    ],
 
-                "& .MuiChip-icon": {
-                  color:
-                    params.value === "REJECTED"
-                      ? "error.dark"
-                      : params.value === "ACCEPTED"
-                        ? "success.dark"
-                        : params.value === "CANCELLED"
-                          ? "primary.dark"
-                          : "warning.main",
-                },
-              }}
-            />
-          // </Box>
-        ),
-      },
+    transformData: (data) =>
+      data.map((row) => {
+        const parsed = row.payload || {};
+        return {
+          ...row,
+          ...parsed,
+          includeFile: parsed.includeFile === "Y" ? "YES" : "NO",
+        };
+      }),
+  },
+
+  /**
+   * -------------------------------------------------------------
+   * YEAR END PROFIT TRANSFER
+   * -------------------------------------------------------------
+   */
+  YEAR_END_PROFIT_TRANSFER: {
+    patchUrl: "/CR/update-request",
+
+    columns: [
       {
-        field: "action",
-        headerName: "Action",
+        field: "year",
+        headerName: "Process Name",
         flex: 0.6,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => {
-          return (
-            <Stack
-              direction="row"
-              spacing={1}
-              justifyContent="center"
-              alignItems="center"
-              height="100%"
-            >
-              {permissions.view && (
-                <Tooltip title="View">
-                  <IconButton
-                    // color="primary"
-                    onClick={() => handleViewClick(params.row)}
-                  >
-                    <VisibilityIcon />
-                  </IconButton>
-                </Tooltip>
-              )}
-
-              {params.row.reqStatus === "PENDING" && permissions.cancel && (
-                <Tooltip title={"Cancel Request"}>
-                  <IconButton
-                    onClick={() => {
-                      setConfirmDialog(true);
-                      setRequestId(params.row.id);
-                    }}
-                  >
-                    <CancelIcon fontSize="inherit" />
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Stack>
-          );
-        },
+        minWidth: 220,
+        renderCell: () => "Year End Profit Transfer",
       },
     ],
-    [permissions.cancel, permissions.view],
-  );
 
-  const filteredColumns = useMemo(() => {
-    if (permissions.view || permissions.cancel) {
-      return columns;
-    }
-    // Otherwise, filter out the column where field name is 'action'.
-    else {
-      return columns.filter((column) => column.field !== "action");
-    }
-  }, [columns, permissions]);
+    processViewData: (data) => {
+      if (!data || typeof data !== "object") return data;
 
-  return (
-    <>
-      <Box>
-        <Box>
-          <DataGrid
-            loading={isLoading}
-            rows={cglList}
-            columns={filteredColumns}
-            getRowId={(row) => row.id}
-            disableRowSelectionOnClick
-            pageSizeOptions={[5, 10, 25, 50]}
-            initialState={{
-              pagination: { paginationModel: { pageSize: 10, page: 0 } },
-              sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] },
-            }}
-            slots={{
-              noRowsOverlay: CustomNoRowsOverlay,
-            }}
-          />
-        </Box>
-      </Box>
+      const { circleWiseDetails = [] } = data;
 
-      {/* View Dialog */}
-      <ViewMyRequestDialog
-        open={viewOpen}
-        handleClose={() => setViewOpen(false)}
-        data={viewData}
-      />
+      return {
+        ...data,
+        reportType: "profit_transactions",
+        payload: {
+          ShowCustomTable: true,
+          ShowDownload: true,
+          summaryData: {
+            header: "Year End Profit Transfer",
+            data: circleWiseDetails,
+          },
+        },
+      };
+    },
+  },
 
-      {/* Cancel Dialog */}
-      <Dialog
-        open={confirmDialog}
-        // onClose={() => {
-        //   setConfirmDialog(false);
-        // }}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ fontWeight: 600 }}>
-          Cancel Request ID: {requestId}
-        </DialogTitle>
-        <DialogContent>
-          <Typography sx={{ p: 1 }}>
-            Are you sure you want to cancel this request, please confirm ?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setConfirmDialog(false);
-            }}
-            variant="outlined"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleCancelRequest}
-            color="error"
-            variant="contained"
-          >
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </>
-  );
-}
-import {
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Stack,
-  Typography,
-  Tooltip,
-  IconButton,
-  Chip,
-} from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
-import { useEffect, useMemo, useState } from "react";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
-import CancelIcon from "@mui/icons-material/Cancel";
-import DateRangeIcon from "@mui/icons-material/DateRange";
-import GppBadIcon from "@mui/icons-material/GppBad";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import InfoIcon from "@mui/icons-material/Info";
+  /**
+   * -------------------------------------------------------------
+   * MAIN DATA PARAMETERS
+   * -------------------------------------------------------------
+   */
+  MAIN_DATA_PARAMETERS: {
+    columns: [
+      { field: "fileType", headerName: "File Type", flex: 0.6, minWidth: 200 },
+      { field: "rowCount", headerName: "Rows", flex: 0.4, minWidth: 100 },
+    ],
 
-import useApi from "../../hooks/useApi";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import CustomChip from "../../utils/CustomChip";
-import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
-import { timeStampFormatter } from "../../utils/CommonUtilities";
+    transformData: (data) => {
+      return data.map((row) => {
+        const parsed = row.payload || {};
+        const rows = parsed.rows || [];
 
-function CustomNoRowsOverlay() {
-  return (
-    <Stack height="100%" alignItems="center" justifyContent="center">
-      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-      <Typography variant="h6">No Requests Found</Typography>
-      <Typography>You have not created any requests.</Typography>
-    </Stack>
-  );
-}
+        return {
+          ...row,
+          ...parsed,
+          fileType: parsed.fileType || row.targetId,
+          rowCount: rows.length,
+        };
+      });
+    },
 
-export default function FileDefinitionRequestsTab() {
-  const { callApi } = useApi();
-  const snackbar = useCustomSnackbar();
+    processViewData: (data) => {
+      if (!data || typeof data !== "object") return data;
 
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [confirmDialog, setConfirmDialog] = useState(false);
-  const [requestId, setRequestId] = useState(null);
-  const [viewOpen, setViewOpen] = useState(false);
-  const [viewData, setViewData] = useState(null);
+      const { fileType = "", rows = [] } = data;
 
-  // ================= FETCH =================
+      /* -------- Transform Rows -------- */
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
+      const formattedRows = (rows || []).map((r, index) => ({
+        "Sr No": index + 1,
+        "Column Name": r.columnName,
+        "Start Position": r.startValue,
+        "End Position": r.endValue,
+        "Save to Database": r.toBeIncluded === "true" ? "Yes" : "No",
+        "Data Type": r.dataType,
+        "Decimal Count": r.dataType === "AMOUNT" ? (r.decimalCount ?? 0) : "-",
+      }));
 
-      const payload = { requestType: "MAIN_DATA_PARAMETERS" };
+      /* -------- Final View Payload -------- */
 
-      const response = await callApi("/CR/my-requests", payload, "POST");
-
-      if (response?.data) {
-        const result = response.data.map((row) => {
-          const parsedPayload = {
-            ...row.payload,
-            id: row.id,
-            reqStatus: row.reqStatus,
-            reqDate: row.reqDate,
-            changeType: row.changeType,
-            requestType: "MAIN_DATA_PARAMETERS",
-            //requestType: row.requestType,
-          };
-
-          return parsedPayload;
-        });
-
-        // Pending first, then latest date
-        result.sort((a, b) => {
-          if (a.reqStatus === "PENDING" && b.reqStatus !== "PENDING") return -1;
-          if (a.reqStatus !== "PENDING" && b.reqStatus === "PENDING") return 1;
-          return new Date(b.reqDate) - new Date(a.reqDate);
-        });
-
-        setRows(result);
-      } else {
-        setRows([]);
-      }
-    } catch (error) {
-      snackbar("Failed to fetch requests", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  // ================= CANCEL =================
-
-  const handleCancelRequest = async () => {
-    try {
-      const payload = {
-        requestId,
-        remarks: "User cancelled this request",
+      const viewPayload = {
+        ShowCustomTable: true,
+        summaryData: {
+          data: formattedRows || [],
+          header: fileType + " File Definition:",
+        },
       };
 
-      const response = await callApi("/CR/cancel-request", payload, "PATCH");
+      return {
+        ...data,
+        payload: viewPayload,
+      };
+    },
+  },
+};
 
-      if (response?.success) {
-        snackbar(`Request ${requestId} cancelled successfully`, "success");
-      } else {
-        snackbar(response?.message || "Cancel failed", "error");
-      }
-    } catch (error) {
-      snackbar("Cancel failed", "error");
-    } finally {
-      setConfirmDialog(false);
-      fetchData();
-    }
-  };
+/**
+ * -------------------------------------------------------------
+ * MAIN EXPORT
+ * -------------------------------------------------------------
+ *
+ * Automatically resolves:
+ *
+ * screenId -> screenName -> config
+ */
 
-  // ================= VIEW =================
-
-  const handleViewClick = (row) => {
-    setViewData(row);
-    setViewOpen(true);
-  };
-
-  // ================= COLUMNS =================
-
-  const columns = useMemo(
-    () => [
-      { field: "fileType", headerName: "File Type", flex: 0.5 },
-      { field: "id", headerName: "Request Id", flex: 0.3 },
-
-      {
-        field: "changeType",
-        headerName: "Request Type",
-        flex: 0.7,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => {
-          const val = params.value;
-          const color =
-            val === "ADD" ? "success" : val === "DELETE" ? "error" : "warning";
-          const icon =
-            val === "ADD" ? (
-              <AddBoxIcon />
-            ) : val === "DELETE" ? (
-              <AutoDeleteIcon />
-            ) : (
-              <EditDocumentIcon />
-            );
-          return (
-            <CustomChip
-            sx={{
-              width:105,
-              justifyContent:"flex-start",
-            }}
-              icon={icon}
-              label={
-                val === "ADD"
-                  ? "Added"
-                  : val === "DELETE"
-                    ? "Deleted"
-                    : "Modified"
-              }
-              color={color}
-              variant="outlined"
-            />
-          );
-        },
-      },
-
-      {
-        field: "reqDate",
-        headerName: "Requested Date",
-        flex: 0.7,
-        filterable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => timeStampFormatter(params.value),
-      },
-      {
-        field: "reqStatus",
-        headerName: "Status",
-        flex: 0.7,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <Box
-            // sx={{
-            //   color:
-            //     params.value === "REJECTED"
-            //       ? "error.main"
-            //       : params.value === "ACCEPTED"
-            //         ? "success.dark"
-            //         : "warning.main",
-            // }}
-          >
-            <CustomChip
-              variant="outlined"
-              icon={
-                params.value === "REJECTED" ? (
-                  <BlockFlippedIcon />
-                ) : params.value === "ACCEPTED" ? (
-                  <CheckCircleIcon />
-                ) : params.value === "CANCELLED" ? (
-                  <GppBadIcon />
-                ) : (
-                  <PendingActionsIcon />
-                )
-              }
-              label={
-                params.value === "REJECTED"
-                  ? "Rejected"
-                  : params.value === "ACCEPTED"
-                    ? "Approved"
-                    : params.value === "CANCELLED"
-                      ? "Cancelled"
-                      : "Pending"
-              }
-              sx={{
-                color:
-                  params.value === "REJECTED"
-                    ? "error.dark"
-                    : params.value === "ACCEPTED"
-                      ? "success.dark"
-                      : params.value === "CANCELLED"
-                        ? "primary.dark"
-                        : "warning.main",
-
-                "& .MuiChip-icon": {
-                  color:
-                    params.value === "REJECTED"
-                      ? "error.dark"
-                      : params.value === "ACCEPTED"
-                        ? "success.dark"
-                        : params.value === "CANCELLED"
-                          ? "primary.dark"
-                          : "warning.main",
-                },
-              }}
-            />
-          </Box>
-        ),
-      },
-
-      // Actions
-      {
-        field: "actions",
-        headerName: "Action",
-        flex: 1,
-        align: "center",
-        renderCell: (params) => (
-          <Stack direction="row" spacing={1}>
-            <Tooltip title="View">
-              <IconButton onClick={() => handleViewClick(params.row)}>
-                <VisibilityIcon />
-              </IconButton>
-            </Tooltip>
-
-            {params.row.reqStatus === "PENDING" && (
-              <Tooltip title="Cancel">
-                <IconButton
-                  onClick={() => {
-                    setRequestId(params.row.id);
-                    setConfirmDialog(true);
-                  }}
-                >
-                  <CancelIcon />
-                </IconButton>
-              </Tooltip>
-            )}
-          </Stack>
-        ),
-      },
-    ],
-    [],
-  );
-
-  return (
-    <>
-      <Box>
-        <Box>
-          <DataGrid
-            rows={rows}
-            columns={columns}
-            loading={loading}
-            pageSizeOptions={[5, 10, 25, 50]}
-            initialState={{
-              pagination: { paginationModel: { pageSize: 10, page: 0 } },
-            }}
-            slots={{
-              noRowsOverlay: CustomNoRowsOverlay,
-            }}
-            getRowId={(row) => row.id}
-          />
-        </Box>
-      </Box>
-      {/* View Dialog */}
-      <ViewMyRequestDialog
-        open={viewOpen}
-        handleClose={() => setViewOpen(false)}
-        data={viewData}
-      />
-
-      {/* Cancel Dialog */}
-      <Dialog open={confirmDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>Cancel Request ID: {requestId}</DialogTitle>
-        <DialogContent>
-          <Typography>Are you sure you want to cancel this request?</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDialog(false)}>Close</Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleCancelRequest}
-          >
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </>
-  );
-}
+export const COMMON_REQ_SCREEN_CONFIGS = new Proxy(
+  {},
+  {
+    get(_, screenId) {
+      const screenName = SCREEN_ID_NAME_MAP[screenId];
+      return SCREEN_CONFIGS_BY_NAME[screenName] || {};
+    },
+  },
+);
