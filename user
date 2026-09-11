@@ -1,1062 +1,256 @@
-import React from "react";
+// src/pages/DashboardPage.jsx
+import React, { useEffect, useState } from "react";
+import { Box, Card, CardContent, Typography, Stack } from "@mui/material";
+import Grid from "@mui/material/Grid";
+import LeaderboardIcon from "@mui/icons-material/Leaderboard";
+import DataExplorationIcon from "@mui/icons-material/DataExploration";
+import DonutSmallIcon from "@mui/icons-material/DonutSmall";
+import AutoGraphIcon from "@mui/icons-material/AutoGraph";
+import InsertChartIcon from "@mui/icons-material/InsertChart";
 import {
-  Card,
-  CardContent,
-  Typography,
-  Stack,
-  List,
-  ListItem,
-  ListItemText,
-  Divider,
-  Box,
-  Chip,
-} from "@mui/material";
-import CampaignIcon from "@mui/icons-material/Campaign";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
-import InfoIcon from "@mui/icons-material/Info";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
-import CustomChip from "../../../utils/CustomChip";
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+} from "recharts";
+import useApi from "../../hooks/useApi";
+import { DashboardHead } from "./components/DashboardHead";
+import DashboardCustomChart from "./components/DashboardCustomChart";
+import { DashboardRecentActivity } from "./components/DashboardRecentActivity";
+import { DashboardAnnouncements } from "./components/DashboardAnnouncements";
+import DashboardFrequencyStats from "./components/DashboardFrequencyStats";
+import { toPascalKebabCase } from "../../utils/CommonUtilities";
 
-/**
- * Announcements component
- * - severity chip positioned at the right end of the row
- * - chip contains an icon for quick scanning
- */
-export const DashboardAnnouncements = ({ announcements = [] }) => {
-  const getSeverityConfig = (severity) => {
-    const key = (severity || "").toUpperCase();
-    switch (key) {
-      case "WARN":
-        return {
-          color: "warning",
-          label: "WARN",
-          icon: <WarningAmberIcon fontSize="small" />,
-        };
-      case "ERROR":
-        return {
-          color: "error",
-          label: "ERROR",
-          icon: <ErrorOutlineIcon fontSize="small" />,
-        };
-      case "INFO":
-      default:
-        return {
-          color: "info",
-          label: "INFO",
-          icon: <InfoIcon fontSize="small" />,
-        };
-    }
-  };
+const COLOR_SET_A = [
+  "hsl(220, 45%, 75%)", // light blue
+  "hsl(220, 45%, 55%)",
+  "hsl(220, 45%, 40%)",
+  "hsl(220, 45%, 25%)", // deep navy blue
+];
 
-  // fallback renderer for chip (in case CustomChip doesn't accept icon prop)
-  const RenderChip = ({ severity }) => {
-    const cfg = getSeverityConfig(severity);
-    // try CustomChip first; if it supports icon prop it'll be used.
-    // If CustomChip is not available or doesn't accept icon, fallback to MUI Chip.
-    try {
-      return (
-        <CustomChip
-          label={cfg.label}
-          size="small"
-          color={cfg.color}
-          variant="outlined"
-          icon={cfg.icon}
-          sx={{ fontWeight: 700 }}
-        />
-      );
-    } catch (e) {
-      return (
-        <Chip
-          label={cfg.label}
-          size="small"
-          color={cfg.color}
-          variant="outlined"
-          icon={cfg.icon}
-          sx={{ fontWeight: 700 }}
-        />
-      );
-    }
-  };
+const COLOR_SET_B = [
+  "hsl(145, 45%, 75%)", // light green
+  "hsl(145, 45%, 55%)",
+  "hsl(145, 45%, 40%)",
+  "hsl(145, 45%, 25%)", // deep forest green
+];
 
-  return (
-    <Card variant="outlined" sx={{ borderRadius: 3 }}>
-      <CardContent>
-        <Stack direction="row" spacing={1} alignItems="center" mb={1}>
-          <Box
-            sx={{
-              width: 44,
-              height: 44,
-              borderRadius: 2,
-              bgcolor: "rgba(0,0,0,0.06)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <CampaignIcon />
-          </Box>
-
-          <Typography variant="subtitle1" fontWeight={700}>
-            Announcements
-          </Typography>
-        </Stack>
-
-        <List dense sx={{ minHeight: 320, maxHeight: 320, overflow: "auto" }}>
-          {(announcements || []).length === 0 && (
-            <Box sx={{ py: 3, textAlign: "center" }}>
-              <Typography variant="body2" color="text.secondary">
-                No announcements
-              </Typography>
-            </Box>
-          )}
-
-          {(announcements || []).map((a, idx) => {
-            const cfg = getSeverityConfig(a.severity);
-            const key = a.id ?? idx;
-
-            return (
-              <React.Fragment key={key}>
-                {idx > 0 && <Divider component="li" />}
-
-                <ListItem alignItems="flex-start" sx={{ py: 1.25 }}>
-                  {/* Use a flex container so title and chip sit at extremes */}
-                  <Box
-                    sx={{
-                      display: "flex",
-                      width: "100%",
-                      alignItems: "flex-start",
-                      gap: 2,
-                    }}
-                  >
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <ListItemText
-                        primary={
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              gap: 2,
-                            }}
-                          >
-                            <Typography
-                              variant="body2"
-                              fontWeight={700}
-                              sx={{
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {a.title}
-                            </Typography>
-
-                            {/* Right-corner chip */}
-                            <Box sx={{ flexShrink: 0, ml: 1 }}>
-                              <RenderChip severity={a.severity} />
-                            </Box>
-                          </Box>
-                        }
-                        secondary={
-                          <Box>
-                            <Typography
-                              component="span"
-                              variant="caption"
-                              color="text.secondary"
-                              display="block"
-                            >
-                              {a.date}
-                            </Typography>
-                            <Typography variant="body2" sx={{ mt: 0.5 }}>
-                              {a.message}
-                            </Typography>
-                          </Box>
-                        }
-                      />
-                    </Box>
-                  </Box>
-                </ListItem>
-              </React.Fragment>
-            );
-          })}
-        </List>
-      </CardContent>
-    </Card>
-  );
-};
-
-export default DashboardAnnouncements;
-// src/components/DashboardCustomChart.jsx
-import * as React from "react";
-import PropTypes from "prop-types";
-import { PieChart } from "@mui/x-charts/PieChart";
-import { useDrawingArea } from "@mui/x-charts/hooks";
-import { styled } from "@mui/material/styles";
-import Typography from "@mui/material/Typography";
-import Card from "@mui/material/Card";
-import CardContent from "@mui/material/CardContent";
-import Box from "@mui/material/Box";
-import Stack from "@mui/material/Stack";
-import DonutLargeIcon from "@mui/icons-material/DonutLarge";
-import LinearProgress, {
-  linearProgressClasses,
-} from "@mui/material/LinearProgress";
-import Avatar from "@mui/material/Avatar";
-
-const StyledText = styled("text", {
-  shouldForwardProp: (prop) => prop !== "variant",
-})(({ theme }) => ({
-  textAnchor: "middle",
-  dominantBaseline: "central",
-  fill: (theme.vars || theme).palette.text.secondary,
-  variants: [
-    {
-      props: { variant: "primary" },
-      style: {
-        fontSize: theme.typography.h6.fontSize,
-        fontWeight: theme.typography.h6.fontWeight,
-      },
-    },
-    {
-      props: ({ variant }) => variant !== "primary",
-      style: {
-        fontSize: theme.typography.body2.fontSize,
-        fontWeight: theme.typography.body2.fontWeight,
-      },
-    },
-  ],
-}));
-
-function PieCenterLabel({ primaryText, secondaryText }) {
-  const { width, height, left, top } = useDrawingArea();
-  const primaryY = top + height / 2 - 8;
-  const secondaryY = primaryY + 20;
-
-  return (
-    <React.Fragment>
-      <StyledText variant="primary" x={left + width / 2} y={primaryY}>
-        {primaryText}
-      </StyledText>
-      <StyledText variant="secondary" x={left + width / 2} y={secondaryY}>
-        {secondaryText}
-      </StyledText>
-    </React.Fragment>
-  );
-}
-
-PieCenterLabel.propTypes = {
-  primaryText: PropTypes.string.isRequired,
-  secondaryText: PropTypes.string.isRequired,
-};
-
-const defaultColors = [
+const COLOR_SET_C = [
   "hsl(220, 25%, 65%)",
   "hsl(220, 25%, 45%)",
   "hsl(220, 25%, 30%)",
   "hsl(220, 25%, 20%)",
 ];
 
-const defaultIcon = <DonutLargeIcon />;
-export default function DashboardCustomChart({
-  title,
-  icon = { defaultIcon },
-  seriesData = [],
-  colors = defaultColors,
-}) {
-  // seriesData: [{ label: 'Branch', value: 3 }, ...]
-  const total = seriesData.reduce((s, it) => s + (Number(it.value) || 0), 0);
-  const chartData = seriesData.map((d) => ({
-    label: d.label,
-    value: Number(d.value) || 0,
-  }));
+const COLOR_SET_D = [
+  "hsl(30, 70%, 75%)", // light orange
+  "hsl(30, 70%, 55%)",
+  "hsl(30, 70%, 40%)",
+  "hsl(30, 70%, 25%)", // deep burnt orange
+];
 
-  // Build legend items (each gets a percent value). Keep order and colors stable.
-  const legendItems = chartData.map((d, idx) => ({
-    name: d.label,
-    value: total > 0 ? Math.round((d.value / total) * 100) : 0,
-    color: colors[idx % colors.length],
-    icon: (
-      <Avatar
-        sx={{
-          width: 18,
-          height: 18,
-          bgcolor: colors[idx % colors.length],
-        }}
-      />
-    ),
-  }));
+const COLOR_SET_E = [
+  "hsl(215, 15%, 80%)", // light grey-blue
+  "hsl(215, 15%, 60%)",
+  "hsl(215, 15%, 40%)",
+  "hsl(215, 15%, 25%)", // deep slate
+];
+const COLOR_SET_F = [
+  "hsl(0, 60%, 75%)", // soft red
+  "hsl(0, 60%, 55%)",
+  "hsl(0, 60%, 40%)",
+  "hsl(0, 60%, 25%)", // deep red
+];
 
-  return (
-    <Card
-      variant="outlined"
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "8px",
-        flexGrow: 1,
-        transition: "transform .14s ease, box-shadow .14s ease",
-        "&:hover": { transform: "translateY(-4px)", boxShadow: 4 },
-      }}
-    >
-      <CardContent>
-        <Stack direction="row" spacing={1} alignItems="center" mb={1}>
-          <Box
-            sx={{
-              width: 44,
-              height: 44,
-              borderRadius: 2,
-              bgcolor: "rgba(0,0,0,0.06)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {icon}
-          </Box>
-
-          <Typography variant="subtitle1" fontWeight={700}>
-            {title}
-          </Typography>
-        </Stack>
-
-        <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-          <Box>
-            <PieChart
-              colors={colors}
-              margin={{ left: 24, right: 24, top: 24, bottom: 24 }}
-              series={[
-                {
-                  data: chartData,
-                  //   innerRadius: Math.round(width * 0.28),
-                  //   outerRadius: Math.round(width * 0.42),
-                  innerRadius: Math.round(75),
-                  outerRadius: Math.round(100),
-                  paddingAngle: 0,
-                  highlightScope: { fade: "global", highlight: "item" },
-                },
-              ]}
-              height={260}
-              width={260}
-              hideLegend
-            >
-              <PieCenterLabel primaryText={`${total}`} secondaryText="Total" />
-            </PieChart>
-          </Box>
-
-          <Box sx={{ flex: 1, minWidth: 140 }}>
-            <Stack spacing={1}>
-              {legendItems.length === 0 && (
-                <Typography variant="caption" color="text.secondary">
-                  No data
-                </Typography>
-              )}
-
-              {legendItems.map((it, idx) => (
-                <Stack
-                  key={it.name + idx}
-                  direction="row"
-                  alignItems="center"
-                  spacing={1}
-                >
-                  <Box sx={{ width: 28 }}>{it.icon}</Box>
-
-                  <Box sx={{ flex: 1 }}>
-                    <Stack
-                      direction="row"
-                      justifyContent="space-between"
-                      alignItems="center"
-                    >
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {it.name}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {it.value}%
-                      </Typography>
-                    </Stack>
-
-                    <LinearProgress
-                      variant="determinate"
-                      value={it.value}
-                      sx={{
-                        height: 8,
-                        borderRadius: 2,
-                        mt: 0.5,
-                        [`& .${linearProgressClasses.bar}`]: {
-                          backgroundColor: it.color,
-                        },
-                      }}
-                      aria-label={`${it.name} share`}
-                    />
-                  </Box>
-                </Stack>
-              ))}
-            </Stack>
-          </Box>
-        </Box>
-      </CardContent>
-    </Card>
-  );
-}
-
-DashboardCustomChart.propTypes = {
-  title: PropTypes.string,
-  seriesData: PropTypes.arrayOf(
-    PropTypes.shape({
-      label: PropTypes.string,
-      value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
-    })
-  ),
-  width: PropTypes.number,
-  height: PropTypes.number,
-};
-// DashboardFrequencyStats.jsx
-import React, { useMemo } from "react";
-import PropTypes from "prop-types";
-import { useTheme } from "@mui/material/styles";
-import Card from "@mui/material/Card";
-import CardContent from "@mui/material/CardContent";
-import Chip from "@mui/material/Chip";
-import Typography from "@mui/material/Typography";
-import Stack from "@mui/material/Stack";
-import Box from "@mui/material/Box";
-import { LineChart } from "@mui/x-charts/LineChart";
-
-/**
- * DashboardFrequencyStats
- *
- * Props:
- * - frequencyStats: {
- *     createdToday, approvedToday, rejectedToday,
- *     createdThisWeek, approvedThisWeek, rejectedThisWeek
- *   }
- * - title (optional)
- * - height (optional)
- *
- * Renders:
- * - top chips showing today's counts
- * - small 7-day generated sparkline (created/approved/rejected) using weekly totals if available,
- *   otherwise using today's numbers distributed across last 7 days.
- */
-export default function DashboardFrequencyStats({
-  frequencyStats = {},
-  title = "Requests Frequency",
-  height = 180,
-}) {
-  const theme = useTheme();
-
-  // defensive defaults
-  const {
-    createdToday = 0,
-    approvedToday = 0,
-    rejectedToday = 0,
-    createdThisWeek,
-    approvedThisWeek,
-    rejectedThisWeek,
-  } = frequencyStats || {};
-
-  // generate 7 labels D-6 .. D-0
-  const days = 7;
-  const labels = Array.from({ length: days }, (_, i) => `D-${days - 1 - i}`); // D-6 ... D-0 (D-0 is today)
-
-  // helper: distribute a total across 7 days, heavier weight to most recent day
-  const distribute = (total) => {
-    if (!total || total <= 0) {
-      // return zeros but keep last point as today's value if available
-      return Array.from({ length: days }, (_, i) => 0);
-    }
-
-    // weights: older days smaller, recent day slightly larger
-    const baseWeights = [0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.8]; // sum ~8.5
-    const sum = baseWeights.reduce((s, w) => s + w, 0);
-    const arr = baseWeights.map((w) => Math.round((w / sum) * total));
-    // adjust rounding difference
-    const diff = total - arr.reduce((s, v) => s + v, 0);
-    if (diff !== 0) {
-      arr[arr.length - 1] += diff;
-    }
-    return arr;
+function mapLabelMap(key) {
+  const labelMap = {
+    BRANCH: "Branch",
+    CURRENCY: "Currency",
+    ROLE_MANAGEMENT: "Role Management",
+    SEGMENT: "Segment",
+    CGL: "CGL",
+    STATE: "State",
+    USER_MANAGEMENT: "User Management",
+    CALENDER: "Calendar",
+    CIRCLE: "Circle",
   };
-
-  // choose weekly totals if available, otherwise fall back to today * 7
-  const createdTotal =
-    typeof createdThisWeek === "number"
-      ? createdThisWeek
-      : Math.max(createdToday * days, createdToday);
-  const approvedTotal =
-    typeof approvedThisWeek === "number"
-      ? approvedThisWeek
-      : Math.max(approvedToday * days, approvedToday);
-  const rejectedTotal =
-    typeof rejectedThisWeek === "number"
-      ? rejectedThisWeek
-      : Math.max(rejectedToday * days, rejectedToday);
-
-  // memoize series arrays
-  const [createdSeries, approvedSeries, rejectedSeries] = useMemo(() => {
-    return [
-      distribute(createdTotal),
-      distribute(approvedTotal),
-      distribute(rejectedTotal),
-    ];
-  }, [createdTotal, approvedTotal, rejectedTotal]);
-
-  // prepare series objects for LineChart
-  const series = [
-    {
-      id: "created",
-      label: "Created",
-      data: createdSeries,
-      area: true,
-      curve: "linear",
-      showMark: false,
-      stack: "total",
-    },
-    {
-      id: "approved",
-      label: "Approved",
-      data: approvedSeries,
-      area: true,
-      curve: "linear",
-      showMark: false,
-      stack: "total",
-    },
-    {
-      id: "rejected",
-      label: "Rejected",
-      data: rejectedSeries,
-      area: true,
-      curve: "linear",
-      showMark: false,
-      stack: "total",
-    },
-  ];
-
-  const colorPalette = [
-    theme.palette.primary.light,
-    theme.palette.primary.main,
-    theme.palette.error.main,
-  ];
-
-  // small helper text for caption
-  const summaryText = `Showing last ${days} days (generated from weekly totals)`;
-
-  return (
-    <Card variant="outlined" sx={{ borderRadius: 3 }}>
-      <CardContent>
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          alignItems="center"
-          mb={1}
-        >
-          <Typography component="h2" variant="subtitle2">
-            {title}
-          </Typography>
-
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Chip size="small" label={`Created: ${createdToday}`} />
-            <Chip
-              size="small"
-              color="success"
-              label={`Approved: ${approvedToday}`}
-            />
-            <Chip
-              size="small"
-              color="error"
-              label={`Rejected: ${rejectedToday}`}
-            />
-          </Stack>
-        </Stack>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          display="block"
-          mb={1}
-        >
-          {summaryText}
-        </Typography>
-
-        <Box sx={{ width: "100%", height }}>
-          <LineChart
-            colors={colorPalette}
-            xAxis={[
-              {
-                scaleType: "point",
-                data: labels,
-                tickInterval: (index, i) => (i + 1) % 2 === 0, // show every other tick by default
-                height: 24,
-              },
-            ]}
-            yAxis={[{ width: 48 }]}
-            series={series}
-            height={height}
-            margin={{ left: 0, right: 12, top: 6, bottom: 0 }}
-            grid={{ horizontal: true }}
-            hideLegend
-          />
-        </Box>
-      </CardContent>
-    </Card>
-  );
+  return labelMap[key] || key;
 }
 
-DashboardFrequencyStats.propTypes = {
-  frequencyStats: PropTypes.shape({
-    createdToday: PropTypes.number,
-    approvedToday: PropTypes.number,
-    rejectedToday: PropTypes.number,
-    createdThisWeek: PropTypes.number,
-    approvedThisWeek: PropTypes.number,
-    rejectedThisWeek: PropTypes.number,
-  }),
-  title: PropTypes.string,
-  height: PropTypes.number,
-};
-// src/components/DashboardHead.jsx
-import React from "react";
-import { useSelector } from "react-redux";
-import { Card, CardContent, Typography, Stack, Box, Chip } from "@mui/material";
-import Grid from "@mui/material/Grid";
+const DashboardPage = () => {
+  const { callApi } = useApi();
+  const [rawData, setRawData] = useState(null);
 
-// Icons
-import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
-import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
-import LocationCityIcon from "@mui/icons-material/LocationCity";
-import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
-import PersonIcon from "@mui/icons-material/Person";
-import MailIcon from "@mui/icons-material/Mail";
-import CustomChip from "../../../utils/CustomChip";
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await callApi("/DS/dashboard/init", null, "GET");
+        const payload = res?.data ? res.data : res;
+        if (payload?.success || payload?.stats) {
+          const data = payload.data ? payload.data : payload;
+          setRawData(data);
+        }
+      } catch (e) {
+        console.error("Failed to load dashboard", e);
+      }
+    };
+    load();
+  }, [callApi]);
 
-/**
- * Reusable information card
- */
-const InfoCard = ({ icon, title, rows = [] }) => (
-  <Card
-    variant="outlined"
-    sx={{
-      borderRadius: 3,
-      transition: "all .18s ease",
-      "&:hover": { transform: "translateY(-6px)", boxShadow: 6 },
-      cursor: "default",
-      height: "100%",
-      bgcolor: "background.paper",
-    }}
-  >
-    <CardContent>
-      <Stack direction="row" spacing={1} alignItems="center" mb={1}>
-        <Box
-          sx={{
-            width: 44,
-            height: 44,
-            borderRadius: 2,
-            bgcolor: "rgba(0,0,0,0.06)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {icon}
-        </Box>
+  const stats = rawData?.stats || {};
 
-        <Typography variant="subtitle1" fontWeight={700}>
-          {title}
-        </Typography>
-      </Stack>
+  // transform functions
+  const buildPieFromDetailObj = (detailObj) =>
+    Object.entries(detailObj || {}).map(([k, v]) => ({
+      label: mapLabelMap(k),
+      value: Number(v) || 0,
+    }));
 
-      {rows.map((r) => (
-        <Box key={r.label} sx={{ mb: 0.8 }}>
-          <Typography variant="caption" color="text.secondary">
-            {r.label}
-          </Typography>
+  const myPendingPie = buildPieFromDetailObj(stats.myPendingDetails);
+  const myApprovedPie = buildPieFromDetailObj(stats.myApprovedDetails);
+  const myRejectedPie = buildPieFromDetailObj(stats.myRejectedDetails);
+  const pendingForMePie = buildPieFromDetailObj(stats.pendingForMeDetails);
 
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Typography variant="body2" fontWeight={700}>
-              {r.value}
-            </Typography>
-          </Stack>
-        </Box>
-      ))}
-    </CardContent>
-  </Card>
-);
+  // bar data: Pending vs Approved vs Rejected (module-wise)
+  const allModules = new Set([
+    ...Object.keys(stats.myPendingDetails || {}),
+    ...Object.keys(stats.myApprovedDetails || {}),
+    ...Object.keys(stats.myRejectedDetails || {}),
+  ]);
+  const statusByModule = Array.from(allModules).map((m) => ({
+    module: toPascalKebabCase(mapLabelMap(m) || ""),
+    pending: stats.myPendingDetails?.[m] || 0,
+    approved: stats.myApprovedDetails?.[m] || 0,
+    rejected: stats.myRejectedDetails?.[m] || 0,
+  }));
 
-/**
- * Dashboard head main
- */
-export const DashboardHead = () => {
-  const user = useSelector((state) => state.auth?.user) || {};
-  const fy = user.financialYear || {};
+  console.log("statusByModule", statusByModule);
 
   return (
-    <Box>
-      {/* Row 1 — Welcome + User Info Pill */}
-      <Card
-        variant="outlined"
-        sx={{
-          mb: 2,
-          borderRadius: 2,
-          transition: ".30s",
-          "&:hover": { transform: "translateY(-3px)", boxShadow: 3 },
-          bgcolor: "background.paper",
-        }}
-      >
-        <CardContent sx={{ height: "10vh", padding: "0 2%" }}>
-          <Grid container spacing={12}>
-            <Grid size={{ xs: 12, md: 8 }} sx={{ pt: 1 }}>
-              <Typography variant="h2" fontWeight={800}>
-                Welcome To FinCore
-              </Typography>
-            </Grid>
-            <Grid
-              size={{ xs: 12, md: 4 }}
-              sx={{
-                display: "flex",
-                justifyContent: "end",
-                // height: "7vh",
-                // padding: "2% 1% 2% 1%",
-                // margin: "2",
-              }}
-            >
-              <Grid container sx={{ padding: 2 }}>
-                <Grid size={{ xs: 12, md: 12 }} sx={{ display: "flex", pb: 1 }}>
-                  <Typography color="text.secondary">Name:</Typography>
-                  &nbsp;&nbsp;
-                  <Typography variant="body1" fontWeight={700}>
-                    {user.displayName ||
-                      `${user.firstName || "User"} ${user.lastName || ""}`}
-                  </Typography>
-                </Grid>
-                <br></br>
-                <Grid size={{ xs: 12, md: 12 }} sx={{ display: "flex", ml: 2 }}>
-                  <Typography color="text.secondary" sx={{ display: "block" }}>
-                    Role:
-                  </Typography>
-                  &nbsp;
-                  <Typography variant="body1" fontWeight={700}>
-                    {user.roleName || user.role || "UCO"}
-                  </Typography>
-                </Grid>
-              </Grid>
+    <Box p={3}>
+      {/* Rows 1 & 2 */}
+      <DashboardHead />
 
-              {/* <Grid container spacing={12} sx={{ mt: 1 }}>
-                <CustomChip
-                  icon={<MailIcon />}
-                  label={user.email || "NA"}
-                  variant="outlined"
-                  sx={{ fontWeight: 700 }}
-                />
-                <CustomChip
-                  icon={<PhoneAndroidIcon />}
-                  label={user.phoneNumber || "NA"}
-                  variant="outlined"
-                  sx={{ fontWeight: 700 }}
-                />
-              </Grid> */}
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
+      {/* Row 3: Module-wise bar chart */}
+      <Grid container spacing={2} mb={3}>
+        <Grid size={{ xs: 12 }}>
+          <Card variant="outlined" sx={{ borderRadius: 3 }}>
+            <CardContent>
+              <Typography
+                variant="subtitle2"
+                fontWeight={600}
+                mb={1}
+              ></Typography>
 
-      {/* Row 2 — 3 Info Cards */}
-      <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <InfoCard
-            icon={<CalendarMonthIcon />}
-            title="Current Financial Period"
-            rows={[
-              { label: "Start date", value: fy.startDate || "01-04-2025" },
-              { label: "End date", value: fy.endDate || "31-03-2026" },
-            ]}
+              <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 2,
+                    bgcolor: "rgba(0,0,0,0.06)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <LeaderboardIcon />
+                </Box>
+
+                <Typography variant="subtitle1" fontWeight={700}>
+                  Pending vs Approved vs Rejected (Module-wise)
+                </Typography>
+              </Stack>
+
+              <Box sx={{ width: "100%", height: 320 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={statusByModule}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="rgba(255,255,255,0.3)"
+                    />
+                    <XAxis
+                      dataKey="module"
+                      // stroke="white"
+                      // fontSize={10}
+                      tickMargin={4}
+                    />
+                    <YAxis fontSize={10} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="pending" name="Pending" fill="#6a5acd" />
+                    <Bar dataKey="approved" name="Approved" fill="#20b2aa" />
+                    <Bar dataKey="rejected" name="Rejected" fill="#d87093" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Row 4: Four small charts using DashboardCustomChart */}
+      <Grid container spacing={2} mb={3}>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <DashboardCustomChart
+            title="My Approved (Module-wise)"
+            icon={<DataExplorationIcon />}
+            seriesData={myApprovedPie}
+            colors={COLOR_SET_B}
           />
         </Grid>
 
-        <Grid size={{ xs: 12, md: 4 }}>
-          <InfoCard
-            icon={<LocationCityIcon />}
-            title="Circle Information"
-            rows={[
-              {
-                label: "Circle Name",
-                value: user.circleName || "CO-AU II, MUMBAI",
-              },
-              {
-                label: "Circle Code",
-                value: user.circleCode || "020",
-              },
-            ]}
+        <Grid size={{ xs: 12, md: 6 }}>
+          <DashboardCustomChart
+            title="My Rejected (Module-wise)"
+            icon={<InsertChartIcon />}
+            seriesData={myRejectedPie}
+            colors={COLOR_SET_F}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <DashboardCustomChart
+            title="My Pending (Module-wise)"
+            icon={<DonutSmallIcon />}
+            seriesData={myPendingPie}
+            colors={COLOR_SET_D}
           />
         </Grid>
 
-        <Grid size={{ xs: 12, md: 4 }}>
-          <InfoCard
-            icon={<AccountBalanceIcon />}
-            title="Branch Information"
-            rows={[
-              {
-                label: "Branch Name",
-                value: user.branchName || "Main Branch Name",
-              },
-              {
-                label: "Branch Code",
-                value: user.branchCode || "12345",
-              },
-            ]}
+        <Grid size={{ xs: 12, md: 6 }}>
+          <DashboardCustomChart
+            title="Pending For My Approval (Module-wise)"
+            icon={<AutoGraphIcon />}
+            seriesData={pendingForMePie}
+            colors={COLOR_SET_C}
           />
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={2} mb={3}>
+        {/* Row 5:  Announcements */}
+        <Grid item size={{ xs: 12, md: 6 }}>
+          <DashboardAnnouncements announcements={rawData?.announcements} />
+        </Grid>
+
+        {/* Row 6: Recent Activity */}
+        <Grid item size={{ xs: 12, md: 6 }}>
+          <DashboardRecentActivity recentActivity={rawData?.recentActivity} />
+        </Grid>
+      </Grid>
+
+      {/* Row 7: Frequency of request status */}
+      <Grid container spacing={2} mb={3}>
+        <Grid item size={{ xs: 12 }}>
+          <DashboardFrequencyStats frequencyStats={rawData?.frequencyStats} />
         </Grid>
       </Grid>
     </Box>
   );
 };
 
-export default DashboardHead;
-// src/components/DashboardRecentActivity.jsx
-import React from "react";
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Stack,
-  List,
-  ListItem,
-  ListItemText,
-  Divider,
-  Chip,
-  Avatar,
-  IconButton,
-} from "@mui/material";
-import HistoryIcon from "@mui/icons-material/History";
-import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
-import DoneIcon from "@mui/icons-material/Done";
-import CloseIcon from "@mui/icons-material/Close";
-import HourglassBottomIcon from "@mui/icons-material/HourglassBottom";
-import PersonIcon from "@mui/icons-material/Person";
-import RequestQuoteIcon from "@mui/icons-material/RequestQuote";
-import CustomChip from "../../../utils/CustomChip";
-
-/** Small Empty state used in list fallbacks */
-function EmptyState({ text = "No items" }) {
-  return (
-    <Box sx={{ py: 3, textAlign: "center" }}>
-      <Typography variant="body2" color="text.secondary">
-        {text}
-      </Typography>
-    </Box>
-  );
-}
-
-/** map status to chip config */
-const getStatusConfig = (status) => {
-  const key = (status || "").toUpperCase();
-  switch (key) {
-    case "PENDING":
-      return {
-        color: "warning",
-        label: "PENDING",
-        icon: <HourglassBottomIcon fontSize="small" />,
-      };
-    case "APPROVED":
-      return {
-        color: "success",
-        label: "APPROVED",
-        icon: <DoneIcon fontSize="small" />,
-      };
-    case "REJECTED":
-      return {
-        color: "error",
-        label: "REJECTED",
-        icon: <CloseIcon fontSize="small" />,
-      };
-    default:
-      return { color: "default", label: key || "UNKNOWN", icon: null };
-  }
-};
-
-/** fallback-safe chip renderer: try CustomChip, else MUI Chip */
-const RenderChip = ({ status }) => {
-  const cfg = getStatusConfig(status);
-  try {
-    // prefer CustomChip if available and supports icon prop
-    return (
-      <CustomChip
-        label={cfg.label}
-        size="small"
-        color={cfg.color}
-        variant="outlined"
-        icon={cfg.icon}
-        sx={{ fontWeight: 700 }}
-      />
-    );
-  } catch (e) {
-    return (
-      <Chip
-        label={cfg.label}
-        size="small"
-        color={cfg.color}
-        variant="outlined"
-        icon={cfg.icon}
-        sx={{ fontWeight: 700 }}
-      />
-    );
-  }
-};
-
-/** pick icon for action for avatar */
-function actionIcon(action) {
-  if (!action) return <MoreHorizIcon />;
-  const a = action.toLowerCase();
-  if (a.includes("user")) return <PersonIcon />;
-  if (a.includes("request") || a.includes("raised") || a.includes("modify"))
-    return <RequestQuoteIcon />;
-  return <MoreHorizIcon />;
-}
-
-/** simple relative time helper (best-effort) */
-function relativeTime(tsOrDisplay) {
-  try {
-    const date =
-      typeof tsOrDisplay === "number"
-        ? new Date(tsOrDisplay)
-        : new Date(Date.parse(tsOrDisplay));
-    if (isNaN(date)) return "";
-    const diff = Date.now() - date.getTime();
-    const sec = Math.floor(diff / 1000);
-    if (sec < 60) return `${sec}s ago`;
-    const min = Math.floor(sec / 60);
-    if (min < 60) return `${min}m ago`;
-    const hr = Math.floor(min / 60);
-    if (hr < 24) return `${hr}h ago`;
-    const days = Math.floor(hr / 24);
-    if (days < 7) return `${days}d ago`;
-    return date.toLocaleDateString();
-  } catch {
-    return "";
-  }
-}
-
-/**
- * DashboardRecentActivity
- * Props:
- *  - recentActivity: array of { action, displayTime, timestamp, details, status, user, source }
- */
-export const DashboardRecentActivity = ({ recentActivity = [] }) => {
-  const items = (recentActivity || []).slice(0, 20);
-
-  return (
-    <Card variant="outlined" sx={{ borderRadius: 3 }}>
-      <CardContent>
-        <Stack direction="row" spacing={1} alignItems="center" mb={1}>
-          <Box
-            sx={{
-              width: 44,
-              height: 44,
-              borderRadius: 2,
-              bgcolor: "rgba(0,0,0,0.06)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <HistoryIcon />
-          </Box>
-
-          <Typography variant="subtitle1" fontWeight={700}>
-            Recent Activity
-          </Typography>
-        </Stack>
-
-        <List
-          dense
-          sx={{
-            minHeight: 320,
-            maxHeight: 320,
-            width: "100%",
-            overflow: "auto",
-          }}
-        >
-          {items.length === 0 && <EmptyState text="No activity" />}
-
-          {items.map((r, idx) => {
-            const key = `${r.timestamp ?? r.displayTime ?? idx}-${idx}`;
-            const rel = relativeTime(r.timestamp ?? r.displayTime);
-            return (
-              <Box key={key}>
-                {idx > 0 && <Divider component="li" />}
-                <ListItem alignItems="flex-start" sx={{ py: 1.25 }}>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      width: "100%",
-                      alignItems: "flex-start",
-                      gap: 2,
-                    }}
-                  >
-                    {/* left: avatar + title */}
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1,
-                        minWidth: 0,
-                      }}
-                    >
-                      <Avatar
-                        sx={{
-                          bgcolor: "rgba(0,0,0,0.06)",
-                          width: 36,
-                          height: 36,
-                        }}
-                      >
-                        {actionIcon(r.action)}
-                      </Avatar>
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography
-                          variant="body2"
-                          fontWeight={700}
-                          sx={{
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {r.action}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {r.user ? `By ${r.user}` : ""}{" "}
-                          {rel ? ` • ${rel}` : ""}
-                        </Typography>
-                      </Box>
-                    </Box>
-
-                    {/* right: chip aligned to end */}
-                    <Box sx={{ marginLeft: "auto", flexShrink: 0 }}>
-                      <RenderChip status={r.status} />
-                    </Box>
-                  </Box>
-
-                  {/* details below spanning full width */}
-                  <Box sx={{ width: "100%", mt: 1, pl: "52px" }}>
-                    <Typography variant="body2">{r.details}</Typography>
-                    {r.source && (
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ mt: 0.5, display: "block" }}
-                      >
-                        {r.source}
-                      </Typography>
-                    )}
-                  </Box>
-                </ListItem>
-              </Box>
-            );
-          })}
-        </List>
-      </CardContent>
-    </Card>
-  );
-};
-
-export default DashboardRecentActivity;
+export default DashboardPage;
