@@ -1,256 +1,1613 @@
-// src/pages/DashboardPage.jsx
-import React, { useEffect, useState } from "react";
-import { Box, Card, CardContent, Typography, Stack } from "@mui/material";
-import Grid from "@mui/material/Grid";
-import LeaderboardIcon from "@mui/icons-material/Leaderboard";
-import DataExplorationIcon from "@mui/icons-material/DataExploration";
-import DonutSmallIcon from "@mui/icons-material/DonutSmall";
-import AutoGraphIcon from "@mui/icons-material/AutoGraph";
-import InsertChartIcon from "@mui/icons-material/InsertChart";
+import React, { useState, useEffect } from "react";
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  CartesianGrid,
-} from "recharts";
-import useApi from "../../hooks/useApi";
-import { DashboardHead } from "./components/DashboardHead";
-import DashboardCustomChart from "./components/DashboardCustomChart";
-import { DashboardRecentActivity } from "./components/DashboardRecentActivity";
-import { DashboardAnnouncements } from "./components/DashboardAnnouncements";
-import DashboardFrequencyStats from "./components/DashboardFrequencyStats";
-import { toPascalKebabCase } from "../../utils/CommonUtilities";
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Button,
+  Box,
+  Checkbox,
+  Typography,
+  Stack,
+  Divider,
+  Paper,
+  FormLabel,
+  ToggleButtonGroup,
+  ToggleButton,
+  Chip,
+} from "@mui/material";
+import { LocalizationProvider, DateTimePicker } from "@mui/x-date-pickers";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import dayjs from "dayjs";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
+import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 
-const COLOR_SET_A = [
-  "hsl(220, 45%, 75%)", // light blue
-  "hsl(220, 45%, 55%)",
-  "hsl(220, 45%, 40%)",
-  "hsl(220, 45%, 25%)", // deep navy blue
-];
+export default function AnnouncementFormDialog({
+  open,
+  onClose,
+  onSave,
+  initialData,
+  roles,
+}) {
+  const [form, setForm] = useState({
+    title: "",
+    message: "",
+    severity: "INFO",
+    targetRoles: [],
+    start_date: dayjs().add(5, "minute").second(0).millisecond(0),
+    expiry_date: null,
+  });
 
-const COLOR_SET_B = [
-  "hsl(145, 45%, 75%)", // light green
-  "hsl(145, 45%, 55%)",
-  "hsl(145, 45%, 40%)",
-  "hsl(145, 45%, 25%)", // deep forest green
-];
-
-const COLOR_SET_C = [
-  "hsl(220, 25%, 65%)",
-  "hsl(220, 25%, 45%)",
-  "hsl(220, 25%, 30%)",
-  "hsl(220, 25%, 20%)",
-];
-
-const COLOR_SET_D = [
-  "hsl(30, 70%, 75%)", // light orange
-  "hsl(30, 70%, 55%)",
-  "hsl(30, 70%, 40%)",
-  "hsl(30, 70%, 25%)", // deep burnt orange
-];
-
-const COLOR_SET_E = [
-  "hsl(215, 15%, 80%)", // light grey-blue
-  "hsl(215, 15%, 60%)",
-  "hsl(215, 15%, 40%)",
-  "hsl(215, 15%, 25%)", // deep slate
-];
-const COLOR_SET_F = [
-  "hsl(0, 60%, 75%)", // soft red
-  "hsl(0, 60%, 55%)",
-  "hsl(0, 60%, 40%)",
-  "hsl(0, 60%, 25%)", // deep red
-];
-
-function mapLabelMap(key) {
-  const labelMap = {
-    BRANCH: "Branch",
-    CURRENCY: "Currency",
-    ROLE_MANAGEMENT: "Role Management",
-    SEGMENT: "Segment",
-    CGL: "CGL",
-    STATE: "State",
-    USER_MANAGEMENT: "User Management",
-    CALENDER: "Calendar",
-    CIRCLE: "Circle",
-  };
-  return labelMap[key] || key;
-}
-
-const DashboardPage = () => {
-  const { callApi } = useApi();
-  const [rawData, setRawData] = useState(null);
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await callApi("/DS/dashboard/init", null, "GET");
-        const payload = res?.data ? res.data : res;
-        if (payload?.success || payload?.stats) {
-          const data = payload.data ? payload.data : payload;
-          setRawData(data);
-        }
-      } catch (e) {
-        console.error("Failed to load dashboard", e);
+    if (open) {
+      if (initialData) {
+        setForm({
+          id: initialData.id,
+          title: initialData.title || "",
+          message: initialData.message || "",
+          severity: initialData.severity || "INFO",
+          targetRoles:
+            initialData.targetRoles === "ALL"
+              ? roles.map((r) => r.id)
+              : Array.isArray(initialData.targetRoles)
+                ? initialData.targetRoles.map(String)
+                : [],
+          start_date: initialData.startDate
+            ? dayjs(initialData.startDate)
+            : dayjs().add(5, "minute").second(0).millisecond(0),
+          expiry_date: initialData.expiryDate
+            ? dayjs(initialData.expiryDate)
+            : null,
+        });
+      } else {
+        setForm({
+          title: "",
+          message: "",
+          severity: "INFO",
+          targetRoles: [],
+          start_date: dayjs().add(5, "minute").second(0).millisecond(0),
+          expiry_date: null,
+        });
       }
+      setErrors({});
+    }
+  }, [open, initialData, roles]);
+
+  const handleChange = (e) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    if (errors[e.target.name])
+      setErrors((prev) => ({ ...prev, [e.target.name]: null }));
+  };
+
+  const handleSeverityChange = (event, newSeverity) => {
+    if (newSeverity !== null) {
+      setForm((prev) => ({ ...prev, severity: newSeverity }));
+    }
+  };
+
+  const toggleRole = (id) => {
+    setForm((prev) => {
+      const updatedRoles = prev.targetRoles.includes(id)
+        ? prev.targetRoles.filter((r) => r !== id)
+        : [...prev.targetRoles, id];
+
+      if (errors.targetRoles && updatedRoles.length > 0) {
+        setErrors((errs) => ({ ...errs, targetRoles: null }));
+      }
+      return { ...prev, targetRoles: updatedRoles };
+    });
+  };
+
+  const selectAll = () => {
+    setForm((p) => ({ ...p, targetRoles: roles.map((r) => r.id) }));
+    setErrors((errs) => ({ ...errs, targetRoles: null }));
+  };
+
+  const clearRoles = () => setForm((p) => ({ ...p, targetRoles: [] }));
+
+  const validate = () => {
+    let newErrors = {};
+
+    // 1. Core Text Validations
+    if (!form.title.trim()) newErrors.title = "Announcement Title is required";
+    if (!form.message.trim()) newErrors.message = "Message is required";
+
+    // 2. Role Validation
+    if (form.targetRoles.length === 0) {
+      newErrors.targetRoles = "At least one target role must be selected";
+    }
+
+    // 3. Date Validations
+    if (!form.start_date) {
+      newErrors.start_date = "Start date is required";
+    } else if (!initialData) {
+      // If creating new, start date cannot be in the past
+      if (form.start_date.isBefore(dayjs(), "minute")) {
+        newErrors.start_date = "Start date cannot be in the past";
+      }
+    }
+
+    if (!form.expiry_date) {
+      newErrors.expiry_date = "Expiry date is required";
+    } else if (form.start_date && form.expiry_date.isBefore(form.start_date)) {
+      newErrors.expiry_date = "Expiry date must be after the start date";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = () => {
+    if (!validate()) return;
+
+    const payload = {
+      ...(form.id && { id: form.id }),
+      title: form.title.trim(),
+      message: form.message.trim(),
+      severity: form.severity,
+      targetRoles:
+        form.targetRoles.length === roles.length
+          ? ["ALL"]
+          : form.targetRoles.map((id) => (isNaN(Number(id)) ? id : Number(id))),
+      startDate: form.start_date
+        ? form.start_date.format("YYYY-MM-DD HH:mm:ss")
+        : null,
+      expiryDate: form.expiry_date
+        ? form.expiry_date.format("YYYY-MM-DD HH:mm:ss")
+        : null,
+      isActive: initialData?.isActive ?? "Y",
     };
-    load();
-  }, [callApi]);
 
-  const stats = rawData?.stats || {};
-
-  // transform functions
-  const buildPieFromDetailObj = (detailObj) =>
-    Object.entries(detailObj || {}).map(([k, v]) => ({
-      label: mapLabelMap(k),
-      value: Number(v) || 0,
-    }));
-
-  const myPendingPie = buildPieFromDetailObj(stats.myPendingDetails);
-  const myApprovedPie = buildPieFromDetailObj(stats.myApprovedDetails);
-  const myRejectedPie = buildPieFromDetailObj(stats.myRejectedDetails);
-  const pendingForMePie = buildPieFromDetailObj(stats.pendingForMeDetails);
-
-  // bar data: Pending vs Approved vs Rejected (module-wise)
-  const allModules = new Set([
-    ...Object.keys(stats.myPendingDetails || {}),
-    ...Object.keys(stats.myApprovedDetails || {}),
-    ...Object.keys(stats.myRejectedDetails || {}),
-  ]);
-  const statusByModule = Array.from(allModules).map((m) => ({
-    module: toPascalKebabCase(mapLabelMap(m) || ""),
-    pending: stats.myPendingDetails?.[m] || 0,
-    approved: stats.myApprovedDetails?.[m] || 0,
-    rejected: stats.myRejectedDetails?.[m] || 0,
-  }));
-
-  console.log("statusByModule", statusByModule);
+    onSave(payload);
+  };
 
   return (
-    <Box p={3}>
-      {/* Rows 1 & 2 */}
-      <DashboardHead />
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      PaperProps={{
+        sx: {
+          borderRadius: 3,
+        },
+      }}
+    >
+      {/* HEADER */}
+      <Box sx={{ bgcolor: "primary.main", color: "white", px: 4, py: 3 }}>
+        <Typography variant="h5" fontWeight="700">
+          {initialData ? "Edit Announcement" : "Create New Announcement"}
+        </Typography>
+        <Typography variant="body2" sx={{ mt: 0.5, opacity: 0.8 }}>
+          Fill in the mandatory fields (*) below to broadcast a message to your
+          users.
+        </Typography>
+      </Box>
 
-      {/* Row 3: Module-wise bar chart */}
-      <Grid container spacing={2} mb={3}>
-        <Grid size={{ xs: 12 }}>
-          <Card variant="outlined" sx={{ borderRadius: 3 }}>
-            <CardContent>
-              <Typography
-                variant="subtitle2"
-                fontWeight={600}
-                mb={1}
-              ></Typography>
+      <DialogContent>
+        <Stack spacing={4}>
+          {/* GROUP 1: Core Info & Severity */}
+          <Paper
+            elevation={0}
+            sx={{ p: 3, borderRadius: 2, border: "1px solid #e2e8f0" }}
+          >
+            <Stack spacing={3}>
+              <TextField
+                required
+                label="Announcement Title"
+                name="title"
+                fullWidth
+                value={form.title}
+                onChange={handleChange}
+                error={Boolean(errors.title)}
+                helperText={errors.title}
+                variant="outlined"
+              />
 
-              <Stack direction="row" spacing={1} alignItems="center" mb={1}>
-                <Box
+              <TextField
+                required
+                label="Message Content"
+                name="message"
+                fullWidth
+                multiline
+                minRows={4}
+                value={form.message}
+                onChange={handleChange}
+                error={Boolean(errors.message)}
+                helperText={errors.message}
+              />
+
+              <Box>
+                <FormLabel
+                  required
+                  component="legend"
+                  sx={{ mb: 1, fontWeight: 600, color: "text.primary" }}
+                >
+                  Severity Level
+                </FormLabel>
+                <ToggleButtonGroup
+                  value={form.severity}
+                  exclusive
+                  onChange={handleSeverityChange}
+                  fullWidth
+                  size="medium"
+                  sx={{ mt: 0.5 }}
+                >
+                  <ToggleButton
+                    value="INFO"
+                    color="info"
+                    sx={{ fontWeight: 600 }}
+                  >
+                    <InfoOutlinedIcon sx={{ mr: 1 }} fontSize="small" />{" "}
+                    Information
+                  </ToggleButton>
+                  <ToggleButton
+                    value="WARN"
+                    color="warning"
+                    sx={{ fontWeight: 600 }}
+                  >
+                    <WarningAmberOutlinedIcon sx={{ mr: 1 }} fontSize="small" />{" "}
+                    Warning
+                  </ToggleButton>
+                  <ToggleButton
+                    value="CRITICAL"
+                    color="error"
+                    sx={{ fontWeight: 600 }}
+                  >
+                    <ErrorOutlineOutlinedIcon sx={{ mr: 1 }} fontSize="small" />{" "}
+                    Critical
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+            </Stack>
+          </Paper>
+
+          {/* GROUP 2: Scheduling */}
+          <Paper
+            elevation={0}
+            sx={{ p: 3, borderRadius: 2, border: "1px solid #e2e8f0" }}
+          >
+            <Typography fontWeight={600} color="text.primary" mb={2}>
+              Schedule Details *
+            </Typography>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={3}>
+                <DateTimePicker
+                  label="Start Date & Time (Default time)"
+                  value={form.start_date}
+                  // Prevent selecting past dates on the calendar only if creating new
+                  minDateTime={!initialData ? dayjs() : undefined}
+                  onChange={(val) => {
+                    setForm((prev) => ({ ...prev, start_date: val }));
+                    setErrors((prev) => ({ ...prev, start_date: null }));
+                  }}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      required: true,
+                      error: Boolean(errors.start_date),
+                      helperText: errors.start_date,
+                    },
+                  }}
+                />
+                <DateTimePicker
+                  label="Expiry Date & Time"
+                  value={form.expiry_date}
+                  // Prevent selecting an expiry date before the start date
+                  minDateTime={form.start_date ? form.start_date : undefined}
+                  onChange={(val) => {
+                    setForm((prev) => ({ ...prev, expiry_date: val }));
+                    setErrors((prev) => ({ ...prev, expiry_date: null }));
+                  }}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      required: true,
+                      error: Boolean(errors.expiry_date),
+                      helperText: errors.expiry_date,
+                    },
+                  }}
+                />
+              </Stack>
+            </LocalizationProvider>
+          </Paper>
+
+          {/* GROUP 3: Targeting Roles */}
+          <Paper
+            elevation={0}
+            sx={{
+              p: 3,
+              borderRadius: 2,
+              border: "1px solid",
+              borderColor: errors.targetRoles ? "error.main" : "#e2e8f0",
+            }}
+          >
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              mb={1}
+            >
+              <Box>
+                <Typography
+                  fontWeight={600}
+                  color={errors.targetRoles ? "error.main" : "text.primary"}
+                >
+                  Target Roles *
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color={errors.targetRoles ? "error.main" : "text.secondary"}
+                >
+                  {errors.targetRoles
+                    ? errors.targetRoles
+                    : form.targetRoles.length === roles.length
+                      ? "All roles selected"
+                      : `${form.targetRoles.length} role(s) selected`}
+                </Typography>
+              </Box>
+
+              <Stack direction="row" spacing={1}>
+                <Button size="small" variant="outlined" onClick={selectAll}>
+                  Select All
+                </Button>
+                <Button
+                  size="small"
+                  variant="text"
+                  color="error"
+                  onClick={clearRoles}
+                >
+                  Clear
+                </Button>
+              </Stack>
+            </Stack>
+
+            {/* Responsive Grid for Checkboxes */}
+            <Box
+              sx={{
+                maxHeight: 220,
+                overflowY: "auto",
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                gap: 1,
+                mt: 2,
+                mb: form.targetRoles.length > 0 ? 2 : 0,
+                pr: 1,
+              }}
+            >
+              {roles.map((role) => {
+                const isSelected = form.targetRoles.includes(role.id);
+                return (
+                  <Paper
+                    key={role.id}
+                    variant="outlined"
+                    onClick={() => toggleRole(role.id)}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      p: 0.5,
+                      cursor: "pointer",
+                      transition: "0.2s",
+                      bgcolor: isSelected ? "primary.50" : "transparent",
+                      borderColor: isSelected ? "primary.main" : "divider",
+                      "&:hover": { bgcolor: "action.hover" },
+                    }}
+                  >
+                    <Checkbox
+                      checked={isSelected}
+                      disableRipple
+                      color="primary"
+                    />
+                    <Typography
+                      variant="body2"
+                      fontWeight={isSelected ? 600 : 400}
+                    >
+                      {role.name}
+                    </Typography>
+                  </Paper>
+                );
+              })}
+            </Box>
+
+            {/* Selected Roles Chips */}
+            {form.targetRoles.length > 0 && (
+              <>
+                <Divider sx={{ my: 2 }} />
+                <Box display="flex" gap={1} flexWrap="wrap">
+                  {form.targetRoles.map((id) => {
+                    const role = roles.find((r) => r.id === id);
+                    return (
+                      <Chip
+                        key={id}
+                        label={role?.name ?? id}
+                        onDelete={() => toggleRole(id)}
+                        color="primary"
+                        variant="outlined"
+                        size="small"
+                        sx={{ fontWeight: 500 }}
+                      />
+                    );
+                  })}
+                </Box>
+              </>
+            )}
+          </Paper>
+        </Stack>
+      </DialogContent>
+
+      <Divider />
+
+      <DialogActions sx={{ p: 3, justifyContent: "flex-end" }}>
+        <Button
+          onClick={onClose}
+          sx={{ color: "text.secondary", px: 3, fontWeight: 600 }}
+        >
+          Cancel
+        </Button>
+        <Button
+          variant="contained"
+          onClick={handleSubmit}
+          sx={{
+            px: 4,
+            py: 1.2,
+            borderRadius: 2,
+            boxShadow: 2,
+            fontWeight: 600,
+          }}
+        >
+          {initialData ? "Save Changes" : "Publish Announcement"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Button,
+  MenuItem,
+  Select,
+  InputLabel,
+  FormControl,
+  Box,
+} from "@mui/material";
+
+import useApi from "../../../hooks/useApi";
+
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import dayjs from "dayjs";
+import CustomChip from "../../../utils/CustomChip";
+import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
+import { date } from "zod";
+
+export default function CreateAnnouncementDialog({ open, onClose, onSave }) {
+  const { callApi } = useApi();
+
+  const initialForm = {
+    title: "",
+    message: "",
+    severity: "INFO",
+    target_roles: [],
+    start_date: null,
+    expiry_date: null,
+  };
+
+  const [form, setForm] = useState(initialForm);
+  const formRef = useRef(form);
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
+  const [errors, setErrors] = useState({
+    title: null,
+    message: null,
+    date: null,
+  });
+  const [roles, setRoles] = useState([]);
+  const [loadingRoles, setLoadingRoles] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      fetchRoles();
+    } else {
+      setForm(initialForm);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  async function fetchRoles() {
+    setLoadingRoles(true);
+    try {
+      const res = await callApi("/UM/role/get-roles", null, "GET");
+      const rolesData = res?.result?.roles ?? [];
+      const activeRoles = rolesData.filter((r) => r.roleStatus === "ACTIVE");
+      const normalized = activeRoles.map((r) => ({
+        id: String(r.roleId),
+        name: r.roleName,
+      }));
+      setRoles(normalized);
+    } catch (err) {
+      console.error("fetchRoles error", err);
+      setRoles([]);
+    } finally {
+      setLoadingRoles(false);
+    }
+  }
+  function changeText(e) {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  }
+  function setStartDate(v) {
+    setForm((prev) => ({ ...prev, start_date: v }));
+    setErrors((prev) => ({ ...prev, date: null }));
+  }
+  function setExpiryDate(v) {
+    setForm((prev) => ({ ...prev, expiry_date: v }));
+    setErrors((prev) => ({ ...prev, date: null }));
+  }
+
+  function validateAll() {
+    const next = { title: null, message: null, date: null };
+    let ok = true;
+    if (!form.title || !String(form.title).trim()) {
+      next.title = "Title is Required";
+      ok = false;
+    }
+    if (!form.message || !String(form.message).trim()) {
+      next.message = "Message is Required";
+      ok = false;
+    }
+    if (form.start_date && form.expiry_date) {
+      const s = dayjs(form.start_date);
+      const e = dayjs(form.expiry_date);
+      if (!e.isAfter(s)) {
+        next.date = "Expiry date must be after Start date";
+        ok = false;
+      }
+    }
+    setErrors(next);
+    return ok;
+  }
+
+  function handleSave() {
+    const currentForm = formRef.current;
+    if (!validateAll()) return;
+
+    // format dates to "YYYY-MM-DD HH:mm:ss"
+    const payload = {
+      title: currentForm.title,
+      message: currentForm.message,
+      severity: currentForm.severity,
+      // send array of role ids; if none selected, use "ALL"
+      targetRoles:
+        currentForm.target_roles && currentForm.target_roles.length > 0
+          ? currentForm.target_roles
+          : "ALL",
+      startDate: currentForm.start_date
+        ? dayjs(currentForm.start_date).format("YYYY-MM-DD HH:mm:ss")
+        : null,
+      expiryDate: currentForm.expiry_date
+        ? dayjs(currentForm.expiry_date).format("YYYY-MM-DD HH:mm:ss")
+        : null,
+      isActive: "Y",
+    };
+
+    onSave(payload);
+  }
+
+  const isFormvalid =
+    !form.title?.trim() || !form.message?.trim() || Boolean(errors.date);
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Create Announcement</DialogTitle>
+
+      <DialogContent dividers>
+        <TextField
+          margin="dense"
+          autoFocus
+          label="Title*"
+          name="title"
+          fullWidth
+          value={form.title}
+          onChange={changeText}
+          error={Boolean(errors.title)}
+          helperText={errors.title}
+        />
+
+        <TextField
+          margin="dense"
+          label="Message*"
+          name="message"
+          fullWidth
+          multiline
+          minRows={3}
+          value={form.message}
+          onChange={changeText}
+          error={Boolean(errors.message)}
+          helperText={errors.message}
+        />
+
+        <TextField
+          select
+          margin="dense"
+          fullWidth
+          label="Severity"
+          name="severity"
+          value={form.severity}
+          onChange={changeText}
+        >
+          <MenuItem value="INFO">INFO</MenuItem>
+          <MenuItem value="WARN">WARN</MenuItem>
+          <MenuItem value="CRITICAL">CRITICAL</MenuItem>
+        </TextField>
+
+        <FormControl fullWidth margin="dense">
+          <InputLabel>Target Roles</InputLabel>
+          <Select
+            multiple
+            label="Target Roles"
+            name="target_roles"
+            value={form.target_roles}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, target_roles: e.target.value }))
+            }
+            renderValue={(selected) => (
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                {selected.map((val) => {
+                  const role = roles.find((r) => String(r.id) === String(val));
+                  const label = role ? role.name : String(val);
+                  return (
+                    <CustomChip variant="outlined" key={val} label={label} />
+                  );
+                })}
+              </Box>
+            )}
+          >
+            {roles.map((role) => (
+              <MenuItem key={role.id} value={role.id}>
+                {role.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <DateTimePicker
+            label="Start Date & Time"
+            value={form.start_date}
+            onChange={setStartDate}
+            slotProps={{ textField: { fullWidth: true, margin: "dense" } }}
+          />
+
+          <DateTimePicker
+            label="Expiry Date & Time"
+            value={form.expiry_date}
+            onChange={setExpiryDate}
+            slotProps={{ textField: { fullWidth: true, margin: "dense" } }}
+          />
+          {errors.date && (
+            <Box sx={{ color: "error.main", mt: 1, fontSize: 13 }}>
+              {errors.date}
+            </Box>
+          )}
+        </LocalizationProvider>
+      </DialogContent>
+
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={handleSave} disabled={isFormvalid}>
+          Save
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Button,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Select,
+  Box,
+} from "@mui/material";
+import dayjs from "dayjs";
+
+import useApi from "../../../hooks/useApi";
+
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
+import CustomChip from "../../../utils/CustomChip";
+
+export default function EditAnnouncementDialog({
+  open,
+  record,
+  onClose,
+  onSave,
+}) {
+  const { callApi } = useApi();
+
+  const [form, setForm] = useState({
+    id: null,
+    title: "",
+    message: "",
+    severity: "INFO",
+    targetRoles: [],
+    start_date: null,
+    expiry_date: null,
+    isActive: "Y",
+  });
+
+  const formRef = useRef(form);
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
+  const [errors, setErrors] = useState({
+    title: null,
+    message: null,
+    date: null,
+  });
+  const [roles, setRoles] = useState([]);
+  const [loadingRoles, setLoadingRoles] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+
+    fetchRoles();
+
+    if (record) {
+      setForm({
+        id: record.id ?? record.announcementId ?? null,
+        title: record.title ?? "",
+        message: record.message ?? "",
+        severity: record.severity ?? "INFO",
+        targetRoles: record.targetRoles ?? record.targetRole ?? [],
+        start_date: record.startDate ?? record.start_date ?? null,
+        expiry_date: record.expiryDate ?? record.expiry_date ?? null,
+        isActive: record.isActive ?? record.is_active ?? "Y",
+      });
+    }
+  }, [open, record]);
+
+  async function fetchRoles() {
+    setLoadingRoles(true);
+    try {
+      const res = await callApi("/UM/role/get-roles", null, "GET");
+      const rolesData = res?.result?.roles ?? [];
+      const activeRoles = rolesData.filter((r) => r.roleStatus === "ACTIVE");
+      const normalized = activeRoles.map((r) => ({
+        id: String(r.roleId),
+        name: r.roleName,
+      }));
+      setRoles(normalized);
+    } catch (err) {
+      console.error("fetchRoles error", err);
+      setRoles([]);
+    } finally {
+      setLoadingRoles(false);
+    }
+  }
+  function change(e) {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  }
+  function setStartDate(v) {
+    setForm((prev) => ({ ...prev, start_date: v }));
+    setErrors((prev) => ({ ...prev, date: null }));
+  }
+  function setExpiryDate(v) {
+    setForm((prev) => ({ ...prev, expiry_date: v }));
+    setErrors((prev) => ({ ...prev, date: null }));
+  }
+
+  function validateAll() {
+    const next = { title: null, message: null, date: null };
+    let ok = true;
+    if (!form.title || !String(form.title).trim()) {
+      next.title = "Title is Required";
+      ok = false;
+    }
+    if (!form.message || !String(form.message).trim()) {
+      next.message = "Message is Required";
+      ok = false;
+    }
+    if (form.start_date && form.expiry_date) {
+      const s = dayjs(form.start_date);
+      const e = dayjs(form.expiry_date);
+      if (!e.isAfter(s)) {
+        next.date = "Expiry date must be after Start date";
+        ok = false;
+      }
+    }
+    setErrors(next);
+    return ok;
+  }
+
+  async function handleSave() {
+    // latest snapshot (keeps up-to-date values)
+    const currentForm = formRef.current;
+    console.log("[handleSave] currentForm:", JSON.stringify(currentForm));
+
+    // run UI validation (validateAll reads `form` state to populate errors)
+    if (!validateAll()) return;
+
+    // defensive date check on the snapshot as well
+    if (currentForm.start_date && currentForm.expiry_date) {
+      if (
+        !dayjs(currentForm.expiry_date).isAfter(dayjs(currentForm.start_date))
+      ) {
+        setErrors((prev) => ({
+          ...prev,
+          date: "Expiry must be later than Start",
+        }));
+        return;
+      }
+    }
+
+    // build payload from the snapshot (use currentForm, not form)
+    const payload = {
+      // id: currentForm.id ?? null,
+      title: String(currentForm.title ?? "").trim(),
+      message: String(currentForm.message ?? "").trim(),
+      severity: currentForm.severity ?? "INFO",
+      // backend expects numbers for role ids — convert where possible
+      targetRoles: Array.isArray(currentForm.targetRoles)
+        ? currentForm.targetRoles.map((v) => (isNaN(Number(v)) ? v : Number(v)))
+        : currentForm.targetRoles ?? "ALL",
+      startDate: currentForm.start_date
+        ? dayjs(currentForm.start_date).format("YYYY-MM-DD HH:mm:ss")
+        : null,
+      expiryDate: currentForm.expiry_date
+        ? dayjs(currentForm.expiry_date).format("YYYY-MM-DD HH:mm:ss")
+        : null,
+      isActive: currentForm.isActive ?? "Y",
+    };
+
+    console.log("[handleSave] payload:", payload);
+
+    // setIsSubmitting(true);
+    try {
+      // assume parent onSave handles API call (PUT) and closing
+      await onSave(payload);
+      // if parent doesn't close the dialog, you may call onClose() here
+    } catch (err) {
+      console.error("[handleSave] save error:", err);
+      // setIsSubmitting(false);
+    }
+  }
+  const isFormvalid =
+    !form.title?.trim() || !form.message?.trim() || Boolean(errors.date);
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Edit Announcement</DialogTitle>
+
+      <DialogContent dividers>
+        <TextField
+          margin="dense"
+          autoFocus
+          label="Title*"
+          fullWidth
+          name="title"
+          value={form.title ?? ""}
+          onChange={change}
+          error={Boolean(errors.title)}
+          helperText={errors.title}
+        />
+
+        <TextField
+          margin="dense"
+          label="Message*"
+          fullWidth
+          multiline
+          minRows={3}
+          name="message"
+          value={form.message ?? ""}
+          onChange={change}
+        />
+
+        <TextField
+          select
+          margin="dense"
+          fullWidth
+          label="Severity"
+          name="severity"
+          value={form.severity ?? "INFO"}
+          onChange={change}
+        >
+          <MenuItem value="INFO">INFO</MenuItem>
+          <MenuItem value="WARN">WARN</MenuItem>
+          <MenuItem value="CRITICAL">CRITICAL</MenuItem>
+        </TextField>
+        <FormControl fullWidth margin="dense">
+          <InputLabel>Target Roles</InputLabel>
+          <Select
+            multiple
+            label="Target Roles"
+            name="target_roles"
+            value={form.targetRoles}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, target_roles: e.target.value }))
+            }
+            renderValue={(selected) => (
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                {selected.map((val) => {
+                  const role = roles.find((r) => String(r.id) === String(val));
+                  const label = role ? role.name : String(val);
+                  return (
+                    <CustomChip variant="outlined" key={val} label={label} />
+                  );
+                })}
+              </Box>
+            )}
+          >
+            {roles.map((role) => (
+              <MenuItem key={role.id} value={role.id}>
+                {role.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <DateTimePicker
+            label="Start Date & Time"
+            value={
+              form.start_date
+                ? dayjs.isDayjs(form.start_date)
+                  ? form.start_date
+                  : dayjs(form.start_date)
+                : null
+            }
+            onChange={setStartDate}
+            slotProps={{ textField: { fullWidth: true, margin: "dense" } }}
+          />
+
+          <DateTimePicker
+            label="Expiry Date & Time"
+            value={
+              form.expiry_date
+                ? dayjs.isDayjs(form.expiry_date)
+                  ? form.expiry_date
+                  : dayjs(form.expiry_date)
+                : null
+            }
+            onChange={setExpiryDate}
+            slotProps={{ textField: { fullWidth: true, margin: "dense" } }}
+          />
+          {errors.date && (
+            <Box sx={{ color: "error.main", mt: 1, fontSize: 13 }}>
+              {errors.date}
+            </Box>
+          )}
+        </LocalizationProvider>
+      </DialogContent>
+
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={handleSave} disabled={isFormvalid}>
+          Save
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+import React, { useMemo } from "react";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Typography,
+  Grid,
+  Box,
+  Divider,
+} from "@mui/material";
+import {
+  timeStampFormatter,
+  toPascalKebabCase,
+} from "../../../utils/CommonUtilities";
+import InfoIcon from "@mui/icons-material/Info";
+import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
+import WarningIcon from "@mui/icons-material/Warning";
+import CustomChip from "../../../utils/CustomChip";
+
+const ViewAnnouncementDialog = ({ open, onClose, data, roles }) => {
+  const roleMap = useMemo(() => {
+    const map = {};
+    roles?.forEach((role) => {
+      map[role.id] = role.name;
+    });
+    return map;
+  }, [roles]);
+
+  if (!data) return null;
+
+  const severityChip = (data) => {
+    const icon =
+      data === "Info" ? (
+        <InfoIcon />
+      ) : data === "Warn" ? (
+        <WarningIcon />
+      ) : (
+        <PriorityHighIcon />
+      );
+    return <CustomChip label={data} variant="outlined" icon={icon} />;
+  };
+
+  const mainDetails = [
+    { label: "Creator ID", value: data.createdBy, size: 3 },
+    {
+      label: "Severity",
+      value: severityChip(toPascalKebabCase(data.severity)),
+      size: 3,
+    },
+    {
+      label: "Status",
+      value: data.isActive === "Y" ? "Active" : "Inactive",
+      size: 3,
+    },
+    {
+      label: "Created Date",
+      value: timeStampFormatter(data.createdAt),
+      size: 3,
+    },
+  ];
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth="true">
+      {/* Header */}
+      <DialogTitle>
+        Request Details - <b>ID: {data.id}</b>
+      </DialogTitle>
+      <Divider />
+
+      {/* Content */}
+      <DialogContent>
+        {/* Main Details Section */}
+        <Grid container spacing={2}>
+          {mainDetails.map((item) => (
+            <Grid size={{ xs: 12, sm: item.size }} key={item.label}>
+              <Box sx={{ display: "flex", flexDirection: "column" }}>
+                <Typography
+                  variant="subtitle2"
                   sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 2,
-                    bgcolor: "rgba(0,0,0,0.06)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    fontWeight: 800,
+                    color: "text.secondary",
                   }}
                 >
-                  <LeaderboardIcon />
-                </Box>
-
-                <Typography variant="subtitle1" fontWeight={700}>
-                  Pending vs Approved vs Rejected (Module-wise)
+                  {item.label}
                 </Typography>
-              </Stack>
-
-              <Box sx={{ width: "100%", height: 320 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={statusByModule}>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.3)"
-                    />
-                    <XAxis
-                      dataKey="module"
-                      // stroke="white"
-                      // fontSize={10}
-                      tickMargin={4}
-                    />
-                    <YAxis fontSize={10} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="pending" name="Pending" fill="#6a5acd" />
-                    <Bar dataKey="approved" name="Approved" fill="#20b2aa" />
-                    <Bar dataKey="rejected" name="Rejected" fill="#d87093" />
-                  </BarChart>
-                </ResponsiveContainer>
+                <Typography variant="body1" sx={{ color: "text.primary" }}>
+                  {item.value ?? "N/A"}
+                </Typography>
               </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Row 4: Four small charts using DashboardCustomChart */}
-      <Grid container spacing={2} mb={3}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <DashboardCustomChart
-            title="My Approved (Module-wise)"
-            icon={<DataExplorationIcon />}
-            seriesData={myApprovedPie}
-            colors={COLOR_SET_B}
-          />
+            </Grid>
+          ))}
         </Grid>
 
-        <Grid size={{ xs: 12, md: 6 }}>
-          <DashboardCustomChart
-            title="My Rejected (Module-wise)"
-            icon={<InsertChartIcon />}
-            seriesData={myRejectedPie}
-            colors={COLOR_SET_F}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <DashboardCustomChart
-            title="My Pending (Module-wise)"
-            icon={<DonutSmallIcon />}
-            seriesData={myPendingPie}
-            colors={COLOR_SET_D}
-          />
-        </Grid>
+        <Divider sx={{ m: 2 }} />
 
-        <Grid size={{ xs: 12, md: 6 }}>
-          <DashboardCustomChart
-            title="Pending For My Approval (Module-wise)"
-            icon={<AutoGraphIcon />}
-            seriesData={pendingForMePie}
-            colors={COLOR_SET_C}
-          />
-        </Grid>
-      </Grid>
+        {/* data Section */}
 
-      <Grid container spacing={2} mb={3}>
-        {/* Row 5:  Announcements */}
-        <Grid item size={{ xs: 12, md: 6 }}>
-          <DashboardAnnouncements announcements={rawData?.announcements} />
-        </Grid>
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12 }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 800,
+                  color: "text.secondary",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                Announcement Title
+              </Typography>
+              <Typography
+                variant="body1"
+                sx={{
+                  color: "text.primary",
+                  wordBreak: "break-word",
+                }}
+              >
+                {data.title}
+              </Typography>
+            </Box>
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 800,
+                  color: "text.secondary",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                Announcement Message
+              </Typography>
+              <Typography
+                variant="body1"
+                sx={{
+                  color: "text.primary",
+                  wordBreak: "break-word",
+                }}
+              >
+                {data.message}
+              </Typography>
+            </Box>
+          </Grid>
 
-        {/* Row 6: Recent Activity */}
-        <Grid item size={{ xs: 12, md: 6 }}>
-          <DashboardRecentActivity recentActivity={rawData?.recentActivity} />
-        </Grid>
-      </Grid>
+          <Grid size={{ xs: 12 }} sx={{ mt: 1 }}>
+            <Box sx={{ alignContent: "center" }}>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 800,
+                  color: "text.secondary",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                Target Roles
+              </Typography>
+              <Typography
+                variant="body1"
+                sx={{
+                  color: "text.primary",
+                  wordBreak: "break-word",
+                }}
+              >
+                {/* {data.targetRoles} */}
+                {Array.isArray(data.targetRoles)
+                  ? data.targetRoles
+                      ?.map((id) => roleMap[id])
+                      .filter(Boolean)
+                      .join(", ")
+                  : roleMap[data.targetRoles] || "-"}
+              </Typography>
+            </Box>
+          </Grid>
 
-      {/* Row 7: Frequency of request status */}
-      <Grid container spacing={2} mb={3}>
-        <Grid item size={{ xs: 12 }}>
-          <DashboardFrequencyStats frequencyStats={rawData?.frequencyStats} />
+          <Grid size={{ xs: 12, md: 6 }} sx={{ mt: 1 }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 800,
+                  color: "text.secondary",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                Announcement Start Date
+              </Typography>
+              <Typography
+                variant="body1"
+                sx={{
+                  color: "text.primary",
+                  wordBreak: "break-word",
+                }}
+              >
+                {timeStampFormatter(data.startDate)}
+              </Typography>
+            </Box>
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }} sx={{ mt: 1 }}>
+            <Box sx={{ alignContent: "center" }}>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 800,
+                  color: "text.secondary",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                Announcement Expiry Date
+              </Typography>
+              <Typography
+                variant="body1"
+                sx={{
+                  color: "text.primary",
+                  wordBreak: "break-word",
+                }}
+              >
+                {timeStampFormatter(data.expiryDate)}
+              </Typography>
+            </Box>
+          </Grid>
         </Grid>
-      </Grid>
-    </Box>
+      </DialogContent>
+
+      {/* Footer */}
+      <Divider />
+      <DialogActions sx={{ p: 2, justifyContent: "flex-end" }}>
+        <Button
+          onClick={onClose}
+          variant="contained"
+          color="primary"
+          sx={{ textTransform: "none", borderRadius: 2, px: 3 }}
+        >
+          Close
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 
-export default DashboardPage;
+export default ViewAnnouncementDialog;
+import React, { useEffect, useState, useMemo } from "react";
+import {
+  Box,
+  Fab,
+  Switch,
+  IconButton,
+  Stack,
+  Tooltip,
+  Typography,
+  Paper,
+} from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import { DataGrid } from "@mui/x-data-grid";
+import EditIcon from "@mui/icons-material/Edit";
+import CreateAnnouncementDialog from "./components/CreateAnnouncementDialog";
+import EditAnnouncementDialog from "./components/EditAnnouncementDialog";
+import ViewAnnouncementDialog from "./components/ViewAnnouncementDialog";
+import useApi from "../../hooks/useApi";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import OnlinePredictionIcon from "@mui/icons-material/OnlinePrediction";
+import CustomChip from "../../utils/CustomChip";
+import { timeStampFormatter } from "../../utils/CommonUtilities";
+import InfoIcon from "@mui/icons-material/Info";
+import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
+import WarningIcon from "@mui/icons-material/Warning";
+
+export default function Announcements() {
+  const { callApi } = useApi();
+
+  const [rows, setRows] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const [openCreate, setOpenCreate] = useState(false);
+  const [editRow, setEditRow] = useState(null);
+  const [viewRow, setViewRow] = useState(null);
+  const [openViewDailog, setOpenViewDailog] = useState(false);
+
+  // ---------- INITIAL LOAD ----------
+  useEffect(() => {
+    fetchRoles();
+    fetchRows();
+  }, []);
+
+  // ---------- FETCH ROLES ----------
+  async function fetchRoles() {
+    try {
+      const res = await callApi("/UM/role/get-roles", null, "GET");
+      const data = res?.data ?? res;
+      setRoles(Array.isArray(data) ? data : data?.data ?? []);
+    } catch (err) {
+      console.error("fetchRoles error", err);
+      setRoles([]);
+    }
+  }
+
+  // ---------- FETCH ANNOUNCEMENTS ----------
+  const fetchRows = async () => {
+    setLoading(true);
+    try {
+      const res = await callApi("/CM/announcements/list", null, "GET");
+      const payload = res?.data ?? res;
+      const list = payload?.data ?? payload;
+      setRows(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.error("fetchRows error", err);
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---------- ACTIVE/INACTIVE TOGGLE ----------
+  const handleToggle = async (row) => {
+    try {
+      const res = await callApi(
+        `/CM/announcements/${row.id}/toggle`,
+        null,
+        "PATCH"
+      );
+      const updated = res?.data ?? res;
+
+      setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    } catch (err) {
+      console.error("toggle error", err);
+      if (err?.response?.status === 400) {
+        alert(err.response.data?.message ?? "Toggle not allowed");
+      }
+    }
+  };
+
+  // ---------- CREATE SAVE ----------
+  const handleCreateSave = async (payload) => {
+    try {
+      await callApi("/CM/announcements", payload, "POST");
+      setOpenCreate(false);
+      fetchRows();
+    } catch (err) {
+      console.error("create error", err);
+    }
+  };
+
+  // ---------- EDIT SAVE ----------
+  const handleEditSave = async (updated) => {
+    try {
+      await callApi(`/CM/announcements/${updated.id}`, updated, "PUT");
+      setEditRow(null);
+      fetchRows();
+    } catch (err) {
+      console.error("edit save error", err);
+    }
+  };
+
+  // ---------- ROLE NAME MAPPING ----------
+  const roleMap = useMemo(() => {
+    const m = {};
+    roles.forEach((r) => (m[String(r.id)] = r.name));
+    return m;
+  }, [roles]);
+
+  const columns = [
+    { field: "title", headerName: "Title", flex: 1 },
+    {
+      field: "severity",
+      headerName: "Severity",
+      flex: 1,
+
+      renderCell: (params) => {
+        const sev = params.value;
+        const icon =
+          sev === "CRITICAL" ? (
+            <InfoIcon fontSize="small" />
+          ) : sev === "WARN" ? (
+            <WarningIcon fontSize="small" />
+          ) : (
+            <PriorityHighIcon fontSize="small" />
+          );
+        const color =
+          sev === "CRITICAL" ? "error" : sev === "WARN" ? "warning" : "info";
+        return (
+          <CustomChip
+            variant="outlined"
+            label={sev}
+            color={color}
+            icon={icon}
+          />
+        );
+      },
+    },
+    {
+      field: "targetRoles",
+      headerName: "Target Roles",
+      flex: 1,
+      renderCell: (params) => {
+        const tr = params.row.targetRoles;
+
+        if (!tr || tr === "ALL") return "ALL";
+
+        const arr = Array.isArray(tr)
+          ? tr
+          : String(tr)
+              .split(",")
+              .map((x) => x.trim());
+
+        return arr.map((id) => roleMap[id] ?? id).join(", ");
+      },
+    },
+
+    {
+      field: "startDate",
+      headerName: "Start Date",
+      flex: 1,
+      sortable: true,
+      renderCell: (p) => (
+        <Typography
+          variant="body1"
+          component="span"
+          sx={{ fontSize: "0.9rem" }}
+        >
+          {timeStampFormatter(p?.row?.startDate) || "NA"}
+        </Typography>
+      ),
+    },
+
+    {
+      field: "expiryDate",
+      headerName: "Expiry Date",
+      flex: 1,
+      sortable: true,
+      renderCell: (p) => (
+        <Typography
+          variant="body1"
+          component="span"
+          sx={{ fontSize: "0.9rem" }}
+        >
+          {timeStampFormatter(p?.row?.expiryDate) || "NA"}
+        </Typography>
+      ),
+    },
+
+    {
+      field: "displayStatus",
+      headerName: "Status",
+      flex: 1,
+      // sortable: true,
+      renderCell: (params) => (
+        <CustomChip
+          color={
+            params.value === "ACTIVE"
+              ? "#3b803fff"
+              : params.value === "EXPIRED"
+              ? "#d32f2f"
+              : params.value === "SCHEDULED"
+              ? "#1976d2"
+              : "#9e9e9e"
+          }
+          variant="outlined"
+          icon={<OnlinePredictionIcon />}
+          label={params.value}
+        />
+      ),
+    },
+
+    {
+      field: "action",
+      headerName: "Actions",
+      flex: 1,
+
+      renderCell: (params) => (
+        <Stack
+          direction="row"
+          spacing={1}
+          justifyContent="center"
+          alignItems="center"
+          sx={{ height: "100%" }}
+        >
+          <Tooltip
+            title={
+              params.row.isActive === "Y"
+                ? "Inactive Announcement"
+                : "Activate Announcement"
+            }
+          >
+            {/* <IconButton
+              color={params.row.isActive === "Y" ? "error" : "success"}
+              onClick={() => handleToggle(params.row)}
+            >
+              <CampaignIcon fontSize="inherit" />
+            </IconButton> */}
+            <Switch
+              checked={params.row.isActive === "Y"}
+              onChange={() => handleToggle(params.row)}
+            />
+          </Tooltip>
+
+          <Tooltip title="Edit Announcement">
+            <IconButton onClick={() => setEditRow(params.row)}>
+              <EditIcon fontSize="inherit" />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="View Announcement">
+            <IconButton
+              onClick={() => {
+                setOpenViewDailog(true);
+                setViewRow(params.row);
+              }}
+            >
+              <VisibilityIcon fontSize="inherit" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      ),
+    },
+  ];
+
+  return (
+    <Paper
+    elevation={2}
+    sx={{
+      display:"flex",
+      flexDirection:"column",
+      borderRadius:2,
+      overflow:"hidden",
+      minHeight:"calc(100vh - 210px)",
+      width:"100%",
+    }}>
+    <Box p={2} height="80vh">
+      <DataGrid
+        rows={rows}
+        columns={columns}
+        loading={loading}
+        pageSizeOptions={[5, 10, 25]}
+        disableRowSelectionOnClick
+      />
+
+      <Fab
+        color="primary"
+        onClick={() => setOpenCreate(true)}
+        variant="extended"
+        sx={{
+          position: "fixed",
+          borderRadius: 1,
+          fontSize: "15px",
+          bottom: (theme) => theme.spacing(8),
+          right: (theme) => theme.spacing(4),
+        }}
+      >
+        <AddIcon />
+        Create
+      </Fab>
+
+      <CreateAnnouncementDialog
+        open={openCreate}
+        onClose={() => setOpenCreate(false)}
+        onSave={handleCreateSave}
+      />
+
+      {editRow && (
+        <EditAnnouncementDialog
+          open={Boolean(editRow)}
+          record={editRow}
+          onClose={() => setEditRow(null)}
+          onSave={handleEditSave}
+        />
+      )}
+
+      {viewRow && (
+        <ViewAnnouncementDialog
+          open={openViewDailog}
+          data={viewRow}
+          onClose={() => setOpenViewDailog(false)}
+        />
+      )}
+    </Box>
+    </Paper>
+  );
+}
