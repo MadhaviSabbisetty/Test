@@ -1,433 +1,473 @@
+import React, { useState, useEffect } from "react";
 import {
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Stack,
+  Container,
+  Paper,
   Typography,
-  Tooltip,
-  IconButton,
-  Chip,
+  TextField,
+  MenuItem,
+  Box,
+  Grid,
+  Card,
+  CardContent,
+  Button,
+  CircularProgress,
+  FormControl,
+  FormHelperText,
+  Stack,
 } from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
-import { useEffect, useMemo, useState } from "react";
-import InfoIcon from "@mui/icons-material/Info";
+import {
+  FilePresent,
+  ErrorOutline,
+  WarningAmber,
+  Compare,
+  Search,
+  Inbox,
+} from "@mui/icons-material";
+import { DataGrid, GridToolbar } from "@mui/x-data-grid";
+import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { motion, AnimatePresence } from "framer-motion";
+import dayjs from "dayjs";
 import useApi from "../../hooks/useApi";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
-import DateRangeIcon from "@mui/icons-material/DateRange";
-import CancelIcon from "@mui/icons-material/Cancel";
-import { useSelector } from "react-redux";
-import CustomChip from "../../utils/CustomChip";
-import GppBadIcon from "@mui/icons-material/GppBad";
 import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
-import { getPermissions } from "../../utils/CommonUtilities";
+import CustomChip from "../../utils/CustomChip";
 
-function CustomNoRowsOverlay() {
-  return (
-    <Stack height="100%" alignItems="center" justifyContent="center">
-      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-      <Typography variant="h6">No Circle Requests Found</Typography>
-      <Typography>You have not created any Circle requests.</Typography>
-    </Stack>
-  );
-}
-export default function MyCircleRequestsTab() {
-  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
-  const [rows, setRows] = useState([]);
-  const [confirmDialog, setConfirmDialog] = useState(false);
+const FileComparison = () => {
   const { callApi } = useApi();
-  const snackbar = useCustomSnackbar();
-  const permissions = getPermissions(selectedMenuItem);
-  const [requestId, setRequestId] = useState(null);
-  const [viewOpen, setViewOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [zones, setZones] = useState([]);
-  const [viewData, setViewData] = useState(null);
+  const showSnackbar = useCustomSnackbar();
+  const [etlDate, setEtlDate] = useState(dayjs());
+  const [dateError, setDateError] = useState(null);
 
-  const fetchData = async () => {
+  // Filters & State
+  const minDate = dayjs("2026-03-31");
+  // 1. Updated: Default date set to Today
+  const [date, setDate] = useState();
+  const [type, setType] = useState("CBS");
+
+  const [rows, setRows] = useState([]);
+  const [meta, setMeta] = useState({
+    malformed: 0,
+    total: 0,
+    missing: 0,
+    mismatchCount: 0,
+  });
+  const [paginationModel, setPaginationModel] = React.useState({
+    page: 0,
+    pageSize: 10,
+  });
+
+  const [loading, setLoading] = useState(false);
+
+  // 2. Validation: Both fields must be present
+  const isFormValid = date && date.isValid() && type && !dateError;
+
+  // 3. Updated: API call logic moved to an explicit handler
+
+  const fetchData = async (apiDate = date) => {
+    if (!(apiDate && apiDate.isValid() && type && !dateError)) return;
+
     setLoading(true);
     try {
-      const payload = { requestType: "CIRCLE" };
-      const [zonesRes, response] = await Promise.all([
-        callApi("/CM/common-master/zone-codes", null, "GET"),
-        callApi("/CR/my-requests", payload, "POST"),
-      ]);
-
-      setZones(zonesRes?.data ?? []);
-
-      if (response?.data) {
-        const result = response.data.map((row) => {
-          let parsedPayload = {};
-          parsedPayload = row.payload ? row.payload : {};
-          parsedPayload = {
-            ...parsedPayload,
-            id: row.id,
-            reqStatus: row.reqStatus,
-            reqDate: row.reqDate,
-            creatorId: row.creatorId,
-            executorId: row.executorId,
-            executionDate: row.executionDate,
-            executorRemarks: row.executorRemarks,
-            changeType: row.changeType,
-          };
-
-          return {
-            ...parsedPayload,
-          };
+      const response = await callApi(
+        "/PS/file/comparison-file",
+        { date: apiDate.format("DD-MM-YYYY"), type },
+        "GET",
+      );
+      if (response?.success) {
+        const {
+          comparisonInfo,
+          malformedLinesCount,
+          totalLinesProcessed,
+          notMatchedCount,
+          fileNotFoundCount,
+        } = response.data;
+        if (!comparisonInfo?.length) {
+          showSnackbar(
+            "No missing or mismatched files found for the selected date.",
+            "success",
+          );
+        }
+        const rowsWithId = (comparisonInfo || []).map((row, index) => ({
+          id: row.fileName || index,
+          ...row,
+        }));
+        setRows(rowsWithId || []);
+        setPaginationModel((prev) => ({ ...prev, page: 0 }));
+        setMeta({
+          malformed: malformedLinesCount,
+          total: totalLinesProcessed,
+          missing: fileNotFoundCount,
+          mismatchCount: notMatchedCount,
         });
-        result.sort((a, b) => {
-          if (a.reqStatus === "PENDING" && b.reqStatus !== "PENDING") return -1;
-          if (a.reqStatus !== "PENDING" && b.reqStatus === "PENDING") return 1;
-          return new Date(b.reqDate) - new Date(a.reqDate);
-        });
-        setRows(result);
       } else {
         setRows([]);
+        setMeta({ malformed: 0, total: 0, missing: 0, mismatchCount: 0 });
       }
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      showSnackbar(err.message || "Failed to fetch data", "error");
+      setRows([]);
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchETLDate = async () => {
+    setLoading(true);
+    try {
+      const response = await callApi("/PS/file/fincore-date", {}, "GET");
+
+      // 1. Get the date from API
+      const rawValue = response?.data?.etlDate;
+      const apiDate = rawValue ? dayjs(rawValue) : dayjs();
+
+      if (apiDate.isValid()) {
+        // 2. Update state for the UI
+        setEtlDate(apiDate);
+        setDate(apiDate);
+
+        // 3. IMMEDIATELY call fetchData with the fresh API date
+        // We pass the date as an argument to avoid waiting for state sync
+        fetchData(apiDate);
+      }
+    } catch (err) {
+      console.error(err.message || "Failed to load date");
+      showSnackbar("Failed to fetch ETL date", "error");
+      const today = dayjs();
+      setEtlDate(today);
+      setDate(today);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch only on first mount with default values
   useEffect(() => {
-    fetchData();
+    fetchETLDate();
   }, []);
 
-  const handleCancelRequest = async () => {
-    try {
-      const payload = {
-        requestId,
-        remarks: "User canceled this Request",
-      };
+  const getErrorMessage = (error) => {
+    switch (error) {
+      case "invalidDate":
+        return "Date format must be DD/MM/YYYY";
+      case "minDate":
+        return "Date cannot be before 31/03/2026";
+      case "maxDate":
+        return "Future dates are not allowed";
+      default:
+        return "";
+    }
+  };
 
-      const response = await callApi("/CR/cancel-request", payload, "PATCH");
-      if (response?.success) {
-        snackbar(`Request Id ${requestId} Cancelled Successfully.`, "success");
-      } else {
-        snackbar(
-          response?.message
-            ? response?.message
-            : "Failed to process your cancel request, Kindly try again",
-          "error",
+  // Column Definitions
+  const columns = [
+    { field: "fileName", headerName: "File Name", flex: 2 },
+    {
+      field: "actualCount",
+      headerName: "Actual Records",
+      flex: 1,
+      align: "right",
+      headerAlign: "right",
+    },
+    {
+      field: "controlCount",
+      headerName: "Control File Records",
+      flex: 1,
+      align: "right",
+      headerAlign: "right",
+    },
+    {
+      field: "status",
+      headerName: "Status",
+      flex: 1.5,
+      align: "center",
+      headerAlign: "center",
+      renderCell: (params) => {
+        const isError = params.value?.toLowerCase().includes("not found");
+        const isMismatch =
+          params.row.actualCount !== params.row.controlCount && !isError;
+        return (
+          <CustomChip
+            label={params.value}
+            color={isError ? "error" : isMismatch ? "warning" : "success"}
+            sx={{ fontWeight: "bold", width: 110 }}
+          />
         );
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      fetchData();
-      setConfirmDialog(false);
-    }
-  };
-  const handleViewClick = (data) => {
-    const { circleCode, circleName, zoneDescription } = data;
-    const showData = {
-      circleCode,
-      circleName,
-      zone: zoneDescription,
-    };
-
-    data.showData = showData;
-    setViewData(data);
-    setViewOpen(true);
-  };
-
-  const columns = useMemo(
-    () => [
-      { field: "id", headerName: "Request Id", flex: 0.6, minWidth: 150 },
-      {
-        field: "circleCode",
-        headerName: "Circle Code",
-        flex: 0.6,
-        sortable: true,
-        minWidth: 160,
       },
+    },
+  ];
 
-      {
-        field: "circleName",
-        headerName: "Circle Name",
-        flex: 1.2,
-        sortable: true,
-        minWidth: 150,
-      },
-      {
-        field: "zoneCode",
-        headerName: "Zone",
-        filterable: false,
-        minWidth: 160,
-        flex: 1,
-        renderCell: (params) => {
-          const zone = zones.find((z) => String(z.id) === String(params.value));
-          return zone ? zone.description : "N/A";
-        },
-      },
-
-      {
-        field: "changeType",
-        headerName: "Request Type",
-        flex: 1,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => {
-          const val = params.value;
-          const color =
-            val === "ADD" ? "success" : val === "DELETE" ? "error" : "warning";
-          const icon =
-            val === "ADD" ? (
-              <AddBoxIcon />
-            ) : val === "DELETE" ? (
-              <AutoDeleteIcon />
-            ) : (
-              <EditDocumentIcon />
-            );
-          return (
-            <CustomChip
-            sx={{
-              width:105,
-              justifyContent:"flex-start",
-            }}
-              icon={icon}
-              label={
-                val === "ADD"
-                  ? "Added"
-                  : val === "DELETE"
-                    ? "Deleted"
-                    : "Modified"
-              }
-              color={color}
-              variant="outlined"
-            />
-          );
-        },
-      },
-
-      {
-        field: "reqDate",
-        headerName: "Date of Submission",
-        flex: 1,
-        filterable: false,
-        minWidth: 160,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <Box>
-            <Chip
-              sx={{ color: "text.secondary" }}
-              icon={<DateRangeIcon />}
-              label={params.value.split("T")[0]}
-            />
-          </Box>
-        ),
-      },
-      {
-        field: "reqStatus",
-        headerName: "Status",
-        flex: 0.7,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <Box
-            // sx={{
-            //   color:
-            //     params.value === "REJECTED"
-            //       ? "error.main"
-            //       : params.value === "ACCEPTED"
-            //         ? "success.dark"
-            //         : "warning.main",
-            //   // fontWeight: "bold",
-            // }}
-          >
-            <CustomChip
-              variant="outlined"
-              icon={
-                params.value === "REJECTED" ? (
-                  <BlockFlippedIcon />
-                ) : params.value === "ACCEPTED" ? (
-                  <CheckCircleIcon />
-                ) : params.value === "CANCELLED" ? (
-                  <GppBadIcon />
-                ) : (
-                  <PendingActionsIcon />
-                )
-              }
-              label={
-                params.value === "REJECTED"
-                  ? "Rejected"
-                  : params.value === "ACCEPTED"
-                    ? "Approved"
-                    : params.value === "CANCELLED"
-                      ? "Cancelled"
-                      : "Pending"
-              }
-              sx={{
-                color:
-                  params.value === "REJECTED"
-                    ? "error.dark"
-                    : params.value === "ACCEPTED"
-                      ? "success.dark"
-                      : params.value === "CANCELLED"
-                        ? "primary.dark"
-                        : "warning.main",
-
-                "& .MuiChip-icon": {
-                  color:
-                    params.value === "REJECTED"
-                      ? "error.dark"
-                      : params.value === "ACCEPTED"
-                        ? "success.dark"
-                        : params.value === "CANCELLED"
-                          ? "primary.dark"
-                          : "warning.main",
-                },
-              }}
-            />
-          </Box>
-        ),
-      },
-      {
-        field: "action",
-        headerName: "Action",
-        flex: 1,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => {
-          return (
-            <Stack
-              direction="row"
-              spacing={1}
-              justifyContent="center"
-              alignItems="center"
-              sx={{ height: "100%" }}
-            >
-              {permissions.view && (
-                <Tooltip title="View">
-                  <IconButton
-                    // color="primary"
-                    onClick={() => handleViewClick(params.row)}
-                  >
-                    <VisibilityIcon />
-                  </IconButton>
-                </Tooltip>
-              )}
-
-              {params.row.reqStatus === "PENDING" && permissions.cancel && (
-                <Tooltip title={"Cancel Request"}>
-                  <IconButton
-                    onClick={() => {
-                      setConfirmDialog(true);
-                      setRequestId(params.row.id);
-                    }}
-                  >
-                    <CancelIcon fontSize="inherit" />
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Stack>
-          );
-        },
-      },
-    ],
-    [permissions.cancel, permissions.view, zones],
-  );
-  const filteredColumns = useMemo(() => {
-    if (permissions.view || permissions.cancel) {
-      return columns;
-    }
-    // Otherwise, filter out the column where field name is 'action'.
-    else {
-      return columns.filter((column) => column.field !== "action");
-    }
-  }, [columns, permissions]);
+  function CustomNoRowsOverlay() {
+    return (
+      <Stack
+        height="100%"
+        alignItems="center"
+        justifyContent="center"
+        spacing={1}
+      >
+        <Inbox
+          sx={{ fontSize: "3rem", color: "text.secondary", opacity: 0.5 }}
+        />
+        <Typography variant="h6" color="text.secondary">
+          No Data Found
+        </Typography>
+      </Stack>
+    );
+  }
 
   return (
-    <>
-      <Box>
-        <Box>
+    <Container maxWidth="xl">
+      {/* 1. Control Panel - Full Width Design */}
+      <motion.div
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+      >
+        <Paper
+          elevation={0}
+          sx={{
+            p: "30px 32px",
+            mb: 2,
+            borderRadius: 4,
+            display: "flex",
+            alignItems: "center", // Align items to center vertically
+            justifyContent: "space-between", // Pushes content to edges
+            // backgroundColor: "#fff",
+            border: "1px solid",
+            borderColor: "divider",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            overflow: "hidden",
+          }}
+        >
+          {/* Left Side: Input Grouping */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 3, flex: 1 }}>
+            {/* Date Picker Group */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  color: "text.secondary",
+                  whiteSpace: "nowrap",
+                  fontWeight: 700,
+                }}
+              >
+                ETL DATE:
+              </Typography>
+              <FormControl sx={{ minWidth: 220 }}>
+                <LocalizationProvider
+                  dateAdapter={AdapterDayjs}
+                  adapterLocale="en-gb"
+                >
+                  <DatePicker
+                    format="DD/MM/YYYY"
+                    value={date || etlDate}
+                    onChange={(newDate) => setDate(newDate)}
+                    maxDate={etlDate ? dayjs(etlDate) : dayjs()}
+                    minDate={minDate}
+                    onError={(newError) => setDateError(newError)}
+                    disabled={loading}
+                    slotProps={{
+                      textField: {
+                        size: "small",
+                        error: !!dateError,
+                        helperText: dateError ? getErrorMessage(dateError) : "",
+                        placeholder: "DD/MM/YYYY",
+                        sx: {
+                          "& .MuiOutlinedInput-root": {
+                            borderRadius: 2,
+                            bgcolor: "#fcfcfc",
+                          },
+                          "& .MuiFormHelperText-root": {
+                            position: "absolute",
+                            bottom: -20,
+                          }, // Prevents shifting the row height
+                        },
+                      },
+                    }}
+                  />
+                </LocalizationProvider>
+              </FormControl>
+            </Box>
+
+            {/* Divider Line */}
+            <Box sx={{ height: 30, width: "1px", bgcolor: "divider" }} />
+
+            {/* System Select Group */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  color: "text.secondary",
+                  whiteSpace: "nowrap",
+                  fontWeight: 700,
+                }}
+              >
+                SYSTEM TYPE:
+              </Typography>
+              <TextField
+                select
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+                size="small"
+                sx={{
+                  width: 180,
+                }}
+                disabled={loading}
+              >
+                <MenuItem value="CBS">CBS</MenuItem>
+                <MenuItem value="GLIF">GLIF</MenuItem>
+              </TextField>
+            </Box>
+          </Box>
+
+          {/* Right Side: Action Button */}
+          <Box sx={{ ml: 2 }}>
+            <Button
+              variant="contained"
+              disabled={!isFormValid || loading}
+              onClick={() => fetchData(date)}
+              startIcon={
+                loading ? (
+                  <CircularProgress size={20} color="inherit" />
+                ) : (
+                  <Search />
+                )
+              }
+              sx={{
+                borderRadius: 2,
+                px: 6,
+                height: 40,
+                textTransform: "none",
+                fontWeight: 800,
+                boxShadow: "none",
+                "&:hover": { boxShadow: "0 4px 12px rgba(25, 118, 210, 0.2)" },
+              }}
+            >
+              {loading ? "Fetching..." : "Fetch Records"}
+            </Button>
+          </Box>
+        </Paper>
+      </motion.div>
+
+      {/* 2. Stat Cards */}
+      <Grid container spacing={3} sx={{ m: 2, mb: 4, mt: 4 }}>
+        {[
+          {
+            label: "Total Files Tracked",
+            val: meta.total,
+            col: "#1976d2",
+            icon: <FilePresent />,
+          },
+          {
+            label: "Missing Files",
+            val: meta.missing,
+            col: "#d32f2f",
+            icon: <ErrorOutline />,
+          },
+          {
+            label: "Count Mismatch",
+            val: meta.mismatchCount,
+            col: "#ed6c02",
+            icon: <WarningAmber />,
+          },
+          {
+            label: "Malformed",
+            val: meta.malformed,
+            col: "#c746b6",
+            icon: <Compare />,
+          },
+        ].map((s, i) => (
+          <Grid size={{ xs: 12, sm: 6, md: 3 }} key={i}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3, delay: i * 0.1 }}
+            >
+              <Card
+                sx={{
+                  borderLeft: `6px solid ${s.col}`,
+                  borderRadius: 3,
+                  boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+                }}
+              >
+                <CardContent
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    py: 2,
+                  }}
+                >
+                  <Box>
+                    <Typography
+                      variant="overline"
+                      sx={{ color: "text.secondary", fontWeight: "bold" }}
+                    >
+                      {s.label}
+                    </Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                      {s.val}
+                    </Typography>
+                  </Box>
+                  <Box
+                    sx={{
+                      color: s.col,
+                      backgroundColor: `${s.col}15`,
+                      p: 1.5,
+                      borderRadius: "50%",
+                    }}
+                  >
+                    {s.icon}
+                  </Box>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+        ))}
+      </Grid>
+
+      {/* 4. Animated Data Table */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.4 }}
+      >
+        <Paper
+          sx={{
+            height: 600,
+            width: "100%",
+            boxShadow: 3,
+            borderRadius: 3,
+            overflow: "hidden",
+          }}
+        >
           <DataGrid
-            loading={loading}
             rows={rows}
-            columns={filteredColumns}
-            disableRowSelectionOnClick
-            pageSizeOptions={[5, 10, 25, 50]}
-            initialState={{
-              pagination: { paginationModel: { pageSize: 10, page: 0 } },
-              // sorting: { sortModel: [{ field: "circleCode", sort: "asc" }] },
-            }}
+            columns={columns}
+            loading={loading}
+            paginationModel={paginationModel}
+            onPaginationModelChange={setPaginationModel}
             slots={{
+              toolbar: GridToolbar,
               noRowsOverlay: CustomNoRowsOverlay,
             }}
-            getRowId={(row) => row.id}
-             sx={{
+            slotProps={{
+              toolbar: { showQuickFilter: true },
+            }}
+            disableRowSelectionOnClick
+            sx={{
+              border: "none",
               "& .MuiDataGrid-columnHeaders": {
-              backgroundColor: "#f5f5f5 !important",
-             border:"none",
-             },
+                backgroundColor: "#f8f9fa",
+                color: "#5f6368",
+              },
+              "& .MuiDataGrid-cell:hover": { color: "primary.main" },
+              // Optional: Set a minimum height so the icon is centered vertically
+              minHeight: 400,
             }}
           />
-        </Box>
-      </Box>
-      <ViewMyRequestDialog
-        open={viewOpen}
-        handleClose={() => setViewOpen(false)}
-        data={viewData}
-      />
-
-      {/* Cancel Dialog */}
-      <Dialog
-        open={confirmDialog}
-        onClose={() => {
-          setConfirmDialog(false);
-        }}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ fontWeight: 600 }}>
-          Cancel Request ID: {requestId}
-        </DialogTitle>
-        <DialogContent>
-          <Typography sx={{ p: 1 }}>
-            Are you sure you want to cancel this request Please confirm ?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setConfirmDialog(false);
-            }}
-            variant="outlined"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleCancelRequest}
-            color="error"
-            variant="contained"
-          >
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </>
+        </Paper>
+      </motion.div>
+    </Container>
   );
-}
+};
+
+export default FileComparison;
