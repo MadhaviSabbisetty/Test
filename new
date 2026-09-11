@@ -1,27 +1,27 @@
 import * as React from "react";
 import PropTypes from "prop-types";
-import { Tabs, Tab, Box, Paper } from "@mui/material";
-import CurrencyRupeeIcon from "@mui/icons-material/CurrencyRupee";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
+import Box from "@mui/material/Box";
+import CGLMasterTab from "./CGLMasterTab";
+import MyCGLRequestsTab from "./MyCGLRequestsTab";
+import ConnectWithoutContactIcon from "@mui/icons-material/ConnectWithoutContact";
 import PendingActionsIcon from "@mui/icons-material/PendingActions";
-import CurrencyRateChangeTab from "./CurrencyRateChangeTab";
-import MyCurrencyRateRequestsTab from "./MyCurrencyRateRequestsTab";
-import { CurrencyRateMasterStyles } from "./CurrencyRateChangeStyles";
+import { Paper } from "@mui/material";
 
 function CustomTabPanel(props) {
   const { children, value, index, ...other } = props;
 
   return (
-    <Box
+    <div
       role="tabpanel"
       hidden={value !== index}
       id={`simple-tabpanel-${index}`}
       aria-labelledby={`simple-tab-${index}`}
       {...other}
     >
-      {value === index && (
-        <Box sx={CurrencyRateMasterStyles.customTabPanelBox}>{children}</Box>
-      )}
-    </Box>
+      {value === index && <Box sx={{ py: 2 }}>{children}</Box>}
+    </div>
   );
 }
 
@@ -38,7 +38,7 @@ function a11yProps(index) {
   };
 }
 
-export default function CurrencyRateChange() {
+export default function CGLMaster() {
   const [value, setValue] = React.useState(0);
 
   const handleChange = (event, newValue) => {
@@ -46,28 +46,35 @@ export default function CurrencyRateChange() {
   };
 
   return (
-     <Paper
-    elevation={2}
-    sx={{
-      display:"flex",
-      flexDirection:"column",
-      borderRadius:2,
-      overflow:"hidden",
-      minHeight:"calc(100vh - 210px)",
-      width:"100%",
-    }}>
-      <Box>
-      <Box sx={CurrencyRateMasterStyles.tabBox}>
+    <>
+    <Paper
+        elevation={2}
+        sx={{
+          display:"flex",
+          flexDirection:"column",
+          borderRadius:2,
+          overflow:"hidden",
+          minHeight:"calc(100vh - 210px)",
+          width:"100%",
+        }}>
+      <Box
+        sx={{
+          borderBottom: 1,
+          borderColor: "divider",
+        }}
+      >
         <Tabs
-          sx={CurrencyRateMasterStyles.tabs}
+          sx={{
+            width: "100%",
+          }}
           value={value}
           onChange={handleChange}
           aria-label="basic tabs example"
           variant="fullWidth"
         >
           <Tab
-            label="Manage Currency Rate"
-            icon={<CurrencyRupeeIcon />}
+            label="Manage CGL's"
+            icon={<ConnectWithoutContactIcon />}
             iconPosition="start"
             {...a11yProps(0)}
           />
@@ -80,216 +87,12 @@ export default function CurrencyRateChange() {
         </Tabs>
       </Box>
       <CustomTabPanel value={value} index={0}>
-        <CurrencyRateChangeTab />
+        <CGLMasterTab />
       </CustomTabPanel>
       <CustomTabPanel value={value} index={1}>
-        <MyCurrencyRateRequestsTab permissions={{view:true ,cancel:true}}/>
+        <MyCGLRequestsTab />
       </CustomTabPanel>
-      </Box>
-    </Paper>
+      </Paper>
+    </>
   );
-}import { styled } from "@mui/material/styles";
-import {
-  Box,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  TextField,
-  Button,
-  Grid,
-  TableBody,
-  TableCell,
-  Table,
-  TableContainer,
-  TableHead,
-  TableRow,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  CircularProgress,
-  TablePagination,
-  Chip,
-  IconButton,
-  Typography,
-} from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
-import { BorderBottom } from "@mui/icons-material";
-
-export const StyledContainerBox = styled(Box)(({ theme }) => ({
-  padding: theme.spacing(3),
-}));
-
-export const StyledTablePagination = styled(TablePagination)(({ theme }) => ({
-  display: "flex",
-  justifyContent: "space-around",
-  borderTop: `1px solid ${theme.palette.divider}`,
-  backgroundColor: theme.palette.background.paper,
-  borderRadius: "0 0 12px 12px",
-  "& .MuiTablePagination-toolbar": {
-    minHeight: "48px",
-  },
-  "& .MuiTablePagination-selectLabel": {
-    fontSize: "14px",
-  },
-  "& .MuiTablePagination-input": {
-    fontSize: "14px",
-  },
-  "& .MuiTablePagination-displayedRows": {
-    fontSize: "14px",
-  },
-  "& .MuiTablePagination-actions": {
-    "& svg": {
-      fontSize: "20px",
-    },
-  },
-}));
-
-export const StyledDataGridContainer = styled(DataGrid)(({ theme }) => ({
-
-}));
-
-export const StyledDialog = styled(Dialog)(({ theme }) => ({
-  "& .MuiDialog-paper": {
-    minWidth: "500px",
-    // height: "520px",
-    display: "flex",
-  },
-}));
-
-export const StyledDialogTitle = styled(DialogTitle)(({ theme }) => ({
-  marginTop: theme.spacing(1),
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-}));
-
-export const StyledDialogContent = styled(DialogContent)(({ theme }) => ({}));
-
-export const StyledTextField = styled(TextField)(({ theme }) => ({
-  marginTop: theme.spacing(1),
-  marginBottom: theme.spacing(1),
-}));
-
-export const StyledDialogActions = styled(DialogActions)(({ theme }) => ({
-  padding: "16px 24px",
-  justifyContent: "flex-end",
-}));
-
-export const StyledCircularProgressBox = styled(Box)(({ theme }) => ({
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  height: 300,
-}));
-
-export const StyledCircularProgress = styled(CircularProgress)(
-  ({ theme }) => ({})
-);
-
-export const StyledButton = styled(Button)(({ theme }) => ({}));
-
-export const StyledGridContainer = styled(Grid)(({ theme }) => ({
-  marginBottom: theme.spacing(2),
-}));
-
-export const StyledGridItem = styled(Grid)(({ theme }) => ({
-  // Note: Spacing is usually handled by Grid 'spacing' prop or 'item'
-  // Adding marginRight here might break Grid layouts, use carefully.
-  // marginRight: theme.spacing(2), 
-}));
-
-export const StyledFormControl = styled(FormControl)(({ theme }) => ({}));
-
-export const StyledInputLabel = styled(InputLabel)(({ theme }) => ({}));
-
-export const StyledSelect = styled(Select)(({ theme }) => ({}));
-
-export const StyledMenuItem = styled(MenuItem)(({ theme }) => ({}));
-
-export const StyledTableContainer = styled(TableContainer)(({ theme }) => ({
-  borderRadius: "10px",
-}));
-
-export const StyledTable = styled(Table)(() => ({}));
-
-export const StyledTableHead = styled(TableHead)(() => ({}));
-
-export const StyledTableBody = styled(TableBody)(() => ({}));
-
-export const StyledTableRow = styled(TableRow)(() => ({
-  "&:hover": {},
-}));
-
-export const StyledTableHeaderCell = styled(TableCell)(({ theme }) => ({
-  fontWeight: "bold",
-  fontSize: "14px",
-}));
-
-export const StyledTableCell = styled(TableCell)(() => ({
-  fontSize: "14px",
-}));
-
-export const StyledEmptyCell = styled(TableCell)(({ theme }) => ({
-  textAlign: "center",
-  padding: theme.spacing(3),
-  color: theme.palette.text.secondary,
-}));
-
-export const StyledCloseButton = styled(IconButton)(() => ({
-  padding: 4,
-  // alignContent is not for text alignment. 
-  // IconButton handles centering usually.
-}));
-
-export const StyledBox = styled(Box)(({ theme }) => ({
-  marginTop: theme.spacing(2),
-}));
-
-export const StyledTypographyBox = styled(Box)(({ theme }) => ({
-  marginBottom: "20px",
-}));
-
-export const StyledDataGrid = styled(DataGrid)(({ theme }) => ({
-  
-}));
-
-export const StyledDialogTitleBox = styled(Box)(({ theme }) => ({}));
-
-export const StyledTypography = styled(Typography)(({ theme }) => ({
-  fontWeight: "bold",
-  fontSize: "20px",
-}));
-
-export const StyledDateChip = styled(Chip)(({ theme }) => ({
-  color: theme.palette.text.secondary,
-}));
-
-export const StyledStatusChip = styled(Chip)(({ theme }) => ({
-  padding: theme.spacing(0.5),
-  margin: 0,
-  width: "90%",
-}));
-
-export const StyledStatusBox = styled(Box)(({ theme }) => ({
-}));
-
-export const StyledRequestDataGrid = styled(DataGrid)(({ theme }) => ({
-
-}));
-
-export const StyledRequestContainerBox = styled(Box)(({ theme }) => ({}));
-
-export const CurrencyRateMasterStyles = {
-  tabBox: {
-    borderColor: "divider",
-  },
-  tabs: {
-    width: "100%",
-    height: "100%",
-  },
-  customTabPanelBox: {
-    // py: 2,
-  },
-};
+}
