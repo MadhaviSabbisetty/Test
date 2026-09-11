@@ -1,427 +1,295 @@
+import * as React from "react";
+import PropTypes from "prop-types";
+import { Tabs, Tab, Box, Paper } from "@mui/material";
+import CurrencyRupeeIcon from "@mui/icons-material/CurrencyRupee";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import CurrencyRateChangeTab from "./CurrencyRateChangeTab";
+import MyCurrencyRateRequestsTab from "./MyCurrencyRateRequestsTab";
+import { CurrencyRateMasterStyles } from "./CurrencyRateChangeStyles";
+
+function CustomTabPanel(props) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <Box
+      role="tabpanel"
+      hidden={value !== index}
+      id={`simple-tabpanel-${index}`}
+      aria-labelledby={`simple-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={CurrencyRateMasterStyles.customTabPanelBox}>{children}</Box>
+      )}
+    </Box>
+  );
+}
+
+CustomTabPanel.propTypes = {
+  children: PropTypes.node,
+  index: PropTypes.number.isRequired,
+  value: PropTypes.number.isRequired,
+};
+
+function a11yProps(index) {
+  return {
+    id: `simple-tab-${index}`,
+    "aria-controls": `simple-tabpanel-${index}`,
+  };
+}
+
+export default function CurrencyRateChange() {
+  const [value, setValue] = React.useState(0);
+
+  const handleChange = (event, newValue) => {
+    setValue(newValue);
+  };
+
+  return (
+     <Paper
+    elevation={2}
+    sx={{
+      display:"flex",
+      flexDirection:"column",
+      borderRadius:2,
+      overflow:"hidden",
+      minHeight:"calc(100vh - 210px)",
+      width:"100%",
+    }}>
+      <Box>
+      <Box sx={CurrencyRateMasterStyles.tabBox}>
+        <Tabs
+          sx={CurrencyRateMasterStyles.tabs}
+          value={value}
+          onChange={handleChange}
+          aria-label="basic tabs example"
+          variant="fullWidth"
+        >
+          <Tab
+            label="Manage Currency Rate"
+            icon={<CurrencyRupeeIcon />}
+            iconPosition="start"
+            {...a11yProps(0)}
+          />
+          <Tab
+            icon={<PendingActionsIcon />}
+            iconPosition="start"
+            label="My Requests"
+            {...a11yProps(1)}
+          />
+        </Tabs>
+      </Box>
+      <CustomTabPanel value={value} index={0}>
+        <CurrencyRateChangeTab />
+      </CustomTabPanel>
+      <CustomTabPanel value={value} index={1}>
+        <MyCurrencyRateRequestsTab permissions={{view:true ,cancel:true}}/>
+      </CustomTabPanel>
+      </Box>
+    </Paper>
+  );
+}import { styled } from "@mui/material/styles";
 import {
   Box,
-  Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Stack,
-  Typography,
-  Tooltip,
-  IconButton,
+  TextField,
+  Button,
+  Grid,
+  TableBody,
+  TableCell,
+  Table,
+  TableContainer,
+  TableHead,
+  TableRow,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  CircularProgress,
+  TablePagination,
   Chip,
+  IconButton,
+  Typography,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import { useEffect, useMemo, useState } from "react";
-import InfoIcon from "@mui/icons-material/Info";
-import useApi from "../../hooks/useApi";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
-import DateRangeIcon from "@mui/icons-material/DateRange";
-import CancelIcon from "@mui/icons-material/Cancel";
-import { useSelector } from "react-redux";
-import CustomChip from "../../utils/CustomChip";
-import GppBadIcon from "@mui/icons-material/GppBad";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
-import { getPermissions } from "../../utils/CommonUtilities";
+import { BorderBottom } from "@mui/icons-material";
 
-function CustomNoRowsOverlay() {
-  return (
-    <Stack height="100%" alignItems="center" justifyContent="center">
-      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-      <Typography variant="h6">No Circle Requests Found</Typography>
-      <Typography>You have not created any Circle requests.</Typography>
-    </Stack>
-  );
-}
-export default function MyCircleRequestsTab() {
-  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
-  const [rows, setRows] = useState([]);
-  const [confirmDialog, setConfirmDialog] = useState(false);
-  const { callApi } = useApi();
-  const snackbar = useCustomSnackbar();
-  const permissions = getPermissions(selectedMenuItem);
-  const [requestId, setRequestId] = useState(null);
-  const [viewOpen, setViewOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [zones, setZones] = useState([]);
-  const [viewData, setViewData] = useState(null);
+export const StyledContainerBox = styled(Box)(({ theme }) => ({
+  padding: theme.spacing(3),
+}));
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const payload = { requestType: "CIRCLE" };
-      const [zonesRes, response] = await Promise.all([
-        callApi("/CM/common-master/zone-codes", null, "GET"),
-        callApi("/CR/my-requests", payload, "POST"),
-      ]);
+export const StyledTablePagination = styled(TablePagination)(({ theme }) => ({
+  display: "flex",
+  justifyContent: "space-around",
+  borderTop: `1px solid ${theme.palette.divider}`,
+  backgroundColor: theme.palette.background.paper,
+  borderRadius: "0 0 12px 12px",
+  "& .MuiTablePagination-toolbar": {
+    minHeight: "48px",
+  },
+  "& .MuiTablePagination-selectLabel": {
+    fontSize: "14px",
+  },
+  "& .MuiTablePagination-input": {
+    fontSize: "14px",
+  },
+  "& .MuiTablePagination-displayedRows": {
+    fontSize: "14px",
+  },
+  "& .MuiTablePagination-actions": {
+    "& svg": {
+      fontSize: "20px",
+    },
+  },
+}));
 
-      setZones(zonesRes?.data ?? []);
+export const StyledDataGridContainer = styled(DataGrid)(({ theme }) => ({
 
-      if (response?.data) {
-        const result = response.data.map((row) => {
-          let parsedPayload = {};
-          parsedPayload = row.payload ? row.payload : {};
-          parsedPayload = {
-            ...parsedPayload,
-            id: row.id,
-            reqStatus: row.reqStatus,
-            reqDate: row.reqDate,
-            creatorId: row.creatorId,
-            executorId: row.executorId,
-            executionDate: row.executionDate,
-            executorRemarks: row.executorRemarks,
-            changeType: row.changeType,
-          };
+}));
 
-          return {
-            ...parsedPayload,
-          };
-        });
-        result.sort((a, b) => {
-          if (a.reqStatus === "PENDING" && b.reqStatus !== "PENDING") return -1;
-          if (a.reqStatus !== "PENDING" && b.reqStatus === "PENDING") return 1;
-          return new Date(b.reqDate) - new Date(a.reqDate);
-        });
-        setRows(result);
-      } else {
-        setRows([]);
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+export const StyledDialog = styled(Dialog)(({ theme }) => ({
+  "& .MuiDialog-paper": {
+    minWidth: "500px",
+    // height: "520px",
+    display: "flex",
+  },
+}));
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+export const StyledDialogTitle = styled(DialogTitle)(({ theme }) => ({
+  marginTop: theme.spacing(1),
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+}));
 
-  const handleCancelRequest = async () => {
-    try {
-      const payload = {
-        requestId,
-        remarks: "User canceled this Request",
-      };
+export const StyledDialogContent = styled(DialogContent)(({ theme }) => ({}));
 
-      const response = await callApi("/CR/cancel-request", payload, "PATCH");
-      if (response?.success) {
-        snackbar(`Request Id ${requestId} Cancelled Successfully.`, "success");
-      } else {
-        snackbar(
-          response?.message
-            ? response?.message
-            : "Failed to process your cancel request, Kindly try again",
-          "error",
-        );
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      fetchData();
-      setConfirmDialog(false);
-    }
-  };
-  const handleViewClick = (data) => {
-    const { circleCode, circleName, zoneDescription } = data;
-    const showData = {
-      circleCode,
-      circleName,
-      zone: zoneDescription,
-    };
+export const StyledTextField = styled(TextField)(({ theme }) => ({
+  marginTop: theme.spacing(1),
+  marginBottom: theme.spacing(1),
+}));
 
-    data.showData = showData;
-    setViewData(data);
-    setViewOpen(true);
-  };
+export const StyledDialogActions = styled(DialogActions)(({ theme }) => ({
+  padding: "16px 24px",
+  justifyContent: "flex-end",
+}));
 
-  const columns = useMemo(
-    () => [
-      { field: "id", headerName: "Request Id", flex: 0.6, minWidth: 150 },
-      {
-        field: "circleCode",
-        headerName: "Circle Code",
-        flex: 0.6,
-        sortable: true,
-        minWidth: 160,
-      },
+export const StyledCircularProgressBox = styled(Box)(({ theme }) => ({
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  height: 300,
+}));
 
-      {
-        field: "circleName",
-        headerName: "Circle Name",
-        flex: 1.2,
-        sortable: true,
-        minWidth: 150,
-      },
-      {
-        field: "zoneCode",
-        headerName: "Zone",
-        filterable: false,
-        minWidth: 160,
-        flex: 1,
-        renderCell: (params) => {
-          const zone = zones.find((z) => String(z.id) === String(params.value));
-          return zone ? zone.description : "N/A";
-        },
-      },
+export const StyledCircularProgress = styled(CircularProgress)(
+  ({ theme }) => ({})
+);
 
-      {
-        field: "changeType",
-        headerName: "Request Type",
-        flex: 1,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => {
-          const val = params.value;
-          const color =
-            val === "ADD" ? "success" : val === "DELETE" ? "error" : "warning";
-          const icon =
-            val === "ADD" ? (
-              <AddBoxIcon />
-            ) : val === "DELETE" ? (
-              <AutoDeleteIcon />
-            ) : (
-              <EditDocumentIcon />
-            );
-          return (
-            <CustomChip
-            sx={{
-              width:105,
-              justifyContent:"flex-start",
-            }}
-              icon={icon}
-              label={
-                val === "ADD"
-                  ? "Added"
-                  : val === "DELETE"
-                    ? "Deleted"
-                    : "Modified"
-              }
-              color={color}
-              variant="outlined"
-            />
-          );
-        },
-      },
+export const StyledButton = styled(Button)(({ theme }) => ({}));
 
-      {
-        field: "reqDate",
-        headerName: "Date of Submission",
-        flex: 1,
-        filterable: false,
-        minWidth: 160,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <Box>
-            <Chip
-              sx={{ color: "text.secondary" }}
-              icon={<DateRangeIcon />}
-              label={params.value.split("T")[0]}
-            />
-          </Box>
-        ),
-      },
-      {
-        field: "reqStatus",
-        headerName: "Status",
-        flex: 0.7,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <Box
-            // sx={{
-            //   color:
-            //     params.value === "REJECTED"
-            //       ? "error.main"
-            //       : params.value === "ACCEPTED"
-            //         ? "success.dark"
-            //         : "warning.main",
-            //   // fontWeight: "bold",
-            // }}
-          >
-            <CustomChip
-              variant="outlined"
-              icon={
-                params.value === "REJECTED" ? (
-                  <BlockFlippedIcon />
-                ) : params.value === "ACCEPTED" ? (
-                  <CheckCircleIcon />
-                ) : params.value === "CANCELLED" ? (
-                  <GppBadIcon />
-                ) : (
-                  <PendingActionsIcon />
-                )
-              }
-              label={
-                params.value === "REJECTED"
-                  ? "Rejected"
-                  : params.value === "ACCEPTED"
-                    ? "Approved"
-                    : params.value === "CANCELLED"
-                      ? "Cancelled"
-                      : "Pending"
-              }
-              sx={{
-                color:
-                  params.value === "REJECTED"
-                    ? "error.dark"
-                    : params.value === "ACCEPTED"
-                      ? "success.dark"
-                      : params.value === "CANCELLED"
-                        ? "primary.dark"
-                        : "warning.main",
+export const StyledGridContainer = styled(Grid)(({ theme }) => ({
+  marginBottom: theme.spacing(2),
+}));
 
-                "& .MuiChip-icon": {
-                  color:
-                    params.value === "REJECTED"
-                      ? "error.dark"
-                      : params.value === "ACCEPTED"
-                        ? "success.dark"
-                        : params.value === "CANCELLED"
-                          ? "primary.dark"
-                          : "warning.main",
-                },
-              }}
-            />
-          </Box>
-        ),
-      },
-      {
-        field: "action",
-        headerName: "Action",
-        flex: 1,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => {
-          return (
-            <Stack
-              direction="row"
-              spacing={1}
-              justifyContent="center"
-              alignItems="center"
-              sx={{ height: "100%" }}
-            >
-              {permissions.view && (
-                <Tooltip title="View">
-                  <IconButton
-                    // color="primary"
-                    onClick={() => handleViewClick(params.row)}
-                  >
-                    <VisibilityIcon />
-                  </IconButton>
-                </Tooltip>
-              )}
+export const StyledGridItem = styled(Grid)(({ theme }) => ({
+  // Note: Spacing is usually handled by Grid 'spacing' prop or 'item'
+  // Adding marginRight here might break Grid layouts, use carefully.
+  // marginRight: theme.spacing(2), 
+}));
 
-              {params.row.reqStatus === "PENDING" && permissions.cancel && (
-                <Tooltip title={"Cancel Request"}>
-                  <IconButton
-                    onClick={() => {
-                      setConfirmDialog(true);
-                      setRequestId(params.row.id);
-                    }}
-                  >
-                    <CancelIcon fontSize="inherit" />
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Stack>
-          );
-        },
-      },
-    ],
-    [permissions.cancel, permissions.view, zones],
-  );
-  const filteredColumns = useMemo(() => {
-    if (permissions.view || permissions.cancel) {
-      return columns;
-    }
-    // Otherwise, filter out the column where field name is 'action'.
-    else {
-      return columns.filter((column) => column.field !== "action");
-    }
-  }, [columns, permissions]);
+export const StyledFormControl = styled(FormControl)(({ theme }) => ({}));
 
-  return (
-    <>
-      <Box>
-        <Box>
-          <DataGrid
-            loading={loading}
-            rows={rows}
-            columns={filteredColumns}
-            disableRowSelectionOnClick
-            pageSizeOptions={[5, 10, 25, 50]}
-            initialState={{
-              pagination: { paginationModel: { pageSize: 10, page: 0 } },
-              // sorting: { sortModel: [{ field: "circleCode", sort: "asc" }] },
-            }}
-            slots={{
-              noRowsOverlay: CustomNoRowsOverlay,
-            }}
-            getRowId={(row) => row.id}
-          />
-        </Box>
-      </Box>
-      <ViewMyRequestDialog
-        open={viewOpen}
-        handleClose={() => setViewOpen(false)}
-        data={viewData}
-      />
+export const StyledInputLabel = styled(InputLabel)(({ theme }) => ({}));
 
-      {/* Cancel Dialog */}
-      <Dialog
-        open={confirmDialog}
-        onClose={() => {
-          setConfirmDialog(false);
-        }}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ fontWeight: 600 }}>
-          Cancel Request ID: {requestId}
-        </DialogTitle>
-        <DialogContent>
-          <Typography sx={{ p: 1 }}>
-            Are you sure you want to cancel this request Please confirm ?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setConfirmDialog(false);
-            }}
-            variant="outlined"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleCancelRequest}
-            color="error"
-            variant="contained"
-          >
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </>
-  );
-}
+export const StyledSelect = styled(Select)(({ theme }) => ({}));
+
+export const StyledMenuItem = styled(MenuItem)(({ theme }) => ({}));
+
+export const StyledTableContainer = styled(TableContainer)(({ theme }) => ({
+  borderRadius: "10px",
+}));
+
+export const StyledTable = styled(Table)(() => ({}));
+
+export const StyledTableHead = styled(TableHead)(() => ({}));
+
+export const StyledTableBody = styled(TableBody)(() => ({}));
+
+export const StyledTableRow = styled(TableRow)(() => ({
+  "&:hover": {},
+}));
+
+export const StyledTableHeaderCell = styled(TableCell)(({ theme }) => ({
+  fontWeight: "bold",
+  fontSize: "14px",
+}));
+
+export const StyledTableCell = styled(TableCell)(() => ({
+  fontSize: "14px",
+}));
+
+export const StyledEmptyCell = styled(TableCell)(({ theme }) => ({
+  textAlign: "center",
+  padding: theme.spacing(3),
+  color: theme.palette.text.secondary,
+}));
+
+export const StyledCloseButton = styled(IconButton)(() => ({
+  padding: 4,
+  // alignContent is not for text alignment. 
+  // IconButton handles centering usually.
+}));
+
+export const StyledBox = styled(Box)(({ theme }) => ({
+  marginTop: theme.spacing(2),
+}));
+
+export const StyledTypographyBox = styled(Box)(({ theme }) => ({
+  marginBottom: "20px",
+}));
+
+export const StyledDataGrid = styled(DataGrid)(({ theme }) => ({
+  
+}));
+
+export const StyledDialogTitleBox = styled(Box)(({ theme }) => ({}));
+
+export const StyledTypography = styled(Typography)(({ theme }) => ({
+  fontWeight: "bold",
+  fontSize: "20px",
+}));
+
+export const StyledDateChip = styled(Chip)(({ theme }) => ({
+  color: theme.palette.text.secondary,
+}));
+
+export const StyledStatusChip = styled(Chip)(({ theme }) => ({
+  padding: theme.spacing(0.5),
+  margin: 0,
+  width: "90%",
+}));
+
+export const StyledStatusBox = styled(Box)(({ theme }) => ({
+}));
+
+export const StyledRequestDataGrid = styled(DataGrid)(({ theme }) => ({
+
+}));
+
+export const StyledRequestContainerBox = styled(Box)(({ theme }) => ({}));
+
+export const CurrencyRateMasterStyles = {
+  tabBox: {
+    borderColor: "divider",
+  },
+  tabs: {
+    width: "100%",
+    height: "100%",
+  },
+  customTabPanelBox: {
+    // py: 2,
+  },
+};
