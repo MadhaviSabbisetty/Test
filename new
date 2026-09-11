@@ -1,37 +1,52 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Box,
-  Button,
-  Dialog,
-  DialogContent,
-  Grid,
-  IconButton,
-  Stack,
-  TextField,
-  Typography,
-  Tooltip,
-  MenuItem,
-  DialogActions,
-  Divider,
-  styled,
-} from "@mui/material";
-
-import {
-  Edit as EditIcon,
-  Add as AddIcon,
-  Close as CloseIcon,
-} from "@mui/icons-material";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
+import { Box, Fab, IconButton, Tooltip, Typography } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import { DataGrid } from "@mui/x-data-grid";
+import OnlinePredictionIcon from "@mui/icons-material/OnlinePrediction";
+import EditIcon from "@mui/icons-material/Edit";
 import useApi from "../../hooks/useApi";
 import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import {
-  CircleTab1Container,
-  CircleMasterDataGrid,
-  CircleTab1Addicon,
-  CircleTab1Fab,
-  CircleTab1Grid,
-  Circletab1DialogTitle,
-} from "./CircleMasterStyle";
+import CustomChip from "../../utils/CustomChip";
+import CGLDialog from "./CGLDialog";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import TrendingDownIcon from "@mui/icons-material/TrendingDown";
+import BookmarkAddedIcon from "@mui/icons-material/BookmarkAdded";
+import BookmarkRemoveIcon from "@mui/icons-material/BookmarkRemove";
+import DatasetIcon from "@mui/icons-material/Dataset";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import GppGoodIcon from "@mui/icons-material/GppGood";
+import GppBadIcon from "@mui/icons-material/GppBad";
+import NoteIcon from "@mui/icons-material/Note";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CancelIcon from "@mui/icons-material/Cancel";
+import { useSelector } from "react-redux";
+import { getPermissions } from "../../utils/CommonUtilities";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import styled from "@emotion/styled";
+
+/* ================= CONSTANTS ================= */
+
+const ACCOUNT_CLASSIFICATIONS = [
+  {
+    value: "A",
+    label: "Asset",
+    icon: <DatasetIcon fontSize="small" />,
+  },
+  {
+    value: "L",
+    label: "Liability",
+    icon: <AccountBalanceWalletIcon fontSize="small" />,
+  },
+  { value: "I", label: "Income", icon: <TrendingUpIcon fontSize="small" /> },
+  { value: "E", label: "Expense", icon: <TrendingDownIcon fontSize="small" /> },
+  { value: "M", label: "Memo A/c", icon: <NoteIcon fontSize="small" /> },
+];
 
 const OverlayBox = styled(Box)(() => ({
   display: "flex",
@@ -41,309 +56,342 @@ const OverlayBox = styled(Box)(() => ({
   alignItems: "center",
 }));
 
-const CustomNoRowsOverlay = () => {
-  return (
-    <OverlayBox>
-      <ErrorOutlineIcon fontSize="large" />
-      <Typography variant="h5" fontSize="1.2rem">
-        Data is not available
-      </Typography>
-    </OverlayBox>
-  );
-};
+const CustomNoRowsOverlay = () => (
+  <OverlayBox>
+    <ErrorOutlineIcon fontSize="large" />
+    <Typography fontSize="1.1rem">Data is not available</Typography>
+  </OverlayBox>
+);
 
-export default function CircleMasterTab() {
-  const [rows, setRows] = useState([]);
-  const [zones, setZones] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const snackbar = useCustomSnackbar();
-  const [originalData, setOriginalData] = useState(null); // New state for original data
-  const [isDataSame, setIsDataSame] = useState(true);
+/* ================= COMPONENT ================= */
+
+export default function CGLMasterTab() {
+  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
+  const requestType = selectedMenuItem?.requestType || "";
+  const permissions = getPermissions(selectedMenuItem);
+
   const { callApi } = useApi();
+  const snackbar = useCustomSnackbar();
 
-  const [circleData, setCircleData] = useState({
-    circleCode: "",
-    circleName: "",
-    zoneCode: "",
+  const [rows, setRows] = useState([]);
+  const [rowCount, setRowCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editRow, setEditRow] = useState(null);
+
+  /* ===== SERVER GRID STATE ===== */
+
+  const [paginationModel, setPaginationModel] = useState({
+    page: 0,
+    pageSize: 20,
   });
-  const [errors, setErrors] = useState({});
 
-  const checkDataEquality = (current, original) => {
-    if (!original) return true; // If no original data, assume they are "same" initially for disable state
-    return (
-      current.circleName === original.circleName &&
-      current.zoneCode === original.zoneCode
-      // currencyCode is excluded as it is the ID and likely read-only
-    );
-  };
+  const [sortModel, setSortModel] = useState([]);
+  const [filterModel, setFilterModel] = useState({ items: [] });
 
-  // --- debounce/snackbar control ---
-  const snackGateRef = useRef(true);
-  const notifyOnce = (msg, variant = "warning") => {
-    if (!snackGateRef.current) return;
-    snackGateRef.current = false;
-    snackbar(msg, variant);
-    setTimeout(() => (snackGateRef.current = true), 900);
-  };
+  /* ===== REFS TO PREVENT DOUBLE CALLS ===== */
 
-  // --- Fetch Data ---
-  const fetchData = async () => {
+  const lastFilterRef = useRef("");
+  const lastQueryRef = useRef("");
+
+  /* ================= FETCH DATA ================= */
+
+  const fetchRows = useCallback(async () => {
+    if (!requestType) return;
+
+    const sortField = sortModel[0]?.field;
+    const sortOrder = sortModel[0]?.sort;
+
+    const filters = filterModel.items
+      .filter(
+        (f) =>
+          f.operator &&
+          f.value !== undefined &&
+          f.value !== null &&
+          f.value !== "",
+      )
+      .map((f) => ({
+        field: f.field,
+        operator: f.operator,
+        value: f.value,
+      }));
+
+    const querySignature = JSON.stringify({
+      page: paginationModel.page,
+      size: paginationModel.pageSize,
+      sortField,
+      sortOrder,
+      filters,
+    });
+
+    // PREVENT DUPLICATE API CALL
+    if (lastQueryRef.current === querySignature) return;
+    lastQueryRef.current = querySignature;
+
     try {
       setLoading(true);
-      const [zonesRes, circlesRes] = await Promise.all([
-        callApi("/CM/common-master/zone-codes", null, "GET"),
-        callApi("/CM/common-master/circle-codes", null, "GET"),
-      ]);
-      setZones(zonesRes?.data ?? []);
-      setRows(circlesRes?.data ?? []);
+      const payload = {
+        // requestType,
+        page: paginationModel.page,
+        size: paginationModel.pageSize,
+        sortField: sortField || "cglNumber",
+        sortOrder: sortOrder || "asc",
+        filters,
+      };
+      const resp = await callApi("/CM/common-master/cgls", payload, "POST");
+
+      setRows(resp?.data?.data || []);
+      setRowCount(resp?.data?.totalElements || 0);
     } catch (err) {
-      console.error(err);
-      snackbar("Failed to fetch data", "error");
+      snackbar(err?.message || "Failed to load CGLs", "error");
+      setRows([]);
+      setRowCount(0);
     } finally {
       setLoading(false);
     }
-  };
+  }, [callApi, requestType, snackbar, paginationModel, sortModel, filterModel]);
 
+  /* ================= EFFECTS ================= */
+
+  // Main fetch
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchRows();
+  }, [fetchRows]);
 
+  // Reset page ONLY when filter meaningfully changes
   useEffect(() => {
-    if (editingId && originalData) {
-      setIsDataSame(checkDataEquality(circleData, originalData));
-    }
-  }, [circleData, originalData, editingId]);
+    const current = JSON.stringify(filterModel.items || []);
+    if (current === lastFilterRef.current) return;
 
-  // --- Validation Rules ---
-  const reDigits = /^[0-9]*$/;
-  // const reDesc = /^[a-zA-Z0-9\s/&(),-]*$/;
-  const reDesc = /^(?!.* {2})[a-zA-Z0-9\s/&(),-]*$/;
-  const validateField = (name, value) => {
-    switch (name) {
-      case "circleCode":
-        if (!value.trim()) return "Circle Code is required";
-        if (!reDigits.test(value)) return "Only digits allowed";
-        if (value.length !== 3) return "Must be 3 digits";
-        break;
+    lastFilterRef.current = current;
 
-      case "circleName":
-        if (!value.trim()) return "Circle Name is required";
-        if (!reDesc.test(value))
-          return "Invalid Format, Only alphabets, numbers, spaces(single spaces only between words) and ,()&/- are allowed!";
-        if (value.trim().length < 5)
-          return "Circle Name must be at least 5 characters";
-        break;
+    setPaginationModel((p) => (p.page === 0 ? p : { ...p, page: 0 }));
+  }, [filterModel]);
 
-      case "zoneCode":
-        if (!value.trim()) return "Zone Code is required";
-        if (!reDesc.test(value)) return "Only letters and digits allowed";
-        break;
+  /* ================= DIALOG ================= */
 
-      default:
-        return "";
-    }
-    return "";
+  const handleOpenCreate = () => {
+    setEditRow(null);
+    setOpenDialog(true);
   };
 
-  const isFormValid = useMemo(
-    () =>
-      !validateField("circleCode", circleData.circleCode) &&
-      !validateField("circleName", circleData.circleName) &&
-      !validateField("zoneCode", circleData.zoneCode),
-    [circleData],
-  );
-
-  const handleChange = (e) => {
-    const { name } = e.target;
-    let { value } = e.target;
-    if (name === "circleCode") {
-      if (!reDigits.test(value)) {
-        notifyOnce("Circle Code accepts digits only");
-        return;
-      }
-      if (value.length > 3) {
-        notifyOnce("Circle Code must be 3 digits");
-        return;
-      }
-    }
-    if (name === "circleName") {
-      if (value && !/^[A-Za-z0-9]$/.test(value[0])) {
-        notifyOnce("Should not start with special character");
-        return;
-      }
-      value = value?.toUpperCase();
-      if (!reDesc.test(value)) {
-        notifyOnce(
-          "Invalid Format, Only alphabets, spaces(single spaces only between words) and ,()&/- are allowed!",
-        );
-        return;
-      }
-      if (name === "zoneCode" && !reDesc.test(value)) {
-        notifyOnce("Zone Code accepts only letters/digits");
-        return;
-      }
-    }
-    setCircleData((prev) => ({ ...prev, [name]: value }));
-    setErrors((prev) => ({ ...prev, [name]: validateField(name, value) }));
+  const handleOpenEdit = (row) => {
+    setEditRow(row);
+    setOpenDialog(true);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (editingId && isDataSame) {
-      snackbar("No Changes Detected!", "warning");
-      return; // Stop submission
-    }
-    const isEditing = editingId;
-    if (!isEditing) {
-      const circleExists = rows.some(
-        (row) => row.circleCode === circleData.circleCode,
-      );
-      if (circleExists) {
-        snackbar("Circle code already exist", "warning");
-        return;
-      }
-    }
-
-    const allErrors = {
-      circleCode: validateField("circleCode", circleData.circleCode),
-      circleName: validateField("circleName", circleData.circleName),
-      zoneCode: validateField("zoneCode", circleData.zoneCode),
-    };
-    setErrors(allErrors);
-
-    const valid = Object.values(allErrors).every((v) => !v);
-    if (!valid) {
-      notifyOnce("Please fix validation errors", "error");
-      return;
-    }
-
-    const selectedZone = zones.find(
-      (z) => String(z.id) === String(circleData.zoneCode),
-    );
-
-    const payloadData = {
-      requestType: "CIRCLE",
-      changeType: editingId ? "UPDATE" : "ADD",
-      targetId: circleData.circleCode,
-      payload: {
-        circleCode: circleData.circleCode,
-        circleName: circleData.circleName,
-        zoneCode: circleData.zoneCode,
-        zoneDescription: selectedZone?.description,
-      },
-    };
-
-    try {
-      const response = await callApi("/CR/create-request", payloadData, "POST");
-      if (response) {
-        snackbar(
-          editingId
-            ? "Circle update request submitted successfully with request id " +
-                response?.data?.id
-            : "Circle creation request submitted successfully with request id " +
-                response?.data?.id,
-          "success",
-        );
-        handleClose();
-        fetchData();
-      }
-    } catch (err) {
-      snackbar(err?.message || "Request failed", "error");
-    }
+  const handleSaved = () => {
+    setOpenDialog(false);
+    setEditRow(null);
+    lastQueryRef.current = ""; // force reload
+    fetchRows();
   };
 
-  const handleEdit = (row) => {
-    const initialData = {
-      circleCode: String(row.circleCode ?? ""),
-      circleName: String(row.circleName ?? ""),
-      zoneCode: String(row.zoneCode ?? ""),
-    };
-    setCircleData(initialData);
-    setOriginalData(initialData); // Store the original data here
-    setEditingId(row.circleCode);
-    setOpen(true);
-    setIsDataSame(true);
-  };
+  /* ================= COLUMNS ================= */
 
-  const handleClose = () => {
-    setOpen(false);
-    setCircleData({
-      circleCode: "",
-      circleName: "",
-      zoneCode: "",
-    });
-    setOriginalData(null); // Clear original data on close
-    setErrors({});
-    setEditingId(null);
-    setIsDataSame(true);
-  };
-
-  // --- Columns ---
   const columns = useMemo(
     () => [
+      // { field: "cglNumber", headerName: "CGL Code", flex: 1 },
       {
-        field: "circleCode",
-        headerName: "Circle Code",
-        flex: 1.2,
-        minWidth: 160,
-      },
-      {
-        field: "circleName",
-        headerName: "Circle Name",
-        flex: 2,
+        field: "cglNumber",
+        headerName: "CGL Code",
+        flex: 1,
         minWidth: 150,
+        renderCell: (params) => (
+          <Box
+            // sx={{
+            //   fontFamily: "Monospace",
+            //   letterSpacing: "0.08em",
+            //   fontWeight: 700,
+            // }}
+          >
+            {params.value}
+          </Box>
+        ),
       },
+
       {
-        field: "zoneCode",
-        headerName: "Zone",
-        filterable: false,
-        disableColumnMenu: true,
+        field: "description",
+        headerName: "Description",
         flex: 2,
-        minWidth: 200,
-        valueGetter: (params) => {
-          const zone = zones.find((z) => String(z.id) === String(params));
-          return zone ? zone.description : "N/A";
+        minWidth: 300,
+      },
+
+      {
+        field: "acClassification",
+        headerName: "Account Classification",
+        flex: 1.2,
+        minWidth: 210,
+        type: "singleSelect",
+        valueOptions: ACCOUNT_CLASSIFICATIONS.map((a) => ({
+          value: a.value, // A, L, I, E, M
+          label: a.label,
+        })),
+        renderCell: (params) => {
+          const found = ACCOUNT_CLASSIFICATIONS.find(
+            (x) => x.value === params.value,
+          );
+          return (
+            <CustomChip
+              label={found?.label}
+              icon={found?.icon}
+              variant="outlined"
+            />
+          );
         },
       },
+
       {
-        field: "actions",
-        headerName: "Actions",
-        flex: 0.8,
+        field: "balCompare",
+        headerName: "Balance Compare",
+        flex: 1,
         minWidth: 150,
+        headerAlign: "center",
+        align: "center",
         filterable: false,
         sortable: false,
         disableColumnMenu: true,
-        align: "center",
+        renderCell: (params) => (
+          <CustomChip
+            size="small"
+            variant="outlined"
+            icon={
+              params.row.balCompare ? (
+                <BookmarkAddedIcon />
+              ) : (
+                <BookmarkRemoveIcon />
+              )
+            }
+            label={params.row.balCompare ? "Include" : "Exclude"}
+            row={params.row}
+          />
+        ),
+      },
+
+      {
+        field: "manualPosting",
+        headerName: "Manual Posting",
+        flex: 1,
+        minWidth: 150,
         headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <CustomChip
+            size="small"
+            variant="outlined"
+            icon={params.row.manualPosting ? <GppGoodIcon /> : <GppBadIcon />}
+            label={params.row.manualPosting ? "Allowed" : "Not Allowed"}
+            row={params.row}
+          />
+        ),
+      },
+      {
+        field: "balFwd",
+        headerName: "Balance Forward",
+        flex: 1,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <CustomChip
+            size="small"
+            variant="outlined"
+            icon={params.row.balFwd ? <CheckCircleIcon /> : <CancelIcon />}
+            label={params.row.balFwd ? "Yes" : "No"}
+            row={params.row}
+          />
+        ),
+      },
+
+      {
+        field: "status",
+        headerName: "Status",
+        flex: 0.7,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        type: "singleSelect",
+        // sortable: false,
+        valueOptions: [
+          { value: 1, label: "Active" },
+          { value: 0, label: "In Active" },
+        ],
+
+        renderCell: (params) => (
+          <CustomChip
+            icon={<OnlinePredictionIcon />}
+            label={params.value === 1 ? "Active" : "In Active"}
+            color={params.value === 1 ? "success" : "error"}
+            variant="outlined"
+          />
+        ),
+      },
+
+      {
+        field: "actions",
+        headerName: "Actions",
+        flex: 0.6,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+
         renderCell: (params) => (
           <Tooltip title="Edit">
-            <IconButton color="primary" onClick={() => handleEdit(params.row)}>
+            <IconButton
+              onClick={() => handleOpenEdit(params.row)}
+              color="primary"
+            >
               <EditIcon />
             </IconButton>
           </Tooltip>
         ),
       },
     ],
-    [zones],
+    [],
   );
 
+  const filteredColumns = useMemo(() => {
+    if (permissions.modify || permissions.block || permissions.unblock) {
+      return columns;
+    }
+    return columns.filter((c) => c.field !== "actions");
+  }, [columns, permissions]);
+
+  /* ================= RENDER ================= */
+
   return (
-    <CircleTab1Container>
-      <CircleMasterDataGrid
-        loading={loading}
+    <Box>
+      <DataGrid
         rows={rows}
-        columns={columns}
+        columns={filteredColumns}
+        getRowId={(row) => row.cglNumber}
+        loading={loading}
+        paginationMode="server"
+        sortingMode="server"
+        filterMode="server"
+        rowCount={rowCount}
+        paginationModel={paginationModel}
+        onPaginationModelChange={setPaginationModel}
+        sortModel={sortModel}
+        onSortModelChange={setSortModel}
+        filterModel={filterModel}
+        onFilterModelChange={setFilterModel}
+        pageSizeOptions={[10, 20, 50, 100]}
         disableRowSelectionOnClick
-        getRowId={(row) => row.circleCode}
-        pageSizeOptions={[5, 10, 25, 50]}
-        initialState={{
-          pagination: { paginationModel: { pageSize: 10, page: 0 } },
-          sorting: { sortModel: [{ field: "circleCode", sort: "asc" }] },
+        slots={{
+          noRowsOverlay: CustomNoRowsOverlay,
         }}
-        sx={{
+         sx={{
           minHeight: 520,
           width: "100%",
          "& .MuiDataGrid-columnHeaders": {
@@ -355,206 +403,35 @@ export default function CircleMasterTab() {
           zIndex: 1,
         },
         }}
-        localeText={{
-          noRowsLabel: "No Circle Records Found",
-        }}
-        slots={{
-          noRowsOverlay: CustomNoRowsOverlay,
-        }}
       />
 
-      {/* Floating Create Button */}
-       <Box>
-      <CircleTab1Fab
-        onClick={() => setOpen(true)}
-        color="primary"
-        variant="extended"
-      >
-        <CircleTab1Addicon />
-        Create
-      </CircleTab1Fab>
-       </Box> 
-
-      {/* Dialog Form */}
-      <Dialog open={open} maxWidth="sm" fullWidth="true">
-        <Box component="form" onSubmit={handleSubmit}>
-          <Circletab1DialogTitle>
-            <Stack
-              // margin={-1}
-              direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-            >
-              <Typography variant="h6" color="primary">
-                {editingId ? "Edit Circle" : "Add New Circle"}
-              </Typography>
-              <IconButton onClick={handleClose}>
-                <CloseIcon />
-              </IconButton>
-            </Stack>
-          </Circletab1DialogTitle>
-
-          <Divider />
-
-          <DialogContent>
-            <CircleTab1Grid container spacing={3}>
-              <Grid size={{ xs: 12 }}>
-                <TextField
-                  fullWidth
-                  label="Circle Code *"
-                  name="circleCode"
-                  value={circleData.circleCode}
-                  onChange={handleChange}
-                  disabled={!!editingId}
-                  error={!!errors.circleCode}
-                  helperText={errors.circleCode || "Exactly 3 digits"}
-                  inputProps={{ maxLength: 3, inputMode: "numeric" }}
-                />
-              </Grid>
-
-              <Grid size={{ xs: 12 }}>
-                <TextField
-                  fullWidth
-                  label="Circle Name *"
-                  name="circleName"
-                  value={circleData.circleName}
-                  onChange={handleChange}
-                  error={!!errors.circleName}
-                  inputProps={{ maxLength: 40 }}
-                  helperText={
-                    errors.circleName ||
-                    "Allowed 5-40 characters (A-Z, 0-9, spaces,/,&,(,),- )"
-                  }
-                />
-              </Grid>
-
-              <Grid size={{ xs: 12 }}>
-                <TextField
-                  fullWidth
-                  select
-                  label="Zone *"
-                  name="zoneCode"
-                  value={circleData.zoneCode}
-                  onChange={handleChange}
-                  error={!!errors.zoneCode}
-                  helperText={errors.zoneCode || "Select corresponding Zone"}
-                >
-                  {zones.map((zone) => (
-                    <MenuItem key={zone.id} value={zone.id}>
-                      {zone.description}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-            </CircleTab1Grid>
-          </DialogContent>
-          <Divider></Divider>
-          <DialogActions>
-            <Button
-              type="submit"
-              variant="contained"
-              startIcon={editingId ? <EditIcon /> : <AddIcon />}
-              disabled={!isFormValid}
-            >
-              {editingId ? "Update" : "Add"}
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
-    </CircleTab1Container>
-  );
-}
-import * as React from "react";
-import PropTypes from "prop-types";
-import Tab from "@mui/material/Tab";
-import CircleMasterTab1 from "./CircleMasterTab";
-import CircleMasterTab2 from "./MyCircleRequestsTab";
-import ConnectWithoutContactIcon from "@mui/icons-material/ConnectWithoutContact";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-
-import {
-  CircleMasterTabs,
-  CircleTabContainer,
-  CircleMastermainBox,
-} from "./CircleMasterStyle";
-import { Box, Paper } from "@mui/material";
-
-function CustomTabPanel(props) {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`simple-tabpanel-${index}`}
-      aria-labelledby={`simple-tab-${index}`}
-      {...other}
-    >
-      {value === index && <CircleMastermainBox>{children}</CircleMastermainBox>}
-    </div>
-  );
-}
-
-CustomTabPanel.propTypes = {
-  children: PropTypes.node,
-  index: PropTypes.number.isRequired,
-  value: PropTypes.number.isRequired,
-};
-
-function a11yProps(index) {
-  return {
-    id: `simple-tab-${index}`,
-    "aria-controls": `simple-tabpanel-${index}`,
-  };
-}
-
-export default function CircleMaster() {
-  const [value, setValue] = React.useState(0);
-
-  const handleChange = (event, newValue) => {
-    setValue(newValue);
-  };
-
-  return (
-    <>
-    <Paper
-    elevation={2}
-    sx={{
-      display:"flex",
-      flexDirection:"column",
-      borderRadius:2,
-      overflow:"hidden",
-      minHeight:"calc(100vh - 210px)",
-      width:"100%",
-    }}>
-      <CircleTabContainer fullWidth={"true"}>
-        <CircleMasterTabs
-          value={value}
-          onChange={handleChange}
-          aria-label="basic tabs example"
-          variant="fullWidth"
+      {permissions?.create && !loading && (
+        <Fab
+          color="primary"
+          variant="extended"
+          onClick={handleOpenCreate}
+          sx={{
+             position: "fixed",
+             borderRadius: "8px",
+             fontSize: "15px",
+             bottom: 15,
+             right: 30,
+             zIndex: 1000,
+          }}
         >
-          <Tab
-            label="Manage Circles"
-            icon={<ConnectWithoutContactIcon />}
-            iconPosition="start"
-            {...a11yProps(0)}
-          />
-          <Tab
-            icon={<PendingActionsIcon />}
-            iconPosition="start"
-            label="My Requests"
-            {...a11yProps(1)}
-          />
-        </CircleMasterTabs>
-      </CircleTabContainer>
-      <CustomTabPanel value={value} index={0}>
-        <CircleMasterTab1 />
-      </CustomTabPanel>
-      <CustomTabPanel value={value} index={1}>
-        <CircleMasterTab2 />
-      </CustomTabPanel>
-    </Paper>
-    </>
+          <AddIcon />
+          Create
+        </Fab>
+      )}
+
+      <CGLDialog
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        onSaved={handleSaved}
+        editInitialData={editRow}
+        accountClassifications={ACCOUNT_CLASSIFICATIONS}
+        permissions={permissions}
+      />
+    </Box>
   );
 }
