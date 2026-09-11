@@ -1,52 +1,192 @@
-import React, {
-  useEffect,
-  useState,
-  useCallback,
-  useMemo,
-  useRef,
-} from "react";
-import { Box, Fab, IconButton, Tooltip, Typography } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
+import React, { useState } from "react";
+import { styled } from "@mui/material/styles";
+import { Box, Tabs, Fab, Grid, Chip, Stack, TextField } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import OnlinePredictionIcon from "@mui/icons-material/OnlinePrediction";
-import EditIcon from "@mui/icons-material/Edit";
+import AddIcon from "@mui/icons-material/Add";
+//segmentmaster
+
+export const Boxdtatagrid = styled(Box)(({ theme }) => ({
+  height: 500,
+}));
+
+export const BoxStyle = styled(Box)(({ theme }) => ({
+  borderBottom: 1,
+  borderColor: "divider",
+}));
+
+export const Box2Style = styled(Box)(({ theme }) => ({
+  py: 2,
+}));
+
+export const TabsStyle = styled(Tabs)(({ theme }) => ({
+  width: "100%",
+}));
+
+//segmentmastertab
+
+export const StackStyle = styled(Stack)(({ theme }) => ({
+  mt: 1.5,
+}));
+
+export const FabStyle = styled(Fab)(({ theme }) => ({
+  // position: "fixed",
+  borderRadius: "8px",
+  fontSize: "15px",
+  // bottom: theme.spacing(4),
+  // right: theme.spacing(4),
+  // zIndex: 1000,
+}));
+
+export const AddIconStyle = styled(AddIcon)(({ theme }) => ({
+  mr: 1,
+}));
+
+export const GridContainer = styled(Grid)(({ theme }) => ({
+  pt: 1,
+}));
+
+export const GridItem1 = styled(Grid)(({ theme }) => ({
+  mt: 2,
+  mb: 3,
+}));
+
+// export const Textfielss = styled(TextField)(({ theme }) => ({
+//     mb: 90,
+// }));
+
+export const GridItem2 = styled(Grid)(({ theme }) => ({
+  display: "flex",
+  justifyContent: "flex-end",
+  mt: 2,
+}));
+
+//mysegmentrequeststab
+export const DataGridStyles = styled(DataGrid)(({ theme }) => ({}));
+
+export const Chip1Style = styled(Chip)(({ theme }) => ({
+  p: 0.5,
+  m: 0,
+  width: "90%",
+}));
+import React, { useState } from "react";
+import PropTypes from "prop-types";
+import Tab from "@mui/material/Tab";
+import { Box, Paper } from "@mui/material";
+import SegmentMasterTab1 from "./SegmentMasterTab";
+import SegmentMasterTab2 from "./MySegmentRequestsTab";
+import ConnectWithoutContactIcon from "@mui/icons-material/ConnectWithoutContact";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+
+import { BoxStyle, Box2Style, TabsStyle } from "./SegmentMasterStyles";
+
+function CustomTabPanel(props) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`simple-tabpanel-${index}`}
+      aria-labelledby={`simple-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box2Style sx={{p:3}}>{children}</Box2Style>}
+    </div>
+  );
+}
+
+CustomTabPanel.propTypes = {
+  children: PropTypes.node,
+  index: PropTypes.number.isRequired,
+  value: PropTypes.number.isRequired,
+};
+
+function a11yProps(index) {
+  return {
+    id: `simple-tab-${index}`,
+    "aria-controls": `simple-tabpanel-${index}`,
+  };
+}
+
+export default function SegmentMaster() {
+  const [value, setValue] = useState(0);
+
+  const handleChange = (event, newValue) => {
+    setValue(newValue);
+  };
+
+  return (
+    <Paper
+    elevation={2}
+    sx={{
+      display:"flex",
+      flexDirection:"column",
+      borderRadius:2,
+      overflow:"hidden",
+      minHeight:"calc(100vh - 210px)",
+      width:"100%",
+    }}>
+    <Box>
+      <BoxStyle fullwidth>
+        <TabsStyle
+          value={value}
+          onChange={handleChange}
+          aria-label="basic tabs example"
+          variant="fullWidth"
+        >
+          <Tab
+            label="Manage Segments"
+            icon={<ConnectWithoutContactIcon />}
+            iconPosition="start"
+            {...a11yProps(0)}
+          />
+          <Tab
+            icon={<PendingActionsIcon />}
+            iconPosition="start"
+            label="My Requests"
+            {...a11yProps(1)}
+          />
+        </TabsStyle>
+      </BoxStyle>
+      <CustomTabPanel value={value} index={0}>
+        <SegmentMasterTab1 />
+      </CustomTabPanel>
+      <CustomTabPanel value={value} index={1}>
+        <SegmentMasterTab2 />
+      </CustomTabPanel>
+    </Box>
+    </Paper>
+  );
+}
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Grid,
+  IconButton,
+  Stack,
+  TextField,
+  Typography,
+  Tooltip,
+  styled,
+  Divider,
+  DialogActions,
+} from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Edit as EditIcon,
+  Add as AddIcon,
+  Close as CloseIcon,
+} from "@mui/icons-material";
 import useApi from "../../hooks/useApi";
 import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import CustomChip from "../../utils/CustomChip";
-import CGLDialog from "./CGLDialog";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import TrendingDownIcon from "@mui/icons-material/TrendingDown";
-import BookmarkAddedIcon from "@mui/icons-material/BookmarkAdded";
-import BookmarkRemoveIcon from "@mui/icons-material/BookmarkRemove";
-import DatasetIcon from "@mui/icons-material/Dataset";
-import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
-import GppGoodIcon from "@mui/icons-material/GppGood";
-import GppBadIcon from "@mui/icons-material/GppBad";
-import NoteIcon from "@mui/icons-material/Note";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import CancelIcon from "@mui/icons-material/Cancel";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import { FabStyle, AddIconStyle, GridContainer } from "./SegmentMasterStyles";
 import { useSelector } from "react-redux";
 import { getPermissions } from "../../utils/CommonUtilities";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
-import styled from "@emotion/styled";
-
-/* ================= CONSTANTS ================= */
-
-const ACCOUNT_CLASSIFICATIONS = [
-  {
-    value: "A",
-    label: "Asset",
-    icon: <DatasetIcon fontSize="small" />,
-  },
-  {
-    value: "L",
-    label: "Liability",
-    icon: <AccountBalanceWalletIcon fontSize="small" />,
-  },
-  { value: "I", label: "Income", icon: <TrendingUpIcon fontSize="small" /> },
-  { value: "E", label: "Expense", icon: <TrendingDownIcon fontSize="small" /> },
-  { value: "M", label: "Memo A/c", icon: <NoteIcon fontSize="small" /> },
-];
 
 const OverlayBox = styled(Box)(() => ({
   display: "flex",
@@ -56,284 +196,218 @@ const OverlayBox = styled(Box)(() => ({
   alignItems: "center",
 }));
 
-const CustomNoRowsOverlay = () => (
-  <OverlayBox>
-    <ErrorOutlineIcon fontSize="large" />
-    <Typography fontSize="1.1rem">Data is not available</Typography>
-  </OverlayBox>
-);
+const CustomNoRowsOverlay = () => {
+  return (
+    <OverlayBox>
+      <ErrorOutlineIcon fontSize="large" />
+      <Typography variant="h5" fontSize="1.2rem">
+        Data is not available
+      </Typography>
+    </OverlayBox>
+  );
+};
 
-/* ================= COMPONENT ================= */
-
-export default function CGLMasterTab() {
+export default function SegmentMasterTab() {
   const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
   const requestType = selectedMenuItem?.requestType || "";
   const permissions = getPermissions(selectedMenuItem);
-
+  const [rows, setRows] = useState([]);
+  const [open, setOpen] = useState(false);
   const { callApi } = useApi();
+  const [originalData, setOriginalData] = useState(null); // New state for original data
+  const [isDataSame, setIsDataSame] = useState(true);
+  const [editingId, setEditingId] = useState(null);
+  const [segmentData, setSegmentData] = useState({
+    segmentCode: "",
+    description: "",
+  });
+  const [errors, setErrors] = useState({});
+  const checkDataEquality = (current, original) => {
+    if (!original) return true; // If no original data, assume they are "same" initially for disable state
+    return (
+      current.description === original.description
+      // currencyCode is excluded as it is the ID and likely read-only
+    );
+  };
   const snackbar = useCustomSnackbar();
 
-  const [rows, setRows] = useState([]);
-  const [rowCount, setRowCount] = useState(0);
-  const [loading, setLoading] = useState(false);
+  // --- throttle snackbars so they don't spam while typing ---
+  const snackGateRef = useRef(true);
+  const notifyOnce = (msg, variant = "warning") => {
+    if (!snackGateRef.current) return;
+    snackGateRef.current = false;
+    snackbar(msg, variant);
+    setTimeout(() => (snackGateRef.current = true), 800);
+  };
 
-  const [openDialog, setOpenDialog] = useState(false);
-  const [editRow, setEditRow] = useState(null);
+  const fetchData = async () => {
+    const payload = { requestType: "SEGMENT_CODE" };
+    const response = await callApi(
+      "/CM/common-master/segment-codes",
+      payload,
+      "GET",
+    );
+    setRows(response ? (response.data ?? []) : []);
+  };
 
-  /* ===== SERVER GRID STATE ===== */
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-  const [paginationModel, setPaginationModel] = useState({
-    page: 0,
-    pageSize: 20,
-  });
+  useEffect(() => {
+    if (editingId && originalData) {
+      setIsDataSame(checkDataEquality(segmentData, originalData));
+    }
+  }, [segmentData, originalData, editingId]);
 
-  const [sortModel, setSortModel] = useState([]);
-  const [filterModel, setFilterModel] = useState({ items: [] });
+  // --- validators ---
+  const reDigits = /^[0-9]*$/;
+  // const reDesc = /^[a-zA-Z0-9\s/&()-.]*$/;
+  const reDesc = /^(?!.* {2})[a-zA-Z0-9\s/&(),-]*$/;
 
-  /* ===== REFS TO PREVENT DOUBLE CALLS ===== */
+  const validateField = (name, value) => {
+    let err = "";
 
-  const lastFilterRef = useRef("");
-  const lastQueryRef = useRef("");
+    if (name === "segmentCode") {
+      if (!value.trim()) err = "Segment Code is required";
+      else if (!reDigits.test(value)) err = "Only digits allowed";
+      else if (value.length !== 4) err = "Must be 4 digits";
+    }
 
-  /* ================= FETCH DATA ================= */
+    if (name === "description") {
+      if (!value) err = "Description is required";
+      else if (!reDesc.test(value))
+        err =
+          "Invalid Format, Only alphabets, numbers, spaces(single spaces only between words) and ,()&/- are allowed!";
+      else if (value?.length < 5)
+        err = "Description must be at least 5 characters";
+    }
 
-  const fetchRows = useCallback(async () => {
-    if (!requestType) return;
+    return err;
+  };
 
-    const sortField = sortModel[0]?.field;
-    const sortOrder = sortModel[0]?.sort;
+  const isFormValid = () => {
+    return (
+      !validateField("segmentCode", segmentData.segmentCode) &&
+      !validateField("description", segmentData.description)
+    );
+  };
 
-    const filters = filterModel.items
-      .filter(
-        (f) =>
-          f.operator &&
-          f.value !== undefined &&
-          f.value !== null &&
-          f.value !== "",
-      )
-      .map((f) => ({
-        field: f.field,
-        operator: f.operator,
-        value: f.value,
-      }));
+  // --- live validation on change + snackbars for bad keystrokes ---
+  const handleChange = (e) => {
+    const { name, value } = e.target;
 
-    const querySignature = JSON.stringify({
-      page: paginationModel.page,
-      size: paginationModel.pageSize,
-      sortField,
-      sortOrder,
-      filters,
-    });
+    // Allow soft typing for segmentCode: block invalid keystroke immediately
+    if (name === "segmentCode") {
+      if (!reDigits.test(value)) {
+        notifyOnce("Segment Code accepts digits only");
+        return; // block update
+      }
+      if (value.length > 4) {
+        notifyOnce("Segment Code must be 4 digits");
+        return; // block update
+      }
+    }
 
-    // PREVENT DUPLICATE API CALL
-    if (lastQueryRef.current === querySignature) return;
-    lastQueryRef.current = querySignature;
+    if (name === "description") {
+      if (value && !/^[A-Za-z0-9]$/.test(value[0])) {
+        notifyOnce("Should not start with special character");
+        return;
+      }
+      // soft block invalid characters
+      if (!reDesc.test(value)) {
+        notifyOnce(
+          "Invalid Format, Only alphabets, spaces(single spaces only between words) and ,()&/- are allowed!",
+        );
+        return;
+      }
+    }
+
+    setSegmentData((prev) => ({ ...prev, [name]: value }));
+
+    // update error for just this field
+    setErrors((prev) => ({
+      ...prev,
+      [name]: validateField(name, value),
+    }));
+  };
+
+  const validateFormAndSet = () => {
+    const newErrors = {
+      segmentCode: validateField("segmentCode", segmentData.segmentCode),
+      description: validateField("description", segmentData.description),
+    };
+    setErrors(newErrors);
+    const ok = !newErrors.segmentCode && !newErrors.description;
+    if (!ok) notifyOnce("Please fix validation errors", "error");
+    return ok;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateFormAndSet()) return;
+
+    if (editingId && isDataSame) {
+      snackbar("No Changes Detected!", "warning");
+      return; // Stop submission
+    }
+
+    const isEditing = editingId;
+    if (!isEditing) {
+      const segmentExists = rows.some(
+        (row) => row.segmentCode === segmentData.segmentCode,
+      );
+      if (segmentExists) {
+        snackbar("Segment code already exist", "warning");
+        return;
+      }
+    }
+
+    const payloadData = {
+      requestType,
+      changeType: editingId ? "UPDATE" : "ADD",
+      targetId: segmentData.segmentCode,
+      payload: {
+        segmentCode: segmentData.segmentCode.trim(),
+        description: segmentData.description.trim(),
+      },
+    };
 
     try {
-      setLoading(true);
-      const payload = {
-        // requestType,
-        page: paginationModel.page,
-        size: paginationModel.pageSize,
-        sortField: sortField || "cglNumber",
-        sortOrder: sortOrder || "asc",
-        filters,
-      };
-      const resp = await callApi("/CM/common-master/cgls", payload, "POST");
-
-      setRows(resp?.data?.data || []);
-      setRowCount(resp?.data?.totalElements || 0);
-    } catch (err) {
-      snackbar(err?.message || "Failed to load CGLs", "error");
-      setRows([]);
-      setRowCount(0);
-    } finally {
-      setLoading(false);
+      const response = await callApi("/CR/create-request", payloadData, "POST");
+      if (response) {
+        snackbar(
+          editingId
+            ? "Segment update request submitted successfully with request id " +
+                response?.data?.id
+            : "Segment creation request submitted successfully with request id " +
+                response?.data?.id,
+          "success",
+        );
+        handleClose();
+        fetchData();
+      }
+    } catch (error) {
+      snackbar(error?.message || "Request failed", "error");
     }
-  }, [callApi, requestType, snackbar, paginationModel, sortModel, filterModel]);
-
-  /* ================= EFFECTS ================= */
-
-  // Main fetch
-  useEffect(() => {
-    fetchRows();
-  }, [fetchRows]);
-
-  // Reset page ONLY when filter meaningfully changes
-  useEffect(() => {
-    const current = JSON.stringify(filterModel.items || []);
-    if (current === lastFilterRef.current) return;
-
-    lastFilterRef.current = current;
-
-    setPaginationModel((p) => (p.page === 0 ? p : { ...p, page: 0 }));
-  }, [filterModel]);
-
-  /* ================= DIALOG ================= */
-
-  const handleOpenCreate = () => {
-    setEditRow(null);
-    setOpenDialog(true);
   };
-
-  const handleOpenEdit = (row) => {
-    setEditRow(row);
-    setOpenDialog(true);
-  };
-
-  const handleSaved = () => {
-    setOpenDialog(false);
-    setEditRow(null);
-    lastQueryRef.current = ""; // force reload
-    fetchRows();
-  };
-
-  /* ================= COLUMNS ================= */
 
   const columns = useMemo(
     () => [
-      // { field: "cglNumber", headerName: "CGL Code", flex: 1 },
       {
-        field: "cglNumber",
-        headerName: "CGL Code",
+        field: "segmentCode",
+        headerName: "Segment Code",
         flex: 1,
-        minWidth: 150,
-        renderCell: (params) => (
-          <Box
-            // sx={{
-            //   fontFamily: "Monospace",
-            //   letterSpacing: "0.08em",
-            //   fontWeight: 700,
-            // }}
-          >
-            {params.value}
-          </Box>
-        ),
+        minWidth: 180,
+        sortable: true,
       },
-
       {
         field: "description",
         headerName: "Description",
-        flex: 2,
-        minWidth: 300,
+        flex: 3,
+        minWidth: 200,
+        sortable: true,
       },
-
-      {
-        field: "acClassification",
-        headerName: "Account Classification",
-        flex: 1.2,
-        minWidth: 210,
-        type: "singleSelect",
-        valueOptions: ACCOUNT_CLASSIFICATIONS.map((a) => ({
-          value: a.value, // A, L, I, E, M
-          label: a.label,
-        })),
-        renderCell: (params) => {
-          const found = ACCOUNT_CLASSIFICATIONS.find(
-            (x) => x.value === params.value,
-          );
-          return (
-            <CustomChip
-              label={found?.label}
-              icon={found?.icon}
-              variant="outlined"
-            />
-          );
-        },
-      },
-
-      {
-        field: "balCompare",
-        headerName: "Balance Compare",
-        flex: 1,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <CustomChip
-            size="small"
-            variant="outlined"
-            icon={
-              params.row.balCompare ? (
-                <BookmarkAddedIcon />
-              ) : (
-                <BookmarkRemoveIcon />
-              )
-            }
-            label={params.row.balCompare ? "Include" : "Exclude"}
-            row={params.row}
-          />
-        ),
-      },
-
-      {
-        field: "manualPosting",
-        headerName: "Manual Posting",
-        flex: 1,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <CustomChip
-            size="small"
-            variant="outlined"
-            icon={params.row.manualPosting ? <GppGoodIcon /> : <GppBadIcon />}
-            label={params.row.manualPosting ? "Allowed" : "Not Allowed"}
-            row={params.row}
-          />
-        ),
-      },
-      {
-        field: "balFwd",
-        headerName: "Balance Forward",
-        flex: 1,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <CustomChip
-            size="small"
-            variant="outlined"
-            icon={params.row.balFwd ? <CheckCircleIcon /> : <CancelIcon />}
-            label={params.row.balFwd ? "Yes" : "No"}
-            row={params.row}
-          />
-        ),
-      },
-
-      {
-        field: "status",
-        headerName: "Status",
-        flex: 0.7,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        type: "singleSelect",
-        // sortable: false,
-        valueOptions: [
-          { value: 1, label: "Active" },
-          { value: 0, label: "In Active" },
-        ],
-
-        renderCell: (params) => (
-          <CustomChip
-            icon={<OnlinePredictionIcon />}
-            label={params.value === 1 ? "Active" : "In Active"}
-            color={params.value === 1 ? "success" : "error"}
-            variant="outlined"
-          />
-        ),
-      },
-
       {
         field: "actions",
         headerName: "Actions",
@@ -344,16 +418,24 @@ export default function CGLMasterTab() {
         filterable: false,
         sortable: false,
         disableColumnMenu: true,
-
         renderCell: (params) => (
-          <Tooltip title="Edit">
-            <IconButton
-              onClick={() => handleOpenEdit(params.row)}
-              color="primary"
-            >
-              <EditIcon />
-            </IconButton>
-          </Tooltip>
+          <Box
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            justifyContent="center"
+            sx={{ Height: "100%" }}
+          >
+            <Tooltip title="Approve">
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() => handleEdit(params.row)}
+              >
+                <EditIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
         ),
       },
     ],
@@ -364,34 +446,70 @@ export default function CGLMasterTab() {
     if (permissions.modify || permissions.block || permissions.unblock) {
       return columns;
     }
-    return columns.filter((c) => c.field !== "actions");
-  }, [columns, permissions]);
+    // Otherwise, filter out the column where field name is 'action'.
+    else {
+      return columns.filter((column) => column.field !== "action");
+    }
+  }, [columns, permissions.block, permissions.modify, permissions.unblock]);
 
-  /* ================= RENDER ================= */
+  const resetForm = () => {
+    setSegmentData({ segmentCode: "", description: "" });
+    setOriginalData(null); // Clear original data on close
+    setErrors({});
+    setEditingId(null);
+    setIsDataSame(true);
+  };
+
+  const handleEdit = (row) => {
+    const initialData = {
+      segmentCode: String(row.segmentCode ?? ""),
+      description: String(row.description ?? ""),
+    };
+    setSegmentData(initialData);
+    setOriginalData(initialData); // Store the original data here
+    setEditingId(row.segmentCode);
+    setOpen(true);
+    setIsDataSame(true);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    resetForm();
+  };
 
   return (
     <Box>
+      <Box
+      sx={{
+          display:"flex",
+          justifyContent:"flex-end",
+          mt:1,
+          px:1,
+          pb:1,
+        }}>
+        <FabStyle
+          onClick={() => setOpen(true)}
+          color="primary"
+          variant="extended"
+        >
+          <AddIconStyle />
+          Create
+        </FabStyle>
+      </Box>
       <DataGrid
         rows={rows}
         columns={filteredColumns}
-        getRowId={(row) => row.cglNumber}
-        loading={loading}
-        paginationMode="server"
-        sortingMode="server"
-        filterMode="server"
-        rowCount={rowCount}
-        paginationModel={paginationModel}
-        onPaginationModelChange={setPaginationModel}
-        sortModel={sortModel}
-        onSortModelChange={setSortModel}
-        filterModel={filterModel}
-        onFilterModelChange={setFilterModel}
-        pageSizeOptions={[10, 20, 50, 100]}
         disableRowSelectionOnClick
+        pageSizeOptions={[5, 10, 25, 50]}
+        initialState={{
+          pagination: { paginationModel: { pageSize: 10, page: 0 } },
+          sorting: { sortModel: [{ field: "segmentCode", sort: "asc" }] },
+        }}
+        getRowId={(row) => row.segmentCode}
         slots={{
           noRowsOverlay: CustomNoRowsOverlay,
         }}
-         sx={{
+        sx={{
           minHeight: 520,
           width: "100%",
          "& .MuiDataGrid-columnHeaders": {
@@ -405,33 +523,79 @@ export default function CGLMasterTab() {
         }}
       />
 
-      {permissions?.create && !loading && (
-        <Fab
-          color="primary"
-          variant="extended"
-          onClick={handleOpenCreate}
-          sx={{
-             position: "fixed",
-             borderRadius: "8px",
-             fontSize: "15px",
-             bottom: 15,
-             right: 30,
-             zIndex: 1000,
-          }}
-        >
-          <AddIcon />
-          Create
-        </Fab>
-      )}
+      <Dialog
+        open={open}
+        maxWidth="sm"
+        fullWidth
+        component="form"
+        onSubmit={handleSubmit}
+      >
+        <DialogTitle>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
+            <Typography variant="h6" color="primary">
+              {editingId ? "Edit Segment" : "Add New Segment"}
+            </Typography>
+            <IconButton onClick={handleClose}>
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
 
-      <CGLDialog
-        open={openDialog}
-        onClose={() => setOpenDialog(false)}
-        onSaved={handleSaved}
-        editInitialData={editRow}
-        accountClassifications={ACCOUNT_CLASSIFICATIONS}
-        permissions={permissions}
-      />
+        <Divider />
+
+        <DialogContent>
+          <GridContainer container spacing={2}>
+            <Grid size={{ xs: 12 }}>
+              <TextField
+                fullWidth
+                label="Segment Code *"
+                name="segmentCode"
+                value={segmentData.segmentCode}
+                onChange={handleChange}
+                disabled={!!editingId}
+                error={!!errors.segmentCode}
+                helperText={errors.segmentCode || "Exactly 4 digits"}
+                inputProps={{ maxLength: 4, inputMode: "numeric" }}
+                sx={{ mb: 3 }}
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12 }}>
+              <TextField
+                fullWidth={true}
+                label="Description *"
+                name="description"
+                value={segmentData.description}
+                onChange={handleChange}
+                error={!!errors.description}
+                inputProps={{ maxLength: 100 }}
+                helperText={
+                  errors.description ||
+                  "Allowed 5-100 characters (A-Z, 0-9, spaces,/,&,(,),- )"
+                }
+                multiline
+                rows={3}
+              />
+            </Grid>
+          </GridContainer>
+        </DialogContent>
+
+        <Divider />
+        <DialogActions>
+          <Button
+            type="submit"
+            variant="contained"
+            startIcon={editingId ? <EditIcon /> : <AddIcon />}
+            disabled={!isFormValid()}
+          >
+            {editingId ? "Update" : "Add"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
