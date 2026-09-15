@@ -1,897 +1,530 @@
+/**
+ * UsersTable.jsx (Child #3 – DataGrid only; calls back up for edit/delete)
+ *
+ * - Rndering grid only
+ * @author :
+ * @editors :
+ * @reviewer :
+ */
 import {
   Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Stack,
-  Typography,
-  Tooltip,
   IconButton,
-  Chip,
+  Stack,
+  Tooltip,
+  Typography,
+  styled,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import { useEffect, useMemo, useState } from "react";
-import InfoIcon from "@mui/icons-material/Info";
-import useApi from "../../hooks/useApi";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import VisibilityIcon from "@mui/icons-material/Visibility";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
-import DateRangeIcon from "@mui/icons-material/DateRange";
-import CancelIcon from "@mui/icons-material/Cancel";
-import { useSelector } from "react-redux";
-import CustomChip from "../../utils/CustomChip";
-import GppBadIcon from "@mui/icons-material/GppBad";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
-import { getPermissions } from "../../utils/CommonUtilities";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/DeleteOutline";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 
-function CustomNoRowsOverlay() {
+const OverlayBox = styled(Box)(() => ({
+  display: "flex",
+  flexDirection: "column",
+  height: "100%",
+  justifyContent: "center",
+  alignItems: "center",
+}));
+
+const CustomNoRowsOverlay = () => {
   return (
-    <Stack height="100%" alignItems="center" justifyContent="center">
-      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-      <Typography variant="h6">No Circle Requests Found</Typography>
-      <Typography>You have not created any Circle requests.</Typography>
-    </Stack>
+    <OverlayBox>
+      <ErrorOutlineIcon fontSize="large" />
+      <Typography variant="h5" fontSize="1.2rem">
+        Data is not available
+      </Typography>
+    </OverlayBox>
+  );
+};
+function AvatarCell({ name }) {
+  const safe = (name ?? "").trim() || "U";
+  const initials = safe
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+  return (
+    <Box
+      sx={{
+        width: 28,
+        height: 28,
+        borderRadius: "50%",
+        bgcolor: "primary.light",
+        color: "primary.contrastText",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 12,
+        mr: 1,
+      }}
+    >
+      {initials}
+    </Box>
   );
 }
-export default function MyCircleRequestsTab() {
-  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
-  const [rows, setRows] = useState([]);
-  const [confirmDialog, setConfirmDialog] = useState(false);
-  const { callApi } = useApi();
-  const snackbar = useCustomSnackbar();
-  const permissions = getPermissions(selectedMenuItem);
-  const [requestId, setRequestId] = useState(null);
-  const [viewOpen, setViewOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [zones, setZones] = useState([]);
-  const [viewData, setViewData] = useState(null);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const payload = { requestType: "CIRCLE" };
-      const [zonesRes, response] = await Promise.all([
-        callApi("/CM/common-master/zone-codes", null, "GET"),
-        callApi("/CR/my-requests", payload, "POST"),
-      ]);
-
-      setZones(zonesRes?.data ?? []);
-
-      if (response?.data) {
-        const result = response.data.map((row) => {
-          let parsedPayload = {};
-          parsedPayload = row.payload ? row.payload : {};
-          parsedPayload = {
-            ...parsedPayload,
-            id: row.id,
-            reqStatus: row.reqStatus,
-            reqDate: row.reqDate,
-            creatorId: row.creatorId,
-            executorId: row.executorId,
-            executionDate: row.executionDate,
-            executorRemarks: row.executorRemarks,
-            changeType: row.changeType,
-          };
-
-          return {
-            ...parsedPayload,
-          };
-        });
-        result.sort((a, b) => {
-          if (a.reqStatus === "PENDING" && b.reqStatus !== "PENDING") return -1;
-          if (a.reqStatus !== "PENDING" && b.reqStatus === "PENDING") return 1;
-          return new Date(b.reqDate) - new Date(a.reqDate);
-        });
-        setRows(result);
-      } else {
-        setRows([]);
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const handleCancelRequest = async () => {
-    try {
-      const payload = {
-        requestId,
-        remarks: "User canceled this Request",
-      };
-
-      const response = await callApi("/CR/cancel-request", payload, "PATCH");
-      if (response?.success) {
-        snackbar(`Request Id ${requestId} Cancelled Successfully.`, "success");
-      } else {
-        snackbar(
-          response?.message
-            ? response?.message
-            : "Failed to process your cancel request, Kindly try again",
-          "error",
-        );
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      fetchData();
-      setConfirmDialog(false);
-    }
-  };
-  const handleViewClick = (data) => {
-    const { circleCode, circleName, zoneDescription } = data;
-    const showData = {
-      circleCode,
-      circleName,
-      zone: zoneDescription,
-    };
-
-    data.showData = showData;
-    setViewData(data);
-    setViewOpen(true);
-  };
-
-  const columns = useMemo(
-    () => [
-      { field: "id", headerName: "Request Id", flex: 0.6, minWidth: 150 },
-      {
-        field: "circleCode",
-        headerName: "Circle Code",
-        flex: 0.6,
-        sortable: true,
-        minWidth: 160,
-      },
-
-      {
-        field: "circleName",
-        headerName: "Circle Name",
-        flex: 1.2,
-        sortable: true,
-        minWidth: 150,
-      },
-      {
-        field: "zoneCode",
-        headerName: "Zone",
-        filterable: false,
-        minWidth: 160,
-        flex: 1,
-        renderCell: (params) => {
-          const zone = zones.find((z) => String(z.id) === String(params.value));
-          return zone ? zone.description : "N/A";
-        },
-      },
-
-      {
-        field: "changeType",
-        headerName: "Request Type",
-        flex: 1,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => {
-          const val = params.value;
-          const color =
-            val === "ADD" ? "success" : val === "DELETE" ? "error" : "warning";
-          const icon =
-            val === "ADD" ? (
-              <AddBoxIcon />
-            ) : val === "DELETE" ? (
-              <AutoDeleteIcon />
-            ) : (
-              <EditDocumentIcon />
-            );
-          return (
-            <CustomChip
-            sx={{
-              width:105,
-              justifyContent:"flex-start",
-            }}
-              icon={icon}
-              label={
-                val === "ADD"
-                  ? "Added"
-                  : val === "DELETE"
-                    ? "Deleted"
-                    : "Modified"
-              }
-              color={color}
-              variant="outlined"
-            />
-          );
-        },
-      },
-
-      {
-        field: "reqDate",
-        headerName: "Date of Submission",
-        flex: 1,
-        filterable: false,
-        minWidth: 160,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <Box>
-            <Chip
-              sx={{ color: "text.secondary" }}
-              icon={<DateRangeIcon />}
-              label={params.value.split("T")[0]}
-            />
-          </Box>
-        ),
-      },
-      {
-        field: "reqStatus",
-        headerName: "Status",
-        flex: 0.7,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <Box
-            // sx={{
-            //   color:
-            //     params.value === "REJECTED"
-            //       ? "error.main"
-            //       : params.value === "ACCEPTED"
-            //         ? "success.dark"
-            //         : "warning.main",
-            //   // fontWeight: "bold",
-            // }}
+export default function LogsTable({
+  rows,
+  loading,
+  onSelectionChange,
+  onViewRow,
+  onDeleteRow,
+  errorText,
+}) {
+  const columns = [
+    {
+      field: "LOG_ID",
+      headerName: "Log ID ",
+      flex: 0.6,
+      sortable: true,
+      renderCell: (params) => {
+        console.log(params);
+        return (
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1}
+            sx={{ height: "100%" }}
           >
-            <CustomChip
-              variant="outlined"
-              icon={
-                params.value === "REJECTED" ? (
-                  <BlockFlippedIcon />
-                ) : params.value === "ACCEPTED" ? (
-                  <CheckCircleIcon />
-                ) : params.value === "CANCELLED" ? (
-                  <GppBadIcon />
-                ) : (
-                  <PendingActionsIcon />
-                )
-              }
-              label={
-                params.value === "REJECTED"
-                  ? "Rejected"
-                  : params.value === "ACCEPTED"
-                    ? "Approved"
-                    : params.value === "CANCELLED"
-                      ? "Cancelled"
-                      : "Pending"
-              }
-              sx={{
-                color:
-                  params.value === "REJECTED"
-                    ? "error.dark"
-                    : params.value === "ACCEPTED"
-                      ? "success.dark"
-                      : params.value === "CANCELLED"
-                        ? "primary.dark"
-                        : "warning.main",
-
-                "& .MuiChip-icon": {
-                  color:
-                    params.value === "REJECTED"
-                      ? "error.dark"
-                      : params.value === "ACCEPTED"
-                        ? "success.dark"
-                        : params.value === "CANCELLED"
-                          ? "primary.dark"
-                          : "warning.main",
-                },
-              }}
-            />
-          </Box>
-        ),
-      },
-      {
-        field: "action",
-        headerName: "Action",
-        flex: 1,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => {
-          return (
+            {/* <AvatarCell name={params.row.LOG_ID } /> */}
             <Stack
-              direction="row"
-              spacing={1}
+              direction="column"
               justifyContent="center"
-              alignItems="center"
-              sx={{ height: "100%" }}
+              spacing={0}
+              sx={{ lineHeight: 1 }}
             >
-              {permissions.view && (
-                <Tooltip title="View">
-                  <IconButton
-                    // color="primary"
-                    onClick={() => handleViewClick(params.row)}
-                  >
-                    <VisibilityIcon />
-                  </IconButton>
-                </Tooltip>
-              )}
-
-              {params.row.reqStatus === "PENDING" && permissions.cancel && (
-                <Tooltip title={"Cancel Request"}>
-                  <IconButton
-                    onClick={() => {
-                      setConfirmDialog(true);
-                      setRequestId(params.row.id);
-                    }}
-                  >
-                    <CancelIcon fontSize="inherit" />
-                  </IconButton>
-                </Tooltip>
-              )}
+              <Typography
+                fontWeight={600}
+                variant="body2"
+                sx={{ lineHeight: 1.2 }}
+              >
+                {params.row.LOG_ID}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ lineHeight: 1.3 }}
+              >
+                {params.row.USER_ID}
+              </Typography>
             </Stack>
-          );
-        },
+          </Stack>
+        );
       },
-    ],
-    [permissions.cancel, permissions.view, zones],
-  );
-  const filteredColumns = useMemo(() => {
-    if (permissions.view || permissions.cancel) {
-      return columns;
-    }
-    // Otherwise, filter out the column where field name is 'action'.
-    else {
-      return columns.filter((column) => column.field !== "action");
-    }
-  }, [columns, permissions]);
+      valueGetter: (p) => p.row?.LOG_ID,
+    },
+    {
+      field: "ACTION_TYPE",
+      headerName: "Actions",
+      // headerAlign: "center",
+      // align: "center",
+      flex: 0.8,
+      sortable: true,
+    },
+    // { field: "PHONE_NUMBER", headerName: "Phone", flex: 0.9, sortable: true },
+    // { field: "CHANGE_TYPE ", headerName: "Changes", flex: 0.8, sortable: true },
+    {
+      field: "CHANGE_TYPE",
+      headerName: "Changes",
+      flex: 0.6,
+      sortable: true,
+      // align: "center",
+      // headerAlign: "center",
+    },
+    {
+      field: "ACTION_TIME",
+      headerName: "Timestamp",
+      flex: 0.7,
+      sortable: true,
+      // align: "center",
+      // headerAlign: "center",
+    },
+    {
+      field: "action",
+      headerName: "Action",
+      sortable: false,
+      flex: 0.3,
+      // align: "center",
+      // headerAlign: "center",
+      filterable: false,
+      disableColumnMenu: true,
+      renderCell: (params) => (
+        <Stack
+          direction="row"
+          spacing={0.9}
+          alignItems="center"
+          justifyContent="center"
+          sx={{ height: "100%" }}
+        >
+          <Tooltip title="View">
+            <span>
+              <IconButton
+                size="small"
+                onClick={() => onViewRow(params.row, "View")}
+              >
+                <VisibilityIcon fontSize="inherit" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          {/* <Tooltip title="Edit">
+            <IconButton
+              size="small"
+              onClick={() => onEditRow(params.row, "Edit")}
+            >
+              <EditIcon fontSize="inherit" />
+            </IconButton>
+          </Tooltip> */}
+          <Tooltip title="Delete">
+            <IconButton
+              size="small"
+              color="error"
+              onClick={() => onDeleteRow(params.row)}
+            >
+              <DeleteIcon fontSize="inherit" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      ),
+    },
+  ];
+  console.log(rows);
 
   return (
     <>
-      <Box>
-        <Box>
-          <DataGrid
-            loading={loading}
-            rows={rows}
-            columns={filteredColumns}
-            disableRowSelectionOnClick
-            pageSizeOptions={[5, 10, 25, 50]}
-            initialState={{
-              pagination: { paginationModel: { pageSize: 10, page: 0 } },
-              // sorting: { sortModel: [{ field: "circleCode", sort: "asc" }] },
-            }}
-            slots={{
-              noRowsOverlay: CustomNoRowsOverlay,
-            }}
-            getRowId={(row) => row.id}
-             sx={{
-              "& .MuiDataGrid-columnHeaders": {
-              backgroundColor: "#f5f5f5 !important",
-             border:"none",
-             },
-            }}
-          />
-        </Box>
-      </Box>
-      <ViewMyRequestDialog
-        open={viewOpen}
-        handleClose={() => setViewOpen(false)}
-        data={viewData}
-      />
-
-      {/* Cancel Dialog */}
-      <Dialog
-        open={confirmDialog}
-        onClose={() => {
-          setConfirmDialog(false);
+      <DataGrid
+        rows={rows.length > 0 ? rows : []}
+        columns={columns}
+        // checkboxSelection
+        disableRowSelectionOnClick
+        onRowSelectionModelChange={onSelectionChange}
+        pageSizeOptions={[5, 10, 25, 50]}
+        loading={loading}
+        getRowId={(row) => row.LOG_ID}
+        slots={{
+          noRowsOverlay: CustomNoRowsOverlay,
         }}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ fontWeight: 600 }}>
-          Cancel Request ID: {requestId}
-        </DialogTitle>
-        <DialogContent>
-          <Typography sx={{ p: 1 }}>
-            Are you sure you want to cancel this request Please confirm ?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setConfirmDialog(false);
-            }}
-            variant="outlined"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleCancelRequest}
-            color="error"
-            variant="contained"
-          >
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
+        localeText={{
+          noRowsLabel: errorText,
+        }}
+        autoHeight
+        initialState={{
+          pagination: { paginationModel: { pageSize: 10, page: 0 } },
+          sorting: { sortModel: [{ field: "ACTION_TYPE ", sort: "asc" }] },
+        }}
+      />
     </>
   );
 }
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import {
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Stack,
-  Typography,
-  Tooltip,
-  IconButton,
-} from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
+import { Box, Paper, Button } from "@mui/material";
 import useApi from "../../../hooks/useApi";
-import CancelIcon from "@mui/icons-material/Cancel";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
+
+//import LogsSearchFilters from "../components/LogsSearchFilter";
+//import LogsHeader from "../components/LogsHeader";
+import LogsTable from "../components/LogsTable";
+import LogsDialog from "../components/LogsDialog";
+import DeleteConfirmDialog from "../components/DeleteConfirmDialog";
 import useCustomSnackbar from "../../../utils/useCustomSnackbar";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import GppBadIcon from "@mui/icons-material/GppBad";
-import { getPermissions } from "../../../utils/CommonUtilities";
-import CustomChip from "../../../utils/CustomChip";
-import InfoIcon from "@mui/icons-material/Info";
-import ViewMyRequestDialog from "../../common/ViewMyRequestDialog";
-import { useSelector } from "react-redux";
-function CustomNoRowsOverlay() {
-  return (
-    <Stack height="100%" alignItems="center" justifyContent="center">
-      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-      <Typography variant="h6">No Role Requests Found</Typography>
-      <Typography>You have not created any Role requests.</Typography>
-    </Stack>
+import KeyboardReturnIcon from "@mui/icons-material/KeyboardReturn";
+import { useNavigate } from "react-router-dom";
+
+const API_URL = import.meta.env?.VITE_USERS_API_URL || "";
+
+export default function UserLogs({ errorText, filteredCount }) {
+  const { callApi, loading, error: apiError } = useApi();
+  const navigate = useNavigate();
+  // ---- server data ----
+  const [rows, setRows] = useState([
+    {
+      LOG_ID: 234356,
+      ACTION_TYPE: "PASSWORD_CHANGED",
+      CHANGE_TYPE: "USER",
+      ACTION_TIME: "2022-04-17 11:25:12.345",
+      USER_ID: 325447,
+      OLD_VALUE: {
+        USERID: "1017860",
+        PHONE_NUMBER: "34234234",
+        FIRST_NAME: "Sampath",
+        LAST_NAME: "Test",
+        BRANCH: 12345,
+        ROLE_ID: 51,
+        ROLE_NAME: "UCO",
+        ACCOUNT_STATUS: "ACTIVE",
+        EMAIL: "b",
+      },
+      NEW_VALUE: {},
+      IP_ADDRESS: "10.9.19.235",
+    },
+  ]);
+  const [roles, setRoles] = useState([]);
+  const [uiError, setUiError] = useState("");
+  const [selectedRow, setSelectedRow] = useState();
+  // ---- server query (accordion) ----
+  const [reqUserid, setReqUserid] = useState("");
+
+  const [reqAction, setreqAction] = useState("");
+
+  // ---- client filters / selection ----
+  const [query, setQuery] = useState("");
+  const [filterRole, setFilterRole] = useState("");
+  const [selection, setSelection] = useState([]);
+
+  const [openEdit, setOpenEdit] = useState(false);
+
+  // ---- delete dialog ----
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const snackbar = useCustomSnackbar();
+
+  // ---- helpers ----
+  const makePayload = useCallback(
+    () => ({
+      id: reqUserid || undefined,
+
+      LogId: reqAction || undefined,
+    }),
+    [reqUserid, reqAction]
   );
-}
 
-export default function UserManagementTab2() {
-  const { callApi } = useApi();
-  const selectedMenu = useSelector((state) => state.menus.selectedMenuItem);
-  const permissions = getPermissions(selectedMenu);
-  const showSnackBar = useCustomSnackbar();
-  const [isLoading, setIsLoading] = useState(true);
-  const [rows, setRows] = useState([]);
-  const [confirmDialog, setConfirmDialog] = useState(false);
-  const [requestId, setRequestId] = useState(null);
-  const [viewOpen, setViewOpen] = useState(false);
-  const [viewData, setViewData] = useState(null);
+  const normalizeUsers = useCallback((users = []) => {
+    return users.map((u, idx) => {
+      const USER_ID = u?.USER_ID ?? u?.USER_ID ?? "";
 
-  const fetchData = useCallback(async () => {
-    try {
-      const response = await callApi("/UM/user/my-requests", null, "GET");
-      console.log(response);
-      if (response?.result) {
-        const res = response?.result?.myRequests;
-        const result = res.map((row) => {
-          let parsedPayload = {};
-          parsedPayload = row.requestPayload
-            ? JSON.parse(row.requestPayload)
-            : {};
+      const LogIdRaw = u?.LOG_ID ?? u?.LogId ?? "";
+      const parsedLogId =
+        typeof LogIdRaw === "number"
+          ? LogIdRaw
+          : Number.isNaN(parseInt(LogIdRaw, 10))
+          ? LogIdRaw
+          : parseInt(LogIdRaw, 10);
 
-          return {
-            ...parsedPayload,
-            ...row,
-          };
-        });
-        setRows(result);
-      } else {
-        setRows([]);
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [callApi]);
-  useEffect(() => {
-    fetchData();
+      return {
+        id: USER_ID || String(idx + 1),
+        USER_ID,
+        EMAIL: (u?.EMAIL ?? u?.email ?? "").toString(),
+        PHONE_NUMBER: (u?.PHONE_NUMBER ?? u?.phone ?? "").toString(),
+        ROLE_NAME: (u?.ROLE_NAME ?? u?.roleName ?? "").toString().trim(),
+        LOG_ID: parsedLogId,
+        BRANCH: (u?.BRANCH ?? u?.branch ?? "").toString(),
+        __name: name || USER_ID || "(unknown)",
+        ACCOUNT_STATUS: u?.ACCOUNT_STATUS,
+      };
+    });
   }, []);
 
-  const handleCancelRequest = async () => {
+  const fetchUsers = useCallback(async () => {
+    setUiError("");
     try {
-      const payload = {
-        requestId,
-        actionFlag: "CANCEL",
-        remarks: "User canceled this Request",
-      };
-      const response = await callApi(
-        "/UM/user/cancel-request",
-        payload,
-        "POST",
+      const data = await callApi(API_URL, makePayload(), "GET");
+      const users = data?.result?.users ?? [];
+      setRows(normalizeUsers(users));
+    } catch (e) {
+      console.error(e);
+      setRows([]);
+      setUiError(
+        "Failed to fetch users. Check network, CORS, or API availability."
       );
-      console.log(response);
-      if (response?.result?.status) {
-        showSnackBar(
-          `Request Id ${requestId} Cancelled Successfully.`,
-          "success",
-        );
-      } else {
-        showSnackBar(
-          response?.result?.message
-            ? response?.result?.message
-            : "Failed to process your cancel request, Kindly try again",
-          "error",
-        );
-      }
-    } catch (error) {
-      console.log(error);
-    } finally {
-      fetchData();
-      setConfirmDialog(false);
     }
-  };
+  }, [callApi, makePayload, normalizeUsers]);
 
-  const handleViewClick = (data) => {
-    console.log("data", data);
-    const {
-      requestId,
-      requestStatus,
-      requestDate,
-      userId,
-      accountStatus,
-      firstName,
-      middleName,
-      lastName,
-      email,
-      phoneNumber,
-      branch,
-      branchName,
-      roleName,
-      requestorUserId,
-      requestType,
-      approvalDate,
-      approverId,
-      rejectionReason,
-    } = data;
-    console.log("data", data);
-    const showData = {
-      userId: userId || "N/A",
-      roleName: roleName || "N/A",
-      firstName: firstName.trim() || "N/A",
-      middleName: middleName.trim() || "N/A",
-      lastName: lastName.trim() || "N/A",
-      email: email || "N/A",
-      branch: branch && branchName ? `${branch}-${branchName}` : "N/A",
-      phoneNumber: phoneNumber || "N/A",
-    };
-    data.id = requestId;
-    data.reqDate = requestDate;
-    data.changeType = requestType === "CREATE" ? "ADD" : requestType;
-    data.reqStatus = requestStatus;
-    data.creatorId = requestorUserId;
-    data.executorId = approverId;
-    data.executorRemarks = rejectionReason;
-    data.executionDate = approvalDate;
+  const fetchRoles = useCallback(async () => {
+    try {
+      const data = await callApi("/UM/role/get-roles", {}, "GET");
+      const raw = data?.result?.roles ?? [];
+      setRoles(
+        raw.map((r) => ({
+          id: r?.LogId,
+          name: (r?.roleName ?? "").trim(),
+          description: r?.description ?? "",
+        }))
+      );
+    } catch (e) {
+      console.error("Error while fetching roles", e);
+    }
+  }, [callApi]);
 
-    data.showData = showData;
-    setViewData(data);
-    setViewOpen(true);
-  };
-
-  const columns = useMemo(
-    () => [
-      {
-        field: "requestId",
-        headerName: "Request Id",
-        flex: 0.5,
-        minWidth: 150,
-      },
-      { field: "userId", headerName: "User ID", flex: 0.5, minWidth: 150 },
-      {
-        field: "userName",
-        headerName: "User Name",
-        flex: 1.3,
-        minWidth: 250,
-        renderCell: (p) =>
-          `${p.row.firstName} ${p?.row?.middleName || ""} ${
-            p?.row?.lastName || ""
-          }`,
-      },
-      {
-        field: "requestType",
-        headerName: "Request Type",
-        flex: 0.5,
-        minWidth: 150,
-        align: "center",
-        headerAlign: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => {
-          const val = params.value;
-          const color =
-            val === "CREATE"
-              ? "success"
-              : val === "DELETE"
-                ? "error"
-                : "warning";
-          const icon =
-            val === "ADD" ? (
-              <AddBoxIcon />
-            ) : val === "DELETE" ? (
-              <AutoDeleteIcon />
-            ) : (
-              <EditDocumentIcon />
-            );
-          return (
-            <CustomChip
-            sx={{
-              width:105,
-              justifyContent:"flex-start",
-            }}
-              variant="outlined"
-              icon={icon}
-              label={
-                val === "CREATE"
-                  ? "Created"
-                  : val === "DELETE"
-                    ? "Deleted"
-                    : "Modified"
-              }
-              color={color}
-            />
-          );
-        },
-      },
-
-      {
-        field: "requestDate",
-        headerName: "Requested Date",
-        flex: 1,
-        minWidth: 250,
-        // align: "center",
-        // headerAlign: "center",
-        renderCell: (params) => {
-          const isoString = params.value;
-          if (!isoString) return null;
-
-          const date = new Date(isoString);
-          return (
-            <Typography component="span">
-              {date.toLocaleString("en-IN", {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                hour12: true,
-              })}
-            </Typography>
-          );
-        },
-      },
-
-      // ... rest of your DataGrid setup
-      {
-        field: "requestStatus",
-        headerName: "Status",
-        flex: 1,
-        minWidth: 120,
-        align: "center",
-        headerAlign: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <Box
-            // sx={{
-            //   color:
-            //     params.value === "REJECTED"
-            //       ? "error.main"
-            //       : params.value === "ACCEPTED"
-            //         ? "success.dark"
-            //         : "warning.main",
-            //   fontWeight: "bold",
-            // }}
-          >
-            <CustomChip
-            sx={{
-              width:105,
-              justifyContent:"flex-start",
-            }}
-              variant="outlined"
-              icon={
-                params.value === "REJECTED" ? (
-                  <BlockFlippedIcon />
-                ) : params.value === "ACCEPTED" ? (
-                  <CheckCircleIcon />
-                ) : params.value === "CANCELLED" ? (
-                  <GppBadIcon />
-                ) : (
-                  <PendingActionsIcon />
-                )
-              }
-              label={
-                params.value === "REJECTED"
-                  ? "Rejected"
-                  : params.value === "ACCEPTED"
-                    ? "Approved"
-                    : params.value === "CANCELLED"
-                      ? "Cancelled"
-                      : "Pending"
-              }
-              sx={{
-                color:
-                  params.value === "REJECTED"
-                    ? "error.dark"
-                    : params.value === "ACCEPTED"
-                      ? "success.dark"
-                      : params.value === "CANCELLED"
-                        ? "primary.dark"
-                        : "warning.main",
-
-                "& .MuiChip-icon": {
-                  color:
-                    params.value === "REJECTED"
-                      ? "error.dark"
-                      : params.value === "ACCEPTED"
-                        ? "success.dark"
-                        : params.value === "CANCELLED"
-                          ? "primary.dark"
-                          : "warning.main",
-                },
-              }}
-            />
-          </Box>
-        ),
-      },
-      {
-        field: "action",
-        headerName: "Action",
-        flex: 0.6,
-        minWidth: 120,
-        align: "center",
-        headerAlign: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <Stack
-            direction="row"
-            spacing={1}
-            justifyContent="center"
-            alignItems="center"
-            height="100%"
-          >
-            {permissions.view && (
-              <Tooltip title="View">
-                <IconButton
-                  // color="primary"
-                  onClick={() => handleViewClick(params.row)}
-                >
-                  <VisibilityIcon />
-                </IconButton>
-              </Tooltip>
-            )}
-            {params.row.requestStatus === "PENDING" && permissions.cancel && (
-              <Tooltip title={"Cancel Request"}>
-                <IconButton
-                  onClick={() => {
-                    setConfirmDialog(true);
-                    setRequestId(params.row.requestId);
-                  }}
-                >
-                  <CancelIcon fontSize="inherit" />
-                </IconButton>
-              </Tooltip>
-            )}
-          </Stack>
-        ),
-      },
-    ],
-    [],
+  const findRole = useCallback(
+    (id) => roles.find((r) => String(r.id) === String(id)),
+    [roles]
   );
 
-  const filteredColumns = useMemo(() => {
-    console.log(permissions);
-    if (permissions.view || permissions.cancel) {
-      return columns;
-    }
-    // Otherwise, filter out the column where field name is 'action'.
-    else {
-      return columns.filter((column) => column.field !== "action");
-    }
-  }, [columns, permissions]);
+  useEffect(() => {
+    // fetchUsers();
+    fetchRoles();
+  }, [fetchUsers, fetchRoles]);
+
+  // ---- client filtering ----
+  const filteredRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((r) => {
+      const okQ =
+        !q ||
+        r.__name?.toLowerCase().includes(q) ||
+        r.EMAIL?.toLowerCase().includes(q) ||
+        String(r.USER_ID ?? "")
+          .toLowerCase()
+          .includes(q) ||
+        String(r.PHONE_NUMBER ?? "")
+          .toLowerCase()
+          .includes(q);
+
+      const okRole =
+        !filterRole ||
+        String(r.LOG_ID) === String(filterRole) ||
+        r.ROLE_NAME === (findRole(filterRole)?.name ?? "");
+
+      return okQ && okRole;
+    });
+  }, [rows, query, filterRole, findRole]);
+
+  const removeUser = useCallback(
+    (id) => setRows((prev) => prev.filter((r) => r.id !== id)),
+    []
+  );
+
+  const removeBulk = useCallback(
+    () => setRows((prev) => prev.filter((r) => !selection.includes(r.id))),
+    [selection]
+  );
+
+  // ---- export CSV ----
+  const csvEscape = (v) => {
+    const s = (v ?? "").toString();
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const exportCSV = useCallback(() => {
+    if (!filteredRows.length) return;
+    const header =
+      "{LOG_ID,ACTION_TYPE,CHANGE_TYPE,ACTION_TIME,USER_ID,OLD_VALUE ,NEW_VALUE,IP_ADDRESS ";
+    const body = filteredRows.map((r) =>
+      [
+        csvEscape(r.LOG_ID),
+        csvEscape(r.ACTION_TYPE),
+        csvEscape(r.CHANGE_TYPE),
+        csvEscape(r.ACTION_TIME),
+        csvEscape(r.USER_ID),
+        csvEscape(r.OLD_VALUE),
+        csvEscape(r.NEW_VALUE),
+        csvEscape(r.IP_ADDRESS),
+      ].join(",")
+    );
+    const csv = [header, ...body].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "usersLog.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [filteredRows]);
+
+  const effectiveError =
+    apiError?.response?.data?.message || apiError?.message || uiError || "";
+
+  if (effectiveError !== "") {
+    snackbar(
+      apiError?.response?.data?.message || apiError?.message || uiError,
+      "error"
+    );
+  }
 
   return (
-    <>
-      <Box>
-        <DataGrid
-          rows={rows}
-          loading={isLoading}
-          columns={filteredColumns}
-          disableRowSelectionOnClick
-          pageSizeOptions={[5, 10, 25, 50]}
-          initialState={{
-            pagination: { paginationModel: { pageSize: 10, page: 0 } },
-            sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] },
-          }}
-          getRowId={(row) => row.requestId}
-          slots={{
-            noRowsOverlay: CustomNoRowsOverlay,
-          }}
-          sx={{
-          minHeight: 520,
-          width: "100%",
-         "& .MuiDataGrid-columnHeaders": {
-          backgroundColor: "#f5f5f5 !important",
-          fontWeight: 700,
-          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
-          position: 'sticky',
-          top: 0,
-          zIndex: 1,
-        },
-        }}
-        />
-      </Box>
-
-      <ViewMyRequestDialog
-        open={viewOpen}
-        handleClose={() => setViewOpen(false)}
-        data={viewData}
-      />
-      <Dialog
-        open={confirmDialog}
-        onClose={() => {
-          setConfirmDialog(false);
-        }}
-        maxWidth="sm"
-        fullWidth
+    <Box sx={{ p: { xs: 2, md: 3 } }}>
+      <Button
+        size="small"
+        variant="outlined"
+        startIcon={<KeyboardReturnIcon />}
+        onClick={() => navigate(-1)}
+        //disabled={filteredCount === 0 || loading || errorText}
       >
-        <DialogTitle sx={{ fontWeight: 600 }}>
-          Cancel Request ID: {requestId}
-        </DialogTitle>
-        <DialogContent>
-          <Typography sx={{ p: 1 }}>
-            Are you sure you want to cancel this request Please confirm ?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setConfirmDialog(false);
-            }}
-            variant="outlined"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleCancelRequest}
-            color="error"
-            variant="contained"
-          >
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </>
+        Back
+      </Button>
+      {/* Server-side filters */}
+      {/* {!effectiveError && !loading && (
+        <LogsSearchFilters
+          roles={roles}
+          reqUserid={reqUserid}
+          reqAction={reqAction}
+          onChangeUserid={setReqUserid}
+          onChangeRole={setreqAction}
+          loading={loading}
+          errorText={effectiveError}
+          onSearch={fetchUsers}
+        />
+      )} */}
+
+      <Paper variant="outlined" sx={{ mt: 2 }}>
+        {/* Header strip */}
+        {/* {!effectiveError && !loading && (
+          <LogsHeader
+            roles={roles}
+            filterRole={filterRole}
+            onFilterRoleChange={setFilterRole}
+            query={query}
+            onQueryChange={setQuery}
+            totalCount={rows.length}
+            filteredCount={filteredRows.length}
+            selectionCount={selection.length}
+            onBulkDelete={removeBulk}
+            onExport={exportCSV}
+            loading={loading}
+            errorText={effectiveError}
+          />
+        )} */}
+          <Paper
+    elevation={2}
+    sx={{
+      display:"flex",
+      flexDirection:"column",
+      borderRadius:2,
+      overflow:"hidden",
+      width:"100%",
+      p:2,
+    }}>
+        <LogsTable
+          rows={rows}
+          roles={roles}
+          loading={loading}
+          onSelectionChange={setSelection}
+          onViewRow={(row) => {
+            const matched = findRole(row.LOG_ID);
+            // setForm({
+            //   ...row,
+            //   LOG_ID: matched ? matched.id : row.LOG_ID,
+            //   ROLE_NAME: matched ? matched.name : row.ROLE_NAME,
+            // });
+            setSelectedRow(row);
+            setOpenEdit(true);
+          }}
+          onDeleteRow={(row) => setDeleteTarget(row)}
+          errorText={effectiveError}
+        />
+        </Paper>
+
+        {/* Grid */}
+
+        {selectedRow && (
+          <LogsDialog
+            open={openEdit}
+            onClose={() => setOpenEdit(false)}
+            selectedRow={selectedRow}
+          />
+        )}
+
+        <DeleteConfirmDialog
+          open={!!deleteTarget}
+          name={deleteTarget?.__name || deleteTarget?.USER_ID}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => {
+            if (deleteTarget?.id) removeUser(deleteTarget.id);
+            setDeleteTarget(null);
+          }}
+        />
+      </Paper>
+    </Box>
   );
 }
