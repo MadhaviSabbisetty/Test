@@ -556,3 +556,261 @@ export default function CommonRequestScreen() {
     </Box>
   );
 }
+
+
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { Box, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Typography, Button, Stack, Tooltip, IconButton, Divider } from "@mui/material";
+import InfoIcon from "@mui/icons-material/Info";
+import { DataGrid } from "@mui/x-data-grid";
+import { Check, Clear, Visibility } from "@mui/icons-material";
+import AddBoxIcon from "@mui/icons-material/AddBox";
+import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
+import EditDocumentIcon from "@mui/icons-material/EditDocument";
+import RestoreIcon from "@mui/icons-material/Restore";
+import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import ChangeCircleSharpIcon from "@mui/icons-material/ChangeCircleSharp";
+import { useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
+
+import useApi from "../../../../hooks/useApi";
+import useCustomSnackbar from "../../../../utils/useCustomSnackbar";
+import CustomChip from "../../../../utils/CustomChip";
+import { timeStampFormatter } from "../../../../utils/CommonUtilities";
+import LoadingOverlay from "../../../../utils/LoadingOverlay";
+
+import TemplateRequestAnalytics from "../analytics/TemplateRequestAnalytics";
+import ViewRequestDialog from "../dialogs/ViewRequestDialog";
+import CompareTemplateDialog from "../dialogs/CompareTemplate/CompareTemplateDialog";
+import { styles } from "../../TemplateRequestScreenStyles";
+
+const BASE_URL_CONFIG = "/TC/template-config"
+
+export default function PendingRequestsTab() {
+  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
+  const requestType = selectedMenuItem?.requestType || "";
+  const navigate = useNavigate();
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+
+  const [loading, setLoading] = useState(false);
+  const [dataGridLoading, setDataGridLoading] = useState(true);
+  const [rows, setRows] = useState([]);
+  const [remarks, setRemarks] = useState("");
+
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewData, setViewData] = useState(null);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [selectedRequestId, setSelectedRequestId] = useState(null);
+
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null, rowId: null });
+
+  const fetchData = useCallback(async () => {
+    if (!requestType) return;
+    try {
+      const response = await callApi(BASE_URL_CONFIG + "/template-requests/pending", null, "GET");
+      const result = response?.data || response || [];
+
+      const data = result.map((row) => ({
+        ...row,
+        ...(typeof row.summary === "object" ? row.summary : {}),
+      }));
+
+      setRows(data);
+    } catch (err) {
+      console.error(err);
+      showSnackBar("Error fetching data", "error");
+    } finally {
+      setRemarks("");
+      setDataGridLoading(false);
+      setConfirmDialog({ open: false, type: null, rowId: null });
+    }
+  }, [callApi, showSnackBar, requestType]);
+
+  useEffect(() => {
+    setRows([]);
+    setRemarks("");
+    setConfirmDialog({ open: false, type: null, rowId: null });
+    fetchData();
+  }, [fetchData, navigate]);
+
+  const handleConfirm = async () => {
+    if (confirmDialog.type === "reject" && remarks.trim().length < 5) {
+      showSnackBar("Please provide minimum 5 characters remarks before rejecting", "warning");
+      return;
+    }
+    setLoading(true);
+
+    try {
+      const payload = {
+        requestId: confirmDialog.rowId,
+        status: confirmDialog.type === "reject" ? "REJECTED" : "ACCEPTED",
+        remarks: confirmDialog.type === "reject" ? remarks.trim() : "No Remarks",
+      };
+
+      const res = await callApi(BASE_URL_CONFIG + "/template-requests/process", payload, "PATCH");
+      if (res?.success || res) {
+        showSnackBar(confirmDialog.type === "accept" ? "Request Approved" : "Request Rejected", "success");
+        fetchData();
+      } else {
+        showSnackBar("Failed to process request" + res?.message, "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showSnackBar("Error while processing request", "error");
+    } finally {
+      closeConfirmDialog();
+      setLoading(false);
+    }
+  };
+
+  const generateProps = (value) => {
+    let props = {};
+    switch (value) {
+      case "ADD": {
+        props = {
+          ...props,
+          icon: <AddBoxIcon />,
+          label: "Added",
+          color: "success"
+        }
+        break;
+      };
+      case "DELETE": {
+        props = {
+          ...props,
+          icon: <AutoDeleteIcon />,
+          label: "Deleted",
+          color: "error"
+        }
+        break;
+      }
+      case "STATUS": {
+        props = {
+          ...props,
+          icon: <ChangeCircleSharpIcon />,
+          label: "Status-change",
+          color: "info"
+        }
+        break;
+      }
+      case "UPDATE": {
+        props = {
+          ...props,
+          icon: <EditDocumentIcon />,
+          label: "Modified",
+          color: "info"
+        }
+        break;
+      }
+      case "ROLLBACK": {
+        props = {
+          ...props,
+          icon: <RestoreIcon />,
+          label: "Rollback",
+          color: "success"
+        }
+        break;
+      }
+    }
+    return props;
+  }
+
+  const handleViewClick = (data) => {
+    if (data.changeType === "UPDATE") {
+      setSelectedRequestId(data.id);
+      setCompareOpen(true);
+    } else {
+      setViewData(data);
+      setViewOpen(true);
+    }
+  };
+
+  const openConfirmDialog = (type, id) => setConfirmDialog({ open: true, type, rowId: id });
+  const closeConfirmDialog = () => setConfirmDialog({ open: false, type: null, rowId: null });
+
+  const allColumns = useMemo(() => [
+    { field: "reportId", headerName: "Report Id", flex: 0.5 },
+    { field: "reportName", headerName: "Report Name", flex: 1.2 },
+    {
+      field: "changeType", headerName: "Type", flex: 0.6,
+      renderCell: (p) => (
+        <CustomChip
+          {...generateProps(p.value)}
+          size="small" variant="outlined"
+        />
+      ),
+    },
+    {
+      field: "creatorId", headerName: "Creator", flex: 0.8,
+      renderCell: (p) => <CustomChip icon={<AccountCircleIcon />} size="small" color="info" label={p.value} variant="outlined" />,
+    },
+    {
+      field: "reqDate", headerName: "Date", flex: 1,
+      renderCell: (p) => <Typography variant="body1" component="span" sx={styles.requestDate}>{timeStampFormatter(p.value)}</Typography>,
+    },
+    {
+      field: "actions", headerName: "Actions", flex: 0.7,
+      renderCell: (p) => (
+        <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" style={styles.StackStyle}>
+          <Tooltip title="Approve">
+            <IconButton color="success" onClick={() => openConfirmDialog("accept", p.row.id)}><Check /></IconButton>
+          </Tooltip>
+          <Tooltip title="Reject">
+            <IconButton color="error" onClick={() => openConfirmDialog("reject", p.row.id)}><Clear /></IconButton>
+          </Tooltip>
+          <Tooltip title="View">
+            <IconButton onClick={() => handleViewClick(p.row)}><Visibility /></IconButton>
+          </Tooltip>
+        </Stack>
+      ),
+    },
+  ], []);
+
+  return (
+    <Box>
+      <TemplateRequestAnalytics data={rows} />
+      <DataGrid
+        rows={rows} columns={allColumns} loading={dataGridLoading} disableRowSelectionOnClick
+        pageSizeOptions={[5, 10, 25, 50]}
+        initialState={{ pagination: { paginationModel: { pageSize: 5 } }, sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] } }}
+        getRowId={(row) => row.id} sx={styles.dataGrid}
+        slots={{
+          noRowsOverlay: () => (
+            <Stack height="100%" alignItems="center" justifyContent="center">
+              <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+              <Typography variant="h6">No Pending Requests Found</Typography>
+              <Typography>All {selectedMenuItem.title} have been processed.</Typography>
+            </Stack>
+          ),
+        }}
+      />
+
+      <ViewRequestDialog open={viewOpen} handleClose={() => { setViewOpen(false); setViewData(null); }} data={viewData} />
+      <CompareTemplateDialog open={compareOpen} requestId={selectedRequestId} onClose={() => { setCompareOpen(false); setSelectedRequestId(null); }} />
+
+      <Dialog maxWidth="sm" fullWidth open={confirmDialog.open} onClose={closeConfirmDialog}>
+        <DialogTitle>{confirmDialog.type === "accept" ? "Confirm Approval" : "Confirm Rejection"}</DialogTitle>
+        <Divider />
+        <DialogContent>
+          <Typography mb={2}>{confirmDialog.type === "accept" ? "Are you sure you want to approve the request?" : "Please provide remarks to reject this request."}</Typography>
+          {confirmDialog.type === "reject" && (
+            <TextField
+              fullWidth label="Remarks" value={remarks} multiline rows={4}
+              onChange={(e) => setRemarks(e.target.value)} margin="dense"
+              slotProps={{ htmlInput: { maxLength: 200 } }}
+              helperText={remarks?.length !== 0 && remarks?.length < 5 ? "Enter at least 5 characters" : "Allowed 5-200 characters"}
+              error={remarks?.length !== 0 && remarks?.length < 5}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeConfirmDialog}>Cancel</Button>
+          <Button variant="contained" onClick={handleConfirm} color={confirmDialog.type === "accept" ? "success" : "error"}>
+            {confirmDialog.type === "accept" ? "Approve" : "Reject"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <LoadingOverlay loading={loading} />
+    </Box>
+  );
+}
