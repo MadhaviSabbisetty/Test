@@ -1,530 +1,237 @@
-/**
- * UsersTable.jsx (Child #3 – DataGrid only; calls back up for edit/delete)
- *
- * - Rndering grid only
- * @author :
- * @editors :
- * @reviewer :
- */
+
+import React from "react";
+import { alpha } from "@mui/material/styles";
 import {
-  Box,
-  IconButton,
-  Stack,
-  Tooltip,
-  Typography,
-  styled,
-} from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/DeleteOutline";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+  GridPagination,
+  useGridApiContext,
+  useGridSelector,
+  gridPaginationRowCountSelector,
+} from "@mui/x-data-grid";
 
-const OverlayBox = styled(Box)(() => ({
-  display: "flex",
-  flexDirection: "column",
-  height: "100%",
-  justifyContent: "center",
-  alignItems: "center",
-}));
+const GlobalDataGridPagination = () => {
+  const apiRef = useGridApiContext();
 
-const CustomNoRowsOverlay = () => {
-  return (
-    <OverlayBox>
-      <ErrorOutlineIcon fontSize="large" />
-      <Typography variant="h5" fontSize="1.2rem">
-        Data is not available
-      </Typography>
-    </OverlayBox>
-  );
-};
-function AvatarCell({ name }) {
-  const safe = (name ?? "").trim() || "U";
-  const initials = safe
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-  return (
-    <Box
-      sx={{
-        width: 28,
-        height: 28,
-        borderRadius: "50%",
-        bgcolor: "primary.light",
-        color: "primary.contrastText",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 12,
-        mr: 1,
-      }}
-    >
-      {initials}
-    </Box>
-  );
-}
+  const rowCount = useGridSelector(apiRef, gridPaginationRowCountSelector);
 
-export default function LogsTable({
-  rows,
-  loading,
-  onSelectionChange,
-  onViewRow,
-  onDeleteRow,
-  errorText,
-}) {
-  const columns = [
-    {
-      field: "LOG_ID",
-      headerName: "Log ID ",
-      flex: 0.6,
-      sortable: true,
-      renderCell: (params) => {
-        console.log(params);
-        return (
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={1}
-            sx={{ height: "100%" }}
-          >
-            {/* <AvatarCell name={params.row.LOG_ID } /> */}
-            <Stack
-              direction="column"
-              justifyContent="center"
-              spacing={0}
-              sx={{ lineHeight: 1 }}
-            >
-              <Typography
-                fontWeight={600}
-                variant="body2"
-                sx={{ lineHeight: 1.2 }}
-              >
-                {params.row.LOG_ID}
-              </Typography>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ lineHeight: 1.3 }}
-              >
-                {params.row.USER_ID}
-              </Typography>
-            </Stack>
-          </Stack>
-        );
-      },
-      valueGetter: (p) => p.row?.LOG_ID,
-    },
-    {
-      field: "ACTION_TYPE",
-      headerName: "Actions",
-      // headerAlign: "center",
-      // align: "center",
-      flex: 0.8,
-      sortable: true,
-    },
-    // { field: "PHONE_NUMBER", headerName: "Phone", flex: 0.9, sortable: true },
-    // { field: "CHANGE_TYPE ", headerName: "Changes", flex: 0.8, sortable: true },
-    {
-      field: "CHANGE_TYPE",
-      headerName: "Changes",
-      flex: 0.6,
-      sortable: true,
-      // align: "center",
-      // headerAlign: "center",
-    },
-    {
-      field: "ACTION_TIME",
-      headerName: "Timestamp",
-      flex: 0.7,
-      sortable: true,
-      // align: "center",
-      // headerAlign: "center",
-    },
-    {
-      field: "action",
-      headerName: "Action",
-      sortable: false,
-      flex: 0.3,
-      // align: "center",
-      // headerAlign: "center",
-      filterable: false,
-      disableColumnMenu: true,
-      renderCell: (params) => (
-        <Stack
-          direction="row"
-          spacing={0.9}
-          alignItems="center"
-          justifyContent="center"
-          sx={{ height: "100%" }}
-        >
-          <Tooltip title="View">
-            <span>
-              <IconButton
-                size="small"
-                onClick={() => onViewRow(params.row, "View")}
-              >
-                <VisibilityIcon fontSize="inherit" />
-              </IconButton>
-            </span>
-          </Tooltip>
-          {/* <Tooltip title="Edit">
-            <IconButton
-              size="small"
-              onClick={() => onEditRow(params.row, "Edit")}
-            >
-              <EditIcon fontSize="inherit" />
-            </IconButton>
-          </Tooltip> */}
-          <Tooltip title="Delete">
-            <IconButton
-              size="small"
-              color="error"
-              onClick={() => onDeleteRow(params.row)}
-            >
-              <DeleteIcon fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      ),
-    },
-  ];
-  console.log(rows);
-
-  return (
-    <>
-      <DataGrid
-        rows={rows.length > 0 ? rows : []}
-        columns={columns}
-        // checkboxSelection
-        disableRowSelectionOnClick
-        onRowSelectionModelChange={onSelectionChange}
-        pageSizeOptions={[5, 10, 25, 50]}
-        loading={loading}
-        getRowId={(row) => row.LOG_ID}
-        slots={{
-          noRowsOverlay: CustomNoRowsOverlay,
-        }}
-        localeText={{
-          noRowsLabel: errorText,
-        }}
-        autoHeight
-        initialState={{
-          pagination: { paginationModel: { pageSize: 10, page: 0 } },
-          sorting: { sortModel: [{ field: "ACTION_TYPE ", sort: "asc" }] },
-        }}
-      />
-    </>
-  );
-}
-import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { Box, Paper, Button } from "@mui/material";
-import useApi from "../../../hooks/useApi";
-
-//import LogsSearchFilters from "../components/LogsSearchFilter";
-//import LogsHeader from "../components/LogsHeader";
-import LogsTable from "../components/LogsTable";
-import LogsDialog from "../components/LogsDialog";
-import DeleteConfirmDialog from "../components/DeleteConfirmDialog";
-import useCustomSnackbar from "../../../utils/useCustomSnackbar";
-import KeyboardReturnIcon from "@mui/icons-material/KeyboardReturn";
-import { useNavigate } from "react-router-dom";
-
-const API_URL = import.meta.env?.VITE_USERS_API_URL || "";
-
-export default function UserLogs({ errorText, filteredCount }) {
-  const { callApi, loading, error: apiError } = useApi();
-  const navigate = useNavigate();
-  // ---- server data ----
-  const [rows, setRows] = useState([
-    {
-      LOG_ID: 234356,
-      ACTION_TYPE: "PASSWORD_CHANGED",
-      CHANGE_TYPE: "USER",
-      ACTION_TIME: "2022-04-17 11:25:12.345",
-      USER_ID: 325447,
-      OLD_VALUE: {
-        USERID: "1017860",
-        PHONE_NUMBER: "34234234",
-        FIRST_NAME: "Sampath",
-        LAST_NAME: "Test",
-        BRANCH: 12345,
-        ROLE_ID: 51,
-        ROLE_NAME: "UCO",
-        ACCOUNT_STATUS: "ACTIVE",
-        EMAIL: "b",
-      },
-      NEW_VALUE: {},
-      IP_ADDRESS: "10.9.19.235",
-    },
-  ]);
-  const [roles, setRoles] = useState([]);
-  const [uiError, setUiError] = useState("");
-  const [selectedRow, setSelectedRow] = useState();
-  // ---- server query (accordion) ----
-  const [reqUserid, setReqUserid] = useState("");
-
-  const [reqAction, setreqAction] = useState("");
-
-  // ---- client filters / selection ----
-  const [query, setQuery] = useState("");
-  const [filterRole, setFilterRole] = useState("");
-  const [selection, setSelection] = useState([]);
-
-  const [openEdit, setOpenEdit] = useState(false);
-
-  // ---- delete dialog ----
-  const [deleteTarget, setDeleteTarget] = useState(null);
-
-  const snackbar = useCustomSnackbar();
-
-  // ---- helpers ----
-  const makePayload = useCallback(
-    () => ({
-      id: reqUserid || undefined,
-
-      LogId: reqAction || undefined,
-    }),
-    [reqUserid, reqAction]
-  );
-
-  const normalizeUsers = useCallback((users = []) => {
-    return users.map((u, idx) => {
-      const USER_ID = u?.USER_ID ?? u?.USER_ID ?? "";
-
-      const LogIdRaw = u?.LOG_ID ?? u?.LogId ?? "";
-      const parsedLogId =
-        typeof LogIdRaw === "number"
-          ? LogIdRaw
-          : Number.isNaN(parseInt(LogIdRaw, 10))
-          ? LogIdRaw
-          : parseInt(LogIdRaw, 10);
-
-      return {
-        id: USER_ID || String(idx + 1),
-        USER_ID,
-        EMAIL: (u?.EMAIL ?? u?.email ?? "").toString(),
-        PHONE_NUMBER: (u?.PHONE_NUMBER ?? u?.phone ?? "").toString(),
-        ROLE_NAME: (u?.ROLE_NAME ?? u?.roleName ?? "").toString().trim(),
-        LOG_ID: parsedLogId,
-        BRANCH: (u?.BRANCH ?? u?.branch ?? "").toString(),
-        __name: name || USER_ID || "(unknown)",
-        ACCOUNT_STATUS: u?.ACCOUNT_STATUS,
-      };
-    });
-  }, []);
-
-  const fetchUsers = useCallback(async () => {
-    setUiError("");
-    try {
-      const data = await callApi(API_URL, makePayload(), "GET");
-      const users = data?.result?.users ?? [];
-      setRows(normalizeUsers(users));
-    } catch (e) {
-      console.error(e);
-      setRows([]);
-      setUiError(
-        "Failed to fetch users. Check network, CORS, or API availability."
-      );
-    }
-  }, [callApi, makePayload, normalizeUsers]);
-
-  const fetchRoles = useCallback(async () => {
-    try {
-      const data = await callApi("/UM/role/get-roles", {}, "GET");
-      const raw = data?.result?.roles ?? [];
-      setRoles(
-        raw.map((r) => ({
-          id: r?.LogId,
-          name: (r?.roleName ?? "").trim(),
-          description: r?.description ?? "",
-        }))
-      );
-    } catch (e) {
-      console.error("Error while fetching roles", e);
-    }
-  }, [callApi]);
-
-  const findRole = useCallback(
-    (id) => roles.find((r) => String(r.id) === String(id)),
-    [roles]
-  );
-
-  useEffect(() => {
-    // fetchUsers();
-    fetchRoles();
-  }, [fetchUsers, fetchRoles]);
-
-  // ---- client filtering ----
-  const filteredRows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return rows.filter((r) => {
-      const okQ =
-        !q ||
-        r.__name?.toLowerCase().includes(q) ||
-        r.EMAIL?.toLowerCase().includes(q) ||
-        String(r.USER_ID ?? "")
-          .toLowerCase()
-          .includes(q) ||
-        String(r.PHONE_NUMBER ?? "")
-          .toLowerCase()
-          .includes(q);
-
-      const okRole =
-        !filterRole ||
-        String(r.LOG_ID) === String(filterRole) ||
-        r.ROLE_NAME === (findRole(filterRole)?.name ?? "");
-
-      return okQ && okRole;
-    });
-  }, [rows, query, filterRole, findRole]);
-
-  const removeUser = useCallback(
-    (id) => setRows((prev) => prev.filter((r) => r.id !== id)),
-    []
-  );
-
-  const removeBulk = useCallback(
-    () => setRows((prev) => prev.filter((r) => !selection.includes(r.id))),
-    [selection]
-  );
-
-  // ---- export CSV ----
-  const csvEscape = (v) => {
-    const s = (v ?? "").toString();
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const exportCSV = useCallback(() => {
-    if (!filteredRows.length) return;
-    const header =
-      "{LOG_ID,ACTION_TYPE,CHANGE_TYPE,ACTION_TIME,USER_ID,OLD_VALUE ,NEW_VALUE,IP_ADDRESS ";
-    const body = filteredRows.map((r) =>
-      [
-        csvEscape(r.LOG_ID),
-        csvEscape(r.ACTION_TYPE),
-        csvEscape(r.CHANGE_TYPE),
-        csvEscape(r.ACTION_TIME),
-        csvEscape(r.USER_ID),
-        csvEscape(r.OLD_VALUE),
-        csvEscape(r.NEW_VALUE),
-        csvEscape(r.IP_ADDRESS),
-      ].join(",")
-    );
-    const csv = [header, ...body].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "usersLog.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [filteredRows]);
-
-  const effectiveError =
-    apiError?.response?.data?.message || apiError?.message || uiError || "";
-
-  if (effectiveError !== "") {
-    snackbar(
-      apiError?.response?.data?.message || apiError?.message || uiError,
-      "error"
-    );
+  if (rowCount === 0) {
+    return null;
   }
 
-  return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
-      <Button
-        size="small"
-        variant="outlined"
-        startIcon={<KeyboardReturnIcon />}
-        onClick={() => navigate(-1)}
-        //disabled={filteredCount === 0 || loading || errorText}
-      >
-        Back
-      </Button>
-      {/* Server-side filters */}
-      {/* {!effectiveError && !loading && (
-        <LogsSearchFilters
-          roles={roles}
-          reqUserid={reqUserid}
-          reqAction={reqAction}
-          onChangeUserid={setReqUserid}
-          onChangeRole={setreqAction}
-          loading={loading}
-          errorText={effectiveError}
-          onSearch={fetchUsers}
-        />
-      )} */}
+  return React.createElement(GridPagination);
+};
 
-      <Paper variant="outlined" sx={{ mt: 2 }}>
-        {/* Header strip */}
-        {/* {!effectiveError && !loading && (
-          <LogsHeader
-            roles={roles}
-            filterRole={filterRole}
-            onFilterRoleChange={setFilterRole}
-            query={query}
-            onQueryChange={setQuery}
-            totalCount={rows.length}
-            filteredCount={filteredRows.length}
-            selectionCount={selection.length}
-            onBulkDelete={removeBulk}
-            onExport={exportCSV}
-            loading={loading}
-            errorText={effectiveError}
-          />
-        )} */}
-          <Paper
-    elevation={2}
-    sx={{
-      display:"flex",
-      flexDirection:"column",
-      borderRadius:2,
-      overflow:"hidden",
-      width:"100%",
-      p:2,
-    }}>
-        <LogsTable
-          rows={rows}
-          roles={roles}
-          loading={loading}
-          onSelectionChange={setSelection}
-          onViewRow={(row) => {
-            const matched = findRole(row.LOG_ID);
-            // setForm({
-            //   ...row,
-            //   LOG_ID: matched ? matched.id : row.LOG_ID,
-            //   ROLE_NAME: matched ? matched.name : row.ROLE_NAME,
-            // });
-            setSelectedRow(row);
-            setOpenEdit(true);
-          }}
-          onDeleteRow={(row) => setDeleteTarget(row)}
-          errorText={effectiveError}
-        />
-        </Paper>
+export const dataDisplayCustomizations = {
+  MuiTableCell: {
+    styleOverrides: {
+      root: ({ theme }) => ({
+        borderBottom: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
+        padding: "10px 14px",
+      }),
+      head: ({ theme }) => ({
+        background: alpha(theme.palette.primary.main, 0.1),
+        fontWeight: 600,
+        color: theme.palette.text.secondary,
+      }),
+    },
+  },
+  MuiChip: {
+    styleOverrides: {
+      root: ({ theme }) => ({
+        fontWeight: 500,
+        backdropFilter: "blur(8px)",
+        color: theme.palette.text.primary,
+        background:
+          theme.palette.mode === "dark"
+            ? "rgba(255,255,255,0.12)"
+            : "rgba(255,255,255,0.15)",
+      }),
+    },
+  },
 
-        {/* Grid */}
+  MuiModal: {
+    styleOverrides: {
+      backdrop: {
+        backgroundColor: "transparent",
+      },
+    },
+  },
 
-        {selectedRow && (
-          <LogsDialog
-            open={openEdit}
-            onClose={() => setOpenEdit(false)}
-            selectedRow={selectedRow}
-          />
-        )}
+  MuiSnackbarContent: {
+    styleOverrides: {
+      root: ({ theme }) => ({
+        borderRadius: theme.shape.borderRadius,
+        backdropFilter: "blur(10px)",
+        background:
+          theme.palette.mode === "dark"
+            ? "rgba(0,0,0,0.4)"
+            : "rgba(255,255,255,0.4)",
+        color: theme.palette.text.primary,
+        fontWeight: 500,
+      }),
+    },
+  },
 
-        <DeleteConfirmDialog
-          open={!!deleteTarget}
-          name={deleteTarget?.__name || deleteTarget?.USER_ID}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={() => {
-            if (deleteTarget?.id) removeUser(deleteTarget.id);
-            setDeleteTarget(null);
-          }}
-        />
-      </Paper>
-    </Box>
-  );
-}
+  MuiTabs: {
+    styleOverrides: {
+      root: ({ theme }) => ({
+        width: "100%",
+        minHeight: 42,
+        border: `1px solid ${alpha(theme.palette.primary.main, 0.18)}`,
+        borderRadius: theme.shape.borderRadius,
+        overflow: "hidden",
+        background:
+          theme.palette.mode === "dark"
+            ? "rgba(0, 0, 0, 0.12)"
+            : "rgba(255, 255, 255, 0.18)",
+        backdropFilter: "blur(14px)",
+      }),
+
+      flexContainer: {
+        width: "100%",
+      },
+
+      indicator: ({ theme }) => ({
+        height: 3,
+        bottom: 0,
+        borderRadius: "3px 3px 0 0",
+        backgroundColor: theme.palette.primary.main,
+        boxShadow: `0 0 8px ${alpha(theme.palette.primary.main, 0.35)}`,
+      }),
+    },
+  },
+
+  MuiTab: {
+    styleOverrides: {
+      root: ({ theme }) => ({
+        flex: 1,
+        minHeight: 42, // was 52
+        minWidth: 0,
+        padding: "7px 16px", // was 10px 20px
+
+        color: theme.palette.text.secondary,
+        opacity: 0.45,
+        fontWeight: 500,
+
+        border: `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
+        borderTop: "none",
+        borderBottom: "none",
+
+        transition:
+          "color 0.2s ease, opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease",
+
+        "& .MuiTab-iconWrapper": {
+          color: "inherit",
+        },
+
+        "&.Mui-selected": {
+          color: theme.palette.primary.main,
+          opacity: 1,
+          fontWeight: 700,
+
+          background:
+            theme.palette.mode === "dark"
+              ? `linear-gradient(
+                180deg,
+                ${alpha(theme.palette.primary.main, 0.14)},
+                ${alpha(theme.palette.primary.main, 0.06)}
+              )`
+              : `linear-gradient(
+                180deg,
+                ${alpha(theme.palette.primary.main, 0.1)},
+                ${alpha(theme.palette.primary.main, 0.035)}
+              )`,
+        },
+
+        "&:not(.Mui-selected):hover": {
+          opacity: 0.75,
+          color: theme.palette.primary.main,
+          background:
+            theme.palette.mode === "dark"
+              ? "rgba(255,255,255,0.04)"
+              : "rgba(255,255,255,0.25)",
+        },
+      }),
+    },
+  },
+
+  MuiDataGrid: {
+    defaultProps: {
+      slots: {
+        pagination: GlobalDataGridPagination,
+      },
+    },
+    styleOverrides: {
+      root: ({ theme }) => ({
+        width: "100%",
+        minWidth: "100%",
+        maxWidth: "100%",
+        minHeight: 300,
+        maxHeight: 740,
+        "& .MuiDataGrid-cell:focus": { outline: "none" },
+        border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+        background:
+          theme.palette.mode === "dark"
+            ? "rgba(0,0,0,0.15)"
+            : "rgba(255,255,255,0.15)",
+        borderRadius: theme.shape.borderRadius,
+
+        "& .MuiDataGrid-columnHeaders": {
+          position: "sticky",
+          top: 64,
+          zIndex: 1400,
+          background:
+            theme.palette.mode === "dark"
+              ? "rgba(10, 10, 10, 0.85)"
+              : "rgba(225, 225, 225, 0.42)",
+          backdropFilter: "blur(14px)",
+          fontWeight: 600,
+        },
+
+        // --- Minimal Scrollbar Fix ---
+        "& *::-webkit-scrollbar": {
+          width: "5px",
+          height: "5px",
+        },
+        "& *::-webkit-scrollbar-thumb": {
+          background: theme.palette.mode === "dark" ? "#555" : "#cbd5e1",
+          borderRadius: "10px",
+        },
+        "& *::-webkit-scrollbar-track": {
+          background: theme.palette.mode === "dark" ? "#1e1e1e" : "#f1f5f9",
+          borderRadius: "10px",
+        },
+        // ----------------------------
+      }),
+
+      panel: ({ theme }) => ({
+        backgroundColor:
+          theme.palette.mode === "dark"
+            ? theme.palette.background.paper
+            : "#ffffff02",
+        boxShadow: theme.shadows[10],
+        borderRadius: theme.shape.borderRadius,
+        backdropFilter: "blur(14px)",
+      }),
+
+      columnHeader: {
+        "& .MuiDataGrid-menuIcon": {
+          // opacity: 1,
+          Visibility: "visible",
+          width: "auto",
+        },
+        "& .MuiDataGrid-menuIconButton": {
+          opacity: 1,
+          visibility: "visible",
+        },
+      },
+
+      columnHeaderTitleContainer: {
+        flexGrow: 1,
+        justifyContent: "space-between",
+      },
+      columnHeaderTitle: { fontWeight: "bold" },
+    },
+  },
+};
+
+ 
