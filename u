@@ -1,133 +1,463 @@
 import {
-  Add as AddIcon,
-  Close as CloseIcon,
-  Edit as EditIcon,
-} from "@mui/icons-material";
-
-import {
-  Autocomplete,
-  Typography,
   Box,
-  styled,
   Button,
-  CircularProgress,
-  debounce,
+  Chip,
+  Typography,
+  Stack,
   Dialog,
   DialogActions,
   DialogContent,
-  IconButton,
-  MenuItem,
-  Stack,
-  TextField,
+  DialogTitle,
   Tooltip,
+  IconButton,
 } from "@mui/material";
-
 import { DataGrid } from "@mui/x-data-grid";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import dayjs from "dayjs";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+
 import useApi from "../../hooks/useApi";
-import { getIconComponent } from "../../utils/IconUtils";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
-
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
+import DateRangeIcon from "@mui/icons-material/DateRange";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import { currencyFormatterWith6Decimals } from "../../utils/NumberFormat";
+import CancelIcon from "@mui/icons-material/Cancel";
+import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
+import GppBadIcon from "@mui/icons-material/GppBad";
+import CustomChip from "../../utils/CustomChip";
 import {
-  AddIconStyle,
-  Box1Style,
-  ChipStyle,
-  DatePicker1Style,
-  DatePickerStyle,
-  DialogTitleStyle,
-  FabStyle,
-  IconButtonStyle,
-  StackStyle,
-  TextField1Style,
-  TextFieldStyle,
-} from "./BranchMasterStyle";
-import { validations } from "../../utils/Validations";
+  StyledDateChip,
+  StyledStatusChip,
+  StyledStatusBox,
+  StyledRequestDataGrid,
+  StyledRequestContainerBox,
+} from "./CurrencyRateChangeStyles";
+import { useSelector } from "react-redux";
+import InfoIcon from "@mui/icons-material/Info";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
 
-const branchType = [
-  { value: "A", label: "Automated" },
-  { value: "M", label: "Manual" },
-];
+function CustomNoRowsOverlay() {
+  return (
+    <Stack height="100%" alignItems="center" justifyContent="center">
+      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+      <Typography variant="h6">No Currency Rate Requests Found</Typography>
+      <Typography>You have not created any Currency Rate requests.</Typography>
+    </Stack>
+  );
+}
+export default function MyCurrencyRequestsTab({ permissions = {} }) {
+  const [rows, setRows] = useState([]);
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  const selectedMenuItem = useSelector((state) => state.menus.selectedMenuItem);
+  const [confirmDialog, setConfirmDialog] = useState(false);
+  const [requestId, setRequestId] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewData, setViewData] = useState(null);
 
-const reDigits = /^[0-9]*$/;
-const reDesc = /^[a-zA-Z0-9\s/&,-.()]*$/;
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const payload = { requestType: selectedMenuItem.requestType };
+      const response = await callApi("/CR/my-requests", payload, "POST");
+      if (response) {
+        const result = response.data?.map((row) => {
+          let parsedPayload = {};
+          parsedPayload = row.payload ? row.payload : {};
+          parsedPayload = {
+            ...parsedPayload,
+            id: row.id,
+            reqStatus: row.reqStatus,
+            reqDate: row.reqDate,
+            creatorId: row.creatorId,
+            executionDate: row.executionDate,
+            executorId: row.executorId,
+            executorRemarks: row.executorRemarks,
+            reqType: row.requestType,
+            changeType: row.changeType,
+          };
+          return { ...parsedPayload };
+        });
+        result.sort((a, b) => {
+          if (a.reqStatus === "PENDING" && b.reqStatus !== "PENDING") return -1;
+          if (a.reqStatus !== "PENDING" && b.reqStatus === "PENDING") return 1;
+          return new Date(b.reqDate) - new Date(a.reqDate);
+        });
+        setRows(result);
+      } else {
+        setRows([]);
+      }
+    } catch (error) {
+      console.error("Something went wrong", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-const CustomAutoComplete = ({
-  options,
-  value,
-  onChange,
-  renderOption,
-  uniqueElementKey,
-  inputValue,
-  onInputChange,
-  label,
-  name,
-  disabled,
-  loading,
-  error,
-}) => {
-  const filterOptions = name !== "currency" ? (x) => x : undefined;
+  const handleCancelRequest = async () => {
+    try {
+      const payload = {
+        requestId,
+        remarks: "User cancelled this Request",
+      };
+
+      const response = await callApi("/CR/cancel-request", payload, "PATCH");
+      if (response?.success) {
+        showSnackBar(
+          `Request Id ${requestId} Cancelled Successfully.`,
+          "success",
+        );
+      } else {
+        showSnackBar(
+          response?.message
+            ? response?.message
+            : "Failed to process your cancel request, Kindly try again",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      fetchData();
+      setConfirmDialog(false);
+    }
+  };
+
+  const handleViewClick = (data) => {
+    const { currencyCode, currencyRate, existingCurrencyRate } = data;
+
+    const showData = {
+      currencyCode,
+      existingCurrencyRate:
+        currencyFormatterWith6Decimals("INR").format(existingCurrencyRate),
+      updatedCurrencyRate:
+        currencyFormatterWith6Decimals("INR").format(currencyRate),
+    };
+
+    data.showData = showData;
+    setViewData(data);
+    setViewOpen(true);
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const columns = useMemo(
+    () => [
+      { field: "id", headerName: "Request Id", flex: 0.5, minWidth: 150 },
+      {
+        field: "currencyCode",
+        headerName: "Currency Code",
+        flex: 1,
+        minWidth: 150,
+        sortable: true,
+      },
+      {
+        field: "currencyRate",
+        headerName: "Currency Rate",
+        flex: 1,
+        minWidth: 150,
+        sortable: true,
+        align: "right",
+        headerAlign: "right",
+        renderCell: (params) =>
+          currencyFormatterWith6Decimals("INR").format(params.value),
+      },
+      {
+        field: "reqDate",
+        headerName: "Date of Submission",
+        flex: 1.5,
+        minWidth: 250,
+        sortable: true,
+
+        renderCell: (params) => (
+          <Box>
+            <StyledDateChip
+              icon={<DateRangeIcon />}
+              label={params.value.split("T")[0]}
+            />
+          </Box>
+        ),
+      },
+      {
+        field: "reqStatus",
+        headerName: "Status",
+        flex: 1,
+        minWidth: 150,
+
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Box
+            // sx={{
+            //   color:
+            //     params.value === "REJECTED"
+            //       ? "error.main"
+            //       : params.value === "ACCEPTED"
+            //         ? "success.dark"
+            //         : "warning.main",
+            //   // fontWeight: "bold",
+            // }}
+          >
+            <CustomChip
+              variant="outlined"
+              icon={
+                params.value === "REJECTED" ? (
+                  <BlockFlippedIcon />
+                ) : params.value === "ACCEPTED" ? (
+                  <CheckCircleIcon />
+                ) : params.value === "CANCELLED" ? (
+                  <GppBadIcon />
+                ) : (
+                  <PendingActionsIcon />
+                )
+              }
+              label={
+                params.value === "REJECTED"
+                  ? "Rejected"
+                  : params.value === "ACCEPTED"
+                    ? "Approved"
+                    : params.value === "CANCELLED"
+                      ? "Cancelled"
+                      : "Pending"
+              }
+              sx={{
+              width:120,
+              justifyContent:"flex-start",
+                color:
+                  params.value === "REJECTED"
+                    ? "error.dark"
+                    : params.value === "ACCEPTED"
+                      ? "success.dark"
+                      : params.value === "CANCELLED"
+                        ? "primary.dark"
+                        : "warning.main",
+
+                "& .MuiChip-icon": {
+                  color:
+                    params.value === "REJECTED"
+                      ? "error.dark"
+                      : params.value === "ACCEPTED"
+                        ? "success.dark"
+                        : params.value === "CANCELLED"
+                          ? "primary.dark"
+                          : "warning.main",
+                },
+              }}
+            />
+          </Box>
+        ),
+      },
+      {
+        field: "action",
+        headerName: "Action",
+        flex: 0.6,
+        minWidth: 150,
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          return (
+            <Stack
+              direction="row"
+              spacing={1}
+              justifyContent="left"
+              alignItems="center"
+              sx={{ height: "100%", pl: 3 }}
+            >
+              {permissions.view && (
+                <Tooltip title="View">
+                  <IconButton
+                    // color="primary"
+                    onClick={() => handleViewClick(params.row)}
+                    sx={{
+                      borderRadius:"50%",
+                      aspectRadius:"1/1",
+                    }}
+                  >
+                    <VisibilityIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              {params.row.reqStatus === "PENDING" && permissions.cancel && (
+                <Tooltip title={"Cancel Request"}>
+                  <IconButton
+                    onClick={() => {
+                      setConfirmDialog(true);
+                      setRequestId(params.row.id);
+                    }}
+                  >
+                    <CancelIcon fontSize="inherit" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Stack>
+          );
+        },
+      },
+    ],
+    [],
+  );
+
+  const filteredColumns = useMemo(() => {
+    if (permissions.view || permissions.cancel) {
+      return columns;
+    }
+    // Otherwise, filter out the column where field name is 'action'.
+    else {
+      return columns.filter((column) => column.field !== "action");
+    }
+  }, [columns, permissions.cancel, permissions.view]);
 
   return (
-    <Autocomplete
-      options={options}
-      // defaultValue={value || {}} // resolve 38 no defect
-      value={value ?? null}
-      inputValue={inputValue || ""}
-      onInputChange={onInputChange}
-      disabled={disabled}
-      getOptionLabel={(option) => renderOption(option)}
-      onChange={(_, value) => onChange(value)}
-      filterOptions={filterOptions}
-      isOptionEqualToValue={(option, value) =>
-        option?.[uniqueElementKey] === value?.[uniqueElementKey]
-      }
-      renderOption={(props, option) => (
-        <li {...props} key={option[uniqueElementKey]}>
-          {renderOption(option)}
-        </li>
-      )}
-      //noOptionsText={"Exactly 5 digits"} // resolve 38 no defect
-      noOptionsText={
-        loading
-          ? "Loading..."
-          : inputValue?.length < 3
-            ? "Enter Atleast 3 Characters"
-            : options?.length === 0
-              ? "No Data for given filter"
-              : ""
-      }
-      renderInput={(params) => (
-        <TextField
-          {...params}
-          label={label}
-          name={name}
-          disabled={disabled}
-          inputProps={{
-            ...params.inputProps,
-            readOnly: !!disabled,
+    <>
+      <Box sx={{ p: { xs: 2, md: 3 } }}>
+        <DataGrid
+          rows={rows}
+          loading={isLoading}
+          columns={filteredColumns}
+          disableRowSelectionOnClick
+          pageSizeOptions={[5, 10, 25, 50]}
+          initialState={{
+            pagination: { paginationModel: { pageSize: 10, page: 0 } },
+            sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] },
           }}
-          InputProps={{
-            ...params.InputProps,
-            endAdornment: (
-              <>
-                {loading ? <CircularProgress size={20} /> : null}
-                {params.InputProps.endAdornment}
-              </>
-            ),
+          getRowId={(row) => row.id ?? row.requestId}
+          slots={{
+            noRowsOverlay: CustomNoRowsOverlay,
           }}
-          error={error}
-          helperText={error}
-          sx={{ width: 300 }}
+           sx={{
+          minHeight: 700,
+          width: "100%",
+         "& .MuiDataGrid-columnHeaders": {
+          backgroundColor: "#f5f5f5 !important",
+          fontWeight: 700,
+          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+          },
+          }}
         />
-      )}
-    />
+      </Box>
+
+      {/* View Dialog */}
+      <ViewMyRequestDialog
+        open={viewOpen}
+        handleClose={() => setViewOpen(false)}
+        data={viewData}
+      />
+
+      {/* Cancel Dialog */}
+      <Dialog
+        open={confirmDialog}
+        onClose={() => {
+          setConfirmDialog(false);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>
+          Cancel Request ID: {requestId}
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ p: 1 }}>
+            Are you sure you want to cancel this request Please confirm ?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setConfirmDialog(false);
+            }}
+            variant="outlined"
+            sx=
+          {{
+            "&:hover":
+            {
+              color:"#fff",
+            },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCancelRequest}
+            color="error"
+            variant="contained"
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
+}
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import {
+  StyledContainerBox,
+  StyledDataGridContainer,
+  StyledDialog,
+  StyledDialogTitle,
+  StyledDialogContent,
+  StyledTextField,
+  StyledDialogActions,
+  StyledCircularProgressBox,
+  StyledCircularProgress,
+  StyledButton,
+  StyledGridContainer,
+  StyledGridItem,
+  StyledFormControl,
+  StyledInputLabel,
+  StyledSelect,
+  StyledMenuItem,
+  StyledBox,
+  StyledDialogTitleBox,
+  StyledTable,
+  StyledTableContainer,
+  StyledTableHead,
+  StyledTableRow,
+  StyledTableHeaderCell,
+  StyledTableBody,
+  StyledTableCell,
+  StyledTablePagination,
+  StyledTypographyBox,
+  StyledTypography,
+  StyledCloseButton,
+  StyledEmptyCell, // Added import
+} from "./CurrencyRateChangeStyles";
+import { DataGrid, GridActionsCellItem } from "@mui/x-data-grid";
+import EditIcon from "@mui/icons-material/Edit";
+import CloseIcon from "@mui/icons-material/Close";
+import HistoryIcon from "@mui/icons-material/History";
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import {
+  Divider,
+  Stack,
+  IconButton,
+  TablePagination,
+  Typography,
+  styled,
+  Box,
+} from "@mui/material";
+import { currencyFormatterWith6Decimals } from "../../utils/NumberFormat";
+
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+const initialFormState = {
+  currencyCode: "",
+  currencyRate: "",
 };
 
+const getFinancialYear = (date) => {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  return month >= 3 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+};
 const OverlayBox = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
@@ -146,1430 +476,903 @@ const CustomNoRowsOverlay = () => {
     </OverlayBox>
   );
 };
-
-export default function BranchMasterTab() {
+export default function CurrencyRateChangeTab() {
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
   const [rows, setRows] = useState([]);
-  const [rowCount, setRowCount] = useState(0);
-  const [open, setOpen] = useState(false);
-  const { callApi, cancelAllRequests } = useApi();
-
-  const [originalData, setOriginalData] = useState(null); // New state for original data
-  const [isDataSame, setIsDataSame] = useState(true);
-  const [inputValue, setInputValue] = useState("");
-  const [editingId, setEditingId] = useState(null);
-  const [checkingCode, setCheckingCode] = useState(false);
-  const eprefix = "sbi.";
-  const emailDomain = "@sbi.co.in";
-
-  const [branchData, setBranchData] = useState({
-    code: "",
-    name: "",
-    circleCode: "",
-    state: "",
-    city: "",
-    address: "",
-    pinCode: "",
-    phoneNumber: "",
-    emailId: `${eprefix}${emailDomain}`,
-    nmrCode: "",
-    status: "Active",
-    openDate: dayjs(),
-    closeDate: new Date(),
-    mergeDate: new Date(),
-    mergedWithBranch: "",
-    lastChangeDate: new Date(),
-    cpcFlag: false,
-    foodCreditFlag: false,
-    currChestFlag: false,
-    branchType: "A",
-  });
-
-  const [states, setStates] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [formData, setFormData] = useState(initialFormState);
+  const [editingRow, setEditingRow] = useState(null);
   const [errors, setErrors] = useState({});
-  const [circles, setCircles] = useState([]);
-  const [mwb, setMwb] = useState([]);
-  const [mwbLoading, setMwbLoading] = useState(false);
-  const snackbar = useCustomSnackbar();
 
-  const [loading, setLoading] = useState(false);
-  /* ===== SERVER GRID STATE ===== */
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [historyData, setHistoryData] = useState([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [currentCurrency, setCurrentCurrency] = useState(null);
+  const [financialYearOptions, setFinancialYearOptions] = useState([]);
+  const [selectedYear, setSelectedYear] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState("all");
+  const [monthOptions, setMonthOptions] = useState([
+    { value: "all", label: "All Months" },
+  ]);
+  const [page, setPage] = useState(0);
+  const [PreviousRate, setPreviousRate] = useState(null);
+  const [etlDate, setEtlDate] = useState("");
 
-  const [paginationModel, setPaginationModel] = useState({
-    page: 0,
-    pageSize: 20,
-  });
-  const [sortModel, setSortModel] = useState([]);
-  const [filterModel, setFilterModel] = useState({ items: [] });
-
-  /* ===== DUPLICATE CALL PREVENTION ===== */
-
-  const lastQueryRef = useRef("");
-  const lastFilterRef = useRef("");
-
-  const ActiveIcon = useMemo(() => getIconComponent("FiberManualRecord"), []);
-  const InActiveIcon = useMemo(() => getIconComponent("FiberManualRecord"), []);
-
-  /* ================= FETCH ================= */
-
-  const fetchBranches = useCallback(async () => {
-    const sortField = sortModel[0]?.field;
-    const sortOrder = sortModel[0]?.sort;
-
-    const filters = filterModel.items
-      .filter(
-        (f) =>
-          f.operator &&
-          f.value !== undefined &&
-          f.value !== null &&
-          f.value !== "",
-      )
-      .map((f) => ({
-        field: f.field,
-        operator: f.operator,
-        value: f.value,
-      }));
-
-    const querySignature = JSON.stringify({
-      page: paginationModel.page,
-      size: paginationModel.pageSize,
-      sortField,
-      sortOrder,
-      filters,
-    });
-
-    // PREVENT DUPLICATE API CALL
-    if (lastQueryRef.current === querySignature) return;
-    lastQueryRef.current = querySignature;
-
-    try {
-      setLoading(true);
-
-      const payload = {
-        page: paginationModel.page,
-        size: paginationModel.pageSize,
-        sortField,
-        sortOrder,
-        filters,
-      };
-
-      const resp = await callApi(
-        "/CM/common-master/branches-master",
-        payload,
-        "POST",
-      );
-
-      setRows(resp?.data?.data || []);
-      setRowCount(resp?.data?.totalElements || 0);
-    } catch (err) {
-      snackbar(err?.message || "Failed to load branches", "error");
-      setRows([]);
-      setRowCount(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [callApi, snackbar, paginationModel, sortModel, filterModel]);
-
-  /* ================= EFFECTS ================= */
-
-  useEffect(() => {
-    fetchBranches();
-  }, [fetchBranches]);
-
-  // Reset page ONLY when filter meaningfully changes
-  useEffect(() => {
-    const current = JSON.stringify(filterModel.items || []);
-    if (current === lastFilterRef.current) return;
-
-    lastFilterRef.current = current;
-
-    setPaginationModel((p) => (p.page === 0 ? p : { ...p, page: 0 }));
-  }, [filterModel]);
-
-  // --- throttle snackbar so they don't spam while typing ---
-  const snackGateRef = useRef(true);
-  const notifyOnce = useCallback(
-    (msg, variant = "warning") => {
-      if (!snackGateRef.current) return;
-      snackGateRef.current = false;
-      snackbar(msg, variant);
-      setTimeout(() => (snackGateRef.current = true), 800);
-    },
-    [snackbar],
-  );
-
-  const checkDataEquality = (current, original) => {
-    if (!original) return true; // If no original data, assume they are "same" initially for disable state
-    return (
-      current.name === original.name &&
-      current.circleCode === original.circleCode &&
-      current.state === original.state &&
-      current.city === original.city &&
-      current.address === original.address &&
-      current.pinCode === original.pinCode &&
-      current.phoneNumber === original.phoneNumber &&
-      current.emailId === original.emailId &&
-      current.nmrCode === original.nmrCode &&
-      current.status === original.status &&
-      current.openDate === original.openDate &&
-      current.closeDate === original.closeDate &&
-      current.mergeDate === original.mergeDate &&
-      current.mergedWithBranch === original.mergedWithBranch &&
-      current.cpcFlag === original.cpcFlag &&
-      current.foodCreditFlag === original.foodCreditFlag &&
-      current.currChestFlag === original.currChestFlag &&
-      current.branchType === original.branchType
-    );
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
   };
 
   const fetchData = useCallback(async () => {
-    const statesResponse = await callApi(
-      "/CM/common-master/states",
-      null,
-      "GET",
-    );
-    setStates(statesResponse?.data ?? []);
-    const circleResponse = await callApi(
-      "/CM/common-master/circle-codes",
-      null,
-      "GET",
-    );
-    setCircles(circleResponse?.data ?? []);
-  }, [callApi]);
+    setIsLoading(true);
+    try {
+      const response = await callApi(
+        "/CM/common-master/currency-master",
+        null,
+        "GET",
+      );
+
+      if (response && response.data && Array.isArray(response.data)) {
+        const formattedData = response.data.map((row) => {
+          let formattedDate = "N/A";
+          if (row.updatedAt) {
+            const date = new Date(row.updatedAt);
+            if (!isNaN(date.getTime())) {
+              const day = String(date.getDate()).padStart(2, "0");
+              const month = String(date.getMonth() + 1).padStart(2, "0");
+              const year = date.getFullYear();
+              formattedDate = `${day}-${month}-${year}`;
+            }
+          }
+          return { ...row, id: row.currencyCode, updatedAt: formattedDate };
+        });
+        setRows(formattedData);
+        const etlResponse = await callApi("/PS/file/fincore-date", null, "GET");
+        setEtlDate(etlResponse?.data?.etlDate);
+      } else {
+        showSnackBar("Received invalid data format.", "error");
+        setRows([]);
+      }
+    } catch (error) {
+      console.error("Error fetching currency master data:", error);
+      showSnackBar("Something went wrong while fetching data.", "error");
+      setRows([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [callApi, showSnackBar]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  useEffect(() => {
-    const change =
-      branchData.status === "InActive" ||
-      !!branchData.closeDate ||
-      !!branchData.mergeDate ||
-      !!branchData.mergedWithBranch;
-    if (editingId && change && branchData.branchType !== "M") {
-      setBranchData((prev) => ({
-        ...prev,
-        branchType: "M",
-      }));
-    }
-    if (!change && branchData.branchType !== "A") {
-      setBranchData((prev) => ({
-        ...prev,
-        branchType: "A",
-      }));
-    }
-  }, [
-    editingId,
-    branchData.status,
-    branchData.closeDate,
-    branchData.mergeDate,
-    branchData.mergedWithBranch,
-    branchData.branchType,
-  ]);
-
-  useEffect(() => {
-    if (!branchData.mergedWithBranch) {
-      setBranchData((prev) => ({
-        ...prev,
-        mergeDate: null,
-      }));
-    }
-  }, [branchData.mergedWithBranch]);
-
-  useEffect(() => {
-    if (
-      editingId &&
-      branchData.mergedWithBranch &&
-      typeof branchData.mergedWithBranch === "string" &&
-      mwb?.length
-    ) {
-      const obj = mwb.find((b) => b.code === branchData.mergedWithBranch);
-      if (obj) {
-        setBranchData((prev) => ({
-          ...prev,
-          mergedWithBranch: obj,
-        }));
-      }
-    }
-  }, [editingId, mwb]);
-
-  useEffect(() => {
-    if (editingId && originalData) {
-      setIsDataSame(checkDataEquality(branchData, originalData));
-    }
-  }, [branchData, originalData, editingId]);
-
-  const handleMergedWithBranchAutoCompleteChange = (value) => {
-    setBranchData((prev) => ({
-      ...prev,
-      mergedWithBranch: value,
-    }));
-    setErrors((prev) => ({
-      ...prev,
-      mergedWithBranch: validateField("mergedWithBranch", value?.code),
-    }));
-  };
-
-  const isAllZeros = (str) => {
-    return /^0+$/.test(str);
-  };
-
-  const validateField = useCallback((name, value) => {
-    switch (name) {
-      case "code":
-        if (!value.trim()) return "Branch Code is required";
-        if (!reDigits.test(value)) return "Only digits allowed";
-        if (value.length !== 5) return "Must be 5 digits";
-        break;
-
-      case "name":
-        if (!value.trim()) return "Branch name is required";
-        if (!reDesc.test(value))
-          return "Only letters, spaces, numbers, / & ( ) - , .";
-        if (value.trim().length < 3)
-          return "Branch Name must be at least 3 characters";
-        break;
-
-      case "circleCode":
-        if (!value.trim()) return "Circle Code is required";
-        if (!reDigits.test(value)) return "Only digits allowed";
-        if (value.length !== 3) return "Must be 3 digits";
-        break;
-
-      case "state":
-        if (!value.trim()) return "state is required";
-        if (!reDesc.test(value)) return "Only letters";
-        break;
-
-      case "city":
-        if (value.trim() && !reDesc.test(value))
-          return "Only letters, digits, spaces, / & . ( ) - ,";
-        if (value.trim().length < 3)
-          return "City name must be at least 3 characters";
-        break;
-
-      case "address":
-        if (value.trim() && !reDesc.test(value))
-          return "Only letters, digits, spaces, / & ( ) - ,";
-
-        if (value.trim().length < 5)
-          return "Address must be at least 5 characters";
-        break;
-
-      case "pinCode":
-        if (value.trim() && !reDigits.test(value)) return "Only digits allowed";
-        if (value.length !== 6) return "Must be 6 digits";
-        break;
-
-      case "phoneNumber":
-        if (!value.trim()) return "Mobile Number is required";
-        if (!reDigits.test(value)) return "Only digits allowed";
-        if (value.length !== 10) return "Must be 10 digits";
-        break;
-
-      case "nmrCode":
-        if (!value.trim()) return "NMR Code is required";
-        if (!reDigits.test(value)) return "Only digits allowed";
-        if (value.length !== 9) return "Must be 9 digits";
-        break;
-
-      case "mergedWithBranch":
-        if (branchData?.code === value)
-          return "Merged with Branch cannot be same as current Branch!";
-        break;
-
-      default:
-        return "";
-    }
-  });
-
-  const isFormValid = useCallback(() => {
-    if (
-      validateField("code", branchData.code) ||
-      validateField("name", branchData.name) ||
-      validateField("circleCode", branchData.circleCode) ||
-      validateField("state", branchData.state) ||
-      validateField("city", branchData.city) ||
-      validateField("address", branchData.address) ||
-      validateField("pinCode", branchData.pinCode) ||
-      validateField("phoneNumber", branchData.phoneNumber) ||
-      validateField("emailId", branchData.emailId) ||
-      validateField("nmrCode", branchData.nmrCode)
-    ) {
-      return false;
-    }
-    if (branchData.status === "InActive" && !branchData.closeDate) {
-      return false;
-    }
-    if (branchData.mergedWithBranch && !branchData.mergeDate) {
-      return false;
-    }
-    return true;
-  }, [branchData, validateField]);
-
-  // --- live validation on change + snackbar for bad keystrokes ---
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    if (name === "code") {
-      if (!reDigits.test(value)) {
-        notifyOnce("branch Code accepts digits only");
-        return;
-      }
-      if (value.length > 5) {
-        notifyOnce("branch Code must be 5 digits");
-        return;
-      }
-      if (value.length === 5 && isAllZeros(value)) {
-        notifyOnce("All zeros are not Allowed");
-        return;
-      }
-      if (value.length === 5) {
-        checkBranchCodeExixts(value);
-      }
-    }
-
-    if (name === "name") {
-      if (value && !/^[A-Za-z0-9]$/.test(value[0])) {
-        notifyOnce("Should not start with special/invalid character");
-        return;
-      }
-      if (value.length == 50 && isAllZeros(value)) {
-        notifyOnce("All zeros are not Allowed");
-        return;
-      }
-      if (value !== "" && !/^[A-Za-z0-9/&(),-. ]*$/.test(value)) {
-        setErrors((prev) => ({
-          ...prev,
-          name: "Invalid special characters used",
-        }));
-        return;
-      }
-    }
-
-    if (name === "city") {
-      if (value && !/^[A-Za-z0-9]$/.test(value[0])) {
-        notifyOnce("Should not start with special character");
-        return;
-      }
-      if (value.length == 30 && isAllZeros(value)) {
-        notifyOnce("All zeros are not Allowed");
-        return;
-      }
-      if (value !== "" && !/^[A-Za-z0-9/&(),-. ]*$/.test(value)) {
-        setErrors((prev) => ({
-          ...prev,
-          city: "Invalid special characters used",
-        }));
-        return;
-      }
-    }
-
-    if (name === "address") {
-      if (value && !/^[A-Za-z0-9]$/.test(value[0])) {
-        notifyOnce("Should not start with special character");
-        return;
-      }
-      if (value.length == 50 && isAllZeros(value)) {
-        notifyOnce("All zeros are not Allowed");
-        return;
-      }
-      if (value !== "" && !/^[A-Za-z0-9/&(),-. ]*$/.test(value)) {
-        setErrors((prev) => ({
-          ...prev,
-          address: "Invalid special characters used",
-        }));
-        return;
-      }
-    }
-
-    if (name === "pinCode") {
-      if (value && !/^[1-9]$/.test(value[0])) {
-        snackbar("Pin Code should not start with zero", "error");
-        return;
-      }
-      if (!reDigits.test(value)) {
-        notifyOnce("Pin Code accepts digits only");
-        return;
-      }
-      if (value.length > 6) {
-        notifyOnce("Pin Code must be 6 digits");
-        return;
-      }
-      if (value.length === 6 && isAllZeros(value)) {
-        notifyOnce("All zeros are not Allowed");
-        return;
-      }
-    }
-
-    if (name === "phoneNumber") {
-      if (value && !/^[1-9]$/.test(value[0])) {
-        snackbar(
-          "Mobile Number should start only with greater than zero",
-          "error",
-        );
-        return;
-      }
-      if (!reDigits.test(value)) {
-        notifyOnce("Mobile Number accepts digits only");
-        return;
-      }
-      if (value.length > 10) {
-        notifyOnce("Mobile Number must be 10 digits");
-        return;
-      }
-    }
-
-    if (name === "nmrCode") {
-      if (!reDigits.test(value)) {
-        notifyOnce("N-M-R Code accepts digits only");
-        return;
-      }
-      if (value.length > 9) {
-        notifyOnce("N-M-R Code must be 9 digits");
-        return;
-      }
-      if (value.length === 9 && isAllZeros(value)) {
-        notifyOnce("All zeros are not Allowed");
-        return;
-      }
-    }
-
-    setBranchData((prev) => ({ ...prev, [name]: value }));
-
-    setBranchData((prev) => {
-      const updated = {
-        ...prev,
-        [name]: value,
-      };
-
-      if (name === "code") {
-        const bc = value || "";
-        updated.emailId = `${eprefix}${bc}${emailDomain}`;
-      }
-      return updated;
-    });
-    setBranchData((prev) => {
-      const updatedDate = {
-        ...prev,
-        [name]: value,
-      };
-      if (name === "status" && value !== "InActive") {
-        updatedDate.closeDate = null;
-      }
-      return updatedDate;
-    });
-
-    setErrors((prev) => ({ ...prev, [name]: "" }));
-
-    // update error for just this field
-    setErrors((prev) => ({
-      ...prev,
-      [name]: validateField(name, value),
-    }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const isEditing = editingId;
-    if (editingId && isDataSame) {
-      snackbar(
-        "No Changes Detected, Kindly modify data before saving",
-        "warning",
-      );
-      return;
-    }
-    if (!isEditing) {
+  const fetchHistoryData = useCallback(
+    async (currencyCode) => {
+      setIsHistoryLoading(true);
       try {
-        const url =
-          "/CM/common-master/branches-code-name-only?q=" +
-          encodeURIComponent(branchData.code);
-        const payload = null;
-        const response = await callApi(url, payload, "GET");
-        const data = response.data;
+        const response = await callApi(
+          `/CM/common-master/currency-rate-change`,
+          null,
+          "GET",
+        );
 
-        const branchExists = data.some((row) => row.code === branchData.code);
-        if (branchExists) {
-          snackbar("Branch code already exist", "warning");
-          return;
+        if (response && response.data && Array.isArray(response.data)) {
+          const currencySpecificData = response.data.filter(
+            (item) => item.currencyCode === currencyCode,
+          );
+
+          if (currencySpecificData.length === 0) {
+            setHistoryData([]);
+            showSnackBar(
+              `No history data found for currency: ${currencyCode}.`,
+              "info",
+            );
+          } else {
+            const processedData = currencySpecificData.map((item) => {
+              const dateObject = new Date(item.rateChangeDate);
+              let formattedDate = "N/A";
+              if (!isNaN(dateObject.getTime())) {
+                const day = String(dateObject.getDate()).padStart(2, "0");
+                const month = String(dateObject.getMonth() + 1).padStart(
+                  2,
+                  "0",
+                );
+                const year = dateObject.getFullYear();
+                formattedDate = `${day}-${month}-${year}`;
+              }
+              return {
+                ...item,
+                rateChangeDate: formattedDate,
+                dateObject: dateObject,
+              };
+            });
+
+            setHistoryData(processedData);
+
+            const years = [
+              ...new Set(
+                processedData.map((item) => getFinancialYear(item.dateObject)),
+              ),
+            ];
+            years.sort().reverse();
+            setFinancialYearOptions(years);
+            if (years.length > 0) {
+              setSelectedYear(years[0]);
+            }
+          }
+        } else {
+          setHistoryData([]);
+          showSnackBar(
+            "Received invalid history data format from server.",
+            "warning",
+          );
         }
-        if (isClosed && !branchData.closeDate) {
-          notifyOnce("Please select Close Date", "error");
-          return;
-        }
-        if (isMerged && !branchData.mergeDate) {
-          notifyOnce("Please select Merge Date", "error");
-          return;
-        }
-      } catch {
-        snackbar("Something went wrong", "warning");
-        return;
+      } catch (error) {
+        console.error("Error fetching currency history:", error);
+        showSnackBar("Failed to fetch currency rate history.", "error");
+        setHistoryData([]);
+      } finally {
+        setIsHistoryLoading(false);
       }
-    }
+    },
+    [callApi, showSnackBar],
+  );
 
-    if (editingId) {
-      if (
-        !branchData?.code ||
-        !branchData?.name ||
-        !branchData?.circleCode ||
-        !branchData?.state ||
-        !branchData?.city ||
-        !branchData?.pinCode ||
-        !branchData?.address ||
-        !branchData?.phoneNumber ||
-        !branchData?.emailId ||
-        !branchData?.nmrCode ||
-        !branchData?.status ||
-        !branchData?.foodCreditFlag ||
-        !branchData?.currChestFlag ||
-        !branchData?.branchType ||
-        !branchData?.openDate ||
-        !branchData?.cpcFlag
-      ) {
-        snackbar("Kindly Check data before updating", "warning");
-        return;
-      }
-    }
-
-    const allErrors = {
-      code: validateField("code", branchData.code),
-      name: validateField("name", branchData.name),
-      circleCode: validateField("circleCode", branchData.circleCode),
-      state: validateField("state", branchData.state),
-      city: validateField("city", branchData.city),
-      address: validateField("address", branchData.address),
-      pinCode: validateField("pinCode", branchData.pinCode),
-      phoneNumber: validateField("phoneNumber", branchData.phoneNumber),
-      emailId: validateField("emailId", branchData.emailId),
-      nmrCode: validateField("nmrCode", branchData.nmrCode),
-      status: validateField("status", branchData.status),
-      openDate: validateField("openDate", branchData.openDate),
-      branchType: validateField("branchType", branchData.branchType),
-      mergedWithBranch: branchData.mergedWithBranch
-        ? validateField("mergedWithBranch", branchData.mergedWithBranch)
-        : null,
-      closeDate:
-        editingId && branchData.status === "InActive"
-          ? validateField("closeDate", branchData.closeDate)
-          : null,
-      mergeDate:
-        editingId && branchData.mergedWithBranch
-          ? validateField("mergeDate", branchData.mergeDate)
-          : null,
-    };
-    setErrors(allErrors);
-
-    const valid = Object.values(allErrors).every((v) => !v);
-    if (!valid) {
-      notifyOnce("Please fix validation errors", "error");
+  useEffect(() => {
+    if (!selectedYear || historyData.length === 0) {
+      setMonthOptions([{ value: "all", label: "All Months" }]);
       return;
     }
-
-    console.log(branchData);
-
-    const foundCircle = circles.find(
-      (item) => item.circleCode === branchData.circleCode,
-    );
-
-    const foundState = states.find(
-      (item) => item.stateCode === branchData.state,
-    );
-
-    const payloadData = {
-      requestType: "BRANCH",
-      changeType: editingId ? "UPDATE" : "ADD",
-      targetId: branchData.code,
-      payload: {
-        code: branchData.code.trim(),
-        name: branchData.name.trim(),
-        circleCode: branchData.circleCode.trim(),
-        circleName: foundCircle.circleName.trim(),
-        state: branchData.state.trim(),
-        stateName: foundState.stateName.trim(),
-        city: branchData.city.trim(),
-        address: branchData.address.trim(),
-        pinCode: branchData.pinCode.trim(),
-        phoneNumber: branchData.phoneNumber.trim(),
-        emailId: branchData.emailId.trim(),
-        nmrCode: branchData.nmrCode.trim(),
-        status: branchData.status === "Active",
-        cpcFlag: branchData.cpcFlag,
-        foodCreditFlag: branchData.foodCreditFlag,
-        currChestFlag: branchData.currChestFlag,
-        branchType: branchData.branchType,
-        openDate: editingId
-          ? branchData.openDate
-          : branchData.openDate
-            ? dayjs(branchData.openDate).format("DD/MM/YYYY")
-            : null,
-
-        ...(editingId && {
-          mergedWithBranch: branchData.mergedWithBranch?.code || null,
-          closeDate: branchData.closeDate
-            ? dayjs(branchData.closeDate).format("DD/MM/YYYY")
-            : null,
-          mergeDate: branchData.mergeDate
-            ? dayjs(branchData.mergeDate).format("DD/MM/YYYY")
-            : null,
+    const availableMonths = new Set();
+    historyData.forEach((item) => {
+      if (getFinancialYear(item.dateObject) === selectedYear) {
+        availableMonths.add(item.dateObject.getMonth());
+      }
+    });
+    const sortedMonths = Array.from(availableMonths).sort((a, b) => a - b);
+    const options = [
+      { value: "all", label: "All Months" },
+      ...sortedMonths.map((monthIndex) => ({
+        value: monthIndex,
+        label: new Date(0, monthIndex).toLocaleString("default", {
+          month: "long",
         }),
+      })),
+    ];
+    setMonthOptions(options);
+    setSelectedMonth("all");
+  }, [selectedYear, historyData]);
+
+  const filteredHistoryData = useMemo(() => {
+    if (!selectedYear) return [];
+    return historyData.filter((item) => {
+      const itemFinancialYear = getFinancialYear(item.dateObject);
+      const yearMatch = itemFinancialYear === selectedYear;
+      const monthMatch =
+        selectedMonth === "all" || item.dateObject.getMonth() === selectedMonth;
+      return yearMatch && monthMatch;
+    });
+  }, [historyData, selectedYear, selectedMonth]);
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setEditingRow(null);
+    setFormData(initialFormState);
+    setErrors({});
+  };
+
+  const handleEditClick = useCallback(
+    (id) => () => {
+      const rowToEdit = rows.find((row) => row.id === id);
+      if (rowToEdit) {
+        setEditingRow(rowToEdit);
+        setPreviousRate(Number(rowToEdit.currencyRate));
+        setFormData({
+          currencyCode: rowToEdit.currencyCode,
+          currencyRate: rowToEdit.currencyRate,
+        });
+        setErrors({});
+        setIsDialogOpen(true);
+      }
+    },
+    [rows],
+  );
+
+  const isSameRate = Number(formData.currencyRate) === PreviousRate;
+
+  const handleHistoryClick = useCallback(
+    (id) => () => {
+      setCurrentCurrency(id);
+      setIsHistoryDialogOpen(true);
+      fetchHistoryData(id);
+    },
+    [fetchHistoryData],
+  );
+
+  const handleCloseHistoryDialog = () => {
+    setIsHistoryDialogOpen(false);
+    setHistoryData([]);
+    setPage(0);
+    setCurrentCurrency(null);
+    setFinancialYearOptions([]);
+    setSelectedYear("");
+    setSelectedMonth("all");
+  };
+
+  const validate = () => {
+    let tempErrors = {};
+
+    const rate = formData.currencyRate;
+
+    if (!String(rate).trim()) {
+      tempErrors.currencyRate = "Currency Rate is required.";
+    } else if (parseFloat(rate) === 0) {
+      tempErrors.currencyRate = "Currency Rate cannot be taken as zero.";
+    }
+
+    setErrors(tempErrors);
+    return Object.keys(tempErrors).length === 0;
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    if (name === "currencyRate") {
+      if (value !== "" && !/^[0-9.]*$/.test(value)) {
+        setErrors((prev) => ({
+          ...prev,
+          currencyRate: "Special Characters and Alphabeticals are not allowed.",
+        }));
+        return;
+      }
+      if (!/^\d{0,6}(\.\d{0,6})?$/.test(value)) {
+        return;
+      }
+
+      setFormData({ ...formData, [name]: value });
+      if (errors[name]) {
+        setErrors({ ...errors, [name]: "" });
+      }
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+
+    const apiPayload = {
+      requestType: "CURRENCY_RATE_CHANGE",
+      changeType: "UPDATE",
+      payload: {
+        currencyCode: editingRow.currencyCode,
+        currencyRate: parseFloat(formData.currencyRate).toFixed(6) || 0,
+        existingCurrencyRate: parseFloat(PreviousRate).toFixed(6) || 0,
       },
     };
 
     try {
-      const response = await callApi("/CR/create-request", payloadData, "POST");
-      if (response) {
-        snackbar(
-          editingId
-            ? "Branch update request submitted successfully with request id " +
-                response?.data?.id
-            : "Branch creation request submitted successfully with request id " +
-                response?.data?.id,
+      const data = await callApi("/CR/create-request", apiPayload, "POST");
+      if (data) {
+        showSnackBar(
+          "Currency rate change/update request submitted successfully with request id " +
+            data?.data?.id,
           "success",
         );
-        handleClose();
-        fetchData();
       }
+      handleCloseDialog();
+      fetchData(); // Refresh data on success
     } catch (err) {
-      snackbar(err?.message || "Request failed", "error");
+      console.error(err);
+      showSnackBar(err.message, "error");
     }
   };
 
-  const ns = (status) => {
-    if (status === false) return "InActive";
-    if (status === true) return "Active";
-    return status;
-  };
+  const columns = useMemo(() => {
+    const [year, month, day] = etlDate.split("-").map(Number);
+    const etl = new Date(year, month - 1, day);
 
-  const handleEdit = useCallback((row) => {
-    const n = ns(row.status);
-    const initialData = {
-      code: String(row.code ?? ""),
-      name: String(row.name ?? ""),
-      circleCode: String(row.circleCode ?? ""),
-      state: String(row.state ?? ""),
-      city: String(row.city ?? ""),
-      address: String(row.address ?? ""),
-      pinCode: String(row.pinCode ?? ""),
-      phoneNumber: String(row.phoneNumber ?? ""),
-      emailId: `${eprefix}${row.code}${emailDomain}`,
-      nmrCode: String(row.nmrCode ?? ""),
-      openDate: row.openDate,
-      status: n,
-      closeDate: row.closeDate ? dayjs(row.closeDate, "DD/MM/YYYY") : null,
-      mergeDate: row.mergeDate ? dayjs(row.mergeDate, "DD/MM/YYYY") : null,
-      mergedWithBranch: row.mergedWithBranch || null,
-      cpcFlag: String(row.cpcFlag ?? ""),
-      currChestFlag: String(row.currChestFlag ?? ""),
-      foodCreditFlag: String(row.foodCreditFlag ?? ""),
-      branchType: String(row.branchType ?? ""),
-    };
+    const lastDay = new Date(
+      etl.getFullYear(),
+      etl.getMonth() + 1,
+      0,
+    ).getDate();
 
-    setBranchData(initialData);
-    setOriginalData(initialData); // Store the original data here
-    setEditingId(row.code);
-    setOpen(true);
-    setIsDataSame(true);
-  }, []);
+    const isMonthEnd = etl.getDate() === lastDay;
 
-  const columns = useMemo(
-    () => [
+    const isEditDisabled = !isMonthEnd;
+
+    return [
       {
-        field: "code",
-        headerName: "Branch Code",
-        flex: 2,
-        minWidth: 150,
-        sortable: true,
-      },
-      {
-        field: "name",
-        headerName: "Branch Name",
-        flex: 3,
-        minWidth: 150,
-        sortable: true,
-      },
-      {
-        field: "status",
-        headerName: "Status",
+        field: "currencyCode",
+        headerName: "Currency Code",
         flex: 1,
-        minWidth: 120,
+        minWidth: 150,
+        // renderCell: (params) => (
+        //   <Stack
+        //     direction="column"
+        //     justifyContent="center"
+        //     sx={{ height: "100%", py: 1 }}
+        //   >
+        //     <Typography
+        //       variant="body2"
+        //       sx={{ fontWeight: 600, lineHeight: 1.2 }}
+        //     >
+        //       {params.row.currencyName}
+        //     </Typography>
+        //     <Typography variant="caption" color="text.secondary">
+        //       {params.row.currencyCode}
+        //     </Typography>
+        //   </Stack>
+        // ),
+      },
+      {
+        field: "currencyRate",
+        headerName: "Currency Rate",
+        flex: 1,
+        minWidth: 150,
         sortable: true,
-
-        type: "singleSelect",
-        valueOptions: [
-          { value: 1, label: "Active" },
-          { value: 0, label: "In-Active" },
-        ],
-        renderCell: (params) => (
-          <Box1Style>
-            <ChipStyle
-              size="small"
-              icon={params.row.status ? <ActiveIcon /> : <InActiveIcon />}
-              label={params.row.status ? "Active" : "In-Active"}
-              color="primary"
-              row={params.row}
-            />
-          </Box1Style>
-        ),
+        align: "right",
+        headerAlign: "right",
+        renderCell: (params) =>
+          currencyFormatterWith6Decimals("INR").format(params.value),
+      },
+      {
+        field: "updatedAt",
+        headerName: "Last Updated",
+        flex: 1,
+        minWidth: 250,
       },
       {
         field: "actions",
+        type: "actions",
         headerName: "Actions",
-        flex: 1,
-        minWidth: 120,
-        headerAlign: "center",
-        align: "center",
+        flex: 0.5,
+        minWidth: 150,
         filterable: false,
         sortable: false,
         disableColumnMenu: true,
-        renderCell: (params) => (
-          <StackStyle
-            direction="row"
-            spacing={1}
-            alignItems="center"
-            justifyContent="center"
-          >
-            <Tooltip title="Edit">
-              <div>
-                <IconButton
-                  onClick={() => handleEdit(params.row)}
-                  color="primary"
-                >
-                  <EditIcon />
-                </IconButton>
-              </div>
-            </Tooltip>
-          </StackStyle>
-        ),
+        getActions: ({ id }) => [
+          <GridActionsCellItem
+            icon={<EditIcon />}
+            label="Edit Rate"
+            onClick={handleEditClick(id)}
+            disabled={isEditDisabled} // Now enabled for first 5 days
+            key="edit"
+            sx={{ ml: 6 }}
+          />,
+          <GridActionsCellItem
+            icon={<HistoryIcon />}
+            label="View History"
+            onClick={handleHistoryClick(id)}
+            color="inherit"
+            key="history"
+          />,
+        ],
       },
-    ],
-    [handleEdit],
-  );
+    ];
+  }, [handleEditClick, handleHistoryClick, etlDate]);
 
-  const resetForm = () => {
-    setBranchData({
-      code: "",
-      name: "",
-      circleCode: "",
-      state: "",
-      city: "",
-      address: "",
-      pinCode: "",
-      phoneNumber: "",
-      emailId: `${eprefix}${emailDomain}`,
-      nmrCode: "",
-      openDate: dayjs(),
-      mergedWithBranch: "",
-      cpcFlag: false,
-      foodCreditFlag: false,
-      currChestFlag: false,
-      branchType: "A",
-      status: "Active",
-    });
-    setErrors({});
-    setEditingId(null);
-    setIsDataSame(true);
-  };
-
-  const handleClose = () => {
-    setOpen(false);
-    resetForm();
-  };
-
-  const fetchAutoCompleteData = useCallback(
-    async (e, value, reason) => {
-      try {
-        if (!reDesc.test(value)) {
-          snackbar("Invalid special characters are not allowed", "error");
-          return;
-        }
-        const query = value?.trim();
-
-        if (reason === "clear" || !query || query === "") {
-          setMwb([]);
-          return;
-        }
-        if (query.length < 3) {
-          return;
-        }
-        setMwbLoading(true);
-
-        const url =
-          "/CM/common-master/branches-code-name-only?q=" +
-          encodeURIComponent(query);
-
-        const payload = null;
-        cancelAllRequests();
-        const response = await callApi(url, payload, "GET");
-
-        if (!response || !response?.data) {
-          setMwb([]);
-          setMwbLoading(false);
-          return;
-        }
-        setMwb(response?.data);
-        setMwbLoading(false);
-      } catch (e) {
-        if (e.code === "ERR_CANCELED") {
-          return;
-        }
-        setMwbLoading(false);
-      }
+  const historyColumns = [
+    {
+      field: "rateChangeDate",
+      headerName: "Date of Change",
+      flex: 1.5,
     },
-    [callApi, cancelAllRequests],
-  );
-
-  const handleAutoCompleteInputChange = useCallback(
-    (e, value, reason) => {
-      if (!reDesc.test(value)) {
-        snackbar("Invalid special characters are not allowed", "error");
-        return;
-      } else {
-        setInputValue(value);
-        fetchAutoCompleteData(e, value, reason);
-      }
+    {
+      field: "currencyRate",
+      headerName: "Changed Rate",
+      type: "number",
+      flex: 1,
     },
-    [fetchAutoCompleteData],
-  );
-
-  const checkBranchCodeExixts = async (code) => {
-    if (!code || code.length !== 5) return;
-    if (editingId && editingId === code) return;
-    try {
-      setCheckingCode(true);
-
-      const url =
-        "/CM/common-master/branches-code-name-only?q=" +
-        encodeURIComponent(code);
-      const response = await callApi(url, null, "GET");
-      const data = response?.data || [];
-      const exists = data.some((row) => row.code === code);
-      if (exists) {
-        setErrors((prev) => ({
-          ...prev,
-          code: "Branch code already exists",
-        }));
-        snackbar("Branch code already exists", "error");
-        setBranchData((prev) => ({
-          ...prev,
-          code: "",
-        }));
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setCheckingCode(false);
-    }
-  };
-
-  const debounceQuery = debounce(handleAutoCompleteInputChange, 1);
-  const isClosed =
-    branchData.status === "InActive" || branchData.status === "Closed";
-  const isMerged = branchData.mergedWithBranch;
-  const canEnabledMD = !!branchData?.mergedWithBranch?.code && !isClosed;
-  const startOfCurrentMonth = dayjs().startOf("month");
-  const endOfCurrentMonth = dayjs().endOf("month");
-
-  useEffect(() => {
-    if (branchData.status === "InActive" || branchData.status === "Closed") {
-      setBranchData((prev) => ({
-        ...prev,
-        mergedWithBranch: null,
-        mergeDate: null,
-      }));
-      setErrors((prev) => ({
-        ...prev,
-        mergedWithBranch: "",
-        mergeDate: "",
-      }));
-    }
-  }, [branchData.status]);
+  ];
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDayjs}>
+    <StyledContainerBox>
+      <StyledDataGridContainer
+        rows={rows}
+        columns={columns}
+        disableRowSelectionOnClick
+        pageSizeOptions={[5, 10, 25, 50]}
+        initialState={{
+          pagination: { paginationModel: { pageSize: 10 } },
+          sorting: { sortModel: [{ field: "updatedAt", sort: "desc" }] },
+        }}
+        loading={isLoading}
+        slots={{
+          noRowsOverlay: CustomNoRowsOverlay,
+        }}
+        sx={{
+          minHeight: 700,
+          width: "100%",
+         "& .MuiDataGrid-columnHeaders": {
+          backgroundColor: "#f5f5f5 !important",
+          fontWeight: 700,
+          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+        },
+        }}
+      />
+
+      <StyledDialog open={isDialogOpen} fullWidth maxWidth="sm">
+        <StyledDialogTitle>
+          <StyledTypography>Edit Currency Rate</StyledTypography>
+          <StyledCloseButton onClick={handleCloseDialog}>
+            <CloseIcon />
+          </StyledCloseButton>
+        </StyledDialogTitle>
+        <Divider />
+        <StyledDialogContent>
+          <StyledTextField
+            autoFocus
+            name="currencyCode"
+            label="Currency Code"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={formData.currencyCode}
+            disabled
+          />
+
+          <StyledTextField
+            name="currencyRate"
+            label="New Currency Rate"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={formData.currencyRate}
+            onChange={handleInputChange}
+            error={!!errors.currencyRate}
+            helperText={
+              errors.currencyRate ||
+              "Max 6 digits before decimal, up to 6 after (e.g., 123456.123456)."
+            }
+          />
+        </StyledDialogContent>
+        <StyledDialogActions>
+          <StyledButton onClick={handleCloseDialog}>Cancel</StyledButton>
+          <StyledButton
+            onClick={handleSubmit}
+            // disabled={isSameRate} // commented for updating same rate for that month
+            variant="contained"
+          >
+            Submit Request
+          </StyledButton>
+        </StyledDialogActions>
+      </StyledDialog>
+
+      <StyledDialog
+        open={isHistoryDialogOpen}
+        onClose={handleCloseHistoryDialog}
+        fullWidth
+        maxWidth="md"
+      >
+        <StyledDialogTitle>
+          <StyledTypography>
+            Rate Change History for {currentCurrency}
+          </StyledTypography>
+          <StyledCloseButton onClick={handleCloseHistoryDialog}>
+            <CloseIcon />
+          </StyledCloseButton>
+        </StyledDialogTitle>
+        <Divider />
+
+        <StyledBox>
+          <StyledDialogTitleBox>
+            <StyledDialogContent>
+              {isHistoryLoading ? (
+                <StyledCircularProgressBox>
+                  <StyledCircularProgress />
+                </StyledCircularProgressBox>
+              ) : financialYearOptions.length ? (
+                <>
+                  <StyledGridContainer container spacing={2}>
+                    {/* Financial Year */}
+                    <StyledGridItem item xs={12} sm={6}>
+                      <StyledFormControl fullWidth>
+                        <StyledInputLabel id="financial-year-select-label">
+                          Financial Year
+                        </StyledInputLabel>
+                        <StyledSelect
+                          labelId="financial-year-select-label"
+                          value={selectedYear}
+                          label="Financial Year"
+                          onChange={(e) => setSelectedYear(e.target.value)}
+                          disabled={!financialYearOptions.length}
+                        >
+                          {financialYearOptions.map((year) => (
+                            <StyledMenuItem key={year} value={year}>
+                              {year}
+                            </StyledMenuItem>
+                          ))}
+                        </StyledSelect>
+                      </StyledFormControl>
+                    </StyledGridItem>
+
+                    {/* Month */}
+                    <StyledGridItem item xs={12} sm={6}>
+                      <StyledFormControl fullWidth>
+                        <StyledInputLabel id="month-select-label">
+                          Month
+                        </StyledInputLabel>
+                        <StyledSelect
+                          labelId="month-select-label"
+                          value={selectedMonth}
+                          label="Month"
+                          onChange={(e) => setSelectedMonth(e.target.value)}
+                        >
+                          {monthOptions.map((option) => (
+                            <StyledMenuItem
+                              key={option.value}
+                              value={option.value}
+                            >
+                              {option.label}
+                            </StyledMenuItem>
+                          ))}
+                        </StyledSelect>
+                      </StyledFormControl>
+                    </StyledGridItem>
+                  </StyledGridContainer>
+
+                  {/* TABLE START */}
+                  <StyledTableContainer>
+                    <StyledTable>
+                      <StyledTableHead>
+                        <StyledTableRow>
+                          {historyColumns.map((col) => (
+                            <StyledTableHeaderCell key={col.field}>
+                              {col.headerName}
+                            </StyledTableHeaderCell>
+                          ))}
+                        </StyledTableRow>
+                      </StyledTableHead>
+
+                      <StyledTableBody>
+                        {filteredHistoryData.length === 0 ? (
+                          <StyledTableRow>
+                            <StyledEmptyCell colSpan={historyColumns.length}>
+                              No history found for the selected period
+                            </StyledEmptyCell>
+                          </StyledTableRow>
+                        ) : (
+                          filteredHistoryData
+                            .slice(page * 5, page * 5 + 5)
+                            .map((row) => (
+                              <StyledTableRow key={row.id}>
+                                {historyColumns.map((col) => (
+                                  <StyledTableCell key={col.field}>
+                                    {col.field == "currencyRate"
+                                      ? currencyFormatterWith6Decimals(
+                                          "INR",
+                                        ).format(row[col.field])
+                                      : row[col.field]}
+                                  </StyledTableCell>
+                                ))}
+                              </StyledTableRow>
+                            ))
+                        )}
+                      </StyledTableBody>
+                    </StyledTable>
+                  </StyledTableContainer>
+                  {/* TABLE END */}
+                </>
+              ) : (
+                <StyledTypographyBox>
+                  No data found for this currency
+                </StyledTypographyBox>
+              )}
+              {filteredHistoryData.length > 0 && (
+                <StyledTablePagination
+                  component="div"
+                  count={filteredHistoryData.length}
+                  page={page}
+                  onPageChange={handleChangePage}
+                  rowsPerPage={5}
+                  rowsPerPageOptions={[]}
+                  labelDisplayedRows={({ page }) => {
+                    return `PAGE: ${page + 1}`;
+                  }}
+                />
+              )}
+            </StyledDialogContent>
+          </StyledDialogTitleBox>
+        </StyledBox>
+      </StyledDialog>
+    </StyledContainerBox>
+  );
+}
+import { styled } from "@mui/material/styles";
+import {
+  Box,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  TextField,
+  Button,
+  Grid,
+  TableBody,
+  TableCell,
+  Table,
+  TableContainer,
+  TableHead,
+  TableRow,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  CircularProgress,
+  TablePagination,
+  Chip,
+  IconButton,
+  Typography,
+} from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+import { BorderBottom } from "@mui/icons-material";
+
+export const StyledContainerBox = styled(Box)(({ theme }) => ({
+  padding: theme.spacing(2),
+}));
+
+export const StyledTablePagination = styled(TablePagination)(({ theme }) => ({
+  display: "flex",
+  justifyContent: "space-around",
+  borderTop: `1px solid ${theme.palette.divider}`,
+  backgroundColor: theme.palette.background.paper,
+  borderRadius: "0 0 12px 12px",
+  "& .MuiTablePagination-toolbar": {
+    minHeight: "48px",
+  },
+  "& .MuiTablePagination-selectLabel": {
+    fontSize: "14px",
+  },
+  "& .MuiTablePagination-input": {
+    fontSize: "14px",
+  },
+  "& .MuiTablePagination-displayedRows": {
+    fontSize: "14px",
+  },
+  "& .MuiTablePagination-actions": {
+    "& svg": {
+      fontSize: "20px",
+    },
+  },
+}));
+
+export const StyledDataGridContainer = styled(DataGrid)(({ theme }) => ({
+
+}));
+
+export const StyledDialog = styled(Dialog)(({ theme }) => ({
+  "& .MuiDialog-paper": {
+    minWidth: "500px",
+    // height: "520px",
+    display: "flex",
+  },
+}));
+
+export const StyledDialogTitle = styled(DialogTitle)(({ theme }) => ({
+  marginTop: theme.spacing(1),
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+}));
+
+export const StyledDialogContent = styled(DialogContent)(({ theme }) => ({}));
+
+export const StyledTextField = styled(TextField)(({ theme }) => ({
+  marginTop: theme.spacing(1),
+  marginBottom: theme.spacing(1),
+}));
+
+export const StyledDialogActions = styled(DialogActions)(({ theme }) => ({
+  padding: "16px 24px",
+  justifyContent: "flex-end",
+}));
+
+export const StyledCircularProgressBox = styled(Box)(({ theme }) => ({
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  height: 300,
+}));
+
+export const StyledCircularProgress = styled(CircularProgress)(
+  ({ theme }) => ({})
+);
+
+export const StyledButton = styled(Button)(({ theme }) => ({}));
+
+export const StyledGridContainer = styled(Grid)(({ theme }) => ({
+  marginBottom: theme.spacing(2),
+}));
+
+export const StyledGridItem = styled(Grid)(({ theme }) => ({
+  // Note: Spacing is usually handled by Grid 'spacing' prop or 'item'
+  // Adding marginRight here might break Grid layouts, use carefully.
+  // marginRight: theme.spacing(2), 
+}));
+
+export const StyledFormControl = styled(FormControl)(({ theme }) => ({}));
+
+export const StyledInputLabel = styled(InputLabel)(({ theme }) => ({}));
+
+export const StyledSelect = styled(Select)(({ theme }) => ({}));
+
+export const StyledMenuItem = styled(MenuItem)(({ theme }) => ({}));
+
+export const StyledTableContainer = styled(TableContainer)(({ theme }) => ({
+  borderRadius: "10px",
+}));
+
+export const StyledTable = styled(Table)(() => ({}));
+
+export const StyledTableHead = styled(TableHead)(() => ({}));
+
+export const StyledTableBody = styled(TableBody)(() => ({}));
+
+export const StyledTableRow = styled(TableRow)(() => ({
+  "&:hover": {},
+}));
+
+export const StyledTableHeaderCell = styled(TableCell)(({ theme }) => ({
+  fontWeight: "bold",
+  fontSize: "14px",
+}));
+
+export const StyledTableCell = styled(TableCell)(() => ({
+  fontSize: "14px",
+}));
+
+export const StyledEmptyCell = styled(TableCell)(({ theme }) => ({
+  textAlign: "center",
+  padding: theme.spacing(3),
+  color: theme.palette.text.secondary,
+}));
+
+export const StyledCloseButton = styled(IconButton)(() => ({
+  padding: 4,
+  // alignContent is not for text alignment. 
+  // IconButton handles centering usually.
+}));
+
+export const StyledBox = styled(Box)(({ theme }) => ({
+  marginTop: theme.spacing(2),
+}));
+
+export const StyledTypographyBox = styled(Box)(({ theme }) => ({
+  marginBottom: "20px",
+}));
+
+export const StyledDataGrid = styled(DataGrid)(({ theme }) => ({
+  
+}));
+
+export const StyledDialogTitleBox = styled(Box)(({ theme }) => ({}));
+
+export const StyledTypography = styled(Typography)(({ theme }) => ({
+  fontWeight: "bold",
+  fontSize: "20px",
+}));
+
+export const StyledDateChip = styled(Chip)(({ theme }) => ({
+  color: theme.palette.text.secondary,
+}));
+
+export const StyledStatusChip = styled(Chip)(({ theme }) => ({
+  padding: theme.spacing(0.5),
+  margin: 0,
+  width: "90%",
+}));
+
+export const StyledStatusBox = styled(Box)(({ theme }) => ({
+}));
+
+export const StyledRequestDataGrid = styled(DataGrid)(({ theme }) => ({
+
+}));
+
+export const StyledRequestContainerBox = styled(Box)(({ theme }) => ({}));
+
+export const CurrencyRateMasterStyles = {
+  tabBox: {
+    borderColor: "divider",
+  },
+  tabs: {
+    width: "100%",
+    height: "100%",
+  },
+  customTabPanelBox: {
+    p: 0,
+  },
+};import * as React from "react";
+import PropTypes from "prop-types";
+import { Tabs, Tab, Box, Paper } from "@mui/material";
+import CurrencyRupeeIcon from "@mui/icons-material/CurrencyRupee";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import CurrencyRateChangeTab from "./CurrencyRateChangeTab";
+import MyCurrencyRateRequestsTab from "./MyCurrencyRateRequestsTab";
+import { CurrencyRateMasterStyles } from "./CurrencyRateChangeStyles";
+
+function CustomTabPanel(props) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <Box
+      role="tabpanel"
+      hidden={value !== index}
+      id={`simple-tabpanel-${index}`}
+      aria-labelledby={`simple-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={CurrencyRateMasterStyles.customTabPanelBox}>{children}</Box>
+      )}
+    </Box>
+  );
+}
+
+CustomTabPanel.propTypes = {
+  children: PropTypes.node,
+  index: PropTypes.number.isRequired,
+  value: PropTypes.number.isRequired,
+};
+
+function a11yProps(index) {
+  return {
+    id: `simple-tab-${index}`,
+    "aria-controls": `simple-tabpanel-${index}`,
+  };
+}
+
+export default function CurrencyRateChange() {
+  const [value, setValue] = React.useState(0);
+
+  const handleChange = (event, newValue) => {
+    setValue(newValue);
+  };
+
+  return (
+     <Paper
+    elevation={2}
+    sx={{
+      display:"flex",
+      flexDirection:"column",
+      borderRadius:2,
+      overflow:"hidden",
+      minHeight:"calc(100vh - 210px)",
+      width:"100%",
+    }}>
       <Box>
-        <Box>
-          <FabStyle
-            onClick={() => setOpen(true)}
-            color="primary"
-            variant="extended"
-          >
-            <AddIconStyle />Create
-          </FabStyle>
-        </Box>
-
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          getRowId={(row) => row.code}
-          loading={loading}
-          paginationMode="server"
-          sortingMode="server"
-          filterMode="server"
-          rowCount={rowCount}
-          paginationModel={paginationModel}
-          onPaginationModelChange={setPaginationModel}
-          sortModel={sortModel}
-          onSortModelChange={setSortModel}
-          filterModel={filterModel}
-          onFilterModelChange={setFilterModel}
-          pageSizeOptions={[10, 20, 50, 100]}
-          disableRowSelectionOnClick
-          slots={{ noRowsOverlay: CustomNoRowsOverlay }}
-        />
-
-        {open && (
-          <Dialog
-            open={true}
-            scroll="paper"
-            component="form"
-            autoComplete="off"
-            onSubmit={handleSubmit}
-            maxWidth={"md"}
-          >
-            <DialogTitleStyle id="customized-dialog-title">
-              {editingId ? "Edit Branch" : "Add New Branch"}
-            </DialogTitleStyle>
-            <IconButtonStyle aria-label="close" onClick={handleClose}>
-              <CloseIcon />
-            </IconButtonStyle>
-            <DialogContent dividers>
-              <Stack direction={"column"} spacing={2}>
-                <Stack direction={"row"} spacing={1}>
-                  <TextFieldStyle
-                    fullWidth
-                    label="Branch Code *"
-                    name="code"
-                    value={branchData.code}
-                    onChange={handleChange}
-                    disabled={!!editingId}
-                    error={!!errors.code}
-                    helperText={errors.code || "Exactly 5 digits"}
-                    inputProps={{ maxLength: 5, inputMode: "numeric" }}
-                  />
-
-                  <TextFieldStyle
-                    fullWidth
-                    label="Branch Name *"
-                    name="name"
-                    value={branchData.name}
-                    onChange={handleChange}
-                    error={!!errors.name}
-                    inputProps={{ maxLength: 50 }}
-                    helperText={
-                      errors.name ||
-                      "Allowed 3-50 letters,numbers,spaces,/&()-,."
-                    }
-                  />
-
-                  <Autocomplete
-                    fullWidth
-                    options={circles}
-                    getOptionLabel={(option) =>
-                      `${option.circleCode} - ${option.circleName}`
-                    }
-                    value={
-                      circles.find(
-                        (c) => c.circleCode === branchData.circleCode,
-                      ) || null
-                    }
-                    onChange={(_, value) => {
-                      handleChange({
-                        target: {
-                          name: "circleCode",
-                          value: value?.circleCode || "",
-                        },
-                      });
-                    }}
-                    renderInput={(params) => (
-                      <TextFieldStyle
-                        {...params}
-                        label="Circle Code *"
-                        error={!!errors.circleCode}
-                        helperText={errors.circleCode || ""}
-                        inputProps={{
-                          ...params.inputProps,
-                          maxLength: 50,
-                        }}
-                      />
-                    )}
-                  />
-                </Stack>
-
-                <Stack direction={"row"} spacing={1}>
-                  <Autocomplete
-                    fullWidth
-                    options={states}
-                    getOptionLabel={(option) =>
-                      // `${option.stateCode} - ${option.stateName}`
-                      `${option.stateName}`
-                    }
-                    value={
-                      states.find((s) => s.stateCode === branchData.state) ||
-                      null
-                    }
-                    onChange={(_, value) => {
-                      handleChange({
-                        target: {
-                          name: "state",
-                          value: value?.stateCode || "",
-                        },
-                      });
-                    }}
-                    renderInput={(params) => (
-                      <TextFieldStyle
-                        {...params}
-                        label="State *"
-                        error={!!errors.state}
-                        helperText={errors.state}
-                        inputProps={{
-                          ...params.inputProps,
-                          maxLength: 50,
-                        }}
-                      />
-                    )}
-                  />
-
-                  <TextFieldStyle
-                    fullWidth
-                    label="City *"
-                    name="city"
-                    value={branchData.city}
-                    onChange={handleChange}
-                    error={!!errors.city}
-                    inputProps={{ maxLength: 30 }}
-                    helperText={
-                      errors.city ||
-                      "Allowed 3-30 letters,numbers,spaces,/&()-,."
-                    }
-                  />
-
-                  <TextFieldStyle
-                    fullWidth
-                    label="Pin Code *"
-                    name="pinCode"
-                    value={branchData.pinCode}
-                    onChange={handleChange}
-                    error={!!errors.pinCode}
-                    helperText={errors.pinCode || "Exactly 6 digits"}
-                    inputProps={{ maxLength: 6, inputMode: "numeric" }}
-                  />
-                </Stack>
-
-                <Stack direction={"row"} spacing={1}>
-                  <TextField
-                    fullWidth
-                    label="Address *"
-                    name="address"
-                    value={branchData.address}
-                    onChange={handleChange}
-                    error={!!errors.address}
-                    inputProps={{ maxLength: 50 }}
-                    helperText={
-                      errors.address ||
-                      "Allowed 5-50 characters (A-Z, 0-9, spaces, /.&,()-)"
-                    }
-                    multiline
-                    maxRows={2}
-                  />
-                </Stack>
-
-                <Stack direction={"row"} spacing={1}>
-                  <TextField1Style
-                    fullWidth
-                    label="Mobile Number *"
-                    name="phoneNumber"
-                    value={branchData.phoneNumber}
-                    onChange={handleChange}
-                    error={!!errors.phoneNumber}
-                    helperText={errors.phoneNumber || "Exactly 10 digits"}
-                    inputProps={{ maxLength: 10, inputMode: "numeric" }}
-                  />
-                  <TextField1Style
-                    fullWidth
-                    name="emailId"
-                    label="Email ID *"
-                    value={branchData.emailId || emailDomain}
-                    onChange={handleChange}
-                    disabled={true}
-                    onClick={(e) => {
-                      const i = e.target;
-                      const p = branchData.emailId.indexOf("@");
-                      i.setSelectionRange(p, p);
-                    }}
-                    onKeyDown={(e) => {
-                      const p = e.target.selectionStart;
-                      const a = branchData.emailId.indexOf("@");
-                      if (e.key === "Delete" && p >= a) {
-                        e.preventDefault();
-                        return;
-                      }
-                      if (p > a) {
-                        e.preventDefault();
-                        e.target.setSelectionRange(a, a);
-                      }
-                    }}
-                    onBlur={handleChange} // Re-validate on blur
-                    error={!!errors.emailId}
-                    helperText="Auto-generated as sbi.<BranchCode>@sbi.co.in"
-                  />
-                </Stack>
-                <Stack direction={"row"} spacing={1}>
-                  <TextFieldStyle
-                    fullWidth
-                    name="nmrCode"
-                    label="N-M-R Code *"
-                    value={branchData.nmrCode}
-                    onChange={handleChange}
-                    onBlur={handleChange} // Re-validate on blur
-                    error={!!errors.nmrCode}
-                    helperText={errors.nmrCode || "Exactly 9 digits"}
-                    inputProps={{ maxLength: 9, inputMode: "numeric" }}
-                  />
-                  <TextFieldStyle
-                    select
-                    fullWidth
-                    disabled={!editingId}
-                    label="Branch Status as per CBS *"
-                    name="status"
-                    value={
-                      !branchData.status || branchData.status === "InActive"
-                        ? "InActive"
-                        : "Active"
-                    }
-                    onChange={handleChange}
-                    error={!!errors.status}
-                    helperText={errors.status}
-                  >
-                    <MenuItem value="">Select Branch Status</MenuItem>
-                    <MenuItem key={"Live"} value={"Active"}>
-                      Live
-                    </MenuItem>
-                    <MenuItem key={"Closed"} value={"InActive"}>
-                      Closed
-                    </MenuItem>
-                  </TextFieldStyle>
-                  <DatePickerStyle
-                    label="Open Date *"
-                    format="DD/MM/YYYY"
-                    name="openDate"
-                    disabled={!!editingId}
-                    value={
-                      branchData.openDate
-                        ? dayjs(branchData.openDate, "DD/MM/YYYY")
-                        : null
-                    }
-                    onChange={(newValue) => {
-                      handleChange({
-                        target: {
-                          name: "openDate",
-                          value: newValue,
-                        },
-                      });
-                    }}
-                    minDate={!editingId ? startOfCurrentMonth : undefined}
-                    maxDate={!editingId ? endOfCurrentMonth : undefined}
-                    slotProps={{
-                      textField: {
-                        fullWidth: true,
-                        variant: "outlined",
-                        onKeyDown: (e) => e.preventDefault(),
-                      },
-                    }}
-                  />
-                </Stack>
-
-                <Stack direction={"row"} spacing={1}>
-                  {editingId && (
-                    <DatePicker1Style
-                      label="Close Date"
-                      format="DD/MM/YYYY"
-                      name="closeDate"
-                      disabled={!isClosed}
-                      value={
-                        branchData.closeDate
-                          ? dayjs(branchData.closeDate, "DD/MM/YYYY")
-                          : null
-                      }
-                      onChange={(newValue) => {
-                        handleChange({
-                          target: {
-                            name: "closeDate",
-                            value: newValue,
-                          },
-                        });
-                      }}
-                      slotProps={{
-                        textField: {
-                          fullWidth: true,
-                          variant: "outlined", // Pass props to the internal TextField
-                          onKeyDown: (e) => e.preventDefault(),
-                          error:
-                            (isClosed && !branchData.closeDate) ||
-                            (!isClosed && branchData.closeDate),
-                          helperText:
-                            isClosed && !branchData.closeDate
-                              ? "Close Date is required when status is Closed"
-                              : !isClosed && branchData.closeDate
-                                ? "Close Date can be entered only when Branch status is closed"
-                                : "",
-                        },
-                      }}
-                    />
-                  )}
-
-                  {/* Conditionally render closeDate field only if editingId exists */}
-                  {editingId && (
-                    <DatePicker1Style
-                      label="Merge Date"
-                      format="DD/MM/YYYY"
-                      name="mergeDate"
-                      required={isMerged}
-                      //disabled={isClosed}
-                      disabled={!canEnabledMD}
-                      value={
-                        branchData.mergeDate
-                          ? dayjs(branchData.mergeDate, "DD/MM/YYYY")
-                          : null
-                      }
-                      onChange={(newValue) => {
-                        handleChange({
-                          target: {
-                            name: "mergeDate",
-                            value: newValue,
-                          },
-                        });
-                      }}
-                      slotProps={{
-                        textField: {
-                          fullWidth: true,
-                          variant: "outlined", // Pass props to the internal TextField
-                          onKeyDown: (e) => e.preventDefault(),
-                          error:
-                            (isMerged && !branchData.mergeDate) ||
-                            (!isMerged && branchData.mergeDate),
-                          helperText:
-                            isMerged && !branchData.mergeDate
-                              ? "Merge Date is required when branch is merged"
-                              : !isMerged && branchData.mergeDate
-                                ? "Merge Date can be entered only when Merged With Branch is selected"
-                                : "",
-                        },
-                      }}
-                    />
-                  )}
-
-                  {editingId && (
-                    <CustomAutoComplete
-                      key={isClosed ? "mwb-closed" : "mwb-open"}
-                      options={mwb || []}
-                      loading={mwbLoading}
-                      value={isClosed ? null : branchData.mergedWithBranch}
-                      onChange={handleMergedWithBranchAutoCompleteChange}
-                      inputValue={inputValue}
-                      disabled={isClosed}
-                      onInputChange={debounceQuery}
-                      renderOption={(option) =>
-                        typeof option === "string"
-                          ? option
-                          : !option || !option?.code || !option?.name
-                            ? ""
-                            : `${option.code} (${option.name})`
-                      }
-                      uniqueElementKey={"code"}
-                      label={"Merge with Branch"}
-                      name={"mergedWithBranch"}
-                      error={errors?.mergedWithBranch}
-                    />
-                  )}
-                </Stack>
-
-                <Stack direction={"row"} spacing={1}>
-                  <TextFieldStyle
-                    fullWidth
-                    select
-                    label="CPC Flag *"
-                    name="cpcFlag"
-                    value={branchData.cpcFlag}
-                    onChange={handleChange}
-                    error={!!errors.cpcFlag}
-                    helperText={errors.cpcFlag}
-                  >
-                    <MenuItem key={true} value="true">
-                      Allowed
-                    </MenuItem>
-                    <MenuItem key={false} value="false">
-                      Not Allowed
-                    </MenuItem>
-                  </TextFieldStyle>
-
-                  <TextFieldStyle
-                    fullWidth
-                    select
-                    label="Food Credit Flag *"
-                    name="foodCreditFlag"
-                    value={branchData.foodCreditFlag}
-                    onChange={handleChange}
-                    error={!!errors.foodCreditFlag}
-                    helperText={errors.foodCreditFlag}
-                  >
-                    <MenuItem key={true} value="true">
-                      Allowed
-                    </MenuItem>
-                    <MenuItem key={false} value="false">
-                      Not Allowed
-                    </MenuItem>
-                  </TextFieldStyle>
-
-                  <TextFieldStyle
-                    fullWidth
-                    select
-                    label="Currency Chest Flag *"
-                    name="currChestFlag"
-                    value={branchData.currChestFlag}
-                    onChange={handleChange}
-                    error={!!errors.currChestFlag}
-                    helperText={errors.currChestFlag}
-                  >
-                    <MenuItem key={true} value="true">
-                      Allowed
-                    </MenuItem>
-                    <MenuItem key={false} value="false">
-                      Not Allowed
-                    </MenuItem>
-                  </TextFieldStyle>
-
-                  <TextFieldStyle
-                    select
-                    fullWidth
-                    label="Branch Type *"
-                    name="branchType"
-                    value={branchData.branchType}
-                    onChange={handleChange}
-                    error={!!errors.branchType}
-                    helperText={errors.branchType}
-                  >
-                    {branchType.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>
-                        {option.label}
-                      </MenuItem>
-                    ))}
-                  </TextFieldStyle>
-                </Stack>
-              </Stack>
-            </DialogContent>
-            <DialogActions>
-              <Button
-                type="submit"
-                variant="contained"
-                startIcon={editingId ? <EditIcon /> : <AddIcon />}
-                disabled={!isFormValid()}
-              >
-                {editingId ? "Update" : "Add"}
-              </Button>
-            </DialogActions>
-          </Dialog>
-        )}
+      <Box sx={CurrencyRateMasterStyles.tabBox}>
+        <Tabs
+          sx={CurrencyRateMasterStyles.tabs}
+          value={value}
+          onChange={handleChange}
+          aria-label="basic tabs example"
+          variant="fullWidth"
+        >
+          <Tab
+            label="Manage Currency Rate"
+            icon={<CurrencyRupeeIcon />}
+            iconPosition="start"
+            {...a11yProps(0)}
+          />
+          <Tab
+            icon={<PendingActionsIcon />}
+            iconPosition="start"
+            label="My Requests"
+            {...a11yProps(1)}
+          />
+        </Tabs>
       </Box>
-    </LocalizationProvider>
+      <CustomTabPanel value={value} index={0}>
+        <CurrencyRateChangeTab />
+      </CustomTabPanel>
+      <CustomTabPanel value={value} index={1}>
+        <MyCurrencyRateRequestsTab permissions={{view:true ,cancel:true}}/>
+      </CustomTabPanel>
+      </Box>
+    </Paper>
   );
 }
