@@ -1,516 +1,71 @@
-import { useEffect, useMemo, useState } from "react";
-import dayjs from "dayjs";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import CloseIcon from "@mui/icons-material/Close";
-import useApi from "../../hooks/useApi";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import { getIconComponent } from "../../utils/IconUtils";
-import {
-  Box,
-  Stack,
-  Typography,
-  TextField,
-  Button,
-  Divider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-} from "@mui/material";
-import {
-  ChipStyle,
-  StyledBox,
-  StyledTableContainer,
-  StyledTable,
-  StyledTableHead,
-  StyledTableCell,
-  StyledTableRow,
-  StyledTableBody,
-  StyledTablePagination,
-  StyledDialogTitle,
-  StyledTypography,
-  StyledCloseButton,
-  StyledDialog,
-} from "./CalendarConfig";
-
-export default function CalendarConfigTab() {
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
-  const [currentFY, setCurrentFY] = useState({ start: null, end: null });
-  const [nextFYInfo, setNextFYInfo] = useState({
-    expectedStart: null,
-    lastEnd: null,
-  });
-  const [openApprovedDialog, setOpenApprovedDialog] = useState(false);
-  const [calendarRows, setCalendarRows] = useState([]);
-  const [openDialog, setOpenDialog] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(null);
-  const [expectedStartDate, setExpectedStartDate] = useState(null);
-  const [remarks, setRemarks] = useState("");
-  const [remarksError, setRemarksError] = useState("");
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
-
-  const REMARKS_REGEX = /^[A-Za-z0-9 ,.]*$/;
-  // For Active and In-Active Icons inside the table
-  const ActiveIcon = useMemo(() => getIconComponent("FiberManualRecord"), []);
-  const InActiveIcon = useMemo(() => getIconComponent("FiberManualRecord"), []);
-  // Defining minimum and maximum number of Remarks allowed
-  const MAX_REMARKS = 150;
-  const MIN_REMARKS = 5;
-
-  useEffect(() => {
-    loadCurrentFY();
-    loadTableData();
-  }, []);
-
-  // For data inside approved requests form
-  const tableRows = calendarRows.map((row) => ({
-    id: row.id,
-    yearStartDate: row.yearStartDate,
-    yearEndDate: row.yearEndDate,
-    remarks: row.remarks,
-    activeFlag: row.activeFlag,
-    approvedBy: row.approvedBy,
-    requestedBy: row.requestedBy,
-    status: row.activeFlag === 1 ? "Active" : "Inactive",
-  }));
-
-  // Loading current Financial Year (FY)
-  const loadCurrentFY = async () => {
-    const res = await callApi("/CM/common-master/calendar-configuration");
-    if (res?.data?.activeFlag === 1) {
-      setCurrentFY({
-        start: dayjs(res.data.yearStartDate),
-        end: dayjs(res.data.yearEndDate),
-      });
-    }
-  };
-
-  // Loading approved FY's into the table
-  const loadTableData = async () => {
-    const res = await callApi("/CM/calendar-config/next-year-info");
-    if (res?.data) {
-      setExpectedStartDate(res.data.expectedStartDate);
-      setNextFYInfo({
-        expectedStart: res.data.expectedStartDate
-          ? dayjs(res.data.expectedStartDate)
-          : null,
-        lastEnd: res.data.lastEndDate ? dayjs(res.data.lastEndDate) : null,
-      });
-      const rows = res.data.calenderConfig || [];
-      setCalendarRows(rows);
-    }
-  };
-
-  // For "Raise request" button
-  const handleRaiseRequestClick = async () => {
-    resetRaiseRequestForm();
-    await loadTableData();
-    setOpenDialog(true);
-  };
-
-  // To reset the form everytime
-  const resetRaiseRequestForm = () => {
-    setSelectedYear(null);
-    setRemarks("");
-    setRemarksError("");
-  };
-
-  // To handle close button in "view approved requests" form
-  const handleCloseDialog = () => {
-    setOpenApprovedDialog(false);
-  };
-
-  // Logic for "Submit" button in Raise Request form
-  const handleSubmit = async () => {
-    if (!selectedYear) return;
-    try {
-      const res = await callApi(
-        "/CR/create-request",
-        {
-          requestType: "CALENDER",
-          changeType: "ADD",
-          payload: {
-            yearStartDate: `${selectedYear}-04-01`,
-            yearEndDate: `${selectedYear + 1}-03-31`,
-            remarks,
-          },
-        },
-        "POST",
-      );
-      showSnackBar(
-        "Request raised successfully for upcoming financial year with request id " +
-          res?.data?.id,
-        "success",
-      );
-      setOpenDialog(false);
-      setSelectedYear(null);
-      setRemarks("");
-      loadTableData();
-    } catch (err) {
-      showSnackBar(
-        err?.message || "Something went wrong. Please try again.",
-        "error",
-      );
-    }
-  };
-
-  const isValidSelection =
-    selectedYear &&
-    nextFYInfo.expectedStart &&
-    selectedYear === nextFYInfo.expectedStart.year();
-
-  return (
-    <Box sx={{ display: "flex", justifyContent: "center" }}>
-      <Box
-        sx={{ display: "flex", width: "100%", p: 4, justifyContent: "center" }}
-      >
-        {/*To show the current Financial Year details*/}
-        <Box
-          sx={{
-            width: { xs: "95%", md: "65%" },
-            p: 5,
-            borderRadius: "20px",
-            background: "rgba(255,255,255,0.12)",
-            backdropFilter: "blur(12px)",
-            border: "1px solid rgba(255,255,255,0.25)",
-          }}
-        >
-          <Typography variant="h6" textAlign="center" mb={2}>
-            Current Financial Year
-          </Typography>
-
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "center",
-              gap: 15,
-              p: 2,
-              borderRadius: 2,
-              border: "1px solid rgba(255,255,255,0.3)",
-            }}
-          >
-            <Typography>
-              Financial Year Start Date:{" "}
-              <b>{currentFY.start?.format("DD-MM-YYYY")}</b>
-            </Typography>
-            <Typography>
-              Financial Year End Date:{" "}
-              <b>{currentFY.end?.format("DD-MM-YYYY")}</b>
-            </Typography>
-          </Box>
-
-          <Box textAlign="center" mt={2}>
-            <Typography variant="body2" sx={{ opacity: 0.8 }}>
-              Current Financial Year is Active.
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.8, mb: 2 }}>
-              Requests can be raised only for the next Financial Year.
-            </Typography>
-
-            <Stack direction="row" spacing={2} justifyContent="center" mt={2}>
-              <Button
-                variant="contained"
-                onClick={() => setOpenApprovedDialog(true)}
-              >
-                {" "}
-                View Approved Financial Years
-              </Button>
-              <Button variant="contained" onClick={handleRaiseRequestClick}>
-                Raise Request
-              </Button>
-            </Stack>
-          </Box>
-        </Box>
-
-        {/* Dialog to view approved requests*/}
-        <StyledDialog open={openApprovedDialog} fullWidth maxWidth="md">
-          <StyledDialogTitle>
-            <StyledTypography alignItems="center">
-              Approved Financial Year Details
-            </StyledTypography>
-            <StyledCloseButton onClick={handleCloseDialog}>
-              <CloseIcon />
-            </StyledCloseButton>
-          </StyledDialogTitle>
-
-          <Divider />
-
-          <DialogContent>
-            <StyledBox>
-              <StyledTableContainer>
-                <StyledTable stickyHeader>
-                  <StyledTableHead>
-                    <StyledTableRow>
-                      <StyledTableCell>Start Date</StyledTableCell>
-                      <StyledTableCell>End Date</StyledTableCell>
-                      <StyledTableCell>Approved By</StyledTableCell>
-                      <StyledTableCell>Requested By</StyledTableCell>
-                      <StyledTableCell>Status</StyledTableCell>
-                    </StyledTableRow>
-                  </StyledTableHead>
-
-                  <StyledTableBody>
-                    {tableRows
-                      .slice()
-                      .sort(
-                        (a, b) =>
-                          new Date(a.yearStartDate).getTime() -
-                          new Date(b.yearStartDate).getTime(),
-                      )
-                      .slice(
-                        page * rowsPerPage,
-                        page * rowsPerPage + rowsPerPage,
-                      )
-                      .map((row) => {
-                        if (!row) return null;
-
-                        const isActive = row.status === "Active";
-
-                        return (
-                          <StyledTableRow key={row.id}>
-                            <StyledTableCell>
-                              {row.yearStartDate}
-                            </StyledTableCell>
-                            <StyledTableCell>{row.yearEndDate}</StyledTableCell>
-                            <StyledTableCell>
-                              {row.approvedBy || "-"}
-                            </StyledTableCell>
-                            <StyledTableCell>
-                              {row.requestedBy || "-"}
-                            </StyledTableCell>
-                            <StyledTableCell>
-                              <ChipStyle
-                                row={{ status: isActive ? 1 : 0 }}
-                                size="small"
-                                icon={
-                                  isActive ? <ActiveIcon /> : <InActiveIcon />
-                                }
-                                label={isActive ? "Active" : "In-Active"}
-                                sx={{
-                                  backgroundColor:
-                                    row.activeFlag === 1
-                                      ? "rgba(46, 125, 50, 0.15)" // green bg
-                                      : "rgba(211, 47, 47, 0.15)", // red bg
-                                  color:
-                                    row.activeFlag === 1
-                                      ? "#2e7d32"
-                                      : "#d32f2f",
-                                  fontWeight: 500,
-                                }}
-                              />
-                            </StyledTableCell>
-                          </StyledTableRow>
-                        );
-                      })}
-                  </StyledTableBody>
-                </StyledTable>
-              </StyledTableContainer>
-
-              <StyledTablePagination
-                component="div"
-                count={tableRows.length}
-                page={page}
-                onPageChange={(e, newPage) => setPage(newPage)}
-                rowsPerPage={rowsPerPage}
-                rowsPerPageOptions={[]}
-                labelDisplayedRows={({ page }) => `PAGE ${page + 1}`}
-              />
-            </StyledBox>
-          </DialogContent>
-        </StyledDialog>
-
-        {/* Dialog to raise a new request*/}
-        <Dialog open={openDialog} maxWidth="sm" fullWidth>
-          <DialogTitle textAlign={"center"}>
-            Raise Financial Year Request
-          </DialogTitle>
-          <DialogContent>
-            <LocalizationProvider dateAdapter={AdapterDayjs}>
-              <DatePicker
-                views={["year"]}
-                label="Financial Year*"
-                value={selectedYear ? dayjs(`${selectedYear}-01-01`) : null}
-                minDate={dayjs("2025-01-01")}
-                maxDate={nextFYInfo.expectedStart?.endOf("year")}
-                disabled={!nextFYInfo.expectedStart}
-                shouldDisableYear={(year) =>
-                  nextFYInfo.expectedStart
-                    ? year.year() !== nextFYInfo.expectedStart.year()
-                    : true
-                }
-                sx={{ mt: 1 }}
-                onChange={(val) => {
-                  if (!val) {
-                    setSelectedYear(null);
-                    return;
-                  }
-                  setSelectedYear(val.year());
-                }}
-                slotProps={{
-                  textField: {
-                    size: "small",
-                    fullWidth: true,
-                    helperText:
-                      selectedYear == expectedStartDate?.split("-")[0]
-                        ? `Selected Financial Year : ${selectedYear} – ${
-                            selectedYear + 1
-                          } (April to March)`
-                        : selectedYear && nextFYInfo.expectedStart
-                          ? `Requests are permitted only for Financial Year ${nextFYInfo.expectedStart.format(
-                              "YYYY",
-                            )}-${nextFYInfo.expectedStart
-                              .add(1, "year")
-                              .format("YYYY")}.`
-                          : `Next availabe Financial Year for raising request: ${nextFYInfo.expectedStart.format(
-                              "YYYY",
-                            )}-${nextFYInfo.expectedStart
-                              .add(1, "year")
-                              .format("YYYY")} (April to March)`,
-                    FormHelperTextProps: {
-                      sx: {
-                        mt: 1,
-                        fontSize: "0.85rem",
-                        fontWeight: 500,
-                        color:
-                          !selectedYear || isValidSelection
-                            ? "#6500caff"
-                            : "#d32f2f",
-                      },
-                    },
-                  },
-                }}
-              />
-            </LocalizationProvider>
-
-            <TextField
-              label="Remarks*"
-              fullWidth
-              multiline
-              rows={3}
-              sx={{ mt: 2 }}
-              value={remarks}
-              inputProps={{ maxLength: MAX_REMARKS }}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (!REMARKS_REGEX.test(v)) {
-                  setRemarksError("Special characters are not allowed.");
-                  return;
-                }
-                setRemarksError("");
-                setRemarks(v);
-              }}
-              error={
-                Boolean(remarksError) ||
-                (remarks && remarks.length < MIN_REMARKS)
-              }
-              helperText={
-                remarksError ||
-                (remarks.length < MIN_REMARKS
-                  ? `Minimum ${MIN_REMARKS} characters required`
-                  : `${remarks.length}/${MAX_REMARKS}`)
-              }
-            />
-
-            <Stack direction="row" spacing={2} justifyContent="center" mt={3}>
-              <Button
-                variant="contained"
-                disabled={
-                  selectedYear != expectedStartDate?.split("-")[0] ||
-                  !selectedYear ||
-                  remarks.length < MIN_REMARKS
-                }
-                onClick={handleSubmit}
-              >
-                Submit Request
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={() => {
-                  resetRaiseRequestForm();
-                  setOpenDialog(false);
-                }}
-                sx=
-                  {{
-                    "&:hover":
-                      {
-                        color:"#fff",
-                      },
-                  }}
-              >
-                Cancel
-              </Button>
-            </Stack>
-          </DialogContent>
-        </Dialog>
-      </Box>
-    </Box>
-  );
-}
 import {
   Box,
   Button,
-  Chip,
-  Typography,
-  Stack,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Stack,
+  Typography,
   Tooltip,
   IconButton,
+  Chip,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import React, { useEffect, useMemo, useState } from "react";
-
+import { useEffect, useMemo, useState } from "react";
+import InfoIcon from "@mui/icons-material/Info";
 import useApi from "../../hooks/useApi";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
-import DateRangeIcon from "@mui/icons-material/DateRange";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import PendingActionsIcon from "@mui/icons-material/PendingActions";
-import InfoIcon from "@mui/icons-material/Info";
+import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
+import DateRangeIcon from "@mui/icons-material/DateRange";
 import CancelIcon from "@mui/icons-material/Cancel";
-import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
-import GppBadIcon from "@mui/icons-material/GppBad";
-import CustomChip from "../../utils/CustomChip";
 import { useSelector } from "react-redux";
+import CustomChip from "../../utils/CustomChip";
+import GppBadIcon from "@mui/icons-material/GppBad";
 import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import AddBoxIcon from "@mui/icons-material/AddBox";
+import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
+import EditDocumentIcon from "@mui/icons-material/EditDocument";
+import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
+import { getPermissions } from "../../utils/CommonUtilities";
 
 function CustomNoRowsOverlay() {
   return (
     <Stack height="100%" alignItems="center" justifyContent="center">
       <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-      <Typography variant="h6">
-        No Calendar Configuration Requests Found
-      </Typography>
-      <Typography>
-        You have not created any Calendar Configuration requests.
-      </Typography>
+      <Typography variant="h6">No Circle Requests Found</Typography>
+      <Typography>You have not created any Circle requests.</Typography>
     </Stack>
   );
 }
-
-export default function MyCurrencyRequestsTab({ permissions = {} }) {
+export default function MyCircleRequestsTab() {
+  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
   const [rows, setRows] = useState([]);
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
-  const selectedMenuItem = useSelector((state) => state.menus.selectedMenuItem);
   const [confirmDialog, setConfirmDialog] = useState(false);
+  const { callApi } = useApi();
+  const snackbar = useCustomSnackbar();
+  const permissions = getPermissions(selectedMenuItem);
   const [requestId, setRequestId] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [viewOpen, setViewOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [zones, setZones] = useState([]);
   const [viewData, setViewData] = useState(null);
 
   const fetchData = async () => {
-    setIsLoading(true);
+    setLoading(true);
     try {
-      const payload = { requestType: selectedMenuItem.requestType };
-      const response = await callApi("/CR/my-requests", payload, "POST");
-      if (response) {
-        const result = response.data?.map((row) => {
+      const payload = { requestType: "CIRCLE" };
+      const [zonesRes, response] = await Promise.all([
+        callApi("/CM/common-master/zone-codes", null, "GET"),
+        callApi("/CR/my-requests", payload, "POST"),
+      ]);
+
+      setZones(zonesRes?.data ?? []);
+
+      if (response?.data) {
+        const result = response.data.map((row) => {
           let parsedPayload = {};
           parsedPayload = row.payload ? row.payload : {};
           parsedPayload = {
@@ -519,13 +74,15 @@ export default function MyCurrencyRequestsTab({ permissions = {} }) {
             reqStatus: row.reqStatus,
             reqDate: row.reqDate,
             creatorId: row.creatorId,
-            executionDate: row.executionDate,
             executorId: row.executorId,
+            executionDate: row.executionDate,
             executorRemarks: row.executorRemarks,
-            reqType: row.requestType,
             changeType: row.changeType,
           };
-          return { ...parsedPayload };
+
+          return {
+            ...parsedPayload,
+          };
         });
         result.sort((a, b) => {
           if (a.reqStatus === "PENDING" && b.reqStatus !== "PENDING") return -1;
@@ -537,25 +94,28 @@ export default function MyCurrencyRequestsTab({ permissions = {} }) {
         setRows([]);
       }
     } catch (error) {
-      console.error("Something went wrong", error);
+      console.error(error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const handleCancelRequest = async () => {
     try {
       const payload = {
         requestId,
-        remarks: "User cancelled this Request",
+        remarks: "User canceled this Request",
       };
 
       const response = await callApi("/CR/cancel-request", payload, "PATCH");
-      console.log(response);
       if (response?.success) {
-        showSnackBar("Request Cancelled Successfully.", "success");
+        snackbar(`Request Id ${requestId} Cancelled Successfully.`, "success");
       } else {
-        showSnackBar(
+        snackbar(
           response?.message
             ? response?.message
             : "Failed to process your cancel request, Kindly try again",
@@ -563,23 +123,18 @@ export default function MyCurrencyRequestsTab({ permissions = {} }) {
         );
       }
     } catch (error) {
-      console.log(error);
+      console.error(error);
     } finally {
       fetchData();
       setConfirmDialog(false);
     }
   };
-
   const handleViewClick = (data) => {
-    console.log(data);
-
-    const { yearStartDate, yearEndDate, remarks } = data;
-
+    const { circleCode, circleName, zoneDescription } = data;
     const showData = {
-      //payload
-      yearStartDate,
-      yearEndDate,
-      remarks,
+      circleCode,
+      circleName,
+      zone: zoneDescription,
     };
 
     data.showData = showData;
@@ -587,38 +142,103 @@ export default function MyCurrencyRequestsTab({ permissions = {} }) {
     setViewOpen(true);
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const columns = useMemo(
     () => [
+      { field: "id", headerName: "Request Id", flex: 0.6, minWidth: 150 },
       {
-        field: "yearStartDate",
-        headerName: "Year StartDate",
-        flex: 1,
-        minWidth: 150,
+        field: "circleCode",
+        headerName: "Circle Code",
+        flex: 0.6,
         sortable: true,
+        minWidth: 160,
+      },
+
+      {
+        field: "circleName",
+        headerName: "Circle Name",
+        flex: 1.2,
+        sortable: true,
+        minWidth: 150,
       },
       {
-        field: "yearEndDate",
-        headerName: "Year End Date",
-        flex: 1.5,
-        minWidth: 150,
-        sortable: true,
-      },
-      {
-        field: "remarks",
-        headerName: "Remarks",
+        field: "zoneCode",
+        headerName: "Zone",
+        filterable: false,
+        minWidth: 160,
         flex: 1,
-        minWidth: 130,
-        sortable: true,
+        renderCell: (params) => {
+          const zone = zones.find((z) => String(z.id) === String(params.value));
+          return zone ? zone.description : "N/A";
+        },
+      },
+
+      {
+        field: "changeType",
+        headerName: "Request Type",
+        flex: 1,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          const val = params.value;
+          const color =
+            val === "ADD" ? "success" : val === "DELETE" ? "error" : "warning";
+          const icon =
+            val === "ADD" ? (
+              <AddBoxIcon />
+            ) : val === "DELETE" ? (
+              <AutoDeleteIcon />
+            ) : (
+              <EditDocumentIcon />
+            );
+          return (
+            <CustomChip
+            sx={{
+              width:105,
+              justifyContent:"flex-start",
+            }}
+              icon={icon}
+              label={
+                val === "ADD"
+                  ? "Added"
+                  : val === "DELETE"
+                    ? "Deleted"
+                    : "Modified"
+              }
+              color={color}
+              variant="outlined"
+            />
+          );
+        },
+      },
+
+      {
+        field: "reqDate",
+        headerName: "Date of Submission",
+        flex: 1,
+        filterable: false,
+        minWidth: 160,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Box>
+            <Chip
+              sx={{ color: "text.secondary" }}
+              icon={<DateRangeIcon />}
+              label={params.value.split("T")[0]}
+            />
+          </Box>
+        ),
       },
       {
         field: "reqStatus",
         headerName: "Status",
-        flex: 1,
-        minWidth: 130,
+        flex: 0.7,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
         filterable: false,
         sortable: false,
         disableColumnMenu: true,
@@ -686,8 +306,10 @@ export default function MyCurrencyRequestsTab({ permissions = {} }) {
       {
         field: "action",
         headerName: "Action",
-        flex: 0.5,
-        minWidth: 130,
+        flex: 1,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
         filterable: false,
         sortable: false,
         disableColumnMenu: true,
@@ -696,14 +318,14 @@ export default function MyCurrencyRequestsTab({ permissions = {} }) {
             <Stack
               direction="row"
               spacing={1}
-              justifyContent="left"
-              alignItems="left"
-              sx={{ height: "100%", pl: 1 }}
+              justifyContent="center"
+              alignItems="center"
+              sx={{ height: "100%" }}
             >
               {permissions.view && (
                 <Tooltip title="View">
                   <IconButton
-                    color="primary"
+                    // color="primary"
                     onClick={() => handleViewClick(params.row)}
                   >
                     <VisibilityIcon />
@@ -728,9 +350,8 @@ export default function MyCurrencyRequestsTab({ permissions = {} }) {
         },
       },
     ],
-    [],
+    [permissions.cancel, permissions.view, zones],
   );
-
   const filteredColumns = useMemo(() => {
     if (permissions.view || permissions.cancel) {
       return columns;
@@ -739,26 +360,27 @@ export default function MyCurrencyRequestsTab({ permissions = {} }) {
     else {
       return columns.filter((column) => column.field !== "action");
     }
-  }, [permissions.cancel]);
+  }, [columns, permissions]);
 
   return (
     <>
-      <Box sx={{ p:1 }}>
-        <DataGrid
-          rows={rows}
-          loading={isLoading}
-          columns={filteredColumns}
-          disableRowSelectionOnClick
-          pageSizeOptions={[5, 10, 25, 50]}
-          initialState={{
-            pagination: { paginationModel: { pageSize: 10, page: 0 } },
-            // sorting: { sortModel: [{ field: "reqDate", sort: "asc" }] },
-          }}
-          getRowId={(row) => row.id}
-          slots={{
-            noRowsOverlay: CustomNoRowsOverlay,
-          }}
-           sx={{
+      <Box>
+        <Box>
+          <DataGrid
+            loading={loading}
+            rows={rows}
+            columns={filteredColumns}
+            disableRowSelectionOnClick
+            pageSizeOptions={[5, 10, 25, 50]}
+            initialState={{
+              pagination: { paginationModel: { pageSize: 10, page: 0 } },
+              // sorting: { sortModel: [{ field: "circleCode", sort: "asc" }] },
+            }}
+            slots={{
+              noRowsOverlay: CustomNoRowsOverlay,
+            }}
+            getRowId={(row) => row.id}
+              sx={{
           minHeight: 700,
           width: "100%",
          "& .MuiDataGrid-columnHeaders": {
@@ -770,10 +392,9 @@ export default function MyCurrencyRequestsTab({ permissions = {} }) {
           zIndex: 1,
           },
           }}
-        />
+          />
+        </Box>
       </Box>
-
-      {/* View Dialog */}
       <ViewMyRequestDialog
         open={viewOpen}
         handleClose={() => setViewOpen(false)}
@@ -789,7 +410,9 @@ export default function MyCurrencyRequestsTab({ permissions = {} }) {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle sx={{ fontWeight: 600 }}>Cancel Request</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 600 }}>
+          Cancel Request ID: {requestId}
+        </DialogTitle>
         <DialogContent>
           <Typography sx={{ p: 1 }}>
             Are you sure you want to cancel this request Please confirm ?
@@ -823,183 +446,629 @@ export default function MyCurrencyRequestsTab({ permissions = {} }) {
     </>
   );
 }
-import { useState } from "react";
-import { Box, Tabs, Tab, Paper } from "@mui/material";
-import EventNoteIcon from "@mui/icons-material/EventNote";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogContent,
+  Grid,
+  IconButton,
+  Stack,
+  TextField,
+  Typography,
+  Tooltip,
+  MenuItem,
+  DialogActions,
+  Divider,
+  styled,
+} from "@mui/material";
+
+import {
+  Edit as EditIcon,
+  Add as AddIcon,
+  Close as CloseIcon,
+} from "@mui/icons-material";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import {
+  CircleTab1Container,
+  CircleMasterDataGrid,
+  CircleTab1Addicon,
+  CircleTab1Fab,
+  CircleTab1Grid,
+  Circletab1DialogTitle,
+} from "./CircleMasterStyle";
+
+const OverlayBox = styled(Box)(() => ({
+  display: "flex",
+  flexDirection: "column",
+  height: "100%",
+  justifyContent: "center",
+  alignItems: "center",
+}));
+
+const CustomNoRowsOverlay = () => {
+  return (
+    <OverlayBox>
+      <ErrorOutlineIcon fontSize="large" />
+      <Typography variant="h5" fontSize="1.2rem">
+        Data is not available
+      </Typography>
+    </OverlayBox>
+  );
+};
+
+export default function CircleMasterTab() {
+  const [rows, setRows] = useState([]);
+  const [zones, setZones] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const snackbar = useCustomSnackbar();
+  const [originalData, setOriginalData] = useState(null); // New state for original data
+  const [isDataSame, setIsDataSame] = useState(true);
+  const { callApi } = useApi();
+
+  const [circleData, setCircleData] = useState({
+    circleCode: "",
+    circleName: "",
+    zoneCode: "",
+  });
+  const [errors, setErrors] = useState({});
+
+  const checkDataEquality = (current, original) => {
+    if (!original) return true; // If no original data, assume they are "same" initially for disable state
+    return (
+      current.circleName === original.circleName &&
+      current.zoneCode === original.zoneCode
+      // currencyCode is excluded as it is the ID and likely read-only
+    );
+  };
+
+  // --- debounce/snackbar control ---
+  const snackGateRef = useRef(true);
+  const notifyOnce = (msg, variant = "warning") => {
+    if (!snackGateRef.current) return;
+    snackGateRef.current = false;
+    snackbar(msg, variant);
+    setTimeout(() => (snackGateRef.current = true), 900);
+  };
+
+  // --- Fetch Data ---
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [zonesRes, circlesRes] = await Promise.all([
+        callApi("/CM/common-master/zone-codes", null, "GET"),
+        callApi("/CM/common-master/circle-codes", null, "GET"),
+      ]);
+      setZones(zonesRes?.data ?? []);
+      setRows(circlesRes?.data ?? []);
+    } catch (err) {
+      console.error(err);
+      snackbar("Failed to fetch data", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    if (editingId && originalData) {
+      setIsDataSame(checkDataEquality(circleData, originalData));
+    }
+  }, [circleData, originalData, editingId]);
+
+  // --- Validation Rules ---
+  const reDigits = /^[0-9]*$/;
+  // const reDesc = /^[a-zA-Z0-9\s/&(),-]*$/;
+  const reDesc = /^(?!.* {2})[a-zA-Z0-9\s/&(),-]*$/;
+  const validateField = (name, value) => {
+    switch (name) {
+      case "circleCode":
+        if (!value.trim()) return "Circle Code is required";
+        if (!reDigits.test(value)) return "Only digits allowed";
+        if (value.length !== 3) return "Must be 3 digits";
+        break;
+
+      case "circleName":
+        if (!value.trim()) return "Circle Name is required";
+        if (!reDesc.test(value))
+          return "Invalid Format, Only alphabets, numbers, spaces(single spaces only between words) and ,()&/- are allowed!";
+        if (value.trim().length < 5)
+          return "Circle Name must be at least 5 characters";
+        break;
+
+      case "zoneCode":
+        if (!value.trim()) return "Zone Code is required";
+        if (!reDesc.test(value)) return "Only letters and digits allowed";
+        break;
+
+      default:
+        return "";
+    }
+    return "";
+  };
+
+  const isFormValid = useMemo(
+    () =>
+      !validateField("circleCode", circleData.circleCode) &&
+      !validateField("circleName", circleData.circleName) &&
+      !validateField("zoneCode", circleData.zoneCode),
+    [circleData],
+  );
+
+  const handleChange = (e) => {
+    const { name } = e.target;
+    let { value } = e.target;
+    if (name === "circleCode") {
+      if (!reDigits.test(value)) {
+        notifyOnce("Circle Code accepts digits only");
+        return;
+      }
+      if (value.length > 3) {
+        notifyOnce("Circle Code must be 3 digits");
+        return;
+      }
+    }
+    if (name === "circleName") {
+      if (value && !/^[A-Za-z0-9]$/.test(value[0])) {
+        notifyOnce("Should not start with special character");
+        return;
+      }
+      value = value?.toUpperCase();
+      if (!reDesc.test(value)) {
+        notifyOnce(
+          "Invalid Format, Only alphabets, spaces(single spaces only between words) and ,()&/- are allowed!",
+        );
+        return;
+      }
+      if (name === "zoneCode" && !reDesc.test(value)) {
+        notifyOnce("Zone Code accepts only letters/digits");
+        return;
+      }
+    }
+    setCircleData((prev) => ({ ...prev, [name]: value }));
+    setErrors((prev) => ({ ...prev, [name]: validateField(name, value) }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (editingId && isDataSame) {
+      snackbar("No Changes Detected!", "warning");
+      return; // Stop submission
+    }
+    const isEditing = editingId;
+    if (!isEditing) {
+      const circleExists = rows.some(
+        (row) => row.circleCode === circleData.circleCode,
+      );
+      if (circleExists) {
+        snackbar("Circle code already exist", "warning");
+        return;
+      }
+    }
+
+    const allErrors = {
+      circleCode: validateField("circleCode", circleData.circleCode),
+      circleName: validateField("circleName", circleData.circleName),
+      zoneCode: validateField("zoneCode", circleData.zoneCode),
+    };
+    setErrors(allErrors);
+
+    const valid = Object.values(allErrors).every((v) => !v);
+    if (!valid) {
+      notifyOnce("Please fix validation errors", "error");
+      return;
+    }
+
+    const selectedZone = zones.find(
+      (z) => String(z.id) === String(circleData.zoneCode),
+    );
+
+    const payloadData = {
+      requestType: "CIRCLE",
+      changeType: editingId ? "UPDATE" : "ADD",
+      targetId: circleData.circleCode,
+      payload: {
+        circleCode: circleData.circleCode,
+        circleName: circleData.circleName,
+        zoneCode: circleData.zoneCode,
+        zoneDescription: selectedZone?.description,
+      },
+    };
+
+    try {
+      const response = await callApi("/CR/create-request", payloadData, "POST");
+      if (response) {
+        snackbar(
+          editingId
+            ? "Circle update request submitted successfully with request id " +
+                response?.data?.id
+            : "Circle creation request submitted successfully with request id " +
+                response?.data?.id,
+          "success",
+        );
+        handleClose();
+        fetchData();
+      }
+    } catch (err) {
+      snackbar(err?.message || "Request failed", "error");
+    }
+  };
+
+  const handleEdit = (row) => {
+    const initialData = {
+      circleCode: String(row.circleCode ?? ""),
+      circleName: String(row.circleName ?? ""),
+      zoneCode: String(row.zoneCode ?? ""),
+    };
+    setCircleData(initialData);
+    setOriginalData(initialData); // Store the original data here
+    setEditingId(row.circleCode);
+    setOpen(true);
+    setIsDataSame(true);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    setCircleData({
+      circleCode: "",
+      circleName: "",
+      zoneCode: "",
+    });
+    setOriginalData(null); // Clear original data on close
+    setErrors({});
+    setEditingId(null);
+    setIsDataSame(true);
+  };
+
+  // --- Columns ---
+  const columns = useMemo(
+    () => [
+      {
+        field: "circleCode",
+        headerName: "Circle Code",
+        flex: 1.2,
+        minWidth: 160,
+      },
+      {
+        field: "circleName",
+        headerName: "Circle Name",
+        flex: 2,
+        minWidth: 150,
+      },
+      {
+        field: "zoneCode",
+        headerName: "Zone",
+        filterable: false,
+        disableColumnMenu: true,
+        flex: 2,
+        minWidth: 200,
+        valueGetter: (params) => {
+          const zone = zones.find((z) => String(z.id) === String(params));
+          return zone ? zone.description : "N/A";
+        },
+      },
+      {
+        field: "actions",
+        headerName: "Actions",
+        flex: 0.8,
+        minWidth: 150,
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        align: "center",
+        headerAlign: "center",
+        renderCell: (params) => (
+          <Tooltip title="Edit">
+            <IconButton color="primary" onClick={() => handleEdit(params.row)}>
+              <EditIcon />
+            </IconButton>
+          </Tooltip>
+        ),
+      },
+    ],
+    [zones],
+  );
+
+  return (
+    <CircleTab1Container>
+      <CircleMasterDataGrid
+        loading={loading}
+        rows={rows}
+        columns={columns}
+        disableRowSelectionOnClick
+        getRowId={(row) => row.circleCode}
+        pageSizeOptions={[5, 10, 25, 50]}
+        initialState={{
+          pagination: { paginationModel: { pageSize: 10, page: 0 } },
+          sorting: { sortModel: [{ field: "circleCode", sort: "asc" }] },
+        }}
+        sx={{
+          minHeight: 700,
+          width: "100%",
+         "& .MuiDataGrid-columnHeaders": {
+          backgroundColor: "#f5f5f5 !important",
+          fontWeight: 700,
+          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+        },
+        }}
+        localeText={{
+          noRowsLabel: "No Circle Records Found",
+        }}
+        slots={{
+          noRowsOverlay: CustomNoRowsOverlay,
+        }}
+      />
+
+      {/* Floating Create Button */}
+       <Box
+       sx={{
+          display:"flex",
+          justifyContent:"flex-end",
+          mt:1,
+          px:1,
+          pb:1,
+        }}
+       >
+      <CircleTab1Fab
+        onClick={() => setOpen(true)}
+        color="primary"
+        variant="extended"
+      >
+        <CircleTab1Addicon />
+        Create
+      </CircleTab1Fab>
+       </Box> 
+
+      {/* Dialog Form */}
+      <Dialog open={open} maxWidth="sm" fullWidth="true">
+        <Box component="form" onSubmit={handleSubmit}>
+          <Circletab1DialogTitle>
+            <Stack
+              // margin={-1}
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+            >
+              <Typography variant="h6" color="primary">
+                {editingId ? "Edit Circle" : "Add New Circle"}
+              </Typography>
+              <IconButton onClick={handleClose}>
+                <CloseIcon />
+              </IconButton>
+            </Stack>
+          </Circletab1DialogTitle>
+
+          <Divider />
+
+          <DialogContent>
+            <CircleTab1Grid container spacing={3}>
+              <Grid size={{ xs: 12 }}>
+                <TextField
+                  fullWidth
+                  label="Circle Code *"
+                  name="circleCode"
+                  value={circleData.circleCode}
+                  onChange={handleChange}
+                  disabled={!!editingId}
+                  error={!!errors.circleCode}
+                  helperText={errors.circleCode || "Exactly 3 digits"}
+                  inputProps={{ maxLength: 3, inputMode: "numeric" }}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <TextField
+                  fullWidth
+                  label="Circle Name *"
+                  name="circleName"
+                  value={circleData.circleName}
+                  onChange={handleChange}
+                  error={!!errors.circleName}
+                  inputProps={{ maxLength: 40 }}
+                  helperText={
+                    errors.circleName ||
+                    "Allowed 5-40 characters (A-Z, 0-9, spaces,/,&,(,),- )"
+                  }
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <TextField
+                  fullWidth
+                  select
+                  label="Zone *"
+                  name="zoneCode"
+                  value={circleData.zoneCode}
+                  onChange={handleChange}
+                  error={!!errors.zoneCode}
+                  helperText={errors.zoneCode || "Select corresponding Zone"}
+                >
+                  {zones.map((zone) => (
+                    <MenuItem key={zone.id} value={zone.id}>
+                      {zone.description}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+            </CircleTab1Grid>
+          </DialogContent>
+          <Divider></Divider>
+          <DialogActions>
+            <Button
+              type="submit"
+              variant="contained"
+              startIcon={editingId ? <EditIcon /> : <AddIcon />}
+              disabled={!isFormValid}
+            >
+              {editingId ? "Update" : "Add"}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+    </CircleTab1Container>
+  );
+}
+import * as React from "react";
+import Tabs from "@mui/material/Tabs";
+import Box from "@mui/material/Box";
+import { styled } from "@mui/material/styles";
+import { DataGrid } from "@mui/x-data-grid";
+import { Chip, Fab, Grid, Stack, DialogTitle } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+
+export const CircleMastermainBox = styled(Box)(({ theme }) => ({
+  p: 3,
+}));
+
+export const CircleTabContainer = styled(Box)(({ theme }) => ({
+  borderBottom: 1,
+  borderColor: "divider",
+}));
+
+export const CircleMasterTabs = styled(Tabs)(({ theme }) => ({
+  width: "100%",
+}));
+
+////tab1
+export const CircleTab1Container = styled(Box)(({ theme }) => ({
+  p: 2,
+}));
+
+export const CircleTab1Stack = styled(Stack)(({ theme }) => ({
+  alignItems: "center",
+  justifyContent: "center",
+  height: "60vh",
+}));
+
+export const CircleMasterDataGrid = styled(DataGrid)(({ theme }) => ({}));
+
+export const CircleTab1Addicon = styled(AddIcon)(({ theme }) => ({
+  mr: 1,
+}));
+
+export const CircleTab1Fab = styled(Fab)(({ theme }) => ({
+  //position: "fixed",
+  borderRadius: "8px",
+  fontSize: "15px",
+  // bottom: theme.spacing(4),
+  // right: theme.spacing(4),
+  // zIndex: 1000,
+}));
+
+export const CircleTab1Grid = styled(Grid)(({ theme }) => ({
+  mt: 1,
+}));
+export const CircleTab1chip = styled(Chip)(({ theme }) => ({
+  fontWeight: 500,
+}));
+
+export const Circletab1DialogTitle = styled(DialogTitle)(({ theme }) => ({
+  m: 0,
+  p: 2,
+}));
+import * as React from "react";
+import PropTypes from "prop-types";
+import Tab from "@mui/material/Tab";
+import CircleMasterTab1 from "./CircleMasterTab";
+import CircleMasterTab2 from "./MyCircleRequestsTab";
+import ConnectWithoutContactIcon from "@mui/icons-material/ConnectWithoutContact";
 import PendingActionsIcon from "@mui/icons-material/PendingActions";
 
-import CalendarConfigTab from "./CalendarConfigTab";
-import CalendarConfigRequestsTab from "./CalendarConfigRequestsTab";
+import {
+  CircleMasterTabs,
+  CircleTabContainer,
+  CircleMastermainBox,
+} from "./CircleMasterStyle";
+import { Box, Paper } from "@mui/material";
 
-function CustomTabPanel({ children, value, index }) {
+function CustomTabPanel(props) {
+  const { children, value, index, ...other } = props;
+
   return (
-    <div hidden={value !== index}>
-      {value === index && <Box sx={{ p:1 }}>{children}</Box>}
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`simple-tabpanel-${index}`}
+      aria-labelledby={`simple-tab-${index}`}
+      {...other}
+    >
+      {value === index && <CircleMastermainBox sx={{ p: 1 }}>{children}</CircleMastermainBox>}
     </div>
   );
 }
 
-export default function CalendarConfig() {
-  const [value, setValue] = useState(0);
+CustomTabPanel.propTypes = {
+  children: PropTypes.node,
+  index: PropTypes.number.isRequired,
+  value: PropTypes.number.isRequired,
+};
+
+function a11yProps(index) {
+  return {
+    id: `simple-tab-${index}`,
+    "aria-controls": `simple-tabpanel-${index}`,
+  };
+}
+
+export default function CircleMaster() {
+  const [value, setValue] = React.useState(0);
+
+  const handleChange = (event, newValue) => {
+    setValue(newValue);
+  };
 
   return (
+    <>
     <Paper
-            elevation={2}
-            sx={{
-              display:"flex",
-              flexDirection:"column",
-              borderRadius:2,
-              overflow:"hidden",
-              minHeight:"calc(100vh - 210px)",
-              width:"100%",
-            }}>
-    <Box>
-      <Tabs
-        value={value}
-        onChange={(_, newValue) => setValue(newValue)}
-        variant="fullWidth"
-      >
-        <Tab
-          icon={<EventNoteIcon />}
-          iconPosition="start"
-          label="Calendar Configuration"
-        />
-        <Tab
-          icon={<PendingActionsIcon />}
-          iconPosition="start"
-          label="My Requests"
-        />
-      </Tabs>
-
+    elevation={2}
+    sx={{
+      display:"flex",
+      flexDirection:"column",
+      borderRadius:2,
+      overflow:"hidden",
+      minHeight:"calc(100vh - 210px)",
+      width:"100%",
+    }}>
+      <CircleTabContainer fullWidth={"true"}>
+        <CircleMasterTabs
+          value={value}
+          onChange={handleChange}
+          aria-label="basic tabs example"
+          variant="fullWidth"
+        >
+          <Tab
+            label="Manage Circles"
+            icon={<ConnectWithoutContactIcon />}
+            iconPosition="start"
+            {...a11yProps(0)}
+          />
+          <Tab
+            icon={<PendingActionsIcon />}
+            iconPosition="start"
+            label="My Requests"
+            {...a11yProps(1)}
+          />
+        </CircleMasterTabs>
+      </CircleTabContainer>
       <CustomTabPanel value={value} index={0}>
-        <CalendarConfigTab />
+        <CircleMasterTab1 />
       </CustomTabPanel>
-
       <CustomTabPanel value={value} index={1}>
-        <CalendarConfigRequestsTab permissions={{view: true , cancel:true}}/>
+        <CircleMasterTab2 />
       </CustomTabPanel>
-    </Box>
     </Paper>
+    </>
   );
-}import AddIcon from "@mui/icons-material/Add";
-import {
-  Box,
-  Chip,
-  IconButton,
-  Table,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TableCell,TableBody,
-  TablePagination,
-  DialogTitle,
-  Typography,
-  Dialog,
-} from "@mui/material";
-import { styled } from "@mui/material/styles";
-
-const ROW_HEIGHT =45;
-const HEADER_HEIGHT = 45;
-
-export const AddIconStyle = styled(AddIcon)(() => ({
-  mr: 1,
-}));
-
-export const Chip1Style = styled(Chip)(() => ({
-  p: 0.5,
-  m: 0,
-  width: "90%",
-}));
-
-export const ChipStyle = styled(Chip)(({ theme, row }) => ({
-  p: 0.5,
-  mt: 0.8,
-  width: "90%",
-  alignSelf: "center",
-  color: row.status ? theme.palette.success.main : theme.palette.error.main,
-  "& .MuiChip-icon": {
-    color: row.status ? theme.palette.success.main : theme.palette.error.main,
-  },
-}));
-
-export const IconButtonStyle = styled(IconButton)(({ theme }) => ({
-  position: "absolute",
-  right: 8,
-  top: 8,
-  color: theme.palette.grey[500],
-}));
-
-export const StyledBox = styled(Box)(({ theme }) => ({
-  marginTop: theme.spacing(2),
-}));
-
-export const StyledCloseButton = styled(IconButton)(() => ({
-  padding: 4,
-
-}));
-export const StyledDialog = styled(Dialog)(({ theme }) => ({
-  "& .MuiDialog-paper": {
-    minWidth: "500px",
-    display: "flex",
-  },
-}));
-
-export const StyledDialogTitle = styled(DialogTitle)(({ theme }) => ({
-  marginTop: theme.spacing(1),
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-}));
-
-export const StyledTableContainer = styled(TableContainer)(({ theme }) => ({
-  borderRadius: "10px",
-  height: HEADER_HEIGHT + ROW_HEIGHT *5,
-  overflow:"auto"
-}));
-
-export const StyledTable = styled(Table)(() => ({}));
-
-export const StyledTableHead = styled(TableHead)(() => ({}));
-
-export const StyledTableCell = styled(TableCell)(() => ({
-  fontSize: "14px",
-}));
-
-export const StyledTableRow = styled(TableRow)(() => ({
-  "&:hover": {},
-}));
-
-export const StyledTableBody = styled(TableBody)(() => ({}));
-
-export const StyledTablePagination = styled(TablePagination)(({ theme }) => ({
-  display: "flex",
-  justifyContent: "space-around",
-  borderTop: `1px solid ${theme.palette.divider}`,
-  backgroundColor: theme.palette.background.paper,
-  borderRadius: "0 0 12px 12px",
-  "& .MuiTablePagination-toolbar": {
-    minHeight: "48px",
-  },
-  "& .MuiTablePagination-selectLabel": {
-    fontSize: "14px",
-  },
-  "& .MuiTablePagination-input": {
-    fontSize: "14px",
-  },
-  "& .MuiTablePagination-displayedRows": {
-    fontSize: "14px",
-  },
-  "& .MuiTablePagination-actions": {
-    "& svg": {
-      fontSize: "20px",
-    },
-  },
-}));
-
-export const StyledTypography = styled(Typography)(({ theme }) => ({
-  fontWeight: "bold",
-  fontSize: "20px",
-  textAlign: "center",
-  justifyContent:"center"
-}));
-
+}
