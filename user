@@ -1,334 +1,211 @@
-import { Check, Clear, Visibility } from "@mui/icons-material";
-import AccountCircleIcon from "@mui/icons-material/AccountCircle";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import HourglassBottomIcon from "@mui/icons-material/HourglassBottom";
-import InfoIcon from "@mui/icons-material/Info";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
 import {
   Box,
   Button,
-  Card, // Imported Card
+  Chip,
+  Typography,
+  Stack,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
-  IconButton,
-  Stack,
-  TextField,
   Tooltip,
-  Typography,
+  IconButton,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
-
+import React, { useEffect, useMemo, useState } from "react";
 import useApi from "../../hooks/useApi";
-import { timeStampFormatter } from "../../utils/CommonUtilities";
+import AddBoxIcon from "@mui/icons-material/AddBox";
+import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
+import EditDocumentIcon from "@mui/icons-material/EditDocument";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
+import DateRangeIcon from "@mui/icons-material/DateRange";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import InfoIcon from "@mui/icons-material/Info";
+import CancelIcon from "@mui/icons-material/Cancel";
+import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
+import GppBadIcon from "@mui/icons-material/GppBad";
 import CustomChip from "../../utils/CustomChip";
-import downloadFile from "../../utils/DownloadUtils";
-import LoadingOverlay from "../../utils/LoadingOverlay";
+import { currencyFormatterWith6Decimals } from "../../utils/NumberFormat";
+import {
+  StyledDateChip,
+  StyledStatusChip,
+  StyledStatusBox,
+  StyledRequestDataGrid,
+  StyledRequestContainerBox,
+} from "./CurrencyRateChangeStyles";
+import { useSelector } from "react-redux";
 import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import { COMMON_REQ_SCREEN_CONFIGS } from "../common/CommonConstants";
-import { styles } from "./CommonRequestScreenStyles";
-import RequestAnalytics from "./RequestAnalytics";
-import ViewRequestDialog from "./ViewRequestDailog";
 
-const REMARKS_REGEX = /^(?!.* {2})[a-zA-Z0-9\s/&(),.-]*$/;
-const PENDING_REQUESTS_URL = "/CR/pending-requests";
-const PATCH_URL = "/CR/update-request";
-const DOWNLOAD_URL = "/RS/reports/generate/base64";
-const ACTIVE_DOWNLOAD_URL = "/CR/active-requests";
+function CustomNoRowsOverlay() {
+  return (
+    <Stack height="100%" alignItems="center" justifyContent="center">
+      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+      <Typography variant="h6">No Currency Requests Found</Typography>
+      <Typography>You have not created any Currency requests.</Typography>
+    </Stack>
+  );
+}
 
-export default function CommonRequestScreen() {
-  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
-  const requestType = selectedMenuItem?.requestType || "";
-  const navigate = useNavigate();
+export default function MyCurrencyRequestsTab({ permissions = {} }) {
+  const [rows, setRows] = useState([]);
   const { callApi } = useApi();
   const showSnackBar = useCustomSnackbar();
-
-  const screenConfig = COMMON_REQ_SCREEN_CONFIGS[selectedMenuItem?.id];
-  const {
-    columns,
-    transformData,
-    processViewData,
-    requestsUrl,
-    patchUrl,
-    downloadUrl,
-    showDeleteRequest = false,
-  } = screenConfig || {};
-
-  const [loading, setLoading] = useState(false);
-  const [dataGridLoading, setDataGridLoading] = useState(true);
-  const [rows, setRows] = useState([]);
-  const [remarks, setRemarks] = useState("");
+  const selectedMenuItem = useSelector((state) => state.menus.selectedMenuItem);
+  const [confirmDialog, setConfirmDialog] = useState(false);
+  const [requestId, setRequestId] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [viewOpen, setViewOpen] = useState(false);
   const [viewData, setViewData] = useState(null);
-  const [confirmDialog, setConfirmDialog] = useState(false);
-  const [selectedType, setSelectedType] = useState(null);
-  const [selectedRequestId, setSelectedRequestId] = useState(null);
 
-  const exemptions = ["YEAR_END_PROFIT_TRANSFER"];
-
-  const fetchData = useCallback(async () => {
-    if (!requestType) return;
+  const fetchData = async () => {
+    setIsLoading(true);
     try {
-      let url = requestsUrl ? requestsUrl : PENDING_REQUESTS_URL;
-      const payload = { requestType };
-
-      if (exemptions.includes(requestType)) {
-        url = ACTIVE_DOWNLOAD_URL;
+      const payload = { requestType: selectedMenuItem.requestType };
+      const response = await callApi("/CR/my-requests", payload, "POST");
+      if (response) {
+        const result = response.data?.map((row) => {
+          let parsedPayload = {};
+          parsedPayload = row.payload ? row.payload : {};
+          parsedPayload = {
+            ...parsedPayload,
+            id: row.id,
+            reqStatus: row.reqStatus,
+            reqDate: row.reqDate,
+            creatorId: row.creatorId,
+            executionDate: row.executionDate,
+            executorId: row.executorId,
+            executorRemarks: row.executorRemarks,
+            reqType: row.requestType,
+            changeType: row.changeType,
+          };
+          return { ...parsedPayload };
+        });
+        result.sort((a, b) => {
+          if (a.reqStatus === "PENDING" && b.reqStatus !== "PENDING") return -1;
+          if (a.reqStatus !== "PENDING" && b.reqStatus === "PENDING") return 1;
+          return new Date(b.reqDate) - new Date(a.reqDate);
+        });
+        setRows(result);
+      } else {
+        setRows([]);
       }
-
-      const response = await callApi(url, payload, "POST");
-      const result = response?.data || [];
-
-      const data = result.map((row) => ({
-        ...row,
-        ...(typeof row.payload === "object" ? row.payload : {}),
-      }));
-
-      setRows(transformData ? transformData(data) : data);
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error fetching data", "error");
+    } catch (error) {
+      console.error("Something went wrong", error);
     } finally {
-      setRemarks("");
-      setDataGridLoading(false);
-      setConfirmDialog(false);
+      setIsLoading(false);
     }
-  }, [requestType, requestsUrl, callApi, transformData, showSnackBar]);
+  };
 
-  useEffect(() => {
-    if (!screenConfig || !requestType) {
-      return;
-    }
-    setRows([]);
-    setRemarks("");
-    setConfirmDialog(false);
-    fetchData();
-  }, [selectedMenuItem?.id, fetchData, screenConfig, requestType, navigate]);
-
-  const closeConfirmDialog = useCallback(() => {
-    setRemarks("");
-    setConfirmDialog(false);
-  }, []);
-
-  const handleConfirm = async () => {
-    if (selectedType === "reject" && remarks.trim().length < 5) {
-      showSnackBar(
-        "Please provide minimum 5 characters remarks before rejecting",
-        "warning",
-      );
-      return;
-    }
-    setLoading(true);
-
+  const handleCancelRequest = async () => {
     try {
       const payload = {
-        requestId: selectedRequestId,
-        status: selectedType === "reject" ? "REJECTED" : "ACCEPTED",
-        remarks: selectedType === "reject" ? remarks : "No Remarks",
+        requestId,
+        remarks: "User cancelled this Request",
       };
-      const url = patchUrl ? patchUrl : PATCH_URL;
-      const res = await callApi(url, payload, "PATCH");
 
-      if (res?.success || res) {
+      const response = await callApi("/CR/cancel-request", payload, "PATCH");
+      if (response?.success) {
         showSnackBar(
-          selectedType === "accept"
-            ? `Request Id ${selectedRequestId} Approved Successfully`
-            : `Request Id ${selectedRequestId} Rejected Successfully`,
+          `Request Id ${requestId} Cancelled Successfully.`,
           "success",
         );
-        fetchData();
       } else {
-        showSnackBar("Failed to process request: " + res?.message, "error");
+        showSnackBar(
+          response?.message
+            ? response?.message
+            : "Failed to process your cancel request, Kindly try again",
+          "error",
+        );
       }
-    } catch (err) {
-      console.error(err);
-      showSnackBar(err.message || "Error while processing request", "error");
+    } catch (error) {
+      console.error(error);
     } finally {
-      closeConfirmDialog();
-      setLoading(false);
+      fetchData();
+      setConfirmDialog(false);
     }
   };
 
-  const handleViewClick = useCallback(
-    (data) => {
-      const view = processViewData ? processViewData(data) : data;
-      setViewData(view);
-      setViewOpen(true);
-    },
-    [processViewData],
-  );
+  const handleViewClick = (data) => {
+    const { currencyCode, currencyName, currencyRate } = data;
 
-  const openConfirmDialog = useCallback((type, id) => {
-    setConfirmDialog(true);
-    setSelectedType(type);
-    setSelectedRequestId(id);
+    const showData = {
+      //payload
+      currencyCode,
+      currencyName,
+      currencyRate:
+        currencyRate !== null && currencyRate !== undefined
+          ? currencyFormatterWith6Decimals("INR").format(currencyRate)
+          : "",
+    };
+
+    data.showData = showData;
+    setViewData(data);
+    setViewOpen(true);
+  };
+
+  useEffect(() => {
+    fetchData();
   }, []);
 
-  const handleRemarksChange = useCallback(
-    (e) => {
-      const value = e.target.value;
-
-      if (value && !/^[A-Za-z0-9]$/.test(value[0])) {
-        showSnackBar("Should not start with a special character", "error");
-        return;
-      }
-
-      const error = REMARKS_REGEX.test(value)
-        ? ""
-        : "Invalid Format. Only alphabets, numbers, spaces (single spaces between words), and ,()&/-. are allowed!";
-
-      if (error) {
-        showSnackBar(error, "warning");
-        return;
-      }
-
-      setRemarks(value);
-    },
-    [showSnackBar],
-  );
-
-  const handleDownload = async () => {
-    setLoading(true);
-    try {
-      const url = downloadUrl ? downloadUrl : DOWNLOAD_URL;
-      const date = viewData.payload.date || viewData.reportDate;
-      let reportType = viewData.reportType;
-
-      if (requestType === "YEAR_END_PROFIT_TRANSFER") {
-        if (
-          viewData.reqStatus === "PENDING" ||
-          viewData.reqStatus === "QUEUED"
-        ) {
-          reportType = "profit_transfer_report";
-        }
-      }
-
-      const payload = { requestType, reportType, date };
-      const responseData = await callApi(url, payload, "POST");
-      const { reportName, reportDate, pdfBase64, excelBase64 } = responseData;
-
-      let fileName = `${reportName}_${reportDate}`;
-
-      if (!excelBase64) {
-        showSnackBar("Failed to download file", "error");
-        setLoading(false);
-        return;
-      }
-
-      if (
-        reportType === "profit_transactions" ||
-        reportType === "profit_transfer_report"
-      ) {
-        downloadFile(responseData?.excelBase64, "excel", fileName, true);
-        showSnackBar("File downloaded successfully", "success");
-        return;
-      } else if (!pdfBase64) {
-        showSnackBar("Failed to download file", "error");
-        setLoading(false);
-        return;
-      }
-
-      downloadFile(responseData?.pdfBase64, "pdf", fileName, true);
-      downloadFile(responseData?.excelBase64, "excel", fileName, true);
-      showSnackBar("Files downloaded successfully", "success");
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error while processing request", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const allColumns = useMemo(() => {
-    return [
-      { field: "id", headerName: "Request Id", flex: 0.5, minWidth: 130 },
-
-      // Dynamic columns from configs are injected here
-      ...(columns || []),
-
-      ...(selectedMenuItem?.id === 43
-        ? [
-            {
-              field: "reqStatus",
-              headerName: "Status",
-              flex: 0.6,
-              minWidth: 140,
-              align: "center",
-              headerAlign: "center",
-              filterable: false,
-              sortable: false,
-              disableColumnMenu: true,
-              renderCell: (p) => {
-                const val = p.value;
-                return (
-                  <CustomChip
-                    icon={
-                      val === "QUEUE" ? (
-                        <HourglassBottomIcon />
-                      ) : val === "ACCEPTED" ? (
-                        <CheckCircleIcon />
-                      ) : (
-                        <PendingActionsIcon />
-                      )
-                    }
-                    label={
-                      val === "QUEUE"
-                        ? "In Queue"
-                        : val === "ACCEPTED"
-                          ? "Accepted"
-                          : "Pending"
-                    }
-                    color={
-                      val === "QUEUE"
-                        ? "error"
-                        : val === "ACCEPTED"
-                          ? "success"
-                          : "warning"
-                    }
-                    size="small"
-                    variant="outlined"
-                  />
-                );
-              },
-            },
-          ]
-        : []),
-
+  const columns = useMemo(
+    () => [
+      { field: "id", headerName: "Request Id", flex: 0.5, minWidth: 150 },
+      {
+        field: "currencyCode",
+        headerName: "Currency Code",
+        flex: 0.7,
+        minWidth: 150,
+        sortable: true,
+      },
+      {
+        field: "currencyName",
+        headerName: "Currency Name",
+        flex: 1,
+        minWidth: 200,
+        sortable: true,
+      },
+      {
+        field: "currencyRate",
+        headerName: "Currency Rate",
+        flex: 0.7,
+        minWidth: 150,
+        sortable: true,
+        align: "right",
+        headerAlign: "right",
+        renderCell: (params) =>
+          currencyFormatterWith6Decimals("INR").format(params.value),
+      },
       {
         field: "changeType",
-        headerName: "Request type",
-        flex: 0.6,
+        headerName: "Request Type",
+        flex: 0.5,
         minWidth: 150,
-        align: "center",
         headerAlign: "center",
+        align: "center",
         filterable: false,
         sortable: false,
         disableColumnMenu: true,
-        renderCell: (p) => {
-          const val = p.value;
+        renderCell: (params) => {
+          const val = params.value;
+          const color =
+            val === "ADD" ? "success" : val === "DELETE" ? "error" : "warning";
+          const icon =
+            val === "ADD" ? (
+              <AddBoxIcon />
+            ) : val === "DELETE" ? (
+              <AutoDeleteIcon />
+            ) : (
+              <EditDocumentIcon />
+            );
           return (
             <CustomChip
             sx={{
               width:105,
               justifyContent:"flex-start",
             }}
-              icon={
-                val === "ADD" ? (
-                  <AddBoxIcon />
-                ) : val === "DELETE" ? (
-                  <AutoDeleteIcon />
-                ) : (
-                  <EditDocumentIcon />
-                )
-              }
+              icon={icon}
               label={
                 val === "ADD"
                   ? "Added"
@@ -336,481 +213,1333 @@ export default function CommonRequestScreen() {
                     ? "Deleted"
                     : "Modified"
               }
-              color={
-                val === "ADD"
-                  ? "success"
-                  : val === "DELETE"
-                    ? "error"
-                    : "warning"
-              }
-              size="small"
+              color={color}
               variant="outlined"
             />
           );
         },
       },
-
-      {
-        field: "creatorId",
-        headerName: "Creator",
-        flex: 0.8,
-        minWidth: 160,
-        align: "center",
-        headerAlign: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (p) => (
-          <CustomChip
-            icon={<AccountCircleIcon />}
-            size="small"
-            color="info"
-            label={p.value}
-            variant="outlined"
-          />
-        ),
-      },
-
       {
         field: "reqDate",
-        headerName: "Requested Date",
-        flex: 1,
-        minWidth: 210,
-        disableColumnMenu: true,
-        renderCell: (p) => (
-          <Typography variant="body1" component="span" sx={styles.requestDate}>
-            {timeStampFormatter(p.value)}
-          </Typography>
-        ),
-      },
-
-      {
-        field: "actions",
-        headerName: "Actions",
+        headerName: "Date of Submission",
         flex: 0.7,
-        minWidth: 160,
+        minWidth: 200,
+        sortable: true,
         headerAlign: "center",
         align: "center",
-        sortable: false,
         filterable: false,
         disableColumnMenu: true,
-        renderCell: (p) => (
-          <Stack
-            direction="row"
-            spacing={1}
-            alignItems="center"
-            justifyContent="center"
-            style={styles.StackStyle}
-          >
-            <Tooltip title="View">
-              <IconButton onClick={() => handleViewClick(p.row)}>
-                <Visibility />
-              </IconButton>
-            </Tooltip>
-
-            {p.row.reqStatus === "PENDING" && (
-              <>
-                <Tooltip title="Approve">
-                  <IconButton
-                    color="success"
-                    onClick={() => openConfirmDialog("accept", p.row.id)}
-                  >
-                    <Check />
-                  </IconButton>
-                </Tooltip>
-
-                <Tooltip title="Reject">
-                  <IconButton
-                    color="error"
-                    onClick={() => openConfirmDialog("reject", p.row.id)}
-                  >
-                    <Clear />
-                  </IconButton>
-                </Tooltip>
-              </>
-            )}
-          </Stack>
+        renderCell: (params) => (
+          <Box>
+            <StyledDateChip
+              icon={<DateRangeIcon />}
+              label={params.value.split("T")[0]}
+            />
+          </Box>
         ),
       },
-    ];
-  }, [columns, handleViewClick, openConfirmDialog, selectedMenuItem?.id]);
+      {
+        field: "reqStatus",
+        headerName: "Status",
+        flex: 0.5,
+        minWidth: 120,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Box
+            // sx={{
+            //   color:
+            //     params.value === "REJECTED"
+            //       ? "error.main"
+            //       : params.value === "ACCEPTED"
+            //         ? "success.dark"
+            //         : "warning.main",
+            //   // fontWeight: "bold",
+            // }}
+          >
+            <CustomChip
+              variant="outlined"
+              icon={
+                params.value === "REJECTED" ? (
+                  <BlockFlippedIcon />
+                ) : params.value === "ACCEPTED" ? (
+                  <CheckCircleIcon />
+                ) : params.value === "CANCELLED" ? (
+                  <GppBadIcon />
+                ) : (
+                  <PendingActionsIcon />
+                )
+              }
+              label={
+                params.value === "REJECTED"
+                  ? "Rejected"
+                  : params.value === "ACCEPTED"
+                    ? "Approved"
+                    : params.value === "CANCELLED"
+                      ? "Cancelled"
+                      : "Pending"
+              }
+              sx={{
+              width:120,
+              justifyContent:"flex-start",
+                color:
+                  params.value === "REJECTED"
+                    ? "error.dark"
+                    : params.value === "ACCEPTED"
+                      ? "success.dark"
+                      : params.value === "CANCELLED"
+                        ? "primary.dark"
+                        : "warning.main",
+
+                "& .MuiChip-icon": {
+                  color:
+                    params.value === "REJECTED"
+                      ? "error.dark"
+                      : params.value === "ACCEPTED"
+                        ? "success.dark"
+                        : params.value === "CANCELLED"
+                          ? "primary.dark"
+                          : "warning.main",
+                },
+              }}
+            />
+          </Box>
+        ),
+      },
+      {
+        field: "action",
+        headerName: "Action",
+        flex: 0.6,
+        minWidth: 120,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          return (
+            <Stack
+              direction="row"
+              spacing={1}
+              justifyContent="center"
+              alignItems="center"
+              height="100%"
+            >
+              {permissions.view && (
+                <Tooltip title="View">
+                  <IconButton
+                    // color="primary"
+                    onClick={() => handleViewClick(params.row)}
+                  >
+                    <VisibilityIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              {params.row.reqStatus === "PENDING" && permissions.cancel && (
+                <Tooltip title={"Cancel Request"}>
+                  <IconButton
+                    onClick={() => {
+                      setConfirmDialog(true);
+                      setRequestId(params.row.id);
+                    }}
+                  >
+                    <CancelIcon fontSize="inherit" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Stack>
+          );
+        },
+      },
+    ],
+    [permissions.cancel, permissions.view],
+  );
+
+  const filteredColumns = useMemo(() => {
+    if (permissions.view || permissions.cancel) {
+      return columns;
+    }
+    // Otherwise, filter out the column where field name is 'action'.
+    else {
+      return columns.filter((column) => column.field !== "action");
+    }
+  }, [columns, permissions.cancel, permissions.view]);
 
   return (
-    <Box sx={styles.container}>
-      {/* 
-        Wrapped Both Components in a unified Card 
-      */}
-      <Card
-        sx={{
-          width: "100%",
-          boxShadow: 3,
-          borderRadius: 2,
-          bgcolor: "background.paper",
-          overflow: "hidden", // Prevents DataGrid from spilling over rounded corners
-        }}
-      >
-        <RequestAnalytics data={rows} showDeleteRequest={showDeleteRequest} />
-
-        {/* Divider provides a clean separation between the charts and the grid */}
-        <Divider />
-
+    <>
+      <Box>
         <DataGrid
           rows={rows}
-          columns={allColumns}
-          loading={dataGridLoading}
+          loading={isLoading}
+          columns={filteredColumns}
           disableRowSelectionOnClick
           pageSizeOptions={[5, 10, 25, 50]}
           initialState={{
-            pagination: { paginationModel: { pageSize: 5 } },
-            sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] },
+            pagination: { paginationModel: { pageSize: 10, page: 0 } },
+            // sorting: { sortModel: [{ field: "reqDate", sort: "asc" }] },
           }}
           getRowId={(row) => row.id}
-          sx={{
-            ...styles.dataGrid,
-            border: "none", // Remove standard borders so it flows with the card
-            "& .MuiDataGrid-columnHeaders": {
-               backgroundColor: "#f5f5f5 !important",
-              borderTop: "none",
-            },
-          }}
           slots={{
-            noRowsOverlay: () => (
-              <Stack height="100%" alignItems="center" justifyContent="center">
-                <InfoIcon
-                  sx={{ fontSize: 48, color: "text.secondary", mb: 2 }}
-                />
-                <Typography variant="h6">No Pending Requests Found</Typography>
-                <Typography>
-                  All {selectedMenuItem?.title} have been processed.
-                </Typography>
-              </Stack>
-            ),
+            noRowsOverlay: CustomNoRowsOverlay,
+          }}
+           sx={{
+          minHeight: 700,
+          width: "100%",
+         "& .MuiDataGrid-columnHeaders": {
+          backgroundColor: "#f5f5f5 !important",
+          fontWeight: 700,
+          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+          },
           }}
         />
-      </Card>
+      </Box>
 
       {/* View Dialog */}
-      <ViewRequestDialog
+      <ViewMyRequestDialog
         open={viewOpen}
         handleClose={() => setViewOpen(false)}
         data={viewData}
-        screenConfig={screenConfig}
-        handleDownload={handleDownload}
       />
 
-      {/* Confirm Dialog */}
+      {/* Cancel Dialog */}
       <Dialog
+        open={confirmDialog}
+        onClose={() => {
+          setConfirmDialog(false);
+        }}
         maxWidth="sm"
         fullWidth
-        open={confirmDialog}
-        onClose={closeConfirmDialog}
       >
-        <DialogTitle>
-          {selectedType === "accept" ? "Confirm Approval" : "Confirm Rejection"}
+        <DialogTitle sx={{ fontWeight: 600 }}>
+          Cancel Request ID: {requestId}
         </DialogTitle>
-        <Divider />
         <DialogContent>
-          <Typography>
-            {selectedType === "accept"
-              ? "Are you sure you want to approve the request?"
-              : "Please provide remarks to reject this request."}
+          <Typography sx={{ p: 1 }}>
+            Are you sure you want to cancel this request. Please confirm ?
           </Typography>
-
-          {selectedType === "reject" && (
-            <TextField
-              fullWidth
-              label="Remarks*"
-              value={remarks}
-              multiline
-              rows={4}
-              onChange={handleRemarksChange}
-              margin="dense"
-              slotProps={{
-                htmlInput: {
-                  maxLength: 200,
-                },
-              }}
-              helperText={
-                remarks?.length > 0 && remarks?.length < 5
-                  ? "Enter at least 5 characters"
-                  : "Allowed 5-200 characters (alphabets, numbers, spaces,()&,/-.)"
-              }
-              error={remarks?.length > 0 && remarks?.length < 5}
-            />
-          )}
         </DialogContent>
-
         <DialogActions>
-          <Button onClick={closeConfirmDialog}>Cancel</Button>
           <Button
-            variant="contained"
-            onClick={handleConfirm}
-            color={selectedType === "accept" ? "success" : "error"}
+            onClick={() => {
+              setConfirmDialog(false);
+            }}
+            variant="outlined"
           >
-            {selectedType === "accept" ? "Approve" : "Reject"}
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCancelRequest}
+            color="error"
+            variant="contained"
+          >
+            Confirm
           </Button>
         </DialogActions>
       </Dialog>
-
-      <LoadingOverlay loading={loading} />
-    </Box>
+    </>
   );
 }
-
-
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Box, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Typography, Button, Stack, Tooltip, IconButton, Divider } from "@mui/material";
-import InfoIcon from "@mui/icons-material/Info";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Fab,
+  Grid,
+  IconButton,
+  Stack,
+  TextField,
+  Typography,
+  Tooltip,
+  CircularProgress,
+  DialogActions,
+  Divider,
+  styled,
+} from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import { Check, Clear, Visibility } from "@mui/icons-material";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import RestoreIcon from "@mui/icons-material/Restore";
-import AccountCircleIcon from "@mui/icons-material/AccountCircle";
-import ChangeCircleSharpIcon from "@mui/icons-material/ChangeCircleSharp";
-import { useNavigate } from "react-router-dom";
-import { useSelector } from "react-redux";
+import {
+  Edit as EditIcon,
+  Add as AddIcon,
+  Close as CloseIcon,
+} from "@mui/icons-material";
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import { CurrencyMasterStyles } from "./CurrencyMasterStyles";
+import { currencyFormatterWith6Decimals } from "../../utils/NumberFormat";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 
-import useApi from "../../../../hooks/useApi";
-import useCustomSnackbar from "../../../../utils/useCustomSnackbar";
-import CustomChip from "../../../../utils/CustomChip";
-import { timeStampFormatter } from "../../../../utils/CommonUtilities";
-import LoadingOverlay from "../../../../utils/LoadingOverlay";
+const OverlayBox = styled(Box)(() => ({
+  display: "flex",
+  flexDirection: "column",
+  height: "100%",
+  justifyContent: "center",
+  alignItems: "center",
+}));
 
-import TemplateRequestAnalytics from "../analytics/TemplateRequestAnalytics";
-import ViewRequestDialog from "../dialogs/ViewRequestDialog";
-import CompareTemplateDialog from "../dialogs/CompareTemplate/CompareTemplateDialog";
-import { styles } from "../../TemplateRequestScreenStyles";
+const CustomNoRowsOverlay = () => {
+  return (
+    <OverlayBox>
+      <ErrorOutlineIcon fontSize="large" />
+      <Typography variant="h5" fontSize="1.2rem">
+        Data is not available
+      </Typography>
+    </OverlayBox>
+  );
+};
 
-const BASE_URL_CONFIG = "/TC/template-config"
-
-export default function PendingRequestsTab() {
-  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
-  const requestType = selectedMenuItem?.requestType || "";
-  const navigate = useNavigate();
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
-
-  const [loading, setLoading] = useState(false);
-  const [dataGridLoading, setDataGridLoading] = useState(true);
+export default function CurrencyMasterTab() {
   const [rows, setRows] = useState([]);
-  const [remarks, setRemarks] = useState("");
+  const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [originalData, setOriginalData] = useState(null);
+  const snackbar = useCustomSnackbar();
+  const { callApi } = useApi();
 
-  const [viewOpen, setViewOpen] = useState(false);
-  const [viewData, setViewData] = useState(null);
-  const [compareOpen, setCompareOpen] = useState(false);
-  const [selectedRequestId, setSelectedRequestId] = useState(null);
+  const [currencyData, setCurrencyData] = useState({
+    currencyCode: "",
+    currencyName: "",
+    currencyRate: "",
+  });
+  const [errors, setErrors] = useState({});
 
-  const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null, rowId: null });
+  const reDigits = /^\d{0,6}(\.\d{0,6})?$/;
+  const reDesc = /^[A-Za-z\s]*$/;
 
-  const fetchData = useCallback(async () => {
-    if (!requestType) return;
+  const snackGateRef = useRef(true);
+  const notifyOnce = (msg, variant = "warning") => {
+    if (!snackGateRef.current) return;
+    snackGateRef.current = false;
+    snackbar(msg, variant);
+    setTimeout(() => (snackGateRef.current = true), 900);
+  };
+
+  // --- Fetch Data ---
+  const fetchData = async () => {
     try {
-      const response = await callApi(BASE_URL_CONFIG + "/template-requests/pending", null, "GET");
-      const result = response?.data || response || [];
-
-      const data = result.map((row) => ({
-        ...row,
-        ...(typeof row.summary === "object" ? row.summary : {}),
-      }));
-
-      setRows(data);
+      setLoading(true);
+      const currenciesResponse = await callApi(
+        "/CM/common-master/currency-master",
+        null,
+        "GET",
+      );
+      setRows(currenciesResponse?.data ?? []);
     } catch (err) {
-      console.error(err);
-      showSnackBar("Error fetching data", "error");
+      snackbar("Failed to fetch data", "error");
     } finally {
-      setRemarks("");
-      setDataGridLoading(false);
-      setConfirmDialog({ open: false, type: null, rowId: null });
-    }
-  }, [callApi, showSnackBar, requestType]);
-
-  useEffect(() => {
-    setRows([]);
-    setRemarks("");
-    setConfirmDialog({ open: false, type: null, rowId: null });
-    fetchData();
-  }, [fetchData, navigate]);
-
-  const handleConfirm = async () => {
-    if (confirmDialog.type === "reject" && remarks.trim().length < 5) {
-      showSnackBar("Please provide minimum 5 characters remarks before rejecting", "warning");
-      return;
-    }
-    setLoading(true);
-
-    try {
-      const payload = {
-        requestId: confirmDialog.rowId,
-        status: confirmDialog.type === "reject" ? "REJECTED" : "ACCEPTED",
-        remarks: confirmDialog.type === "reject" ? remarks.trim() : "No Remarks",
-      };
-
-      const res = await callApi(BASE_URL_CONFIG + "/template-requests/process", payload, "PATCH");
-      if (res?.success || res) {
-        showSnackBar(confirmDialog.type === "accept" ? "Request Approved" : "Request Rejected", "success");
-        fetchData();
-      } else {
-        showSnackBar("Failed to process request" + res?.message, "error");
-      }
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error while processing request", "error");
-    } finally {
-      closeConfirmDialog();
       setLoading(false);
     }
   };
 
-  const generateProps = (value) => {
-    let props = {};
-    switch (value) {
-      case "ADD": {
-        props = {
-          ...props,
-          icon: <AddBoxIcon />,
-          label: "Added",
-          color: "success"
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const validateField = (name, value) => {
+    switch (name) {
+      case "currencyCode":
+        if (!value.trim()) return "Please provide the required currency code.";
+        if (!reDesc.test(value)) return "Only letters are allowed.";
+        if (value.length !== 3)
+          return "Must be exactly 3 uppercase letters for currency code.";
+        break;
+
+      case "currencyName":
+        if (!value.trim())
+          return "Please provide the required currency name to proceed.";
+        if (!reDesc.test(value))
+          return "Invalid characters (letters and spaces only).";
+        if (value.trim().length < 4)
+          return "Currency Name must be atleast 4 characters.";
+        if (value.length > 30)
+          return "Currency Name must not exceed more than 20 characters.";
+        break;
+
+      case "currencyRate":
+        if (!value.trim()) return "Please provide the required currency rate.";
+        if (!reDigits.test(value))
+          return "Invalid format. Max 6 digits before decimal, up to 6 after (e.g., 123456.123456).";
+        if (value.endsWith(".")) {
+          return "Invalid currency rate format.";
+        }
+        if (Number(value) === 0) {
+          return "Currency Rate cannot be zero.";
         }
         break;
-      };
-      case "DELETE": {
-        props = {
-          ...props,
-          icon: <AutoDeleteIcon />,
-          label: "Deleted",
-          color: "error"
-        }
-        break;
+
+      default:
+        return "";
+    }
+    return "";
+  };
+
+  const isFormValid = () => {
+    let tempErrors = {};
+    tempErrors.currencyCode = editingId
+      ? ""
+      : validateField("currencyCode", currencyData.currencyCode);
+    tempErrors.currencyName = validateField(
+      "currencyName",
+      currencyData.currencyName,
+    );
+    tempErrors.currencyRate = editingId
+      ? ""
+      : validateField("currencyRate", currencyData.currencyRate);
+
+    return Object.values(tempErrors).every((v) => !v);
+  };
+
+  const checkDataEquality = (current, original) => {
+    if (!original) return true;
+    return current.currencyName === original.currencyName;
+  };
+
+  const handleChange = (e) => {
+    let { name, value } = e.target;
+    let errorMsg = "";
+
+    if (name === "currencyCode") {
+      const upperValue = value.toUpperCase();
+
+      if (/[^A-Z]/.test(upperValue)) {
+        setErrors((prev) => ({
+          ...prev,
+          currencyCode: "Special Characters and Numericals are not allowed.",
+        }));
+        return;
       }
-      case "STATUS": {
-        props = {
-          ...props,
-          icon: <ChangeCircleSharpIcon />,
-          label: "Status-change",
-          color: "info"
-        }
-        break;
+      value = upperValue.slice(0, 3);
+      setErrors((prev) => ({
+        ...prev,
+        currencyCode:
+          value.length < 3
+            ? "Currency Code Must be 3 uppercase letters (e.g.,USD,INR)."
+            : "",
+      }));
+    }
+
+    if (name === "currencyName") {
+      if (value !== "" && !/^[A-Za-z ]*$/.test(value)) {
+        setErrors((prev) => ({
+          ...prev,
+          currencyName: "Special Characters and Numericals are not allowed.",
+        }));
+        return;
       }
-      case "UPDATE": {
-        props = {
-          ...props,
-          icon: <EditDocumentIcon />,
-          label: "Modified",
-          color: "info"
-        }
-        break;
+      value = value.slice(0, 30);
+    }
+
+    if (name === "currencyRate") {
+      if (value !== "" && !/^[0-9.]*$/.test(value)) {
+        setErrors((prev) => ({
+          ...prev,
+          currencyRate: "Special Characters and Alphabeticals are not allowed.",
+        }));
+        return;
       }
-      case "ROLLBACK": {
-        props = {
-          ...props,
-          icon: <RestoreIcon />,
-          label: "Rollback",
-          color: "success"
-        }
-        break;
+      if (!/^\d{0,6}(\.\d{0,6})?$/.test(value)) {
+        return;
       }
     }
-    return props;
-  }
 
-  const handleViewClick = (data) => {
-    if (data.changeType === "UPDATE") {
-      setSelectedRequestId(data.id);
-      setCompareOpen(true);
+    setCurrencyData((prev) => ({ ...prev, [name]: value }));
+
+    errorMsg = validateField(name, value);
+    setErrors((prev) => ({ ...prev, [name]: errorMsg }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const allErrors = {
+      currencyCode: editingId
+        ? ""
+        : validateField("currencyCode", currencyData.currencyCode),
+      currencyName: validateField("currencyName", currencyData.currencyName),
+      currencyRate: editingId
+        ? ""
+        : validateField("currencyRate", currencyData.currencyRate),
+    };
+    setErrors(allErrors);
+
+    const valid = Object.values(allErrors).every((v) => !v);
+    if (!valid) {
+      notifyOnce("Please fix validation errors.", "error");
+      return;
+    }
+
+    const isEditing = !!editingId;
+    if (isEditing && checkDataEquality(currencyData, originalData)) {
+      snackbar("No Changes Detected!", "warning");
+      return;
+    }
+
+    if (!isEditing) {
+      const currencyExists = rows.some(
+        (row) =>
+          row.currencyCode.toUpperCase() ===
+          currencyData.currencyCode.toUpperCase(),
+      );
+      if (currencyExists) {
+        snackbar("Currency code already exists.", "warning");
+        return;
+      }
+    }
+
+    let payloadData;
+    if (isEditing) {
+      payloadData = {
+        requestType: "CURRENCY",
+        changeType: "UPDATE",
+        payload: {
+          currencyCode: currencyData.currencyCode,
+          currencyName: currencyData.currencyName,
+          flag: 1,
+          currencyRate: originalData.currencyRate,
+        },
+      };
     } else {
-      setViewData(data);
-      setViewOpen(true);
+      payloadData = {
+        requestType: "CURRENCY",
+        changeType: "ADD",
+        payload: {
+          currencyCode: currencyData.currencyCode,
+          currencyName: currencyData.currencyName,
+          flag: 0,
+          currencyRate: parseFloat(currencyData.currencyRate) || 0,
+        },
+      };
+    }
+
+    try {
+      const response = await callApi("/CR/create-request", payloadData, "POST");
+      if (response) {
+        snackbar(
+          editingId
+            ? "Currency update request submitted successfully with request id " +
+                response?.data?.id
+            : "Currency creation request submitted successfully with request id " +
+                response?.data?.id,
+          "success",
+        );
+        handleClose();
+        fetchData();
+      }
+    } catch (err) {
+      snackbar(err?.message || "Request failed.", "error");
     }
   };
 
-  const openConfirmDialog = (type, id) => setConfirmDialog({ open: true, type, rowId: id });
-  const closeConfirmDialog = () => setConfirmDialog({ open: false, type: null, rowId: null });
+  const handleEdit = (row) => {
+    const initialData = {
+      currencyCode: String(row.currencyCode ?? ""),
+      currencyName: String(row.currencyName ?? ""),
+      currencyRate: String(row.currencyRate ?? ""),
+    };
+    setCurrencyData(initialData);
+    setOriginalData(initialData);
+    setEditingId(row.currencyCode);
+    setOpen(true);
+    setErrors({});
+  };
 
-  const allColumns = useMemo(() => [
-    { field: "reportId", headerName: "Report Id", flex: 0.5 },
-    { field: "reportName", headerName: "Report Name", flex: 1.2 },
-    {
-      field: "changeType", headerName: "Type", flex: 0.6,
-      renderCell: (p) => (
-        <CustomChip
-          {...generateProps(p.value)}
-          size="small" variant="outlined"
-        />
-      ),
-    },
-    {
-      field: "creatorId", headerName: "Creator", flex: 0.8,
-      renderCell: (p) => <CustomChip icon={<AccountCircleIcon />} size="small" color="info" label={p.value} variant="outlined" />,
-    },
-    {
-      field: "reqDate", headerName: "Date", flex: 1,
-      renderCell: (p) => <Typography variant="body1" component="span" sx={styles.requestDate}>{timeStampFormatter(p.value)}</Typography>,
-    },
-    {
-      field: "actions", headerName: "Actions", flex: 0.7,
-      renderCell: (p) => (
-        <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" style={styles.StackStyle}>
-          <Tooltip title="Approve">
-            <IconButton color="success" onClick={() => openConfirmDialog("accept", p.row.id)}><Check /></IconButton>
-          </Tooltip>
-          <Tooltip title="Reject">
-            <IconButton color="error" onClick={() => openConfirmDialog("reject", p.row.id)}><Clear /></IconButton>
-          </Tooltip>
-          <Tooltip title="View">
-            <IconButton onClick={() => handleViewClick(p.row)}><Visibility /></IconButton>
-          </Tooltip>
-        </Stack>
-      ),
-    },
-  ], []);
+  const handleClose = () => {
+    setOpen(false);
+    setCurrencyData({
+      currencyCode: "",
+      currencyName: "",
+      currencyRate: "",
+    });
+    setOriginalData(null);
+    setErrors({});
+    setEditingId(null);
+  };
+
+  const handleBlur = (e) => {
+    const { name } = e.target;
+
+    setErrors((prev) => ({
+      ...prev,
+      [name]: "",
+    }));
+  };
+
+  const columns = useMemo(
+    () => [
+      {
+        field: "currencyCode",
+        headerName: "Currency Code",
+        flex: 1.2,
+        minWidth: 200,
+        sortable: true,
+      },
+      {
+        field: "currencyName",
+        headerName: "Currency Name",
+        flex: 1,
+        minWidth: 200,
+        sortable: true,
+      },
+      {
+        field: "currencyRate",
+        headerName: "Currency Rate",
+        flex: 1,
+        minWidth: 150,
+        align: "right",
+        headerAlign: "right",
+        sortable: true,
+        renderCell: (params) =>
+          currencyFormatterWith6Decimals("INR").format(params.value),
+      },
+      {
+        field: "actions",
+        headerName: "Actions",
+        flex: 0.8,
+        minWidth: 150,
+        align: "center",
+        headerAlign: "center",
+
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Box
+            sx={{
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Tooltip title="Edit">
+              <IconButton
+                // color="primary"
+                size="small"
+                onClick={() => handleEdit(params.row)}
+              >
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        ),
+      },
+    ],
+    [],
+  );
 
   return (
-    <Box>
-      <TemplateRequestAnalytics data={rows} />
+    <Box >
       <DataGrid
-        rows={rows} columns={allColumns} loading={dataGridLoading} disableRowSelectionOnClick
+        loading={loading}
+        rows={rows}
+        columns={columns}
+        disableRowSelectionOnClick
+        getRowId={(row) => row.currencyCode}
         pageSizeOptions={[5, 10, 25, 50]}
-        initialState={{ pagination: { paginationModel: { pageSize: 5 } }, sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] } }}
-        getRowId={(row) => row.id} sx={styles.dataGrid}
+        initialState={{
+          pagination: { paginationModel: { pageSize: 10, page: 0 } },
+          sorting: { sortModel: [{ field: "currencyCode", sort: "asc" }] },
+        }}
+        // sx={CurrencyMasterStyles.dataGridContainer}
+         sx={{
+          minHeight: 700,
+          width: "100%",
+         "& .MuiDataGrid-columnHeaders": {
+          backgroundColor: "#f5f5f5 !important",
+          fontWeight: 700,
+          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+        },
+        }}
+        localeText={{
+          noRowsLabel: "No Currency Records Found",
+        }}
         slots={{
-          noRowsOverlay: () => (
-            <Stack height="100%" alignItems="center" justifyContent="center">
-              <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-              <Typography variant="h6">No Pending Requests Found</Typography>
-              <Typography>All {selectedMenuItem.title} have been processed.</Typography>
-            </Stack>
-          ),
+          noRowsOverlay: CustomNoRowsOverlay,
         }}
       />
 
-      <ViewRequestDialog open={viewOpen} handleClose={() => { setViewOpen(false); setViewData(null); }} data={viewData} />
-      <CompareTemplateDialog open={compareOpen} requestId={selectedRequestId} onClose={() => { setCompareOpen(false); setSelectedRequestId(null); }} />
+      {/* Floating Create Button */}
+       <Box
+        sx={{
+          display:"flex",
+          justifyContent:"flex-end",
+          mt:1,
+          px:1,
+          pb:1,
+        }}
+        >
+      <Fab
+        onClick={() => {
+          setEditingId(null);
+          setCurrencyData({
+            currencyCode: "",
+            currencyName: "",
+            currencyRate: "",
+          });
+          setErrors({});
+          setOpen(true);
+        }}
+        color="primary"
+        variant="extended"
+        sx={CurrencyMasterStyles.fabButton}
+      >
+        <AddIcon sx={CurrencyMasterStyles.fabIcon} />
+        Create
+      </Fab>
+      </Box>
 
-      <Dialog maxWidth="sm" fullWidth open={confirmDialog.open} onClose={closeConfirmDialog}>
-        <DialogTitle>{confirmDialog.type === "accept" ? "Confirm Approval" : "Confirm Rejection"}</DialogTitle>
-        <Divider />
-        <DialogContent>
-          <Typography mb={2}>{confirmDialog.type === "accept" ? "Are you sure you want to approve the request?" : "Please provide remarks to reject this request."}</Typography>
-          {confirmDialog.type === "reject" && (
-            <TextField
-              fullWidth label="Remarks" value={remarks} multiline rows={4}
-              onChange={(e) => setRemarks(e.target.value)} margin="dense"
-              slotProps={{ htmlInput: { maxLength: 200 } }}
-              helperText={remarks?.length !== 0 && remarks?.length < 5 ? "Enter at least 5 characters" : "Allowed 5-200 characters"}
-              error={remarks?.length !== 0 && remarks?.length < 5}
+      <Dialog open={open} maxWidth="sm" fullWidth>
+        <Box component="form" onSubmit={handleSubmit}>
+          <DialogTitle>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              sx={CurrencyMasterStyles.dialogTitleStack}
+            >
+              <Typography variant="h6" color="primary">
+                {editingId ? "Edit Currency" : "Add New Currency"}
+              </Typography>
+              <IconButton onClick={handleClose}>
+                <CloseIcon />
+              </IconButton>
+            </Stack>
+          </DialogTitle>
+
+          <Divider />
+
+          <DialogContent>
+            <Grid
+              container
+              spacing={3}
+              sx={CurrencyMasterStyles.dialogContentGrid}
+            >
+              {/* Currency Code */}
+              <Grid size={{ xs: 12 }}>
+                <TextField
+                  fullWidth
+                  required
+                  label="Currency Code"
+                  name="currencyCode"
+                  variant="outlined"
+                  value={currencyData.currencyCode}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  disabled={!!editingId}
+                  error={!!errors.currencyCode}
+                  helperText={
+                    editingId
+                      ? ""
+                      : errors.currencyCode ||
+                        "Must be 3 uppercase letters (e.g.,USD,INR)."
+                  }
+                  inputProps={{
+                    maxLength: 3,
+                    style: { textTransform: "uppercase" },
+                  }}
+                />
+              </Grid>
+
+              {/* Currency Name */}
+              <Grid size={{ xs: 12 }}>
+                <TextField
+                  fullWidth
+                  required
+                  label="Currency Name"
+                  name="currencyName"
+                  variant="outlined"
+                  value={currencyData.currencyName}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={!!errors.currencyName}
+                  helperText={
+                    errors.currencyName ||
+                    "Min 4 and Max 30 characters (letters and spaces only)."
+                  }
+                  sx={CurrencyMasterStyles.textField}
+                  inputProps={{ maxLength: 30 }}
+                />
+              </Grid>
+
+              {/* Currency Rate */}
+              <Grid size={{ xs: 12 }}>
+                <TextField
+                  fullWidth
+                  required
+                  name="currencyRate"
+                  label="Currency Rate"
+                  variant="outlined"
+                  value={currencyData.currencyRate}
+                  onPaste={(e) => e.preventDefault()} // This works directly on the TextField
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={!!errors.currencyRate}
+                  disabled={!!editingId}
+                  helperText={
+                    editingId
+                      ? ""
+                      : errors.currencyRate ||
+                        "Max 6 digits before decimal, up to 6 after (e.g., 123456.123456) and paste is not allowed."
+                  }
+                  inputProps={{ maxLength: 13, inputMode: "decimal" }}
+                />
+              </Grid>
+            </Grid>
+          </DialogContent>
+
+          <Divider />
+
+          <DialogActions sx={CurrencyMasterStyles.dialogActions}>
+            <Button onClick={handleClose}>Cancel</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              startIcon={editingId ? <EditIcon /> : <AddIcon />}
+              disabled={
+                !isFormValid() ||
+                (editingId && checkDataEquality(currencyData, originalData))
+              }
+            >
+              {editingId ? "Update" : "Add"}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+    </Box>
+  );
+}
+export const CurrencyMasterStyles = {
+  tabBox: {
+    borderColor: "divider",
+  },
+  tabs: {
+    width: "100%",
+    height: "100%",
+  },
+  customTabPanelBox: {
+    p: 1,
+  },
+
+  dataGridContainer: {
+    border: "none",
+  },
+  loadingStack: {
+    height: "60vh",
+  },
+
+  fabButton: (theme) => ({
+    // position: "fixed",
+    borderRadius: "8px",
+    fontSize: "15px",
+    // bottom: theme.spacing(4),
+    // right: theme.spacing(4),
+    // zIndex: 1000,
+  }),
+  fabIcon: {
+    // mr: 1,
+  },
+
+  dialogTitleStack: {
+    paddingBottom: 1,
+  },
+  dialogActions: {
+    padding: 2,
+    display: "flex",
+    gap: "12px",
+  },
+
+  requestDateChip: {
+    color: "text.secondary",
+  },
+
+  requestStatusBox: (color) => ({
+    color: `${color}.main`,
+  }),
+
+  requestStatusChip: (color) => ({
+    p: 0.5,
+    m: 0,
+    width: "90%",
+    color: `${color}.dark`,
+    "& .MuiChip-icon": {
+      color: `${color}.dark`,
+    },
+  }),
+
+  // Fixed camelCase properties here
+  textField: {
+    width: "100%",
+    "&.MuiInputBase-root": {
+      height: "50px !important",
+      borderRadius: "10px", // Added px
+      alignItems: "center", // Fixed camelCase
+    },
+    "&.MuiFormHelperText-root": {
+      minHeight: "20px", // Fixed camelCase
+      lineHeight: "18px", // Fixed camelCase
+      marginLeft: 0, // Fixed camelCase
+      marginTop: "4px",
+    },
+  },
+};
+import {
+  Box,
+  Button,
+  Chip,
+  Typography,
+  Stack,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Tooltip,
+  IconButton,
+} from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+import React, { useEffect, useMemo, useState } from "react";
+import useApi from "../../hooks/useApi";
+import AddBoxIcon from "@mui/icons-material/AddBox";
+import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
+import EditDocumentIcon from "@mui/icons-material/EditDocument";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
+import DateRangeIcon from "@mui/icons-material/DateRange";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import InfoIcon from "@mui/icons-material/Info";
+import CancelIcon from "@mui/icons-material/Cancel";
+import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
+import GppBadIcon from "@mui/icons-material/GppBad";
+import CustomChip from "../../utils/CustomChip";
+import { currencyFormatterWith6Decimals } from "../../utils/NumberFormat";
+import {
+  StyledDateChip,
+  StyledStatusChip,
+  StyledStatusBox,
+  StyledRequestDataGrid,
+  StyledRequestContainerBox,
+} from "./CurrencyRateChangeStyles";
+import { useSelector } from "react-redux";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+
+function CustomNoRowsOverlay() {
+  return (
+    <Stack height="100%" alignItems="center" justifyContent="center">
+      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+      <Typography variant="h6">No Currency Requests Found</Typography>
+      <Typography>You have not created any Currency requests.</Typography>
+    </Stack>
+  );
+}
+
+export default function MyCurrencyRequestsTab({ permissions = {} }) {
+  const [rows, setRows] = useState([]);
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  const selectedMenuItem = useSelector((state) => state.menus.selectedMenuItem);
+  const [confirmDialog, setConfirmDialog] = useState(false);
+  const [requestId, setRequestId] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewData, setViewData] = useState(null);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const payload = { requestType: selectedMenuItem.requestType };
+      const response = await callApi("/CR/my-requests", payload, "POST");
+      if (response) {
+        const result = response.data?.map((row) => {
+          let parsedPayload = {};
+          parsedPayload = row.payload ? row.payload : {};
+          parsedPayload = {
+            ...parsedPayload,
+            id: row.id,
+            reqStatus: row.reqStatus,
+            reqDate: row.reqDate,
+            creatorId: row.creatorId,
+            executionDate: row.executionDate,
+            executorId: row.executorId,
+            executorRemarks: row.executorRemarks,
+            reqType: row.requestType,
+            changeType: row.changeType,
+          };
+          return { ...parsedPayload };
+        });
+        result.sort((a, b) => {
+          if (a.reqStatus === "PENDING" && b.reqStatus !== "PENDING") return -1;
+          if (a.reqStatus !== "PENDING" && b.reqStatus === "PENDING") return 1;
+          return new Date(b.reqDate) - new Date(a.reqDate);
+        });
+        setRows(result);
+      } else {
+        setRows([]);
+      }
+    } catch (error) {
+      console.error("Something went wrong", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancelRequest = async () => {
+    try {
+      const payload = {
+        requestId,
+        remarks: "User cancelled this Request",
+      };
+
+      const response = await callApi("/CR/cancel-request", payload, "PATCH");
+      if (response?.success) {
+        showSnackBar(
+          `Request Id ${requestId} Cancelled Successfully.`,
+          "success",
+        );
+      } else {
+        showSnackBar(
+          response?.message
+            ? response?.message
+            : "Failed to process your cancel request, Kindly try again",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      fetchData();
+      setConfirmDialog(false);
+    }
+  };
+
+  const handleViewClick = (data) => {
+    const { currencyCode, currencyName, currencyRate } = data;
+
+    const showData = {
+      //payload
+      currencyCode,
+      currencyName,
+      currencyRate:
+        currencyRate !== null && currencyRate !== undefined
+          ? currencyFormatterWith6Decimals("INR").format(currencyRate)
+          : "",
+    };
+
+    data.showData = showData;
+    setViewData(data);
+    setViewOpen(true);
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const columns = useMemo(
+    () => [
+      { field: "id", headerName: "Request Id", flex: 0.5, minWidth: 150 },
+      {
+        field: "currencyCode",
+        headerName: "Currency Code",
+        flex: 0.7,
+        minWidth: 150,
+        sortable: true,
+      },
+      {
+        field: "currencyName",
+        headerName: "Currency Name",
+        flex: 1,
+        minWidth: 200,
+        sortable: true,
+      },
+      {
+        field: "currencyRate",
+        headerName: "Currency Rate",
+        flex: 0.7,
+        minWidth: 150,
+        sortable: true,
+        align: "right",
+        headerAlign: "right",
+        renderCell: (params) =>
+          currencyFormatterWith6Decimals("INR").format(params.value),
+      },
+      {
+        field: "changeType",
+        headerName: "Request Type",
+        flex: 0.5,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          const val = params.value;
+          const color =
+            val === "ADD" ? "success" : val === "DELETE" ? "error" : "warning";
+          const icon =
+            val === "ADD" ? (
+              <AddBoxIcon />
+            ) : val === "DELETE" ? (
+              <AutoDeleteIcon />
+            ) : (
+              <EditDocumentIcon />
+            );
+          return (
+            <CustomChip
+            sx={{
+              width:105,
+              justifyContent:"flex-start",
+            }}
+              icon={icon}
+              label={
+                val === "ADD"
+                  ? "Added"
+                  : val === "DELETE"
+                    ? "Deleted"
+                    : "Modified"
+              }
+              color={color}
+              variant="outlined"
             />
-          )}
+          );
+        },
+      },
+      {
+        field: "reqDate",
+        headerName: "Date of Submission",
+        flex: 0.7,
+        minWidth: 200,
+        sortable: true,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Box>
+            <StyledDateChip
+              icon={<DateRangeIcon />}
+              label={params.value.split("T")[0]}
+            />
+          </Box>
+        ),
+      },
+      {
+        field: "reqStatus",
+        headerName: "Status",
+        flex: 0.5,
+        minWidth: 120,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Box
+            // sx={{
+            //   color:
+            //     params.value === "REJECTED"
+            //       ? "error.main"
+            //       : params.value === "ACCEPTED"
+            //         ? "success.dark"
+            //         : "warning.main",
+            //   // fontWeight: "bold",
+            // }}
+          >
+            <CustomChip
+              variant="outlined"
+              icon={
+                params.value === "REJECTED" ? (
+                  <BlockFlippedIcon />
+                ) : params.value === "ACCEPTED" ? (
+                  <CheckCircleIcon />
+                ) : params.value === "CANCELLED" ? (
+                  <GppBadIcon />
+                ) : (
+                  <PendingActionsIcon />
+                )
+              }
+              label={
+                params.value === "REJECTED"
+                  ? "Rejected"
+                  : params.value === "ACCEPTED"
+                    ? "Approved"
+                    : params.value === "CANCELLED"
+                      ? "Cancelled"
+                      : "Pending"
+              }
+              sx={{
+              width:120,
+              justifyContent:"flex-start",
+                color:
+                  params.value === "REJECTED"
+                    ? "error.dark"
+                    : params.value === "ACCEPTED"
+                      ? "success.dark"
+                      : params.value === "CANCELLED"
+                        ? "primary.dark"
+                        : "warning.main",
+
+                "& .MuiChip-icon": {
+                  color:
+                    params.value === "REJECTED"
+                      ? "error.dark"
+                      : params.value === "ACCEPTED"
+                        ? "success.dark"
+                        : params.value === "CANCELLED"
+                          ? "primary.dark"
+                          : "warning.main",
+                },
+              }}
+            />
+          </Box>
+        ),
+      },
+      {
+        field: "action",
+        headerName: "Action",
+        flex: 0.6,
+        minWidth: 120,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          return (
+            <Stack
+              direction="row"
+              spacing={1}
+              justifyContent="center"
+              alignItems="center"
+              height="100%"
+            >
+              {permissions.view && (
+                <Tooltip title="View">
+                  <IconButton
+                    // color="primary"
+                    onClick={() => handleViewClick(params.row)}
+                  >
+                    <VisibilityIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              {params.row.reqStatus === "PENDING" && permissions.cancel && (
+                <Tooltip title={"Cancel Request"}>
+                  <IconButton
+                    onClick={() => {
+                      setConfirmDialog(true);
+                      setRequestId(params.row.id);
+                    }}
+                  >
+                    <CancelIcon fontSize="inherit" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Stack>
+          );
+        },
+      },
+    ],
+    [permissions.cancel, permissions.view],
+  );
+
+  const filteredColumns = useMemo(() => {
+    if (permissions.view || permissions.cancel) {
+      return columns;
+    }
+    // Otherwise, filter out the column where field name is 'action'.
+    else {
+      return columns.filter((column) => column.field !== "action");
+    }
+  }, [columns, permissions.cancel, permissions.view]);
+
+  return (
+    <>
+      <Box>
+        <DataGrid
+          rows={rows}
+          loading={isLoading}
+          columns={filteredColumns}
+          disableRowSelectionOnClick
+          pageSizeOptions={[5, 10, 25, 50]}
+          initialState={{
+            pagination: { paginationModel: { pageSize: 10, page: 0 } },
+            // sorting: { sortModel: [{ field: "reqDate", sort: "asc" }] },
+          }}
+          getRowId={(row) => row.id}
+          slots={{
+            noRowsOverlay: CustomNoRowsOverlay,
+          }}
+           sx={{
+          minHeight: 700,
+          width: "100%",
+         "& .MuiDataGrid-columnHeaders": {
+          backgroundColor: "#f5f5f5 !important",
+          fontWeight: 700,
+          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+          },
+          }}
+        />
+      </Box>
+
+      {/* View Dialog */}
+      <ViewMyRequestDialog
+        open={viewOpen}
+        handleClose={() => setViewOpen(false)}
+        data={viewData}
+      />
+
+      {/* Cancel Dialog */}
+      <Dialog
+        open={confirmDialog}
+        onClose={() => {
+          setConfirmDialog(false);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>
+          Cancel Request ID: {requestId}
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ p: 1 }}>
+            Are you sure you want to cancel this request. Please confirm ?
+          </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeConfirmDialog}>Cancel</Button>
-          <Button variant="contained" onClick={handleConfirm} color={confirmDialog.type === "accept" ? "success" : "error"}>
-            {confirmDialog.type === "accept" ? "Approve" : "Reject"}
+          <Button
+            onClick={() => {
+              setConfirmDialog(false);
+            }}
+            variant="outlined"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCancelRequest}
+            color="error"
+            variant="contained"
+          >
+            Confirm
           </Button>
         </DialogActions>
       </Dialog>
-      <LoadingOverlay loading={loading} />
-    </Box>
+    </>
   );
 }
