@@ -1,23 +1,129 @@
-const CustomDataGridFooter = ({ onCreate }) => {
-  return (
-    <GridFooterContainer
-      sx={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        px: 1,
-      }}
-    >
-      <CircleTab1Fab
-        onClick={onCreate}
-        color="primary"
-        size="small"
-        aria-label="Create"
-      >
-        <CircleTab1Addicon />
-      </CircleTab1Fab>
 
-      <GridPagination />
-    </GridFooterContainer>
-  );
-};
+public class NoDataFoundException extends RuntimeException {
+
+    public NoDataFoundException(String message) {
+        super(message);
+    }
+
+}
+
+
+@RestControllerAdvice
+@Slf4j
+public class GlobalException {
+
+ @ExceptionHandler(MethodArgumentNotValidException.class)
+ public ResponseEntity<ResponseVO<Object>> handleMethodArgumentNotValidException(
+   MethodArgumentNotValidException ex) {
+
+  log.error("Validation failed: {}", ex.getMessage());
+
+  // Extract the first error message
+  String errorMessage = ex.getBindingResult()
+    .getFieldErrors()
+    .stream()
+    .map(error -> error.getField() + ": " + error.getDefaultMessage())
+    .findFirst()
+    .orElse("Validation failed");
+
+  ResponseVO<Object> responseVo = new ResponseVO<>();
+  responseVo.setData(null);
+  responseVo.setMessage(errorMessage); // Show actual field + message
+  responseVo.setStatus(HttpStatus.BAD_REQUEST); // Use direct constant
+  responseVo.setLocalDatetime(LocalDateTime.now());
+
+  return new ResponseEntity<>(responseVo, HttpStatus.BAD_REQUEST);
+ }
+
+ @ExceptionHandler({ IllegalArgumentException.class, IllegalStateException.class })
+ public ResponseEntity<ResponseVO<Object>> handleIllegalArgumentException(IllegalArgumentException ex) {
+  ResponseVO<Object> responseVo = new ResponseVO<>();
+  responseVo.setData(null);
+  responseVo.setMessage("Provided Id Doesn't exists");
+  responseVo.setStatus(HttpStatus.valueOf(HttpStatus.NOT_FOUND.value()));
+  responseVo.setLocalDatetime(LocalDateTime.now());
+  return new ResponseEntity<>(responseVo, responseVo.getStatus());
+ }
+
+ @ExceptionHandler(Exception.class)
+ public ResponseEntity<ResponseVO<Object>> handleGlobalException(
+   Exception ex,
+   WebRequest request) {
+  log.error("An unexpected error occurred: {}", ex.getMessage(), ex);
+  ResponseVO<Object> responseVo = new ResponseVO<>();
+  responseVo.setData(null);
+  responseVo.setMessage("An internal server error occurred.");
+  responseVo.setStatus(HttpStatus.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()));
+  responseVo.setLocalDatetime(LocalDateTime.now());
+  return new ResponseEntity<>(responseVo, responseVo.getStatus());
+ }
+
+ @ExceptionHandler(NullPointerException.class)
+ public ResponseEntity<ResponseVO<Object>> handleNullPointerException(NullPointerException ex) {
+  ResponseVO<Object> responseVo = new ResponseVO<>();
+  responseVo.setData(null);
+  responseVo.setMessage("Provided Id Doesn't exists");
+  responseVo.setStatus(HttpStatus.valueOf(HttpStatus.NOT_FOUND.value()));
+  responseVo.setLocalDatetime(LocalDateTime.now());
+  return new ResponseEntity<>(responseVo, responseVo.getStatus());
+ }
+
+ @ExceptionHandler(NoDataFoundException.class)
+ public ResponseEntity<ApiResponse<?>> handleNoData(NoDataFoundException e) {
+  return ResponseEntity.ok(ApiResponse.error(e.getMessage()));
+ }
+
+ @ExceptionHandler({ UserIdMismatchException.class })
+ public ResponseEntity<ApiResponse<Object>> handleUserIdMisMatch(UserIdMismatchException e) {
+  return ResponseEntity.ok(ApiResponse.error(e.getMessage()));
+ }
+
+ @ExceptionHandler(ExportLimitException.class)
+ public ResponseEntity<ApiResponse<Object>> handleLimitExceed(ExportLimitException e) {
+  log.info("Export limit exceeded");
+  log.error(e.getMessage());
+  return new ResponseEntity<>(ApiResponse.error(e.getMessage()), HttpStatus.EXPECTATION_FAILED);
+ }
+
+ /**
+  * @Author: V1023042
+  *          Exception to be raised when wrong values being passed in parameters.
+  */
+ @ExceptionHandler(BadRequestException.class)
+ public ResponseEntity<Map<String, Object>> handleBadRequest(
+   BadRequestException ex) {
+
+  Map<String, Object> response = new LinkedHashMap<>();
+
+  response.put("success", false);
+  response.put("message", ex.getMessage());
+
+  return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+    .body(response);
+ }
+}
+
+
+ @PostMapping("/export")
+        public ResponseEntity<byte[]> exportBalance(
+                @RequestHeader("Authorization") String token,
+                @RequestBody BalanceRequestDTO request) {
+
+                String userId = jwtUtil.getUserIdFromToken(token);
+
+                byte[] bytes = service.exportBalanceToExcel(
+                        request,
+                        userId);
+
+                return ResponseEntity.ok()
+                        .header(
+                                HttpHeaders.CONTENT_DISPOSITION,
+                                "attachment; filename=balance_enquiry.xlsx")
+                        .contentType(
+                                MediaType.parseMediaType(
+                                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                        .body(bytes);
+        }
+
+
+ 
