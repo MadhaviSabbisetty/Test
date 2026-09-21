@@ -1,59 +1,2435 @@
-const CustomDataGridFooter = ({ onCreate }) => {
+import AddIcon from "@mui/icons-material/Add";
+import {
+ 
+  Chip
+
+} from "@mui/material";
+import { styled } from "@mui/material/styles";
+
+
+
+
+export const ChipStyle = styled(Chip)(({ theme, row }) => ({
+  p: 0.5,
+  mt: 0.8,
+  width: "90%",
+  alignSelf: "center",
+  color: row. balCompare ? theme.palette.success.main : theme.palette.error.main,
+  "& .MuiChip-icon": {
+    color: row.balCompare ? theme.palette.success.main : theme.palette.error.main,
+  },
+}));import React, { useState, useMemo, useEffect } from "react";
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Stack,
+  Typography,
+  Tooltip,
+  IconButton,
+} from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+import CancelIcon from "@mui/icons-material/Cancel";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import AddBoxIcon from "@mui/icons-material/AddBox";
+import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
+import EditDocumentIcon from "@mui/icons-material/EditDocument";
+import GppBadIcon from "@mui/icons-material/GppBad";
+import useApi from "../../hooks/useApi";
+import CustomChip from "../../utils/CustomChip";
+import {
+  getPermissions,
+  timeStampFormatter,
+} from "../../utils/CommonUtilities";
+import InfoIcon from "@mui/icons-material/Info";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import { useSelector } from "react-redux";
+import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
+import DatasetIcon from "@mui/icons-material/Dataset";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import TrendingDownIcon from "@mui/icons-material/TrendingDown";
+import NoteIcon from "@mui/icons-material/Note";
+
+function CustomNoRowsOverlay() {
   return (
-    <GridFooterContainer
-      sx={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        px: 1,
-      }}
-    >
-      <Box
-        sx={{
-          position: "relative",
-          width: 40,
-          height: 40,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
+    <Stack height="100%" alignItems="center" justifyContent="center">
+      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+      <Typography variant="h6">No CGL Requests Found</Typography>
+      <Typography>You have not created any CGL requests.</Typography>
+    </Stack>
+  );
+}
 
-          "&:hover .create-circle-label": {
-            opacity: 1,
-            transform: "translateX(0)",
-          },
-        }}
-      >
-        {/* Create Circle text */}
-        <Box
-          className="create-circle-label"
-          onClick={onCreate}
+const ACCOUNT_CLASSIFICATIONS = [
+  { value: "A", label: "Asset", icon: <DatasetIcon fontSize="small" /> },
+  {
+    value: "L",
+    label: "Liability",
+    icon: <AccountBalanceWalletIcon fontSize="small" />,
+  },
+  { value: "I", label: "Income", icon: <TrendingUpIcon fontSize="small" /> },
+  { value: "E", label: "Expense", icon: <TrendingDownIcon fontSize="small" /> },
+  { value: "M", label: "Memo A/c", icon: <NoteIcon fontSize="small" /> },
+];
+
+export default function MyCGLRequestsTab() {
+  const [cglList, setCglList] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState(false);
+  const [requestId, setRequestId] = useState(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewData, setViewData] = useState(null);
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  const selectedMenuItem = useSelector((state) => state.menus.selectedMenuItem);
+  const permissions = getPermissions(selectedMenuItem);
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const payload = { requestType: "CGL_CODE" };
+      const response = await callApi("/CR/my-requests", payload, "POST");
+      const result = response.data?.map((row) => {
+        let parsedPayload = {};
+        parsedPayload = row.payload ? row.payload : {};
+        const { comp1 = "", segmentCode = "", comp2 = "" } = parsedPayload;
+        parsedPayload = {
+          ...parsedPayload,
+          ...row,
+        };
+        return {
+          ...parsedPayload,
+          cglNumber: `${comp1}${segmentCode}${comp2}`,
+        };
+      });
+      setCglList(result);
+    } catch (error) {
+      console.error(
+        "Something went wrong, Kindly try again after sometime.",
+        error,
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleCancelRequest = async () => {
+    try {
+      const payload = {
+        requestId,
+        remarks: "User canceled this Request",
+      };
+
+      const response = await callApi("/CR/cancel-request", payload, "PATCH");
+      if (response?.success) {
+        showSnackBar(
+          `Request Id ${requestId} Cancelled Successfully.`,
+          "success",
+        );
+      } else {
+        showSnackBar(
+          response?.message
+            ? response?.message
+            : "Failed to process your cancel request, Kindly try again",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      fetchData();
+      setConfirmDialog(false);
+    }
+  };
+
+  const handleViewClick = (data) => {
+    const {
+      comp1,
+      segmentCode,
+      comp2,
+      description,
+      acClassification,
+      balFwd,
+      defBalType,
+      status,
+      balCompare,
+      manualPosting,
+    } = data;
+
+    const accountClassifications = ACCOUNT_CLASSIFICATIONS.find(
+      (x) => x.value === acClassification,
+    );
+
+    const balanceForward = balFwd == "1" ? "Yes" : "No";
+
+    const defaultBalanceType =
+      defBalType == "C" ? "Credit" : defBalType == "D" ? "Debit" : "Memo";
+
+    const cglStatus = status == "1" ? "Active" : "Inactive";
+
+    const balanceCompare = balCompare == "1" ? "Include" : "Exclude";
+
+    const manualPostingAllowed = manualPosting == "1" ? "Yes" : "No";
+
+    const showData = {
+      "CGL Code": comp1 + segmentCode + comp2,
+      description,
+      accountClassification: accountClassifications.label,
+      comp1,
+      segmentCode,
+      comp2,
+      balanceForward,
+      // defaultBalanceType,
+      "CGL Status": cglStatus,
+      balanceCompare,
+      manualPostingAllowed,
+    };
+
+    data.showData = showData;
+    setViewData(data);
+    setViewOpen(true);
+  };
+
+  const columns = useMemo(
+    () => [
+      { field: "id", headerName: "Request Id", flex: 0.5, minWidth: 150 },
+      {
+        field: "cglNumber",
+        headerName: "CGL Code",
+        flex: 1,
+        minWidth: 150,
+        renderCell: (params) => (
+          <Box
+            // sx={{
+            //   fontFamily: "Monospace",
+            //   letterSpacing: "0.08em",
+            //   fontWeight: 700,
+            // }}
+          >
+            {params.value}
+          </Box>
+        ),
+      },
+      {
+        field: "description",
+        headerName: "Description",
+        flex: 2,
+        minWidth: 300,
+        sortable: true,
+      },
+      {
+        field: "changeType",
+        headerName: "Request Type",
+        flex: 0.5,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          const val = params.value;
+          const color =
+            val === "ADD" ? "success" : val === "DELETE" ? "error" : "warning";
+          const icon =
+            val === "ADD" ? (
+              <AddBoxIcon />
+            ) : val === "DELETE" ? (
+              <AutoDeleteIcon />
+            ) : (
+              <EditDocumentIcon />
+            );
+          return (
+            <CustomChip
+            sx={{
+              width:105,
+              justifyContent:"flex-start",
+            }}
+              icon={icon}
+              label={
+                val === "ADD"
+                  ? "Added"
+                  : val === "DELETE"
+                    ? "Deleted"
+                    : "Modified"
+              }
+              color={color}
+              variant="outlined"
+            />
+          );
+        },
+      },
+
+      {
+        field: "reqDate",
+        headerName: "Requested Date",
+        flex: 1,
+        minWidth: 200,
+        filterable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => timeStampFormatter(params.value),
+      },
+      {
+        field: "reqStatus",
+        headerName: "Status",
+        flex: 1,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Box
+            sx={{
+              color:
+                params.value === "REJECTED"
+                  ? "error.main"
+                  : params.value === "ACCEPTED"
+                    ? "success.dark"
+                    : "warning.main",
+              // fontWeight: "bold",
+            }}
+          >
+            <CustomChip
+              variant="outlined"
+              icon={
+                params.value === "REJECTED" ? (
+                  <BlockFlippedIcon />
+                ) : params.value === "ACCEPTED" ? (
+                  <CheckCircleIcon />
+                ) : params.value === "CANCELLED" ? (
+                  <GppBadIcon />
+                ) : (
+                  <PendingActionsIcon />
+                )
+              }
+              label={
+                params.value === "REJECTED"
+                  ? "Rejected"
+                  : params.value === "ACCEPTED"
+                    ? "Approved"
+                    : params.value === "CANCELLED"
+                      ? "Cancelled"
+                      : "Pending"
+              }
+              sx={{
+              width:120,
+              justifyContent:"flex-start",
+                color:
+                  params.value === "REJECTED"
+                    ? "error.dark"
+                    : params.value === "ACCEPTED"
+                      ? "success.dark"
+                      : params.value === "CANCELLED"
+                        ? "primary.dark"
+                        : "warning.main",
+
+                "& .MuiChip-icon": {
+                  color:
+                    params.value === "REJECTED"
+                      ? "error.dark"
+                      : params.value === "ACCEPTED"
+                        ? "success.dark"
+                        : params.value === "CANCELLED"
+                          ? "primary.dark"
+                          : "warning.main",
+                },
+              }}
+            />
+           </Box>
+        ),
+      },
+      {
+        field: "action",
+        headerName: "Action",
+        flex: 0.6,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          return (
+            <Stack
+              direction="row"
+              spacing={1}
+              justifyContent="center"
+              alignItems="center"
+              height="100%"
+            >
+              {permissions.view && (
+                <Tooltip title="View">
+                  <IconButton
+                    // color="primary"
+                    onClick={() => handleViewClick(params.row)}
+                  >
+                    <VisibilityIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              {params.row.reqStatus === "PENDING" && permissions.cancel && (
+                <Tooltip title={"Cancel Request"}>
+                  <IconButton
+                    onClick={() => {
+                      setConfirmDialog(true);
+                      setRequestId(params.row.id);
+                    }}
+                  >
+                    <CancelIcon fontSize="inherit" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Stack>
+          );
+        },
+      },
+    ],
+    [permissions.cancel, permissions.view],
+  );
+
+  const filteredColumns = useMemo(() => {
+    if (permissions.view || permissions.cancel) {
+      return columns;
+    }
+    // Otherwise, filter out the column where field name is 'action'.
+    else {
+      return columns.filter((column) => column.field !== "action");
+    }
+  }, [columns, permissions]);
+
+  return (
+    <>
+      <Box>
+        <Box>
+          <DataGrid
+            loading={isLoading}
+            rows={cglList}
+            columns={filteredColumns}
+            getRowId={(row) => row.id}
+            disableRowSelectionOnClick
+            pageSizeOptions={[5, 10, 25, 50]}
+            initialState={{
+              pagination: { paginationModel: { pageSize: 10, page: 0 } },
+              sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] },
+            }}
+            slots={{
+              noRowsOverlay: CustomNoRowsOverlay,
+            }}
           sx={{
-            position: "absolute",
-            right: 48,
-            whiteSpace: "nowrap",
-            opacity: 0,
-            transform: "translateX(10px)",
-            transition: "opacity 0.2s ease, transform 0.2s ease",
-            cursor: "pointer",
-            fontWeight: 500,
+          minHeight: 700,
+          width: "100%",
+          "& .MuiDataGrid-columnHeaders": {
+          backgroundColor: "#f5f5f5 !important",
+          fontWeight: 700,
+          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+          },
           }}
-        >
-          Create Circle
+          />
         </Box>
-
-        {/* + button */}
-        <CircleTab1Fab
-          onClick={onCreate}
-          color="primary"
-          size="small"
-          aria-label="Create Circle"
-        >
-          <CircleTab1Addicon />
-        </CircleTab1Fab>
       </Box>
 
-      {/* Pagination */}
-      <GridPagination />
-    </GridFooterContainer>
+      {/* View Dialog */}
+      <ViewMyRequestDialog
+        open={viewOpen}
+        handleClose={() => setViewOpen(false)}
+        data={viewData}
+      />
+
+      {/* Cancel Dialog */}
+      <Dialog
+        open={confirmDialog}
+        // onClose={() => {
+        //   setConfirmDialog(false);
+        // }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>
+          Cancel Request ID: {requestId}
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ p: 1 }}>
+            Are you sure you want to cancel this request, please confirm ?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setConfirmDialog(false);
+            }}
+            variant="outlined"
+            sx=
+          {{
+            "&:hover":
+            {
+              color:"#fff",
+            },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCancelRequest}
+            color="error"
+            variant="contained"
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
+}
+import React, { useState, useEffect } from "react";
+import {
+  Autocomplete,
+  Box,
+  Card,
+  CircularProgress,
+  TextField,
+  Typography,
+  Grid,
+  Stack,
+  Divider,
+  Paper
+} from "@mui/material";
+import useApi from "../../hooks/useApi";
+import InfoIcon from "@mui/icons-material/Info";
+import DatasetIcon from "@mui/icons-material/Dataset";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import TrendingDownIcon from "@mui/icons-material/TrendingDown";
+import NoteIcon from "@mui/icons-material/Note";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CancelIcon from "@mui/icons-material/Cancel";
+import BookmarkAddedIcon from "@mui/icons-material/BookmarkAdded";
+import BookmarkRemoveIcon from "@mui/icons-material/BookmarkRemove";
+import GppGoodIcon from "@mui/icons-material/GppGood";
+import GppBadIcon from "@mui/icons-material/GppBad";
+import CustomChip from "../../utils/CustomChip";
+import dayjs from "dayjs";
+import advancedFormat from "dayjs/plugin/advancedFormat";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import CellTowerIcon from "@mui/icons-material/CellTower";
+
+dayjs.extend(advancedFormat);
+
+// Input: 2025-11-25 Output: "25th November 2025"
+const formatDateDayjs = (dateString) => {
+  if (!dateString) return "NA";
+  return dayjs(dateString).format("Do MMMM YYYY");
 };
+
+// Classification lookup
+const ACCOUNT_CLASSIFICATIONS = {
+  A: {
+    label: "Asset",
+    icon: <DatasetIcon fontSize="small" />,
+    color: "success",
+  },
+  L: {
+    label: "Liability",
+    icon: <AccountBalanceWalletIcon fontSize="small" />,
+    color: "warning",
+  },
+  I: {
+    label: "Income",
+    icon: <TrendingUpIcon fontSize="small" />,
+    color: "info",
+  },
+  E: {
+    label: "Expense",
+    icon: <TrendingDownIcon fontSize="small" />,
+    color: "error",
+  },
+  M: {
+    label: "Memo A/c",
+    icon: <NoteIcon fontSize="small" />,
+    color: "default",
+  },
+};
+
+export default function CglView() {
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+
+  const [inputValue, setInputValue] = useState("");
+  const [searchValue, setSearchValue] = useState("");
+  const [options, setOptions] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // ---- Trigger Search only when user is typing (searchValue) ----
+  useEffect(() => {
+    const text = searchValue.trim();
+
+    if (text.length < 3) {
+      setOptions([]);
+      return;
+    }
+
+    const fetch = async () => {
+      try {
+        setLoading(true);
+        const res = await callApi(
+          "/CM/common-master/view-cgl",
+          { cglCodeOrDesc: text },
+          "GET",
+        );
+        setOptions(res?.data?.data || []);
+      } catch (error) {
+        console.error("Something went wrong while fetching CGL", error);
+        showSnackBar(
+          "Something went wrong while fetching CGL's, Kindly try again after sometime",
+          "warning",
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetch();
+  }, [searchValue, callApi, showSnackBar]);
+
+  const classification = selected
+    ? ACCOUNT_CLASSIFICATIONS[selected.acClassification]
+    : null;
+
+  const handleInputChange = (_, value, reason) => {
+    // Keep UI value always in sync
+    setInputValue(value);
+
+    if (reason === "input") {
+      // Only when user types -> update searchValue (fires API)
+      setSearchValue(value);
+    } else if (reason === "clear") {
+      setSearchValue("");
+      setOptions([]);
+    }
+    // reason === "reset" -> selection from option; do NOT trigger API again
+  };
+
+  const handleChange = (_, newValue) => {
+    setSelected(newValue);
+    console.log(newValue);
+  };
+
+  return (
+    <Paper
+        elevation={2}
+        sx={{
+          display:"flex",
+          flexDirection:"column",
+          borderRadius:2,
+          overflow:"hidden",
+          minHeight:"calc(100vh - 210px)",
+          width:"100%",
+        }}>
+    <Box
+      sx={{
+        p: 3,
+        display: "flex",
+        justifyContent: "center",
+      }}
+    >
+      <Box sx={{ width: "100%", maxWidth: 1200 }}>
+        {/* PAGE HEADING */}
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
+            CGL Master Lookup
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Search CGL by number or description and view key account details in
+            a clean, readable layout.
+          </Typography>
+        </Box>
+
+        {/* SEARCH CARD */}
+        <Card
+          sx={{
+            p: 2.5,
+            mb: 3,
+            display: "flex",
+            flexDirection: "column",
+            gap: 1,
+          }}
+        >
+          <Typography
+            variant="h5"
+            sx={{ fontWeight: 600, color: "text.secondary", mb: 0.5 }}
+          >
+            Search CGL
+          </Typography>
+          <Autocomplete
+            fullWidth
+            value={selected}
+            loading={loading}
+            options={options}
+            onChange={handleChange}
+            inputValue={inputValue}
+            onInputChange={handleInputChange}
+            getOptionLabel={(o) =>
+              o ? `${o.cglNumber} - ${o.description}` : ""
+            }
+            noOptionsText={
+              inputValue.trim().length < 3
+                ? "Type at least 3 characters..."
+                : "No CGLs found for given input"
+            }
+            slotProps={{
+              paper: {
+                elevation: 3,
+              },
+              popper: {
+                sx: {
+                  zIndex: (theme) => theme.zIndex.modal + 1,
+                },
+              },
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Search CGL by Number or Description"
+                placeholder="e.g. 1234567890 or Savings Account"
+                size="small"
+                // Max length 50 for autocomplete input
+                inputProps={{
+                  ...params.inputProps,
+                  maxLength: 50,
+                }}
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {loading && <CircularProgress size={18} />}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+          />
+        </Card>
+
+        {/* DETAILS CARD */}
+        <Card sx={{ p: 3 }}>
+          {!selected ? (
+            <Box sx={{ minHeight: 220 }}>
+              <Stack
+                height="100%"
+                alignItems="center"
+                justifyContent="center"
+                spacing={1.5}
+              >
+                <InfoIcon
+                  sx={{ fontSize: 40, color: "text.secondary", mb: 0.5 }}
+                />
+                <Typography variant="subtitle1">No CGL selected yet</Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  textAlign="center"
+                >
+                  Start typing in the search box above and pick a CGL to view
+                  its complete details.
+                </Typography>
+              </Stack>
+            </Box>
+          ) : (
+            <Box>
+              <Box
+                sx={{
+                  mb: 2,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 1,
+                }}
+              >
+                <Box>
+                  <Typography
+                    variant="h6"
+                    sx={{ fontWeight: 700, mb: 0.5, letterSpacing: 0.2 }}
+                  >
+                    CGL Details
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {selected.cglNumber} — {selected.description}
+                  </Typography>
+                </Box>
+
+                {/* {classification && (
+                  <CustomChip
+                    label={classification.label}
+                    icon={classification.icon}
+                    color={classification.color}
+                    variant="outlined"
+                  />
+                )} */}
+                {classification && (
+                  <CustomChip
+                    label={selected.cglStatus == "1" ? "Active" : "Inactive"}
+                    icon={<CellTowerIcon />}
+                    color={selected.cglStatus == "1" ? "success" : "error"}
+                    variant="outlined"
+                  />
+                )}
+              </Box>
+
+              <Divider sx={{ mb: 2 }} />
+
+              <Grid container spacing={3}>
+                {/* ROW 1 */}
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 600, color: "text.secondary" }}
+                  >
+                    CGL Number
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                    {selected.cglNumber}
+                  </Typography>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6, md: 5 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 600, color: "text.secondary" }}
+                  >
+                    CGL Description
+                  </Typography>
+                  <Typography variant="body1">
+                    {selected.description}
+                  </Typography>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 600, color: "text.secondary" }}
+                  >
+                    Account Classification
+                  </Typography>
+                  {classification && (
+                    <Box sx={{ mt: 0.5 }}>
+                      <CustomChip
+                        label={classification.label}
+                        icon={classification.icon}
+                        color={classification.color}
+                        variant="outlined"
+                      />
+                    </Box>
+                  )}
+                </Grid>
+
+                {/* ROW 2 */}
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 600, color: "text.secondary" }}
+                  >
+                    Comp1
+                  </Typography>
+                  <Typography variant="body2">
+                    {selected.comp1 || "—"}
+                  </Typography>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6, md: 5 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 600, color: "text.secondary" }}
+                  >
+                    Segment
+                  </Typography>
+                  <Typography variant="body2">
+                    {selected.segmentCode || "—"}{" "}
+                    {selected.segmentDescription
+                      ? `- ${selected.segmentDescription}`
+                      : ""}
+                  </Typography>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 600, color: "text.secondary" }}
+                  >
+                    Comp2
+                  </Typography>
+                  <Typography variant="body2">
+                    {selected.comp2 || "—"}
+                  </Typography>
+                </Grid>
+
+                {/* ROW 3 */}
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 600, color: "text.secondary" }}
+                  >
+                    Balance Compare
+                  </Typography>
+                  <Box sx={{ mt: 0.5 }}>
+                    <CustomChip
+                      label={selected.balcompare === 1 ? "Include" : "Exclude"}
+                      icon={
+                        selected.balcompare === 1 ? (
+                          <BookmarkAddedIcon fontSize="small" />
+                        ) : (
+                          <BookmarkRemoveIcon fontSize="small" />
+                        )
+                      }
+                      color={selected.balcompare === 1 ? "success" : "default"}
+                      variant="outlined"
+                    />
+                  </Box>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6, md: 5 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 600, color: "text.secondary" }}
+                  >
+                    Manual Posting
+                  </Typography>
+                  <Box sx={{ mt: 0.5 }}>
+                    <CustomChip
+                      label={
+                        selected.manualPosting === 1 ? "Allowed" : "Not Allowed"
+                      }
+                      icon={
+                        selected.manualPosting === 1 ? (
+                          <GppGoodIcon fontSize="small" />
+                        ) : (
+                          <GppBadIcon fontSize="small" />
+                        )
+                      }
+                      color={selected.manualPosting === 1 ? "success" : "error"}
+                      variant="outlined"
+                    />
+                  </Box>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 600, color: "text.secondary" }}
+                  >
+                    Balance Forward
+                  </Typography>
+                  <Box sx={{ mt: 0.5 }}>
+                    <CustomChip
+                      label={selected.balFwd === 1 ? "Yes" : "No"}
+                      icon={
+                        selected.balFwd === 1 ? (
+                          <CheckCircleIcon fontSize="small" />
+                        ) : (
+                          <CancelIcon fontSize="small" />
+                        )
+                      }
+                      color={selected.balFwd === 1 ? "success" : "default"}
+                      variant="outlined"
+                    />
+                  </Box>
+                </Grid>
+
+                {/* ROW 4 */}
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 600, color: "text.secondary" }}
+                  >
+                    Open Date
+                  </Typography>
+                  <Box sx={{ mt: 0.5, display: "flex", alignItems: "center" }}>
+                    <CalendarMonthOutlinedIcon
+                      fontSize="small"
+                      sx={{ mr: 0.5, color: "text.secondary" }}
+                    />
+                    <Typography variant="body2">
+                      {formatDateDayjs(selected.openDate)}
+                    </Typography>
+                  </Box>
+                </Grid>
+
+                {/* <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 600, color: "text.secondary" }}
+                  >
+                    Close Date
+                  </Typography>
+                  <Box sx={{ mt: 0.5, display: "flex", alignItems: "center" }}>
+                    <CalendarMonthOutlinedIcon
+                      fontSize="small"
+                      sx={{ mr: 0.5, color: "text.secondary" }}
+                    />
+                    <Typography variant="body2">
+                      {formatDateDayjs(selected.closeDate)}
+                    </Typography>
+                  </Box>
+                </Grid> */}
+              </Grid>
+            </Box>
+          )}
+        </Card>
+      </Box>
+    </Box>
+    </Paper>
+  );
+}
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
+import { Box, Fab, IconButton, Tooltip, Typography } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import { DataGrid } from "@mui/x-data-grid";
+import OnlinePredictionIcon from "@mui/icons-material/OnlinePrediction";
+import EditIcon from "@mui/icons-material/Edit";
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import CustomChip from "../../utils/CustomChip";
+import CGLDialog from "./CGLDialog";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import TrendingDownIcon from "@mui/icons-material/TrendingDown";
+import BookmarkAddedIcon from "@mui/icons-material/BookmarkAdded";
+import BookmarkRemoveIcon from "@mui/icons-material/BookmarkRemove";
+import DatasetIcon from "@mui/icons-material/Dataset";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import GppGoodIcon from "@mui/icons-material/GppGood";
+import GppBadIcon from "@mui/icons-material/GppBad";
+import NoteIcon from "@mui/icons-material/Note";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CancelIcon from "@mui/icons-material/Cancel";
+import { useSelector } from "react-redux";
+import { getPermissions } from "../../utils/CommonUtilities";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import styled from "@emotion/styled";
+
+/* ================= CONSTANTS ================= */
+
+const ACCOUNT_CLASSIFICATIONS = [
+  {
+    value: "A",
+    label: "Asset",
+    icon: <DatasetIcon fontSize="small" />,
+  },
+  {
+    value: "L",
+    label: "Liability",
+    icon: <AccountBalanceWalletIcon fontSize="small" />,
+  },
+  { value: "I", label: "Income", icon: <TrendingUpIcon fontSize="small" /> },
+  { value: "E", label: "Expense", icon: <TrendingDownIcon fontSize="small" /> },
+  { value: "M", label: "Memo A/c", icon: <NoteIcon fontSize="small" /> },
+];
+
+const OverlayBox = styled(Box)(() => ({
+  display: "flex",
+  flexDirection: "column",
+  height: "100%",
+  justifyContent: "center",
+  alignItems: "center",
+}));
+
+const CustomNoRowsOverlay = () => (
+  <OverlayBox>
+    <ErrorOutlineIcon fontSize="large" />
+    <Typography fontSize="1.1rem">Data is not available</Typography>
+  </OverlayBox>
+);
+
+/* ================= COMPONENT ================= */
+
+export default function CGLMasterTab() {
+  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
+  const requestType = selectedMenuItem?.requestType || "";
+  const permissions = getPermissions(selectedMenuItem);
+
+  const { callApi } = useApi();
+  const snackbar = useCustomSnackbar();
+
+  const [rows, setRows] = useState([]);
+  const [rowCount, setRowCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editRow, setEditRow] = useState(null);
+
+  /* ===== SERVER GRID STATE ===== */
+
+  const [paginationModel, setPaginationModel] = useState({
+    page: 0,
+    pageSize: 20,
+  });
+
+  const [sortModel, setSortModel] = useState([]);
+  const [filterModel, setFilterModel] = useState({ items: [] });
+
+  /* ===== REFS TO PREVENT DOUBLE CALLS ===== */
+
+  const lastFilterRef = useRef("");
+  const lastQueryRef = useRef("");
+
+  /* ================= FETCH DATA ================= */
+
+  const fetchRows = useCallback(async () => {
+    if (!requestType) return;
+
+    const sortField = sortModel[0]?.field;
+    const sortOrder = sortModel[0]?.sort;
+
+    const filters = filterModel.items
+      .filter(
+        (f) =>
+          f.operator &&
+          f.value !== undefined &&
+          f.value !== null &&
+          f.value !== "",
+      )
+      .map((f) => ({
+        field: f.field,
+        operator: f.operator,
+        value: f.value,
+      }));
+
+    const querySignature = JSON.stringify({
+      page: paginationModel.page,
+      size: paginationModel.pageSize,
+      sortField,
+      sortOrder,
+      filters,
+    });
+
+    // PREVENT DUPLICATE API CALL
+    if (lastQueryRef.current === querySignature) return;
+    lastQueryRef.current = querySignature;
+
+    try {
+      setLoading(true);
+      const payload = {
+        // requestType,
+        page: paginationModel.page,
+        size: paginationModel.pageSize,
+        sortField: sortField || "cglNumber",
+        sortOrder: sortOrder || "asc",
+        filters,
+      };
+      const resp = await callApi("/CM/common-master/cgls", payload, "POST");
+
+      setRows(resp?.data?.data || []);
+      setRowCount(resp?.data?.totalElements || 0);
+    } catch (err) {
+      snackbar(err?.message || "Failed to load CGLs", "error");
+      setRows([]);
+      setRowCount(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [callApi, requestType, snackbar, paginationModel, sortModel, filterModel]);
+
+  /* ================= EFFECTS ================= */
+
+  // Main fetch
+  useEffect(() => {
+    fetchRows();
+  }, [fetchRows]);
+
+  // Reset page ONLY when filter meaningfully changes
+  useEffect(() => {
+    const current = JSON.stringify(filterModel.items || []);
+    if (current === lastFilterRef.current) return;
+
+    lastFilterRef.current = current;
+
+    setPaginationModel((p) => (p.page === 0 ? p : { ...p, page: 0 }));
+  }, [filterModel]);
+
+  /* ================= DIALOG ================= */
+
+  const handleOpenCreate = () => {
+    setEditRow(null);
+    setOpenDialog(true);
+  };
+
+  const handleOpenEdit = (row) => {
+    setEditRow(row);
+    setOpenDialog(true);
+  };
+
+  const handleSaved = () => {
+    setOpenDialog(false);
+    setEditRow(null);
+    lastQueryRef.current = ""; // force reload
+    fetchRows();
+  };
+
+  /* ================= COLUMNS ================= */
+
+  const columns = useMemo(
+    () => [
+      // { field: "cglNumber", headerName: "CGL Code", flex: 1 },
+      {
+        field: "cglNumber",
+        headerName: "CGL Code",
+        flex: 1,
+        minWidth: 150,
+        renderCell: (params) => (
+          <Box
+            // sx={{
+            //   fontFamily: "Monospace",
+            //   letterSpacing: "0.08em",
+            //   fontWeight: 700,
+            // }}
+          >
+            {params.value}
+          </Box>
+        ),
+      },
+
+      {
+        field: "description",
+        headerName: "Description",
+        flex: 2,
+        minWidth: 300,
+      },
+
+      {
+        field: "acClassification",
+        headerName: "Account Classification",
+        flex: 1.2,
+        minWidth: 210,
+        type: "singleSelect",
+        valueOptions: ACCOUNT_CLASSIFICATIONS.map((a) => ({
+          value: a.value, // A, L, I, E, M
+          label: a.label,
+        })),
+        renderCell: (params) => {
+          const found = ACCOUNT_CLASSIFICATIONS.find(
+            (x) => x.value === params.value,
+          );
+          return (
+            <CustomChip
+              label={found?.label}
+              icon={found?.icon}
+              variant="outlined"
+            />
+          );
+        },
+      },
+
+      {
+        field: "balCompare",
+        headerName: "Balance Compare",
+        flex: 1,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <CustomChip
+            size="small"
+            variant="outlined"
+            icon={
+              params.row.balCompare ? (
+                <BookmarkAddedIcon />
+              ) : (
+                <BookmarkRemoveIcon />
+              )
+            }
+            label={params.row.balCompare ? "Include" : "Exclude"}
+            row={params.row}
+          />
+        ),
+      },
+
+      {
+        field: "manualPosting",
+        headerName: "Manual Posting",
+        flex: 1,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <CustomChip
+            size="small"
+            variant="outlined"
+            icon={params.row.manualPosting ? <GppGoodIcon /> : <GppBadIcon />}
+            label={params.row.manualPosting ? "Allowed" : "Not Allowed"}
+            row={params.row}
+          />
+        ),
+      },
+      {
+        field: "balFwd",
+        headerName: "Balance Forward",
+        flex: 1,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <CustomChip
+            size="small"
+            variant="outlined"
+            icon={params.row.balFwd ? <CheckCircleIcon /> : <CancelIcon />}
+            label={params.row.balFwd ? "Yes" : "No"}
+            row={params.row}
+          />
+        ),
+      },
+
+      {
+        field: "status",
+        headerName: "Status",
+        flex: 0.7,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        type: "singleSelect",
+        // sortable: false,
+        valueOptions: [
+          { value: 1, label: "Active" },
+          { value: 0, label: "In Active" },
+        ],
+
+        renderCell: (params) => (
+          <CustomChip
+            icon={<OnlinePredictionIcon />}
+            label={params.value === 1 ? "Active" : "In Active"}
+            color={params.value === 1 ? "success" : "error"}
+            variant="outlined"
+            sx={{
+              width:105,
+              justifyContent:"flex-start",
+            }}
+          />
+        ),
+      },
+
+      {
+        field: "actions",
+        headerName: "Actions",
+        flex: 0.6,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+
+        renderCell: (params) => (
+          <Tooltip title="Edit">
+            <IconButton
+              onClick={() => handleOpenEdit(params.row)}
+              color="primary"
+            >
+              <EditIcon />
+            </IconButton>
+          </Tooltip>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const filteredColumns = useMemo(() => {
+    if (permissions.modify || permissions.block || permissions.unblock) {
+      return columns;
+    }
+    return columns.filter((c) => c.field !== "actions");
+  }, [columns, permissions]);
+
+  /* ================= RENDER ================= */
+
+  return (
+    <Box>
+      <DataGrid
+        rows={rows}
+        columns={filteredColumns}
+        getRowId={(row) => row.cglNumber}
+        loading={loading}
+        paginationMode="server"
+        sortingMode="server"
+        filterMode="server"
+        rowCount={rowCount}
+        paginationModel={paginationModel}
+        onPaginationModelChange={setPaginationModel}
+        sortModel={sortModel}
+        onSortModelChange={setSortModel}
+        filterModel={filterModel}
+        onFilterModelChange={setFilterModel}
+        pageSizeOptions={[10, 20, 50, 100]}
+        disableRowSelectionOnClick
+        slots={{
+          noRowsOverlay: CustomNoRowsOverlay,
+        }}
+         sx={{
+          minHeight: 700,
+          width: "100%",
+         "& .MuiDataGrid-columnHeaders": {
+          backgroundColor: "#f5f5f5 !important",
+          fontWeight: 700,
+          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+        },
+        }}
+      />
+
+      {permissions?.create && !loading && (
+        <Box
+                sx={{
+                  display:"flex",
+                  justifyContent:"flex-end",
+                  mt:1,
+                  px:1,
+                  pb:1,
+                }}
+                >
+        <Fab
+          color="primary"
+          variant="extended"
+          onClick={handleOpenCreate}
+          sx={{
+            // position: "fixed",
+             borderRadius: "8px",
+             fontSize: "15px",
+            //  bottom: 15,
+            //  right: 30,
+            //  zIndex: 1000,
+          }}
+        >
+          <AddIcon />
+          Create
+        </Fab>
+        </Box>
+      )}
+
+      <CGLDialog
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        onSaved={handleSaved}
+        editInitialData={editRow}
+        accountClassifications={ACCOUNT_CLASSIFICATIONS}
+        permissions={permissions}
+      />
+    </Box>
+  );
+}
+import * as React from "react";
+import PropTypes from "prop-types";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
+import Box from "@mui/material/Box";
+import CGLMasterTab from "./CGLMasterTab";
+import MyCGLRequestsTab from "./MyCGLRequestsTab";
+import ConnectWithoutContactIcon from "@mui/icons-material/ConnectWithoutContact";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import { Paper } from "@mui/material";
+
+function CustomTabPanel(props) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`simple-tabpanel-${index}`}
+      aria-labelledby={`simple-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ p: 1 }}>{children}</Box>}
+    </div>
+  );
+}
+
+CustomTabPanel.propTypes = {
+  children: PropTypes.node,
+  index: PropTypes.number.isRequired,
+  value: PropTypes.number.isRequired,
+};
+
+function a11yProps(index) {
+  return {
+    id: `simple-tab-${index}`,
+    "aria-controls": `simple-tabpanel-${index}`,
+  };
+}
+
+export default function CGLMaster() {
+  const [value, setValue] = React.useState(0);
+
+  const handleChange = (event, newValue) => {
+    setValue(newValue);
+  };
+
+  return (
+    <>
+    <Paper
+        elevation={2}
+        sx={{
+          display:"flex",
+          flexDirection:"column",
+          borderRadius:2,
+          overflow:"hidden",
+          minHeight:"calc(100vh - 210px)",
+          width:"100%",
+        }}>
+      <Box
+        sx={{
+          borderBottom: 1,
+          borderColor: "divider",
+        }}
+      >
+        <Tabs
+          sx={{
+            width: "100%",
+          }}
+          value={value}
+          onChange={handleChange}
+          aria-label="basic tabs example"
+          variant="fullWidth"
+        >
+          <Tab
+            label="Manage CGL's"
+            icon={<ConnectWithoutContactIcon />}
+            iconPosition="start"
+            {...a11yProps(0)}
+          />
+          <Tab
+            icon={<PendingActionsIcon />}
+            iconPosition="start"
+            label="My Requests"
+            {...a11yProps(1)}
+          />
+        </Tabs>
+      </Box>
+      <CustomTabPanel value={value} index={0}>
+        <CGLMasterTab />
+      </CustomTabPanel>
+      <CustomTabPanel value={value} index={1}>
+        <MyCGLRequestsTab />
+      </CustomTabPanel>
+      </Paper>
+    </>
+  );
+}
+import React, {
+  useEffect,
+  useMemo,
+  useCallback,
+  useState,
+  useRef,
+} from "react";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  Box,
+  Grid,
+  TextField,
+  MenuItem,
+  Typography,
+  FormControlLabel,
+  Checkbox,
+  FormHelperText,
+  FormControl,
+  FormLabel,
+  RadioGroup,
+  Radio,
+  Button,
+  IconButton,
+  Divider,
+  DialogActions,
+  Card,
+  Autocomplete,
+} from "@mui/material";
+import LockOpenIcon from "@mui/icons-material/LockOpen";
+import CloseIcon from "@mui/icons-material/Close";
+import EditIcon from "@mui/icons-material/Edit";
+import AddIcon from "@mui/icons-material/Add";
+import BlockIcon from "@mui/icons-material/Block";
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import LoadingOverlay from "../../utils/LoadingOverlay";
+import _ from "lodash";
+
+const initialCGLState = {
+  comp1: "",
+  segmentCode: "",
+  comp2: "",
+  description: "",
+  acClassification: "",
+  balFwd: false,
+  defBalType: "",
+  balCompare: "1",
+  manualPosting: "1",
+  status: "Active",
+  openDate: new Date().toISOString().split("T")[0],
+  closeDate: null,
+};
+
+function classificationFromComp1(comp1Val) {
+  if (!comp1Val || comp1Val.length === 0) return null;
+  const ch = String(comp1Val)[0];
+  if (ch === "1" || ch === "6") return "A"; // Asset
+  if (ch === "2" || ch === "3" || ch === "4") return "L"; // Liability
+  if (ch === "5") return "M"; // Memo
+  if (ch === "7") return "I"; // Income
+  if (ch === "8") return "E"; // Expense
+  return null;
+}
+
+function defBalTypeFromClassification(ac) {
+  switch (ac) {
+    case "A":
+      return "D";
+    case "L":
+      return "C";
+    case "M":
+      return "M";
+    case "I":
+      return "C";
+    case "E":
+      return "D";
+    default:
+      return "";
+  }
+}
+
+const descRegex = /^[A-Za-z0-9 .,"<>/&()=_-]*$/;
+
+export default function CGLDialog({
+  open,
+  onClose,
+  onSaved,
+  editInitialData = null,
+  accountClassifications = null,
+  permissions = {},
+}) {
+  const { callApi } = useApi();
+  const snackbar = useCustomSnackbar();
+  const [cglData, setCglData] = useState(initialCGLState);
+  const [errors, setErrors] = useState({});
+  const [editingId, setEditingId] = useState(null);
+  const [loadOverlay, setLoadOverlay] = useState(false);
+  const [segments, setSegments] = useState([]);
+  const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
+  const [classificationLocked, setClassificationLocked] = useState(false);
+
+  // throttle snackbars during typing
+  const snackGateRef = useRef(true);
+  const notifyOnce = (msg, variant = "warning") => {
+    if (!snackGateRef.current) return;
+    snackGateRef.current = false;
+    snackbar(msg, variant);
+    setTimeout(() => (snackGateRef.current = true), 800);
+  };
+
+  // derived cglNumber
+  const cglNumber = useMemo(() => {
+    return cglData.comp1 && cglData.segmentCode && cglData.comp2
+      ? `${cglData.comp1}${cglData.segmentCode}${String(cglData.comp2).padStart(
+          2,
+          "0",
+        )}`
+      : "";
+  }, [cglData.comp1, cglData.segmentCode, cglData.comp2]);
+
+  // load segments
+  const fetchSegments = useCallback(async () => {
+    const resp = await callApi(
+      "/CM/common-master/segment-codes",
+      { requestType: "SEGMENT_CODE" },
+      "GET",
+    );
+    setSegments(resp?.data || []);
+  }, [callApi]);
+
+  // when dialog opens for Add or Edit, populate
+  useEffect(() => {
+    if (!open) return;
+    fetchSegments();
+
+    if (editInitialData) {
+      // populate form from editInitialData
+      const mapped = classificationFromComp1(editInitialData.comp1 ?? "");
+
+      const initial = {
+        ...initialCGLState,
+        ...editInitialData,
+        comp1: editInitialData.comp1 ?? "",
+        comp2: editInitialData.comp2 ?? "",
+        segmentCode: editInitialData.segmentCode ?? "",
+        description: editInitialData.description ?? "",
+        balFwd: !!editInitialData.balFwd,
+      };
+
+      // if comp1 determines classification, enforce it and lock dropdown
+      if (mapped) {
+        initial.acClassification = mapped;
+        initial.defBalType = defBalTypeFromClassification(mapped);
+        setClassificationLocked(true);
+      } else {
+        initial.acClassification = editInitialData.acClassification ?? "";
+        initial.defBalType =
+          editInitialData.defBalType ||
+          defBalTypeFromClassification(initial.acClassification);
+        setClassificationLocked(false);
+      }
+
+      // Apply balFwd and balCompare rules based on classification
+      const ac = initial.acClassification;
+      if (ac === "A" || ac === "L") {
+        initial.balFwd = true;
+        initial.balCompare = initial.balCompare ?? "1";
+      } else if (ac === "I" || ac === "E") {
+        initial.balFwd = false;
+        initial.balCompare = "0";
+      }
+
+      setCglData(initial);
+      setEditingId(editInitialData.cglNumber);
+      setErrors({});
+    } else {
+      // fresh
+      setCglData(initialCGLState);
+      setEditingId(null);
+      setErrors({});
+      setClassificationLocked(false);
+    }
+  }, [open, editInitialData, fetchSegments]);
+
+  // whenever acClassification changes we auto-set defBalType and adjust balFwd / balCompare rules
+  useEffect(() => {
+    const ac = cglData.acClassification;
+    if (!ac) {
+      setCglData((prev) => {
+        const next = {
+          ...prev,
+          balFwd: false,
+          defBalType: "",
+          balCompare: "1",
+          manualPosting: "1",
+        };
+        return next;
+      });
+    }
+
+    setCglData((prev) => {
+      const newDef = defBalTypeFromClassification(ac);
+      const next = { ...prev, defBalType: newDef };
+
+      // balFwd rules:
+      if (ac === "A" || ac === "L") {
+        next.balFwd = true; // disabled & checked
+      } else if (ac === "I" || ac === "E") {
+        next.balFwd = false; // disabled & unchecked
+      } // else leave balFwd as-is (user can change)
+
+      // balCompare rules:
+      if (ac === "I" || ac === "E") {
+        next.balCompare = "0"; // force exclude
+      }
+
+      return next;
+    });
+  }, [cglData.acClassification]);
+
+  // single-field validator
+  const validateField = useCallback((name, value) => {
+    switch (name) {
+      case "comp1":
+        if (!value) return "Comp1 is required";
+        if (!/^\d{4}$/.test(value)) return "Comp1 must be exactly 4 digits";
+        if (parseInt(value, 10) < 1000) return "Comp1 must be ≥ 1000";
+        return "";
+      case "segmentCode":
+        if (!value) return "Segment code is required";
+        return "";
+      case "comp2":
+        if (!value) return "Comp2 is required";
+        if (!/^\d{2}$/.test(value)) return "Comp2 must be 2 digits";
+        if (parseInt(value, 10) < 1 || parseInt(value, 10) > 99)
+          return "Comp2 must be between 01 and 99";
+        return "";
+      case "description":
+        if (!value) return "Description is required";
+        if (!descRegex.test(value))
+          return 'Only letters, digits, spaces, .,"<>/&()=_-';
+        if (value?.trim()?.length < 5 || value?.trim()?.length > 100)
+          return "Description should be min 5 and max 100 characters";
+        return "";
+      case "acClassification":
+        if (!value) return "Account classification is required";
+        return "";
+      default:
+        return "";
+    }
+  }, []);
+
+  const isFormValid = useMemo(() => {
+    const fields = [
+      "comp1",
+      "segmentCode",
+      "comp2",
+      "description",
+      "acClassification",
+    ];
+    return fields.every((f) => !validateField(f, cglData[f]));
+  }, [cglData, validateField]);
+
+  const handleChange = useCallback(
+    (e) => {
+      const { name, value, type, checked } = e.target;
+
+      // hard-constraints / input blocking
+      if (name === "comp1") {
+        if (!/^\d*$/.test(value)) {
+          notifyOnce("Comp1 accepts digits only");
+          return;
+        }
+        if (value.length > 4) {
+          notifyOnce("Comp1 must be exactly 4 digits");
+          return;
+        }
+      }
+
+      if (name === "comp2") {
+        if (!/^\d*$/.test(value)) {
+          notifyOnce("Comp2 accepts numbers only");
+          return;
+        }
+        if (value.length > 2) {
+          notifyOnce("Comp2 should be 2 digits");
+          return;
+        }
+      }
+
+      if (name === "description") {
+        if (value && !/^[A-Za-z0-9]$/.test(value[0])) {
+          notifyOnce("Should not start with special character");
+          return;
+        }
+        if (!descRegex.test(value)) {
+          notifyOnce("Invalid character in Description");
+          return;
+        }
+      }
+
+      if (name === "comp1") {
+        const newComp1 = value;
+        setCglData((prev) => ({ ...prev, comp1: newComp1 }));
+        const mapped = classificationFromComp1(newComp1);
+        if (mapped) {
+          setCglData((prev) => {
+            const def = defBalTypeFromClassification(mapped);
+            const updated = {
+              ...prev,
+              comp1: newComp1,
+              acClassification: mapped,
+              defBalType: def,
+            };
+
+            if (mapped === "A" || mapped === "L") updated.balFwd = true;
+            else if (mapped === "I" || mapped === "E") updated.balFwd = false;
+
+            if (mapped === "I" || mapped === "E") updated.balCompare = "0";
+
+            return updated;
+          });
+          setClassificationLocked(true);
+
+          setErrors((prev) => ({ ...prev, comp1: "", acClassification: "" }));
+        } else {
+          setClassificationLocked(false);
+          setCglData((prev) => ({ ...prev, acClassification: "" }));
+        }
+
+        // validate comp1
+        const err = validateField("comp1", newComp1);
+        setErrors((prev) => ({ ...prev, comp1: err }));
+        return;
+      }
+
+      // For balFwd checkbox toggling (only possible when enabled)
+      if (name === "balFwd") {
+        setCglData((prev) => ({ ...prev, balFwd: checked }));
+        setErrors((prev) => ({ ...prev, balFwd: "" }));
+        return;
+      }
+
+      // For balCompare (radio)
+      if (name === "balCompare") {
+        setCglData((prev) => ({ ...prev, balCompare: value }));
+        setErrors((prev) => ({ ...prev, balCompare: "" }));
+        return;
+      }
+
+      // Normal update for other fields
+      setCglData((prev) => ({
+        ...prev,
+        [name]: type === "checkbox" ? checked : value,
+      }));
+
+      // set per-field error
+      const msg = validateField(name, type === "checkbox" ? checked : value);
+      setErrors((prev) => ({ ...prev, [name]: msg }));
+    },
+    [cglData, notifyOnce, validateField],
+  );
+
+  const validateForm = useCallback(() => {
+    const fields = [
+      "comp1",
+      "segmentCode",
+      "comp2",
+      "description",
+      "acClassification",
+    ];
+    const newErrors = {};
+    fields.forEach((f) => {
+      const msg = validateField(f, cglData[f]);
+      if (msg) newErrors[f] = msg;
+    });
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length) {
+      snackbar("Please fix validation errors", "error");
+      return false;
+    }
+    return true;
+  }, [cglData, validateField, snackbar]);
+
+  // submit — dialog does the API call
+  const handleSubmit = useCallback(
+    async (e) => {
+      e?.preventDefault();
+      if (!validateForm()) return;
+
+      setLoadOverlay(true);
+      try {
+        const apiEndpoint = "/CR/create-request";
+        const method = "POST";
+        const changeType = editingId ? "UPDATE" : "ADD";
+
+        const effectiveDef = defBalTypeFromClassification(
+          cglData.acClassification,
+        );
+
+        const innerPayload = {
+          comp1: cglData.comp1,
+          segmentCode: cglData.segmentCode,
+          comp2: cglData.comp2,
+          description: cglData.description,
+          acClassification: cglData.acClassification,
+          balFwd: cglData.balFwd ? 1 : 0,
+          defBalType: effectiveDef,
+          status: cglData.status == "Active" ? 1 : cglData.status,
+          balCompare: cglData.balCompare,
+          manualPosting: cglData.manualPosting,
+        };
+        delete innerPayload.cglNumber;
+
+        const initialData = { ...editInitialData };
+        delete initialData.cglNumber;
+        delete initialData.openDate;
+        delete initialData.closeDate;
+
+        if (innerPayload.description.trim().length < 5) {
+          snackbar("Description should be minimum 5 characters", "warning");
+          return;
+        }
+        if (_.isEqual(initialData, innerPayload)) {
+          snackbar("Kindly Modify data before saving", "warning");
+          return;
+        }
+
+        const payloadData = {
+          requestType: "CGL_CODE",
+          changeType,
+          payload: innerPayload,
+        };
+
+        const response = await callApi(apiEndpoint, payloadData, method);
+        if (response) {
+          snackbar(
+            editingId
+              ? "CGL update request submitted successfully with request id " +
+                  response?.data?.id
+              : "CGL creation request submitted successfully with request id " +
+                  response?.data?.id,
+            "success",
+          );
+
+          onSaved?.();
+          handleClose();
+        } else {
+          snackbar("No response from server", "error");
+        }
+      } catch (error) {
+        console.error(error);
+        snackbar(error?.message || "Request failed", "error");
+      } finally {
+        setLoadOverlay(false);
+      }
+    },
+    [callApi, cglData, cglNumber, editingId, onSaved, snackbar, validateForm],
+  );
+
+  const handleReset = useCallback(() => {
+    setCglData(initialCGLState);
+    setEditingId(null);
+    setErrors({});
+    setClassificationLocked(false);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    onClose?.();
+    handleReset();
+    setBlockConfirmOpen(false);
+  }, [onClose, handleReset]);
+
+  // block flow — dialog owns the blocking behaviour (local mock here)
+  const openBlockConfirm = useCallback(() => {
+    setBlockConfirmOpen(true);
+  }, []);
+
+  const handleBlockUnBlockConfirm = useCallback(async () => {
+    try {
+      setLoadOverlay(true);
+      const newData = { ...editInitialData };
+      const isActive = newData.status == "1";
+      delete newData.cglNumber;
+      delete newData.openDate;
+      delete newData.closeDate;
+      newData.status = isActive ? "0" : "1";
+      const changeType = isActive ? "BLOCK" : "UNBLOCK";
+
+      const payload = {
+        requestType: "CGL_CODE",
+        changeType,
+        payload: newData,
+      };
+
+      const resp = await callApi("/CR/create-request", payload, "POST");
+      if (resp) {
+        snackbar(
+          `CGL ${isActive ? "block" : "unblock"} request created successfully`,
+          "success",
+        );
+        onSaved?.();
+      } else {
+        snackbar("Block failed", "error");
+      }
+    } catch (err) {
+      snackbar(err?.message || "Block request failed", "error");
+    } finally {
+      setBlockConfirmOpen(false);
+      setLoadOverlay(false);
+      handleClose();
+    }
+  }, [editInitialData, callApi, snackbar, onSaved, handleClose]);
+
+  // helpers to decide UI disabled state based on current classification
+  const classification = cglData.acClassification;
+  const isBalFwdDisabled =
+    classification === "A" ||
+    classification === "L" ||
+    classification === "I" ||
+    classification === "E";
+  const balFwdChecked =
+    classification === "A" || classification === "L"
+      ? true
+      : classification === "I" || classification === "E"
+        ? false
+        : cglData.balFwd;
+  const isBalCompareDisabled = classification === "I" || classification === "E";
+
+  const getSegmentValue = (code, allSegments) => {
+    return allSegments.find((segment) => segment.segmentCode === code) || null;
+  };
+
+  return (
+    <>
+      <LoadingOverlay loading={loadOverlay} />
+      <Dialog
+        open={open}
+        fullWidth
+        maxWidth="md"
+        component="form"
+        onSubmit={handleSubmit}
+      >
+        <DialogTitle>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Typography variant="h6" color="primary">
+              {editingId ? "Edit CGL" : "Add New CGL"}
+            </Typography>
+            <IconButton onClick={handleClose}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <Divider />
+
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12 }}>
+                <Box display="flex" gap={1}>
+                  <TextField
+                    fullWidth
+                    label="Comp1 *"
+                    name="comp1"
+                    value={cglData.comp1}
+                    onChange={handleChange}
+                    error={!!errors.comp1}
+                    helperText={errors.comp1 || "Exactly 4 numbers(≥1000)"}
+                    placeholder="1000 to 9999"
+                    disabled={!!editingId}
+                    slotProps={{
+                      input: {
+                        maxLength: 4,
+                        inputMode: "numeric",
+                      },
+                    }}
+                  />
+
+                  {/* <TextField
+                    fullWidth
+                    select
+                    label="Segment Code *"
+                    name="segmentCode"
+                    value={cglData.segmentCode}
+                    onChange={handleChange}
+                    error={!!errors.segmentCode}
+                    helperText={errors.segmentCode}
+                    disabled={!!editingId}
+                  >
+                    <MenuItem value="">Select Segment</MenuItem>
+                    {segments.map((segment) => (
+                      <MenuItem
+                        key={segment.segmentCode}
+                        value={segment.segmentCode}
+                      >
+                        {segment.segmentCode} - {segment.description}
+                      </MenuItem>
+                    ))}
+                  </TextField> */}
+
+                  <Autocomplete
+                    fullWidth
+                    options={segments}
+                    getOptionLabel={(option) =>
+                      `${option.segmentCode} - ${option.description}`
+                    }
+                    value={getSegmentValue(cglData.segmentCode, segments)}
+                    onChange={(event, newValue) => {
+                      // Manually call the parent form handler to update the state with the segmentCode
+                      handleChange({
+                        target: {
+                          name: "segmentCode",
+                          value: newValue ? newValue.segmentCode : "",
+                        },
+                      });
+                    }}
+                    disabled={!!editingId}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Segment Code *"
+                        name="segmentCode" // Name attribute is primarily for form submission, handled by onChange here
+                        error={!!errors.segmentCode}
+                        helperText={errors.segmentCode}
+                        // The value is managed by the Autocomplete component itself
+                      />
+                    )}
+                    // Optional: Add PopperProps for better positioning in small containers
+                    // PopperProps={{ placement: 'bottom-start' }}
+                  />
+
+                  <TextField
+                    fullWidth
+                    label="Comp2 *"
+                    name="comp2"
+                    value={cglData.comp2?.toString()}
+                    onChange={handleChange}
+                    error={!!errors.comp2}
+                    helperText={errors.comp2 || "Exactly 2 numbers(01-99)"}
+                    placeholder="01-99"
+                    disabled={!!editingId}
+                    slotProps={{
+                      input: {
+                        maxLength: 2,
+                      },
+                    }}
+                  />
+                </Box>
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Card variant="outlined" sx={{ p: 2, width: "100%" }}>
+                  <Typography variant="h6" color="textDisabled">
+                    CGL Code {cglNumber || ""}
+                  </Typography>
+                </Card>
+              </Grid>
+
+              <Grid size={{ xs: 12 }} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Description *"
+                  name="description"
+                  value={cglData.description}
+                  onChange={handleChange}
+                  error={!!errors.description}
+                  slotProps={{ htmlInput: { maxLength: 100 } }}
+                  helperText={
+                    errors.description ||
+                    'Allowed 5-100 characters (alphabets, numbers, spaces,._"<>/&()=-)'
+                  }
+                  multiline
+                  rows={3}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Box display="flex" gap={2}>
+                  {/* Account Classification: auto-set & disabled when classificationLocked is true */}
+                  <TextField
+                    select
+                    fullWidth
+                    label="Account Classification *"
+                    name="acClassification"
+                    value={cglData.acClassification}
+                    onChange={handleChange}
+                    error={!!errors.acClassification}
+                    helperText={
+                      classificationLocked
+                        ? "Set by Comp1"
+                        : errors.acClassification || ""
+                    }
+                    disabled={classificationLocked}
+                  >
+                    <MenuItem value="">Select Classification</MenuItem>
+                    {accountClassifications.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+
+                  {/* Default Balance Type is HIDDEN from UI (auto-managed) */}
+                </Box>
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <FormControl component="fieldset" fullWidth>
+                  <FormLabel component="legend">Balance Compare Flag</FormLabel>
+                  <RadioGroup
+                    row
+                    name="balCompare"
+                    value={cglData.balCompare}
+                    onChange={handleChange}
+                  >
+                    <FormControlLabel
+                      value="1"
+                      control={<Radio />}
+                      label="Include"
+                      disabled={isBalCompareDisabled}
+                    />
+                    <FormControlLabel
+                      value="0"
+                      control={<Radio />}
+                      label="Exclude"
+                      disabled={isBalCompareDisabled}
+                    />
+                  </RadioGroup>
+                </FormControl>
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <FormControl component="fieldset" fullWidth>
+                  <FormLabel component="legend">Manual Posting Flag</FormLabel>
+                  <RadioGroup
+                    row
+                    name="manualPosting"
+                    value={cglData.manualPosting}
+                    onChange={handleChange}
+                  >
+                    <FormControlLabel
+                      value="1"
+                      control={<Radio />}
+                      label="Allowed"
+                    />
+                    <FormControlLabel
+                      value="0"
+                      control={<Radio />}
+                      label="Not Allowed"
+                    />
+                  </RadioGroup>
+                </FormControl>
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      name="balFwd"
+                      checked={!!balFwdChecked}
+                      onChange={handleChange}
+                      disabled={isBalFwdDisabled}
+                    />
+                  }
+                  label="Balance Carry Forward to next year"
+                />
+                <FormHelperText>
+                  {classification === "I" || classification === "E"
+                    ? "Not applicable for Income/Expense accounts (Unchecked)"
+                    : classification === "A" || classification === "L"
+                      ? "Automatically enabled for Asset/Liability"
+                      : ""}
+                </FormHelperText>
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Box
+            sx={{
+              mt: 3,
+              display: "flex",
+              gap: 1,
+              justifyContent: "flex-end",
+            }}
+          >
+            {!editingId && (
+              <Button onClick={handleReset} variant="outlined">
+                Reset
+              </Button>
+            )}
+
+            {permissions?.block &&
+              editingId &&
+              editInitialData.status == "1" && (
+                <Button
+                  onClick={openBlockConfirm}
+                  variant="contained"
+                  color="error"
+                  startIcon={<BlockIcon />}
+                >
+                  Block CGL
+                </Button>
+              )}
+
+            {permissions?.unblock &&
+              editingId &&
+              editInitialData.status == "0" && (
+                <Button
+                  onClick={openBlockConfirm}
+                  variant="contained"
+                  color="warning"
+                  startIcon={<LockOpenIcon />}
+                >
+                  Un Block CGL
+                </Button>
+              )}
+
+            {permissions?.modify && editingId && (
+              <Button
+                type="submit"
+                variant="contained"
+                startIcon={<EditIcon />}
+                disabled={!isFormValid}
+              >
+                Update CGL
+              </Button>
+            )}
+
+            {permissions?.create && !editingId && (
+              <Button
+                type="submit"
+                variant="contained"
+                startIcon={<AddIcon />}
+                disabled={!isFormValid}
+              >
+                Add CGL
+              </Button>
+            )}
+          </Box>
+        </DialogActions>
+      </Dialog>
+
+      {/* Block confirmation dialog (owned by dialog component) */}
+      <Dialog
+        open={blockConfirmOpen}
+        onClose={() => setBlockConfirmOpen(false)}
+      >
+        <DialogTitle>
+          {editingId && editInitialData.status == "1" ? "Block" : "Un Block"}{" "}
+          CGL
+        </DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to{" "}
+            {editingId && editInitialData.status == "1" ? "Block" : "Un Block"}{" "}
+            CGL {editingId || cglNumber}?
+          </Typography>
+        </DialogContent>
+        <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end", p: 2 }}>
+          <Button onClick={() => setBlockConfirmOpen(false)}>Cancel</Button>
+          <Button
+            color={
+              editingId && editInitialData.status == "1" ? "error" : "success"
+            }
+            variant="contained"
+            onClick={handleBlockUnBlockConfirm}
+          >
+            {editingId && editInitialData.status == "1"
+              ? "Block CGL"
+              : "Un Block CGL"}
+          </Button>
+        </Box>
+      </Dialog>
+    </>
+  );
+}
