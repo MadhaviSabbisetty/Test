@@ -1,68 +1,50 @@
-const CustomFooter = ({ onCreate }) => {
-  return (
-    <GridFooterContainer
-      sx={{
-        display: "flex",
-        justifyContent: "flex-end",
-        alignItems: "center",
-        minHeight: 52,
-        px: 1,
-      }}
-    >
-      <Fab
-        color="primary"
-        onClick={onCreate}
-        sx={{
-          width: 40,
-          height: 40,
-          minHeight: 40,
-          borderRadius: "50%",
+<Fab
+  color="primary"
+  onClick={onCreate}
+  sx={{
+    width: 40,
+    height: 40,
+    minHeight: 40,
+    borderRadius: "50%",
+    flexShrink: 0,
+    overflow: "hidden",
 
-          flexShrink: 0,
+    transition: "all 0.3s ease",
 
-          overflow: "hidden",
+    "& .create-circle-text": {
+      opacity: 0,
+      width: 0,
+      marginRight: 0,
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      transition: "all 0.3s ease",
+    },
 
-          transition: "all 0.3s ease",
+    "&:hover": {
+      width: 150,
+      borderRadius: "20px",
+      justifyContent: "flex-end",
+      paddingLeft: "12px",
+      paddingRight: "12px",
+    },
 
-          "& .create-circle-text": {
-            opacity: 0,
-            width: 0,
-            marginLeft: 0,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            transition: "all 0.3s ease",
-          },
+    "&:hover .create-circle-text": {
+      opacity: 1,
+      width: "auto",
+      marginRight: "8px",
+    },
+  }}
+>
+  <Box
+    component="span"
+    className="create-circle-text"
+    sx={{
+      fontSize: "14px",
+      fontWeight: 500,
+    }}
+  >
+    Create Circle
+  </Box>
 
-          "&:hover": {
-            width: 150,
-            borderRadius: "20px",
-            justifyContent: "flex-start",
-            paddingLeft: "12px",
-            paddingRight: "12px",
-          },
-
-          "&:hover .create-circle-text": {
-            opacity: 1,
-            width: "auto",
-            marginLeft: "8px",
-          },
-        }}
-      >
-        <AddIcon />
-
-        <Box
-          component="span"
-          className="create-circle-text"
-          sx={{
-            fontSize: "14px",
-            fontWeight: 500,
-          }}
-        >
-          Create Circle
-        </Box>
-      </Fab>
-
-      <GridPagination />
-    </GridFooterContainer>
-  );
-};
+  <AddIcon />
+</Fab>
