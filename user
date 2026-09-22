@@ -1,72 +1,50 @@
-export const FabStyle = styled(Fab)(({ theme }) => ({
-  width: 40,
-  height: 40,
-  minWidth: 40,
-  minHeight: 40,
-  padding: 0,
-  borderRadius: "50%",
-  flexShrink: 0,
-
-  transition: "all 0.3s ease",
-
-  "& .create-circle-text": {
-    opacity: 0,
-    width: 0,
-    marginLeft: 0,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    flexShrink: 0,
-    transition: "all 0.3s ease",
-  },
-
-  "&:hover": {
-    width: 175,
-    minWidth: 175,
-    borderRadius: "20px",
-    justifyContent: "flex-start",
-    paddingLeft: "12px",
-    paddingRight: "12px",
-    flexWrap: "nowrap",
-  },
-
-  "&:hover .create-circle-text": {
-    opacity: 1,
-    width: "auto",
-    marginLeft: "8px",
-  },
-}));
-
-
-
-
-
-
-
-<Box
-  sx={{
-    display: "flex",
-    justifyContent: "flex-end",
-    mt: 1,
-    px: 1,
-    pb: 1,
-  }}
->
-  <FabStyle
-    onClick={() => setOpen(true)}
-    color="primary"
-  >
-    <AddIconStyle />
-
-    <Box
-      component="span"
-      className="create-circle-text"
-      sx={{
-        fontSize: "14px",
-        fontWeight: 500,
-        whiteSpace: "nowrap",
-      }}
-    >
-      Create Segment
-    </Box>
-  </FabStyle>
-</Box>
+{
+eventId : "evt-2134-45465-464645",
+"traceId" : "trc-1288-78754-7541545", 
+"correlationId" : "batch-31-03-26",
+"producerService": "PROCESS_STATUS",
+"eventType" : "EOD_EVENT",
+"priority" : "NORMAL",
+"channels" : [SMS,EMAIL],
+"recipients" : {
+ "roles" : [12,45,95]
+},
+"templateId" : "SUCCESS_EOD_TEMPLATE",
+"payload" : 
+{
+"processDate" : "31-03-26",
+"title" : {
+"balanceCompareTitle" : "Balance Compare",
+"cibaTitle" : "CIBA",
+"suspenseTitle" : "Suspense"
+}
+"balanceCompareHeaders" : ["HEAD","Total_no_of_entries","new_entry"]
+"balanceCompareRows" : [
+{"HEAD":"CASH","Total_no_of_entries":11869,"new_entry":11869},
+{"HEAD":"CTA","Total_no_of_entries":3629,"new_entry":3629}
+]
+"cibaHeaders" : ["cgl","currency","amount"]
+"cibaRows" -> [{"cgl":"1106505001","currency":"INR","amount":-118133641491.3400000000},
+{"cgl":"1106505001","currency":"USD","amount":1524575.2800000000}]
+"suspenseHeaders" : ["cgl","currency","count"]
+"suspenseRows" : [{"cgl":"1111111111","currency":"INR","count":387.0000000000},{"cgl":"1260505001","currency":"INR","count":4141.0000000000}]
+"startTime" : 27-03-26
+"endTime" : 27-03-26
+"timeTaken" : "20:49:43"
+"STATUS" : "SUCCESS"
+},
+"attachments" :[
+{ "attachmentId" : "balance_compare_report_31032026",
+"attachmentType" : "BAL_COMP_SUMMARY",
+"fileName" : "balance_compare_report"
+},
+{ "attachmentId" : "intr_report_31032023",
+"attachmentType" : "INTR_SUMMARY",
+"fileName" : "intr_report"
+},
+{ "attachmentId" : "cntr_report_31032026",
+"attachmentType" : "CNTR_SUMMARY",
+"fileName" : "cntr_report"
+}
+]
+}
