@@ -30,11 +30,21 @@ export const StackStyle = styled(Stack)(({ theme }) => ({
 
 export const FabStyle = styled(Fab)(({ theme }) => ({
   // position: "fixed",
-  borderRadius: "8px",
-  fontSize: "15px",
+  // borderRadius: "8px",
+  // fontSize: "15px",
   // bottom: theme.spacing(4),
   // right: theme.spacing(4),
   // zIndex: 1000,
+
+
+  width:40,
+  height:40,
+  minHeight:40,
+  minWidth:40,
+  padding:0,
+  borderRadius:"50%",
+  fontSize:"15px",
+  flexShrink:0,
 }));
 
 export const AddIconStyle = styled(AddIcon)(({ theme }) => ({
@@ -423,14 +433,40 @@ export default function SegmentMasterTab() {
           px:1,
           pb:1,
         }}>
+          <Box
+          sx={{
+            display:"flex",
+            flexDirection:"row-reverse",
+            alignItems:"center",
+
+            "&:hover .create-circle-label":{
+              opacity:1,
+              maxWidth:"120px",
+              marginRight:"8px",
+            },
+          }}
+          >
         <FabStyle
           onClick={() => setOpen(true)}
           color="primary"
-          variant="extended"
         >
           <AddIconStyle />
-          Create
         </FabStyle>
+
+        <Box
+        sx={{
+          opacity:0,
+          width:0,
+          overflow:"hidden",
+          whiteSpace:"nowrap",
+          marginRight:0,
+          fontSize:"14px",
+          fontWeight:500,
+          transition:"all 0.25s ease",
+        }}>
+          Create Segment
+          </Box>
+      </Box>
       </Box>
       
 
