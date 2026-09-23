@@ -1,4 +1,7 @@
 export const FabStyle = styled(Fab)(({ theme }) => ({
+  // -----------------------------------------
+  // NORMAL STATE
+  // -----------------------------------------
   width: 48,
   height: 48,
   minWidth: 48,
@@ -15,6 +18,7 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
   borderRadius: "50%",
   overflow: "hidden",
+
   flexShrink: 0,
   boxSizing: "border-box",
 
@@ -23,7 +27,8 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   border: "none",
   boxShadow: "none",
 
-  transition: "width 0.3s ease, border-radius 0.3s ease",
+  transition:
+    "width 0.3s ease, border-radius 0.3s ease",
 
   // -----------------------------------------
   // LIGHT PURPLE EXTENSION
@@ -52,7 +57,7 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   },
 
   // -----------------------------------------
-  // DARK PURPLE CIRCLE
+  // DARK PURPLE 48px CIRCLE
   // -----------------------------------------
   "&::after": {
     content: '""',
@@ -84,11 +89,14 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     width: 24,
     height: 24,
+
     minWidth: 24,
     minHeight: 24,
 
-    margin: 0,
+    // THIS IS IMPORTANT
+    // 12 + 24 + 12 = 48px
     marginLeft: 12,
+    marginRight: 0,
 
     color: "#ffffff",
   },
@@ -101,40 +109,43 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     zIndex: 2,
 
-    display: "block",
+    display: "flex",
+    alignItems: "center",
+
+    height: 48,
 
     opacity: 0,
 
     width: 0,
     maxWidth: 0,
 
-    marginLeft: 0,
+    marginLeft: 12,
     padding: 0,
 
     whiteSpace: "nowrap",
     overflow: "hidden",
 
-    color: "#ffffff",
-
     flexShrink: 0,
+
+    color: "#ffffff",
 
     fontSize: "14px",
     fontWeight: 500,
 
-    lineHeight: "normal",
+    lineHeight: 1,
 
     textAlign: "left",
 
     transition:
-      "opacity 0.2s ease, width 0.3s ease, margin-left 0.3s ease",
+      "opacity 0.2s ease, width 0.3s ease",
   },
 
   // -----------------------------------------
   // HOVER
   // -----------------------------------------
   "&:hover": {
-    width: 260,
-    minWidth: 260,
+    width: 180,
+    minWidth: 180,
 
     height: 48,
 
@@ -154,10 +165,10 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   },
 
   // -----------------------------------------
-  // EXPAND LIGHT EXTENSION
+  // LIGHT EXTENSION
   // -----------------------------------------
   "&:hover::before": {
-    width: 212,
+    width: 132,
   },
 
   // -----------------------------------------
@@ -166,8 +177,8 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   "&:hover .create-circle-text": {
     opacity: 1,
 
-    width: 120,
-    maxWidth: 120,
+    width: 108,
+    maxWidth: 108,
 
     marginLeft: 12,
 
