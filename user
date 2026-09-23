@@ -1,8 +1,8 @@
 export const FabStyle = styled(Fab)(({ theme }) => ({
-  width: 48,
-  height: 48,
-  minWidth: 48,
-  minHeight: 48,
+  width: 40,
+  height: 40,
+  minWidth: 40,
+  minHeight: 40,
   padding: 0,
   borderRadius: "50%",
   flexShrink: 0,
@@ -10,52 +10,27 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  flexDirection: "row",
-  flexWrap: "nowrap",
 
-  backgroundColor: theme.palette.primary.main,
-  color: "#fff",
-  border: `1px solid ${theme.palette.primary.main}`,
-
-  transition:
-    "width 0.3s ease, min-width 0.3s ease, border-radius 0.3s ease, background-color 0.3s ease",
+  position: "relative",
 
   "& .create-circle-text": {
+    position: "absolute",
+    left: "48px",
+    top: "50%",
+    transform: "translateY(-50%)",
+
     opacity: 0,
-    width: 0,
-    marginRight: 0,
     whiteSpace: "nowrap",
-    overflow: "hidden",
-    flexShrink: 0,
-    color: "#fff",
-    transition:
-      "opacity 0.2s ease, width 0.3s ease, margin-right 0.3s ease",
-  },
 
-  "&:hover": {
-    width: 180,
-    minWidth: 180,
-    height: 48,
-    borderRadius: "24px",
+    color: "#ffffff",
+    backgroundColor: "transparent",
 
-    justifyContent: "flex-start",
+    pointerEvents: "none",
 
-    paddingLeft: "14px",
-    paddingRight: "14px",
-
-    // Slightly translucent primary colour
-    backgroundColor: alpha(theme.palette.primary.main, 0.82),
-    border: `1px solid ${alpha(theme.palette.primary.main, 0.9)}`,
+    transition: "opacity 0.25s ease",
   },
 
   "&:hover .create-circle-text": {
     opacity: 1,
-    width: 125,
-    marginRight: "8px",
-  },
-
-  "& .MuiSvgIcon-root": {
-    color: "#fff",
-    flexShrink: 0,
   },
 }));
