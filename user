@@ -5,26 +5,87 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   minHeight: 48,
 
   padding: 0,
-  borderRadius: "50%",
-  flexShrink: 0,
+  margin: 0,
+
+  position: "relative",
 
   display: "flex",
   alignItems: "center",
-  justifyContent: "center",
+  justifyContent: "flex-start",
 
-  flexDirection: "row",
-  flexWrap: "nowrap",
+  borderRadius: "50%",
   overflow: "hidden",
+  flexShrink: 0,
   boxSizing: "border-box",
 
   backgroundColor: theme.palette.primary.main,
 
-  border: `1px solid ${theme.palette.primary.main}`,
+  border: "none",
 
-  transition:
-    "width 0.3s ease, border-radius 0.3s ease, background-image 0.3s ease",
+  transition: "width 0.3s ease, border-radius 0.3s ease",
 
+  // LIGHT EXTENSION
+  "&::before": {
+    content: '""',
+
+    position: "absolute",
+
+    left: 24,
+    top: 0,
+
+    width: 0,
+    height: 48,
+
+    backgroundColor: alpha(theme.palette.primary.main, 0.20),
+
+    borderRadius: "0 24px 24px 0",
+
+    transition: "width 0.3s ease",
+
+    zIndex: 0,
+  },
+
+  // DARK PURPLE CIRCLE
+  "&::after": {
+    content: '""',
+
+    position: "absolute",
+
+    left: 0,
+    top: 0,
+
+    width: 48,
+    height: 48,
+
+    borderRadius: "50%",
+
+    backgroundColor: theme.palette.primary.main,
+
+    zIndex: 1,
+  },
+
+  // PLUS ICON
+  "& .MuiSvgIcon-root": {
+    position: "relative",
+
+    zIndex: 2,
+
+    flexShrink: 0,
+
+    margin: 0,
+
+    width: 24,
+    height: 24,
+
+    color: "#ffffff",
+  },
+
+  // CREATE SEGMENT TEXT
   "& .create-circle-text": {
+    position: "relative",
+
+    zIndex: 2,
+
     opacity: 0,
 
     width: 0,
@@ -34,39 +95,37 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     whiteSpace: "nowrap",
     overflow: "hidden",
-    flexShrink: 0,
 
     color: "#ffffff",
+
+    flexShrink: 0,
 
     transition:
       "opacity 0.2s ease, width 0.3s ease, margin-left 0.3s ease",
   },
 
+  // HOVER
   "&:hover": {
     width: 260,
     minWidth: 260,
+
     height: 48,
 
     borderRadius: "24px",
 
-    justifyContent: "flex-start",
+    padding: 0,
 
-    paddingLeft: 0,
-    paddingRight: 12,
+    backgroundColor: alpha(theme.palette.primary.main, 0.20),
 
-    backgroundColor: theme.palette.primary.main,
-
-    border: `1px solid ${theme.palette.primary.main}`,
-
-    backgroundImage: `linear-gradient(
-      to right,
-      ${theme.palette.primary.main} 0px,
-      ${theme.palette.primary.main} 48px,
-      ${alpha(theme.palette.primary.main, 0.10)} 48px,
-      ${alpha(theme.palette.primary.main, 0.25)} 100%
-    )`,
+    border: "none",
   },
 
+  // EXPAND LIGHT EXTENSION
+  "&:hover::before": {
+    width: 236,
+  },
+
+  // SHOW TEXT
   "&:hover .create-circle-text": {
     opacity: 1,
 
@@ -74,7 +133,5 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
     maxWidth: 120,
 
     marginLeft: 12,
-
-    color: "#ffffff",
   },
 }));
