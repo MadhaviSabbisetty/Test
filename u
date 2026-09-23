@@ -1,129 +1,187 @@
+export const FabStyle = styled(Fab)(({ theme }) => ({
+  // -----------------------------------------
+  // NORMAL STATE
+  // -----------------------------------------
+  width: 48,
+  height: 48,
+  minWidth: 48,
+  minHeight: 48,
 
-public class NoDataFoundException extends RuntimeException {
+  padding: 0,
+  margin: 0,
 
-    public NoDataFoundException(String message) {
-        super(message);
-    }
+  position: "relative",
 
-}
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-start",
 
+  borderRadius: "50%",
+  overflow: "hidden",
 
-@RestControllerAdvice
-@Slf4j
-public class GlobalException {
+  flexShrink: 0,
+  boxSizing: "border-box",
 
- @ExceptionHandler(MethodArgumentNotValidException.class)
- public ResponseEntity<ResponseVO<Object>> handleMethodArgumentNotValidException(
-   MethodArgumentNotValidException ex) {
+  backgroundColor: theme.palette.primary.main,
 
-  log.error("Validation failed: {}", ex.getMessage());
+  border: "none",
+  boxShadow: "none",
 
-  // Extract the first error message
-  String errorMessage = ex.getBindingResult()
-    .getFieldErrors()
-    .stream()
-    .map(error -> error.getField() + ": " + error.getDefaultMessage())
-    .findFirst()
-    .orElse("Validation failed");
+  transition:
+    "width 0.3s ease, border-radius 0.3s ease, background-color 0.3s ease",
 
-  ResponseVO<Object> responseVo = new ResponseVO<>();
-  responseVo.setData(null);
-  responseVo.setMessage(errorMessage); // Show actual field + message
-  responseVo.setStatus(HttpStatus.BAD_REQUEST); // Use direct constant
-  responseVo.setLocalDatetime(LocalDateTime.now());
+  // -----------------------------------------
+  // LIGHT PURPLE EXTENSION
+  // -----------------------------------------
+  "&::before": {
+    content: '""',
 
-  return new ResponseEntity<>(responseVo, HttpStatus.BAD_REQUEST);
- }
+    position: "absolute",
 
- @ExceptionHandler({ IllegalArgumentException.class, IllegalStateException.class })
- public ResponseEntity<ResponseVO<Object>> handleIllegalArgumentException(IllegalArgumentException ex) {
-  ResponseVO<Object> responseVo = new ResponseVO<>();
-  responseVo.setData(null);
-  responseVo.setMessage("Provided Id Doesn't exists");
-  responseVo.setStatus(HttpStatus.valueOf(HttpStatus.NOT_FOUND.value()));
-  responseVo.setLocalDatetime(LocalDateTime.now());
-  return new ResponseEntity<>(responseVo, responseVo.getStatus());
- }
+    left: 48,
+    top: 0,
 
- @ExceptionHandler(Exception.class)
- public ResponseEntity<ResponseVO<Object>> handleGlobalException(
-   Exception ex,
-   WebRequest request) {
-  log.error("An unexpected error occurred: {}", ex.getMessage(), ex);
-  ResponseVO<Object> responseVo = new ResponseVO<>();
-  responseVo.setData(null);
-  responseVo.setMessage("An internal server error occurred.");
-  responseVo.setStatus(HttpStatus.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value()));
-  responseVo.setLocalDatetime(LocalDateTime.now());
-  return new ResponseEntity<>(responseVo, responseVo.getStatus());
- }
+    width: 0,
+    height: 48,
 
- @ExceptionHandler(NullPointerException.class)
- public ResponseEntity<ResponseVO<Object>> handleNullPointerException(NullPointerException ex) {
-  ResponseVO<Object> responseVo = new ResponseVO<>();
-  responseVo.setData(null);
-  responseVo.setMessage("Provided Id Doesn't exists");
-  responseVo.setStatus(HttpStatus.valueOf(HttpStatus.NOT_FOUND.value()));
-  responseVo.setLocalDatetime(LocalDateTime.now());
-  return new ResponseEntity<>(responseVo, responseVo.getStatus());
- }
+    background: `linear-gradient(
+      to right,
+      ${alpha(theme.palette.primary.main, 0.08)} 0%,
+      ${alpha(theme.palette.primary.main, 0.12)} 100%
+    )`,
 
- @ExceptionHandler(NoDataFoundException.class)
- public ResponseEntity<ApiResponse<?>> handleNoData(NoDataFoundException e) {
-  return ResponseEntity.ok(ApiResponse.error(e.getMessage()));
- }
+    borderRadius: "0 24px 24px 0",
 
- @ExceptionHandler({ UserIdMismatchException.class })
- public ResponseEntity<ApiResponse<Object>> handleUserIdMisMatch(UserIdMismatchException e) {
-  return ResponseEntity.ok(ApiResponse.error(e.getMessage()));
- }
+    transition: "width 0.3s ease",
 
- @ExceptionHandler(ExportLimitException.class)
- public ResponseEntity<ApiResponse<Object>> handleLimitExceed(ExportLimitException e) {
-  log.info("Export limit exceeded");
-  log.error(e.getMessage());
-  return new ResponseEntity<>(ApiResponse.error(e.getMessage()), HttpStatus.EXPECTATION_FAILED);
- }
+    zIndex: 0,
+  },
 
- /**
-  * @Author: V1023042
-  *          Exception to be raised when wrong values being passed in parameters.
-  */
- @ExceptionHandler(BadRequestException.class)
- public ResponseEntity<Map<String, Object>> handleBadRequest(
-   BadRequestException ex) {
+  // -----------------------------------------
+  // DARK PURPLE 48px CIRCLE
+  // -----------------------------------------
+  "&::after": {
+    content: '""',
 
-  Map<String, Object> response = new LinkedHashMap<>();
+    position: "absolute",
 
-  response.put("success", false);
-  response.put("message", ex.getMessage());
+    left: 0,
+    top: 0,
 
-  return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-    .body(response);
- }
-}
+    width: 48,
+    height: 48,
 
+    borderRadius: "50%",
 
- @PostMapping("/export")
-        public ResponseEntity<byte[]> exportBalance(
-                @RequestHeader("Authorization") String token,
-                @RequestBody BalanceRequestDTO request) {
+    backgroundColor: theme.palette.primary.main,
 
-                String userId = jwtUtil.getUserIdFromToken(token);
+    zIndex: 1,
+  },
 
-                byte[] bytes = service.exportBalanceToExcel(
-                        request,
-                        userId);
+  // -----------------------------------------
+  // PLUS ICON
+  // -----------------------------------------
+  "& .MuiSvgIcon-root": {
+    position: "relative",
 
-                return ResponseEntity.ok()
-                        .header(
-                                HttpHeaders.CONTENT_DISPOSITION,
-                                "attachment; filename=balance_enquiry.xlsx")
-                        .contentType(
-                                MediaType.parseMediaType(
-                                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                        .body(bytes);
-        }
+    zIndex: 2,
 
+    flexShrink: 0,
 
- 
+    width: 24,
+    height: 24,
+
+    minWidth: 24,
+    minHeight: 24,
+
+    // 12 + 24 + 12 = 48
+    marginLeft: 12,
+    marginRight: 0,
+
+    color: "#ffffff",
+  },
+
+  // -----------------------------------------
+  // CREATE SEGMENT TEXT
+  // -----------------------------------------
+  "& .create-circle-text": {
+    position: "relative",
+
+    zIndex: 2,
+
+    display: "flex",
+    alignItems: "center",
+
+    height: 48,
+
+    opacity: 0,
+
+    width: 0,
+    maxWidth: 0,
+
+    marginLeft: 16,
+    padding: 0,
+
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+
+    flexShrink: 0,
+
+    color: "#ffffff",
+
+    fontSize: "14px",
+    fontWeight: 500,
+
+    lineHeight: 1,
+
+    textAlign: "left",
+
+    transition:
+      "opacity 0.2s ease, width 0.3s ease, margin-left 0.3s ease",
+  },
+
+  // -----------------------------------------
+  // HOVER
+  // -----------------------------------------
+  "&:hover": {
+    width: 180,
+    minWidth: 180,
+
+    height: 48,
+
+    borderRadius: "24px",
+
+    padding: 0,
+
+    // IMPORTANT:
+    // Keep the main FAB background transparent.
+    // The ::before creates the light extension.
+    backgroundColor: "transparent",
+
+    border: "none",
+    boxShadow: "none",
+
+    justifyContent: "flex-start",
+  },
+
+  // -----------------------------------------
+  // EXPAND LIGHT PURPLE EXTENSION
+  // -----------------------------------------
+  "&:hover::before": {
+    width: 132,
+  },
+
+  // -----------------------------------------
+  // SHOW CREATE SEGMENT
+  // -----------------------------------------
+  "&:hover .create-circle-text": {
+    opacity: 1,
+
+    width: 108,
+    maxWidth: 108,
+
+    marginLeft: 16,
+
+    color: "#ffffff",
+  },
+}));
