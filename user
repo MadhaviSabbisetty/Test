@@ -386,7 +386,6 @@ export default function SegmentMasterTab() {
     onClick={() => setOpen(true)}
     color="primary"
   >
-    <AddIconStyle />
 
     <Box
       component="span"
@@ -399,6 +398,8 @@ export default function SegmentMasterTab() {
     >
       Create Segment
     </Box>
+    
+    <AddIconStyle />
   </FabStyle>
 </Box>
       
@@ -480,7 +481,7 @@ export default function SegmentMasterTab() {
   );
 }
 import React, { useState } from "react";
-import { styled } from "@mui/material/styles";
+import {alpha, styled } from "@mui/material/styles";
 import { Box, Tabs, Fab, Grid, Chip, Stack, TextField } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
@@ -511,17 +512,17 @@ export const StackStyle = styled(Stack)(({ theme }) => ({
 }));
 
 export const FabStyle = styled(Fab)(({ theme }) => ({
-  // position: "fixed",
+  // position: "fixed",     
   // borderRadius: "8px",
   // fontSize: "15px",
   // bottom: theme.spacing(4),
   // right: theme.spacing(4),
   // zIndex: 1000,
 
-  width: 40,
-  height: 40,
-  minWidth: 40,
-  minHeight: 40,
+  width: 48,
+  height: 48,
+  minWidth: 48,
+  minHeight: 48,
   padding: 0,
   borderRadius: "50%",
   flexShrink: 0,
@@ -532,7 +533,9 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   flexDirection:"row",
   flexWrap:"nowrap",
 
-  transition: "all 0.3s ease",
+  backgroundColor:theme.palette.primary.main,
+  border: `1px solid ${theme.palette.primary.main}`,
+  transition: "width 0.3s ease, border-radius .3s ease, background-color 0.3s ease",
 
   "& .create-circle-text": {
     opacity: 0,
@@ -541,23 +544,34 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
     whiteSpace: "nowrap",
     overflow: "hidden",
     flexShrink: 0,
-    transition: "all 0.3s ease",
+    transition: "opacity 0.2s ease, width 0.3s ease, marf=gin-left 0.3s ease",
   },
 
   "&:hover": {
-    width: 190,
-    minWidth: 190,
-    height:40,
-    borderRadius: "20px",
+    width: 200,
+    minWidth: 200,
+    height:48,
+    borderRadius: "24px",
     justifyContent: "flex-start",
-    paddingLeft: "12px",
-    paddingRight: "12px",
+    paddingLeft: "14px",
+    paddingRight: "14px",
+    
+  // backgroundColor:theme.palette.primary.light, ${theme.palette.primary.main} 0%,
+  // ${theme.palette.primary.main} 78%,
+  border: `2px solid ${theme.palette.primary.main}`,
+//  backdropFilter:"blur(2px)",
+  backgroundImage:`linear-gradient( to right,
+  ${alpha(theme.palette.primary.main,0.10)} 0%,
+  ${alpha(theme.palette.primary.main,0.10)} 78%,
+  ${theme.palette.primary.main} 78%,
+  ${theme.palette.primary.main} 100%,
+  )`,
   },
 
   "&:hover .create-circle-text": {
     opacity: 1,
-    width:120,
-    maxWidth:120,
+    width:130,
+    maxWidth:130,
     marginLeft: "8px",
   },
 
