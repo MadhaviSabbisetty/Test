@@ -4,58 +4,102 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   minWidth: 48,
   minHeight: 48,
   padding: 0,
+
   borderRadius: "50%",
   flexShrink: 0,
 
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  flexDirection: "row",
-  flexWrap: "nowrap",
-  overflow: "hidden",
+
+  position: "relative",
+  overflow: "visible",
   boxSizing: "border-box",
 
-  transition: "width 0.3s ease, border-radius 0.3s ease, background 0.3s ease",
+  backgroundColor: theme.palette.primary.main,
+
+  boxShadow: `0px 4px 12px ${alpha(
+    theme.palette.primary.main,
+    0.35
+  )}`,
+
+  transition:
+    "width 0.3s ease, border-radius 0.3s ease, box-shadow 0.3s ease",
+
+  // Extension behind the circular button
+  "&::before": {
+    content: '""',
+
+    position: "absolute",
+    top: 0,
+    left: 24,
+
+    width: 0,
+    height: 48,
+
+    borderRadius: "0 24px 24px 0",
+
+    backgroundColor: alpha(theme.palette.primary.main, 0.15),
+
+    zIndex: 0,
+
+    transition: "width 0.3s ease",
+  },
+
+  // Keep the + icon above the extension
+  "& > *": {
+    position: "relative",
+    zIndex: 2,
+  },
 
   "& .create-circle-text": {
     opacity: 0,
     width: 0,
     maxWidth: 0,
+
     marginLeft: 0,
+
     whiteSpace: "nowrap",
     overflow: "hidden",
     flexShrink: 0,
+
     color: "#ffffff",
-    transition: "opacity 0.2s ease, width 0.3s ease, margin-left 0.3s ease",
+
+    transition:
+      "opacity 0.2s ease, width 0.3s ease, margin-left 0.3s ease",
   },
 
   "&:hover": {
-    width: 180,
-    minWidth: 180,
+    width: 260,
+    minWidth: 260,
+
     height: 48,
+
     borderRadius: "24px",
 
     justifyContent: "flex-start",
 
-    paddingLeft: 0,
-    paddingRight: 14,
-
     backgroundColor: theme.palette.primary.main,
 
-    backgroundImage: `linear-gradient(
-      to right,
-      ${theme.palette.primary.main} 0px,
-      ${theme.palette.primary.main} 48px,
-      ${alpha(theme.palette.primary.main, 0.10)} 48px,
-      ${alpha(theme.palette.primary.main, 0.25)} 100%
-    )`,
+    boxShadow: `0px 4px 12px ${alpha(
+      theme.palette.primary.main,
+      0.35
+    )}`,
+  },
+
+  // Expand only the right-side extension
+  "&:hover::before": {
+    width: 236,
   },
 
   "&:hover .create-circle-text": {
     opacity: 1,
-    width: 110,
-    maxWidth: 110,
-    marginLeft: 8,
+
+    width: 120,
+    maxWidth: 120,
+
+    marginLeft: 12,
+
     color: "#ffffff",
   },
 }));
