@@ -1,12 +1,4 @@
-
 export const FabStyle = styled(Fab)(({ theme }) => ({
-  // position: "fixed",     
-  // borderRadius: "8px",
-  // fontSize: "15px",
-  // bottom: theme.spacing(4),
-  // right: theme.spacing(4),
-  // zIndex: 1000,
-
   width: 48,
   height: 48,
   minWidth: 48,
@@ -15,55 +7,55 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   borderRadius: "50%",
   flexShrink: 0,
 
-  display:"flex",
-  alignItems:"center",
-  justifyContent:"center",
-  flexDirection:"row",
-  flexWrap:"nowrap",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexDirection: "row",
+  flexWrap: "nowrap",
+  overflow: "hidden",
+  boxSizing: "border-box",
 
-  // backgroundColor:theme.palette.primary.main,
-  // border: `1px solid ${theme.palette.primary.main}`,
-  transition: "all 0.3s ease",
+  transition: "width 0.3s ease, border-radius 0.3s ease, background 0.3s ease",
 
   "& .create-circle-text": {
     opacity: 0,
     width: 0,
+    maxWidth: 0,
     marginLeft: 0,
     whiteSpace: "nowrap",
     overflow: "hidden",
     flexShrink: 0,
-    color:"#ffffff",
-    transition: "all 0.3s ease",
+    color: "#ffffff",
+    transition: "opacity 0.2s ease, width 0.3s ease, margin-left 0.3s ease",
   },
 
   "&:hover": {
     width: 180,
     minWidth: 180,
-    height:48,
+    height: 48,
     borderRadius: "24px",
-    justifyContent: "flex-start",
-    paddingLeft: "0px",
-    paddingRight: "14px",
-    
-  backgroundColor: theme.palette.primary.main,
 
-  border: `1px solid ${theme.palette.primary.main}`,
-//  backdropFilter:"blur(2px)",
-  backgroundImage:`linear-gradient( to right,
-  ${theme.palette.primary.main} 0px,
-  ${theme.palette.primary.main} 48px,
-  ${alpha(theme.palette.primary.main,0.10)} 48px,
-  ${alpha(theme.palette.primary.main,0.25)} 100%,
-  )`,
+    justifyContent: "flex-start",
+
+    paddingLeft: 0,
+    paddingRight: 14,
+
+    backgroundColor: theme.palette.primary.main,
+
+    backgroundImage: `linear-gradient(
+      to right,
+      ${theme.palette.primary.main} 0px,
+      ${theme.palette.primary.main} 48px,
+      ${alpha(theme.palette.primary.main, 0.10)} 48px,
+      ${alpha(theme.palette.primary.main, 0.25)} 100%
+    )`,
   },
 
   "&:hover .create-circle-text": {
     opacity: 1,
-    width:110,
-    maxWidth:110,
-    marginLeft: "8px",
-    color:"#ffffff",
+    width: 110,
+    maxWidth: 110,
+    marginLeft: 8,
+    color: "#ffffff",
   },
-
-
 }));
