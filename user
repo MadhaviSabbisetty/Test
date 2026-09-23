@@ -1,27 +1,7 @@
-<Box
-  sx={{
-    display: "flex",
-    justifyContent: "flex-end",
-    mt: 1,
-    px: 1,
-    pb: 1,
-  }}
->
-  <FabStyle
-    onClick={() => setOpen(true)}
-    color="primary"
-  >
-    <AddIconStyle />
-
-    <span className="create-circle-text">
-      Create Segment
-    </span>
-    
-  </FabStyle>
-</Box>
-
-
-
+export const FabStyle = styled(Fab)(({ theme }) => ({
+  // -----------------------------------------
+  // NORMAL STATE
+  // -----------------------------------------
   width: 48,
   height: 48,
   minWidth: 48,
@@ -34,7 +14,7 @@
 
   display: "flex",
   alignItems: "center",
-  justifyContent: "flex-start",
+  justifyContent: "center",
 
   borderRadius: "50%",
   overflow: "hidden",
@@ -58,7 +38,7 @@
 
     position: "absolute",
 
-    left: 48,
+    left: 0,
     top: 0,
 
     width: 0,
@@ -66,10 +46,10 @@
 
     backgroundColor: alpha(
       theme.palette.primary.main,
-      0.18
+      0.10
     ),
 
-    borderRadius: "0 24px 24px 0",
+    borderRadius: "24px",
 
     transition: "width 0.3s ease",
 
@@ -77,14 +57,14 @@
   },
 
   // -----------------------------------------
-  // DARK PURPLE 48px CIRCLE
+  // DARK PURPLE CIRCLE - RIGHT SIDE
   // -----------------------------------------
   "&::after": {
     content: '""',
 
     position: "absolute",
 
-    left: 0,
+    right: 0,
     top: 0,
 
     width: 48,
@@ -113,10 +93,7 @@
     minWidth: 24,
     minHeight: 24,
 
-    // THIS IS IMPORTANT
-    // 12 + 24 + 12 = 48px
-    marginLeft: 12,
-    marginRight: 0,
+    margin: 0,
 
     color: "#ffffff",
   },
@@ -139,7 +116,7 @@
     width: 0,
     maxWidth: 0,
 
-    marginLeft: 12,
+    margin: 0,
     padding: 0,
 
     whiteSpace: "nowrap",
@@ -173,10 +150,7 @@
 
     padding: 0,
 
-    backgroundColor: alpha(
-      theme.palette.primary.main,
-      0.18
-    ),
+    backgroundColor: "transparent",
 
     border: "none",
     boxShadow: "none",
@@ -185,14 +159,14 @@
   },
 
   // -----------------------------------------
-  // LIGHT EXTENSION
+  // LIGHT PURPLE EXTENSION
   // -----------------------------------------
   "&:hover::before": {
-    width: 132,
+    width: 180,
   },
 
   // -----------------------------------------
-  // SHOW TEXT
+  // CREATE SEGMENT TEXT
   // -----------------------------------------
   "&:hover .create-circle-text": {
     opacity: 1,
@@ -204,3 +178,12 @@
 
     color: "#ffffff",
   },
+
+  // -----------------------------------------
+  // PLUS MOVES TO RIGHT
+  // -----------------------------------------
+  "&:hover .MuiSvgIcon-root": {
+    marginLeft: "auto",
+    marginRight: 12,
+  },
+}));
