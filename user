@@ -44,10 +44,11 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
     width: 0,
     height: 48,
 
-    backgroundColor: alpha(
-      theme.palette.primary.main,
-      0.18
-    ),
+    background: `linear-gradient(
+      to right,
+      ${alpha(theme.palette.primary.main, 0.08)} 0%,
+      ${alpha(theme.palette.primary.main, 0.12)} 100%
+    )`,
 
     borderRadius: "0 24px 24px 0",
 
@@ -93,7 +94,6 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
     minWidth: 24,
     minHeight: 24,
 
-    // Center the + inside the 48px circle
     // 12 + 24 + 12 = 48
     marginLeft: 12,
     marginRight: 0,
@@ -141,7 +141,7 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   },
 
   // -----------------------------------------
-  // HOVER STATE
+  // HOVER
   // -----------------------------------------
   "&:hover": {
     width: 180,
@@ -153,10 +153,10 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     padding: 0,
 
-    backgroundColor: alpha(
-      theme.palette.primary.main,
-      0.18
-    ),
+    // IMPORTANT:
+    // Keep the main FAB background transparent.
+    // The ::before creates the light extension.
+    backgroundColor: "transparent",
 
     border: "none",
     boxShadow: "none",
