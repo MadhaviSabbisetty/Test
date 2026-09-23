@@ -143,4 +143,45 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   // -----------------------------------------
   // HOVER STATE
   // -----------------------------------------
- 
+  "&:hover": {
+    width: 180,
+    minWidth: 180,
+
+    height: 48,
+
+    borderRadius: "24px",
+
+    padding: 0,
+
+    backgroundColor: alpha(
+      theme.palette.primary.main,
+      0.18
+    ),
+
+    border: "none",
+    boxShadow: "none",
+
+    justifyContent: "flex-start",
+  },
+
+  // -----------------------------------------
+  // EXPAND LIGHT PURPLE EXTENSION
+  // -----------------------------------------
+  "&:hover::before": {
+    width: 132,
+  },
+
+  // -----------------------------------------
+  // SHOW CREATE SEGMENT
+  // -----------------------------------------
+  "&:hover .create-circle-text": {
+    opacity: 1,
+
+    width: 108,
+    maxWidth: 108,
+
+    marginLeft: 16,
+
+    color: "#ffffff",
+  },
+}));
