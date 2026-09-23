@@ -1,5 +1,5 @@
 import React from "react";
-import { styled, alpha } from "@mui/material/styles";
+import { styled } from "@mui/material/styles";
 import {
   Box,
   Tabs,
@@ -42,50 +42,50 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   height: 40,
   minWidth: 40,
   minHeight: 40,
+
   padding: 0,
   borderRadius: "50%",
-  flexShrink: 0,
-  zIndex: 2,
 
-  transition: "all 0.3s ease",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  flexShrink: 0,
+  overflow: "hidden",
+
+  transition: "width 0.3s ease, border-radius 0.3s ease",
+
+  "& .create-circle-text": {
+    display: "block",
+    maxWidth: 0,
+    opacity: 0,
+    marginLeft: 0,
+
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+
+    flexShrink: 0,
+
+    transition:
+      "max-width 0.3s ease, opacity 0.2s ease, margin-left 0.3s ease",
+  },
 
   "&:hover": {
-    backgroundColor: theme.palette.primary.main,
-  },
-}));
+    width: 175,
+    minWidth: 175,
 
-export const CreateSegmentLabel = styled(Box)(({ theme }) => ({
-  height: 40,
-  maxWidth: 0,
-  opacity: 0,
-  overflow: "hidden",
-  whiteSpace: "nowrap",
+    borderRadius: "20px",
 
-  display: "flex",
-  alignItems: "center",
+    justifyContent: "flex-start",
 
-  padding: 0,
-  marginLeft: 0,
-
-  color: "#ffffff",
-  backgroundColor: alpha(theme.palette.primary.main, 0.35),
-  border: `1px solid ${theme.palette.primary.main}`,
-  borderLeft: "none",
-
-  borderRadius: "0 20px 20px 0",
-
-  transition: "all 0.3s ease",
-}));
-
-export const CreateSegmentWrapper = styled(Box)(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-
-  "&:hover .create-segment-label": {
-    maxWidth: 130,
-    opacity: 1,
     paddingLeft: "12px",
     paddingRight: "12px",
+  },
+
+  "&:hover .create-circle-text": {
+    maxWidth: 120,
+    opacity: 1,
+    marginLeft: "8px",
   },
 }));
 
