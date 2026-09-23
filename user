@@ -1,18 +1,10 @@
-import React from "react";
-import { styled } from "@mui/material/styles";
-import {
-  Box,
-  Tabs,
-  Fab,
-  Grid,
-  Chip,
-  Stack,
-  TextField,
-} from "@mui/material";
+import React, { useState } from "react";
+import {alpha, styled } from "@mui/material/styles";
+import { Box, Tabs, Fab, Grid, Chip, Stack, TextField } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
-
-// segmentmaster
+import { Opacity } from "@mui/icons-material";
+//segmentmaster
 
 export const Boxdtatagrid = styled(Box)(({ theme }) => ({
   height: 500,
@@ -31,67 +23,82 @@ export const TabsStyle = styled(Tabs)(({ theme }) => ({
   width: "100%",
 }));
 
-// segmentmastertab
+//segmentmastertab
 
 export const StackStyle = styled(Stack)(({ theme }) => ({
   mt: 1.5,
 }));
 
 export const FabStyle = styled(Fab)(({ theme }) => ({
-  width: 40,
-  height: 40,
-  minWidth: 40,
-  minHeight: 40,
+  // position: "fixed",     
+  // borderRadius: "8px",
+  // fontSize: "15px",
+  // bottom: theme.spacing(4),
+  // right: theme.spacing(4),
+  // zIndex: 1000,
 
+  width: 48,
+  height: 48,
+  minWidth: 48,
+  minHeight: 48,
   padding: 0,
   borderRadius: "50%",
-
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-
   flexShrink: 0,
-  overflow: "hidden",
 
-  transition: "width 0.3s ease, border-radius 0.3s ease",
+  display:"flex",
+  alignItems:"center",
+  justifyContent:"center",
+  flexDirection:"row",
+  flexWrap:"nowrap",
+
+  // backgroundColor:theme.palette.primary.main,
+  // border: `1px solid ${theme.palette.primary.main}`,
+  transition: "all 0.3s ease",
 
   "& .create-circle-text": {
-    display: "block",
-    maxWidth: 0,
     opacity: 0,
+    width: 0,
     marginLeft: 0,
-
     whiteSpace: "nowrap",
     overflow: "hidden",
-
     flexShrink: 0,
-
-    transition:
-      "max-width 0.3s ease, opacity 0.2s ease, margin-left 0.3s ease",
+    transition: "all 0.3s ease",
   },
 
   "&:hover": {
-    width: 175,
-    minWidth: 175,
-
-    borderRadius: "20px",
-
+    width: 200,
+    minWidth: 200,
+    height:48,
+    borderRadius: "24px",
     justifyContent: "flex-start",
-
-    paddingLeft: "12px",
-    paddingRight: "12px",
+    paddingLeft: "14px",
+    paddingRight: "14px",
+    
+  // backgroundColor:theme.palette.primary.light, ${theme.palette.primary.main} 0%,
+  // ${theme.palette.primary.main} 78%,
+//   border: `2px solid ${theme.palette.primary.main}`,
+// //  backdropFilter:"blur(2px)",
+//   backgroundImage:`linear-gradient( to right,
+//   ${alpha(theme.palette.primary.main,0.10)} 0%,
+//   ${alpha(theme.palette.primary.main,0.10)} 78%,
+//   ${theme.palette.primary.main} 78%,
+//   ${theme.palette.primary.main} 100%,
+//   )`,
   },
 
   "&:hover .create-circle-text": {
-    maxWidth: 120,
     opacity: 1,
+    width:130,
+    maxWidth:130,
     marginLeft: "8px",
   },
+
+
 }));
 
 export const AddIconStyle = styled(AddIcon)(({ theme }) => ({
-  margin: 0,
-  flexShrink: 0,
+  margin:0,
+  flexShrink:0,
 }));
 
 export const GridContainer = styled(Grid)(({ theme }) => ({
@@ -104,7 +111,7 @@ export const GridItem1 = styled(Grid)(({ theme }) => ({
 }));
 
 // export const Textfielss = styled(TextField)(({ theme }) => ({
-//   mb: 90,
+//     mb: 90,
 // }));
 
 export const GridItem2 = styled(Grid)(({ theme }) => ({
@@ -113,8 +120,7 @@ export const GridItem2 = styled(Grid)(({ theme }) => ({
   mt: 2,
 }));
 
-// mysegmentrequeststab
-
+//mysegmentrequeststab
 export const DataGridStyles = styled(DataGrid)(({ theme }) => ({}));
 
 export const Chip1Style = styled(Chip)(({ theme }) => ({
