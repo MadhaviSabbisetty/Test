@@ -1,5 +1,125 @@
+
+<Box
+  sx={{
+    display: "flex",
+    justifyContent: "flex-end",
+    mt: 1,
+    px: 1,
+    pb: 1,
+  }}
+>
+  <FabStyle
+    onClick={() => setOpen(true)}
+    color="primary"
+  >
+    <AddIconStyle />
+
+    <span className="create-circle-text">
+      Create Segment
+    </span>
+    
+  </FabStyle>
+</Box>import React, { useState } from "react";
+import {alpha, styled } from "@mui/material/styles";
+import { Box, Tabs, Fab, Grid, Chip, Stack, TextField } from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+import AddIcon from "@mui/icons-material/Add";
+import { Opacity } from "@mui/icons-material";
+//segmentmaster
+
+export const Boxdtatagrid = styled(Box)(({ theme }) => ({
+  height: 500,
+}));
+
+export const BoxStyle = styled(Box)(({ theme }) => ({
+  borderBottom: 1,
+  borderColor: "divider",
+}));
+
+export const Box2Style = styled(Box)(({ theme }) => ({
+  py: 2,
+}));
+
+export const TabsStyle = styled(Tabs)(({ theme }) => ({
+  width: "100%",
+}));
+
+//segmentmastertab
+
+export const StackStyle = styled(Stack)(({ theme }) => ({
+  mt: 1.5,
+}));
+
 export const FabStyle = styled(Fab)(({ theme }) => ({
-  width: 48,
+  // position: "fixed",     
+  // borderRadius: "8px",
+  // fontSize: "15px",
+  // bottom: theme.spacing(4),
+  // right: theme.spacing(4),
+  // zIndex: 1000,
+
+//   width: 48,
+//   height: 48,
+//   minWidth: 48,
+//   minHeight: 48,
+//   padding: 0,
+//   borderRadius: "50%",
+//   flexShrink: 0,
+
+//   display:"flex",
+//   alignItems:"center",
+//   justifyContent:"center",
+//   flexDirection:"row",
+//   flexWrap:"nowrap",
+
+//   ovweflow:"hidden",
+//   boxSizing:"border-box",
+
+//   backgroundColor:theme.palette.primary.main,
+//   border: `1px solid ${theme.palette.primary.main}`,
+//   transition: "width 0.3s ease, border-radius 0.3s ease, background-image 0.3s ease",
+
+//   "& .create-circle-text": {
+//     opacity: 0,
+//     width: 0,
+//     marginLeft: 0,
+//     whiteSpace: "nowrap",
+//     overflow: "hidden",
+//     flexShrink: 0,
+//     color:"#ffffff",
+//     transition: "all 0.3s ease",
+//   },
+
+//   "&:hover": {
+//     width: 180,
+//     minWidth: 180,
+//     height:48,
+//     borderRadius: "24px",
+//     justifyContent: "flex-start",
+//     paddingLeft: "14px",
+//     paddingRight: "14px",
+    
+//   backgroundColor: theme.palette.primary.main,
+
+//   border: `1px solid ${theme.palette.primary.main}`,
+// //  backdropFilter:"blur(2px)",
+//   backgroundImage:`linear-gradient( to right,
+//   ${theme.palette.primary.main} 0px,
+//   ${theme.palette.primary.main} 48px,
+//   ${alpha(theme.palette.primary.main,0.10)} 48px,
+//   ${alpha(theme.palette.primary.main,0.25)} 100%
+//   )`,
+//   },
+
+//   "&:hover .create-circle-text": {
+//     opacity: 1,
+//     width:110,
+//     maxWidth:110,
+//     marginLeft: "8px",
+//     color:"#ffffff",
+//   },
+
+ width: 48,
   height: 48,
   minWidth: 48,
   minHeight: 48,
@@ -21,7 +141,7 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   backgroundColor: theme.palette.primary.main,
 
   border: "none",
-
+boxShadow:"none",
   transition: "width 0.3s ease, border-radius 0.3s ease",
 
   // LIGHT EXTENSION
@@ -30,13 +150,13 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     position: "absolute",
 
-    left: 24,
+    left: 48,
     top: 0,
 
     width: 0,
     height: 48,
 
-    backgroundColor: alpha(theme.palette.primary.main, 0.20),
+    backgroundColor: alpha(theme.palette.primary.main, 0.18),
 
     borderRadius: "0 24px 24px 0",
 
@@ -77,7 +197,11 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
     width: 24,
     height: 24,
 
+    minHeight:24,
+    minWidth:24,
+
     color: "#ffffff",
+    tranform:"translateX(12px)",
   },
 
   // CREATE SEGMENT TEXT
@@ -86,12 +210,15 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     zIndex: 2,
 
+    display:"block",
+
     opacity: 0,
 
     width: 0,
     maxWidth: 0,
 
     marginLeft: 0,
+    padding:0,
 
     whiteSpace: "nowrap",
     overflow: "hidden",
@@ -99,6 +226,10 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
     color: "#ffffff",
 
     flexShrink: 0,
+    fontSize:"14px",
+    fontWeight:500,
+    lineHeight:"48px",
+    textAlign:"left",
 
     transition:
       "opacity 0.2s ease, width 0.3s ease, margin-left 0.3s ease",
@@ -111,18 +242,20 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     height: 48,
 
-    borderRadius: "24px",
+    borderRadius: 24,
 
     padding: 0,
 
     backgroundColor: alpha(theme.palette.primary.main, 0.20),
 
     border: "none",
+    boxShadow:"none",
+    justifyContent:"flex-start",
   },
 
   // EXPAND LIGHT EXTENSION
   "&:hover::before": {
-    width: 236,
+    width: 212,
   },
 
   // SHOW TEXT
@@ -132,6 +265,45 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
     width: 120,
     maxWidth: 120,
 
-    marginLeft: 12,
+    marginLeft: 24,
   },
+}));
+
+export const AddIconStyle = styled(AddIcon)(({ theme }) => ({
+  margin:0,
+  flexShrink:0,
+
+  width:24,
+  height:24,
+  minWidth:24,
+  minHeight:24,
+ color:"#ffffff",
+}));
+
+export const GridContainer = styled(Grid)(({ theme }) => ({
+  pt: 1,
+}));
+
+export const GridItem1 = styled(Grid)(({ theme }) => ({
+  mt: 2,
+  mb: 3,
+}));
+
+// export const Textfielss = styled(TextField)(({ theme }) => ({
+//     mb: 90,
+// }));
+
+export const GridItem2 = styled(Grid)(({ theme }) => ({
+  display: "flex",
+  justifyContent: "flex-end",
+  mt: 2,
+}));
+
+//mysegmentrequeststab
+export const DataGridStyles = styled(DataGrid)(({ theme }) => ({}));
+
+export const Chip1Style = styled(Chip)(({ theme }) => ({
+  p: 0.5,
+  m: 0,
+  width: "90%",
 }));
