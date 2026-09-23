@@ -333,7 +333,7 @@ export default function SegmentMasterTab() {
           noRowsOverlay: CustomNoRowsOverlay,
         }}
         sx={{
-          minHeight: 700,
+          minHeight: 705,
           width: "100%",
          "& .MuiDataGrid-columnHeaders": {
           backgroundColor: "#f5f5f5 !important",
@@ -397,7 +397,7 @@ export default function SegmentMasterTab() {
         whiteSpace: "nowrap",
       }}
     >
-      Create Circle
+      Create Segment
     </Box>
   </FabStyle>
 </Box>
@@ -545,8 +545,9 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   },
 
   "&:hover": {
-    width: 175,
-    minWidth: 175,
+    width: 190,
+    minWidth: 190,
+    height:40,
     borderRadius: "20px",
     justifyContent: "flex-start",
     paddingLeft: "12px",
@@ -555,7 +556,8 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
   "&:hover .create-circle-text": {
     opacity: 1,
-    width: "auto",
+    width:120,
+    maxWidth:120,
     marginLeft: "8px",
   },
 
