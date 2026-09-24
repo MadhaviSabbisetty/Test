@@ -1,481 +1,8 @@
-import React, { useState } from "react";
-import {alpha, styled } from "@mui/material/styles";
-import { Box, Tabs, Fab, Grid, Chip, Stack, TextField } from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
-import AddIcon from "@mui/icons-material/Add";
-import { LineWeight, Opacity } from "@mui/icons-material";
-//segmentmaster
-
-export const Boxdtatagrid = styled(Box)(({ theme }) => ({
-  height: 500,
-}));
-
-export const BoxStyle = styled(Box)(({ theme }) => ({
-  borderBottom: 1,
-  borderColor: "divider",
-}));
-
-export const Box2Style = styled(Box)(({ theme }) => ({
-  py: 2,
-}));
-
-export const TabsStyle = styled(Tabs)(({ theme }) => ({
-  width: "100%",
-}));
-
-//segmentmastertab
-
-export const StackStyle = styled(Stack)(({ theme }) => ({
-  mt: 1.5,
-}));
-
 export const FabStyle = styled(Fab)(({ theme }) => ({
-  // position: "fixed",     
-  // borderRadius: "8px",
-  // fontSize: "15px",
-  // bottom: theme.spacing(4),
-  // right: theme.spacing(4),
-  // zIndex: 1000,
-
-//   width: 48,
-//   height: 48,
-//   minWidth: 48,
-//   minHeight: 48,
-//   padding: 0,
-//   borderRadius: "50%",
-//   flexShrink: 0,
-
-//   display:"flex",
-//   alignItems:"center",
-//   justifyContent:"center",
-//   flexDirection:"row",
-//   flexWrap:"nowrap",
-
-//   ovweflow:"hidden",
-//   boxSizing:"border-box",
-
-//   backgroundColor:theme.palette.primary.main,
-//   border: `1px solid ${theme.palette.primary.main}`,
-//   transition: "width 0.3s ease, border-radius 0.3s ease, background-image 0.3s ease",
-
-//   "& .create-circle-text": {
-//     opacity: 0,
-//     width: 0,
-//     marginLeft: 0,
-//     whiteSpace: "nowrap",
-//     overflow: "hidden",
-//     flexShrink: 0,
-//     color:"#ffffff",
-//     transition: "all 0.3s ease",
-//   },
-
-//   "&:hover": {
-//     width: 180,
-//     minWidth: 180,
-//     height:48,
-//     borderRadius: "24px",
-//     justifyContent: "flex-start",
-//     paddingLeft: "14px",
-//     paddingRight: "14px",
-    
-//   backgroundColor: theme.palette.primary.main,
-
-//   border: `1px solid ${theme.palette.primary.main}`,
-// //  backdropFilter:"blur(2px)",
-//   backgroundImage:`linear-gradient( to right,
-//   ${theme.palette.primary.main} 0px,
-//   ${theme.palette.primary.main} 48px,
-//   ${alpha(theme.palette.primary.main,0.10)} 48px,
-//   ${alpha(theme.palette.primary.main,0.25)} 100%
-//   )`,
-//   },
-
-//   "&:hover .create-circle-text": {
-//     opacity: 1,
-//     width:110,
-//     maxWidth:110,
-//     marginLeft: "8px",
-//     color:"#ffffff",
-//   },
-
-// -----------------------------------------
+  // -----------------------------------------
   // NORMAL STATE
   // -----------------------------------------
-  // width: 48,
-  // height: 48,
-  // minWidth: 48,
-  // minHeight: 48,
-
-  // padding: 0,
-  // margin: 0,
-
-  // position: "relative",
-
-  // display: "flex",
-  // alignItems: "center",
-  // justifyContent: "flex-start",
-
-  // borderRadius: "50%",
-  // overflow: "hidden",
-
-  // flexShrink: 0,
-  // boxSizing: "border-box",
-
-  // backgroundColor: theme.palette.primary.main,
-
-  // border: "none",
-  // boxShadow: "none",
-
-  // transition:
-  //   "width 0.3s ease, border-radius 0.3s ease",
-
-  // // -----------------------------------------
-  // // LIGHT PURPLE EXTENSION
-  // // -----------------------------------------
-  // "&::before": {
-  //   content: '""',
-
-  //   position: "absolute",
-
-  //   left: 48,
-  //   top: 0,
-
-  //   width: 0,
-  //   height: 48,
-
-  //   backgroundColor: alpha(
-  //     theme.palette.primary.main,
-  //     0.18
-  //   ),
-
-  //   borderRadius: "0 24px 24px 0",
-
-  //   transition: "width 0.3s ease",
-
-  //   zIndex: 0,
-  // },
-
-  // // -----------------------------------------
-  // // DARK PURPLE 48px CIRCLE
-  // // -----------------------------------------
-  // "&::after": {
-  //   content: '""',
-
-  //   position: "absolute",
-
-  //   left: 0,
-  //   top: 0,
-
-  //   width: 48,
-  //   height: 48,
-
-  //   borderRadius: "50%",
-
-  //   backgroundColor: theme.palette.primary.main,
-
-  //   zIndex: 1,
-  // },
-
-  // // -----------------------------------------
-  // // PLUS ICON
-  // // -----------------------------------------
-  // "& .MuiSvgIcon-root": {
-  //   position: "relative",
-
-  //   zIndex: 2,
-
-  //   flexShrink: 0,
-
-  //   width: 24,
-  //   height: 24,
-
-  //   minWidth: 24,
-  //   minHeight: 24,
-
-  //   // THIS IS IMPORTANT
-  //   // 12 + 24 + 12 = 48px
-  //   marginLeft: 12,
-  //   marginRight: 0,
-
-  //   color: "#ffffff",
-  // },
-
-  // // -----------------------------------------
-  // // CREATE SEGMENT TEXT
-  // // -----------------------------------------
-  // "& .create-circle-text": {
-  //   position: "relative",
-
-  //   zIndex: 2,
-
-  //   display: "flex",
-  //   alignItems: "center",
-
-  //   height: 48,
-
-  //   opacity: 0,
-
-  //   width: 0,
-  //   maxWidth: 0,
-
-  //   marginLeft: 12,
-  //   padding: 0,
-
-  //   whiteSpace: "nowrap",
-  //   overflow: "hidden",
-
-  //   flexShrink: 0,
-
-  //   color: "#ffffff",
-
-  //   fontSize: "14px",
-  //   fontWeight: 500,
-
-  //   lineHeight: 1,
-
-  //   textAlign: "left",
-
-  //   transition:
-  //     "opacity 0.2s ease, width 0.3s ease",
-  // },
-
-  // // -----------------------------------------
-  // // HOVER
-  // // -----------------------------------------
-  // "&:hover": {
-  //   width: 180,
-  //   minWidth: 180,
-
-  //   height: 48,
-
-  //   borderRadius: "24px",
-
-  //   padding: 0,
-
-  //   backgroundColor: alpha(
-  //     theme.palette.primary.main,
-  //     0.18
-  //   ),
-
-  //   border: "none",
-  //   boxShadow: "none",
-
-  //   justifyContent: "flex-start",
-  // },
-
-  // // -----------------------------------------
-  // // LIGHT EXTENSION
-  // // -----------------------------------------
-  // "&:hover::before": {
-  //   width: 132,
-  // },
-
-  // // -----------------------------------------
-  // // SHOW TEXT
-  // // -----------------------------------------
-  // "&:hover .create-circle-text": {
-  //   opacity: 1,
-
-  //   width: 108,
-  //   maxWidth: 108,
-
-  //   marginLeft: 12,
-
-  //   color: "#ffffff",
-  // },
-
-
-
-   // -----------------------------------------
-  // NORMAL STATE
-   // -----------------------------------------
-  // width: 48,
-  // height: 48,
-  // minWidth: 48,
-  // minHeight: 48,
-
-  // padding: 0,
-  // margin: 0,
-
-  // position: "relative",
-
-  // display: "flex",
-  // alignItems: "center",
-  // justifyContent: "center",
-
-  // borderRadius: "50%",
-  // overflow: "hidden",
-
-  // flexShrink: 0,
-  // boxSizing: "border-box",
-
-  // backgroundColor: theme.palette.primary.main,
-
-  // border: "none",
-  // boxShadow: "none",
-
-  // transition:
-  //   "width 0.3s ease, border-radius 0.3s ease",
-
-  // // -----------------------------------------
-  // // LIGHT PURPLE EXTENSION
-  // // -----------------------------------------
-  // "&::before": {
-  //   content: '""',
-
-  //   position: "absolute",
-
-  //   left: 0,
-  //   top: 0,
-
-  //   width: 0,
-  //   height: 48,
-
-  //   backgroundColor: alpha(
-  //     theme.palette.primary.main,
-  //     0.45
-  //   ),
-
-  //   borderRadius: "24px",
-
-  //   transition: "width 0.3s ease",
-
-  //   zIndex: 0,
-  // },
-
-  // // -----------------------------------------
-  // // DARK PURPLE CIRCLE - RIGHT SIDE
-  // // -----------------------------------------
-  // "&::after": {
-  //   content: '""',
-
-  //   position: "absolute",
-
-  //   right: -2,
-  //   top: -2,
-
-  //   width: 52,
-  //   height: 52,
-
-  //   borderRadius: "50%",
-
-  //   backgroundColor: theme.palette.primary.main,
-
-  //   zIndex: 3,
-  // },
-
-  // // -----------------------------------------
-  // // PLUS ICON
-  // // -----------------------------------------
-  // "& .MuiSvgIcon-root": {
-  //   position: "relative",
-
-  //   zIndex: 4,
-
-  //   flexShrink: 0,
-
-  //   width: 24,
-  //   height: 24,
-
-  //   minWidth: 24,
-  //   minHeight: 24,
-
-  //   margin: 0,
-
-  //   color: "#ffffff",
-  // },
-
-  // // -----------------------------------------
-  // // CREATE SEGMENT TEXT
-  // // -----------------------------------------
-  // "& .create-circle-text": {
-  //   position: "relative",
-
-  //   zIndex: 2,
-
-  //   display: "flex",
-  //   alignItems: "center",
-
-  //   height: 48,
-
-  //   opacity: 0,
-
-  //   width: 0,
-  //   maxWidth: 0,
-
-  //   margin: 0,
-  //   padding: 0,
-
-  //   whiteSpace: "nowrap",
-  //   overflow: "hidden",
-
-  //   flexShrink: 0,
-
-  //   color: "#ffffff",
-
-  //   fontSize: "14px",
-  //   fontWeight: 500,
-
-  //   lineHeight: 1,
-
-  //   textAlign: "left",
-
-  //   transition:
-  //     "opacity 0.2s ease, width 0.3s ease",
-  // },
-
-  // // -----------------------------------------
-  // // HOVER
-  // // -----------------------------------------
-  // "&:hover": {
-  //   width: 180,
-  //   minWidth: 180,
-
-  //   height: 48,
-
-  //   borderRadius: "24px",
-
-  //   padding: 0,
-
-  //   backgroundColor: alpha(theme.palette.primary.main,0.18),
-
-  //   border: `2px solid ${theme.palette.primary.main}`,
-  //   boxShadow: "none",
-
-  //   justifyContent: "flex-start",
-  // },
-
-  // // -----------------------------------------
-  // // LIGHT PURPLE EXTENSION
-  // // -----------------------------------------
-  // "&:hover::before": {
-  //   width: 180,
-  // },
-
-  // // -----------------------------------------
-  // // CREATE SEGMENT TEXT
-  // // -----------------------------------------
-  // "&:hover .create-circle-text": {
-  //   opacity: 1,
-
-  //   width: 108,
-  //   maxWidth: 108,
-
-  //   marginLeft: 12,
-
-  //   color: "#ffffff",
-  // },
-
-  // // -----------------------------------------
-  // // PLUS MOVES TO RIGHT
-  // // -----------------------------------------
-  // "&:hover .MuiSvgIcon-root": {
-  //   marginLeft: "auto",
-  //   marginRight: 12,
-  // },
-
-
-    width: 48,
+  width: 48,
   height: 48,
   minWidth: 48,
   minHeight: 48,
@@ -500,33 +27,8 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   border: "none",
   boxShadow: "none",
 
-  transition: "width 0.3s ease, border-radius 0.3s ease",
-
-  // -----------------------------------------
-  // LIGHT PURPLE BACKGROUND
-  // -----------------------------------------
-  "&::before": {
-    content: '""',
-
-    position: "absolute",
-
-    left: 0,
-    top: 0,
-
-    width: 0,
-    height: "100%",
-
-    backgroundColor: alpha(
-      theme.palette.primary.main,
-      0.18
-    ),
-
-    borderRadius: "24px",
-
-    transition: "width 0.3s ease",
-
-    zIndex: 0,
-  },
+  transition:
+    "width 0.3s ease, border-radius 0.3s ease",
 
   // -----------------------------------------
   // DARK PURPLE PLUS CIRCLE
@@ -546,7 +48,7 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     backgroundColor: theme.palette.primary.main,
 
-    zIndex: 2,
+    zIndex: 3,
 
     pointerEvents: "none",
   },
@@ -560,8 +62,6 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
     right: 11,
     top: 11,
 
-    zIndex: 3,
-
     width: 24,
     height: 24,
 
@@ -571,6 +71,10 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
     margin: 0,
 
     color: "#ffffff",
+
+    zIndex: 4,
+
+    flexShrink: 0,
   },
 
   // -----------------------------------------
@@ -580,12 +84,6 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
     position: "absolute",
 
     left: 16,
-
-    /*
-     * IMPORTANT:
-     * The right side is reserved for the
-     * 48px plus circle.
-     */
     right: 48,
 
     top: 0,
@@ -604,7 +102,6 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
     padding: 0,
 
     whiteSpace: "nowrap",
-
     overflow: "hidden",
 
     color: "#ffffff",
@@ -616,9 +113,10 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     textAlign: "left",
 
-    zIndex: 1,
+    zIndex: 2,
 
-    transition: "opacity 0.2s ease",
+    transition:
+      "opacity 0.2s ease",
   },
 
   // -----------------------------------------
@@ -634,10 +132,17 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     padding: 0,
 
-    backgroundColor: alpha(
-      theme.palette.primary.main,
-      0.18
-    ),
+    backgroundColor: "transparent",
+
+    backgroundImage: `linear-gradient(
+      to right,
+      ${theme.palette.primary.main} 0%,
+      ${theme.palette.primary.main} 30%,
+      ${lighten(theme.palette.primary.main, 0.15)} 30%,
+      ${lighten(theme.palette.primary.main, 0.15)} 60%,
+      ${lighten(theme.palette.primary.main, 0.30)} 60%,
+      ${lighten(theme.palette.primary.main, 0.30)} 100%
+    ) !important`,
 
     border: `2px solid ${theme.palette.primary.main}`,
 
@@ -647,55 +152,9 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   },
 
   // -----------------------------------------
-  // LIGHT PURPLE EXTENSION
-  // -----------------------------------------
-  "&:hover::before": {
-    width: "100%",
-  },
-
-  // -----------------------------------------
-  // SHOW TEXT
+  // SHOW CREATE SEGMENT
   // -----------------------------------------
   "&:hover .create-circle-text": {
     opacity: 1,
   },
-}));
-
-export const AddIconStyle = styled(AddIcon)(({ theme }) => ({
-  margin:0,
-  flexShrink:0,
-
-//   width:24,
-//   height:24,
-//   minWidth:24,
-//   minHeight:24,
-//  color:"#ffffff",
-}));
-
-export const GridContainer = styled(Grid)(({ theme }) => ({
-  pt: 1,
-}));
-
-export const GridItem1 = styled(Grid)(({ theme }) => ({
-  mt: 2,
-  mb: 3,
-}));
-
-// export const Textfielss = styled(TextField)(({ theme }) => ({
-//     mb: 90,
-// }));
-
-export const GridItem2 = styled(Grid)(({ theme }) => ({
-  display: "flex",
-  justifyContent: "flex-end",
-  mt: 2,
-}));
-
-//mysegmentrequeststab
-export const DataGridStyles = styled(DataGrid)(({ theme }) => ({}));
-
-export const Chip1Style = styled(Chip)(({ theme }) => ({
-  p: 0.5,
-  m: 0,
-  width: "90%",
 }));
