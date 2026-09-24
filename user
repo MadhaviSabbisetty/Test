@@ -27,8 +27,7 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   border: "none",
   boxShadow: "none",
 
-  transition:
-    "width 0.3s ease, border-radius 0.3s ease",
+  transition: "width 0.3s ease, border-radius 0.3s ease",
 
   // -----------------------------------------
   // LIGHT PURPLE BACKGROUND
@@ -57,7 +56,7 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   },
 
   // -----------------------------------------
-  // DARK PURPLE CIRCLE - RIGHT SIDE
+  // DARK PURPLE PLUS CIRCLE
   // -----------------------------------------
   "&::after": {
     content: '""',
@@ -74,7 +73,7 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     backgroundColor: theme.palette.primary.main,
 
-    zIndex: 1,
+    zIndex: 2,
 
     pointerEvents: "none",
   },
@@ -83,11 +82,12 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   // PLUS ICON
   // -----------------------------------------
   "& .MuiSvgIcon-root": {
-    position: "relative",
+    position: "absolute",
+
+    right: 12,
+    top: 12,
 
     zIndex: 3,
-
-    flexShrink: 0,
 
     width: 24,
     height: 24,
@@ -98,35 +98,41 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
     margin: 0,
 
     color: "#ffffff",
-
-    transition: "margin 0.3s ease",
   },
 
   // -----------------------------------------
   // CREATE SEGMENT TEXT
   // -----------------------------------------
   "& .create-circle-text": {
-    position: "relative",
+    position: "absolute",
 
-    zIndex: 2,
+    left: 16,
+
+    /*
+     * IMPORTANT:
+     * The right side is reserved for the
+     * 48px plus circle.
+     */
+    right: 48,
+
+    top: 0,
+
+    height: 48,
 
     display: "flex",
     alignItems: "center",
 
-    height: 48,
-
     opacity: 0,
 
-    width: 0,
-    maxWidth: 0,
+    width: "auto",
+    maxWidth: "none",
 
     margin: 0,
     padding: 0,
 
     whiteSpace: "nowrap",
-    overflow: "hidden",
 
-    flexShrink: 0,
+    overflow: "hidden",
 
     color: "#ffffff",
 
@@ -137,8 +143,9 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     textAlign: "left",
 
-    transition:
-      "opacity 0.2s ease, width 0.3s ease, margin 0.3s ease",
+    zIndex: 1,
+
+    transition: "opacity 0.2s ease",
   },
 
   // -----------------------------------------
@@ -174,25 +181,9 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   },
 
   // -----------------------------------------
-  // CREATE SEGMENT TEXT ON HOVER
+  // SHOW TEXT
   // -----------------------------------------
   "&:hover .create-circle-text": {
     opacity: 1,
-
-    width: 108,
-    maxWidth: 108,
-
-    marginLeft: 16,
-    marginRight: 0,
-
-    color: "#ffffff",
-  },
-
-  // -----------------------------------------
-  // PLUS MOVES TO RIGHT
-  // -----------------------------------------
-  "&:hover .MuiSvgIcon-root": {
-    marginLeft: "auto",
-    marginRight: 12,
   },
 }));
