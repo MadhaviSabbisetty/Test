@@ -29,6 +29,7 @@ export const StackStyle = styled(Stack)(({ theme }) => ({
   mt: 1.5,
 }));
 
+  
 export const FabStyle = styled(Fab)(({ theme }) => ({
   // position: "fixed",     
   // borderRadius: "8px",
@@ -36,8 +37,6 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   // bottom: theme.spacing(4),
   // right: theme.spacing(4),  
   // zIndex: 1000,
-
-
   width: 48,
   height: 48,
   minWidth: 48,
@@ -74,8 +73,8 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     position: "absolute",
 
-    // right: "0px",
-    // top: "0px",
+    right: "0px",
+    top: "0px",
 
     width: 48,
     height: 48,
@@ -100,8 +99,8 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   "& .MuiSvgIcon-root": {
     position: "absolute",
 
-    right: 11,
-    top: 11,
+    right: 12,
+    top: 12,
 
     width: 24,
     height: 24,
@@ -196,18 +195,26 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   "&:hover .create-circle-text": {
     opacity: 1,
   },
+
+  "&:hover .MuiSvgIcon-root":{
+    right:10,
+    top:10,
+  },
 }));
 
 export const AddIconStyle = styled(AddIcon)(({ theme }) => ({
   margin:0,
   flexShrink:0,
 
+  
 //   width:24,
 //   height:24,
 //   minWidth:24,
 //   minHeight:24,
 //  color:"#ffffff",
 }));
+
+
 
 export const GridContainer = styled(Grid)(({ theme }) => ({
   pt: 1,
