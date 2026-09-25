@@ -1,7 +1,43 @@
+import React, { useState } from "react";
+import {alpha, styled, lighten } from "@mui/material/styles";
+import { Box, Tabs, Fab, Grid, Chip, Stack, TextField } from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+import AddIcon from "@mui/icons-material/Add";
+import { LineWeight, Opacity } from "@mui/icons-material";
+//segmentmaster
+
+export const Boxdtatagrid = styled(Box)(({ theme }) => ({
+  height: 500,
+}));
+
+export const BoxStyle = styled(Box)(({ theme }) => ({
+  borderBottom: 1,
+  borderColor: "divider",
+}));
+
+export const Box2Style = styled(Box)(({ theme }) => ({
+  py: 2,
+}));
+
+export const TabsStyle = styled(Tabs)(({ theme }) => ({
+  width: "100%",
+}));
+
+//segmentmastertab
+
+export const StackStyle = styled(Stack)(({ theme }) => ({
+  mt: 1.5,
+}));
+
 export const FabStyle = styled(Fab)(({ theme }) => ({
-  // -----------------------------------------
-  // NORMAL STATE
-  // -----------------------------------------
+  // position: "fixed",     
+  // borderRadius: "8px",
+  // fontSize: "15px",
+  // bottom: theme.spacing(4),
+  // right: theme.spacing(4),  
+  // zIndex: 1000,
+
+
   width: 48,
   height: 48,
   minWidth: 48,
@@ -38,8 +74,8 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     position: "absolute",
 
-    right: "-2px",
-    top: "-2px",
+    // right: "0px",
+    // top: "0px",
 
     width: 48,
     height: 48,
@@ -51,6 +87,11 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
     zIndex: 3,
 
     pointerEvents: "none",
+  },
+
+  "&:hover::after":{
+    right:"-2px",
+    top:"-2px",
   },
 
   // -----------------------------------------
@@ -132,15 +173,13 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     padding: 0,
 
-    backgroundColor: "transparent",
+    // backgroundColor: "transparent",
 
     backgroundImage: `linear-gradient(
       to right,
       ${theme.palette.primary.main} 0%,
-      ${theme.palette.primary.main} 30%,
-      ${lighten(theme.palette.primary.main, 0.15)} 30%,
-      ${lighten(theme.palette.primary.main, 0.15)} 60%,
-      ${lighten(theme.palette.primary.main, 0.30)} 60%,
+      ${lighten(theme.palette.primary.main, 0.08)} 30%,
+      ${lighten(theme.palette.primary.main, 0.18)} 60%,
       ${lighten(theme.palette.primary.main, 0.30)} 100%
     ) !important`,
 
@@ -157,4 +196,43 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   "&:hover .create-circle-text": {
     opacity: 1,
   },
+}));
+
+export const AddIconStyle = styled(AddIcon)(({ theme }) => ({
+  margin:0,
+  flexShrink:0,
+
+//   width:24,
+//   height:24,
+//   minWidth:24,
+//   minHeight:24,
+//  color:"#ffffff",
+}));
+
+export const GridContainer = styled(Grid)(({ theme }) => ({
+  pt: 1,
+}));
+
+export const GridItem1 = styled(Grid)(({ theme }) => ({
+  mt: 2,
+  mb: 3,
+}));
+
+// export const Textfielss = styled(TextField)(({ theme }) => ({
+//     mb: 90,
+// }));
+
+export const GridItem2 = styled(Grid)(({ theme }) => ({
+  display: "flex",
+  justifyContent: "flex-end",
+  mt: 2,
+}));
+
+//mysegmentrequeststab
+export const DataGridStyles = styled(DataGrid)(({ theme }) => ({}));
+
+export const Chip1Style = styled(Chip)(({ theme }) => ({
+  p: 0.5,
+  m: 0,
+  width: "90%",
 }));
