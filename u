@@ -1,187 +1,135 @@
-export const FabStyle = styled(Fab)(({ theme }) => ({
-  // -----------------------------------------
-  // NORMAL STATE
-  // -----------------------------------------
-  width: 48,
-  height: 48,
-  minWidth: 48,
-  minHeight: 48,
+ @Transactional
+    @Override
+    public ReportStreamResponse downloadTempReportStream(String fileName, LocalDate date, int userRoleId, String userId,
+                                                         String runId, String format) throws IOException {
 
-  padding: 0,
-  margin: 0,
+        String reportDisplayName = fileName; // temporary display name
+        // 1. Validate requested download format
+        ReportDownloadFormat downloadFormat =
+                ReportDownloadFormat.from(format);
 
-  position: "relative",
+        // Construct task id
+        String safeReportName = reportDisplayName.replaceAll("[^a-zA-Z0-9]", "_").toLowerCase().replaceAll("_", "_");
+        String safeDate = date.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        String taskId = String.format("%s_%s_%d", safeReportName, safeDate, System.currentTimeMillis());
 
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "flex-start",
+        // 2. Prepare Paths with the CORRECT format "dd-MM-yyyy"
+        String formattedDate = date.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String fileNamePrefix = fileName + "_" + date.format(DateTimeFormatter.ofPattern("ddMMyyyy"));
 
-  borderRadius: "50%",
-  overflow: "hidden",
+        Path searchDirectory;
+        searchDirectory = new Path(tempReportsBasepath, formattedDate + "/" + runId);
+        log.info("Searching HDFS directory {} for temp reports with prefix '{}'...", searchDirectory,
+                fileNamePrefix);
 
-  flexShrink: 0,
-  boxSizing: "border-box",
+        // 3. Call the common stream Logic and return directly to the client
+        return streamReport(searchDirectory, taskId, userId, fileNamePrefix, reportDisplayName, date, fileName,
+                formattedDate,downloadFormat);
+    }
 
-  backgroundColor: theme.palette.primary.main,
+    // ----------------------------------------------------------------------------------
+    // HELPER METHODS (Stream Logic + Redis)
+    // ----------------------------------------------------------------------------------
+//     private ReportStreamResponse streamReport(Path searchDirectory, String taskId, String userId, String searchPattern,
+//                                               String reportDisplayName, LocalDate date, String fileName, String formattedDate) {
 
-  border: "none",
-  boxShadow: "none",
+//         StreamingResponseBody streamingBody = outputStream -> {
+//             try (ZipOutputStream zipOut = new ZipOutputStream(outputStream)) {
+//                 if (!hdfsFileSystem.exists(searchDirectory)) {
+//                     log.info("Directory not found in HDFS: {}", searchDirectory);
+//                     // Throw immediately so a proper HTTP 404 is sent to the client
+//                     throw new ResourceNotFoundException("Reports directory not found: " + searchDirectory);
+//                 }
+//                 Path globPath = new Path(searchDirectory, searchPattern + "*");
+//                 FileStatus[] fileStatuses = hdfsFileSystem.globStatus(globPath);
+//                 if (fileStatuses == null || fileStatuses.length == 0) {
+//                     throw new ResourceNotFoundException("Report not found");
+//                 }
+//                 //FileStatus[] fileStatuses = hdfsFileSystem.listStatus(searchDirectory);
+//                 // 1. Calculate Total Size of all files to be downloaded
+//                 long calculatedTotalSize = 0;
+//                 for (FileStatus status : fileStatuses ) {
+//                         calculatedTotalSize += status.getLen();
+//                 }
+//                 final long finalTotalSize = calculatedTotalSize; // Needed for lambda
 
-  transition:
-    "width 0.3s ease, border-radius 0.3s ease, background-color 0.3s ease",
+//                 // Atomic counter to track bytes read across multiple files (if multiple exist)
+//                 AtomicLong globalBytesRead = new AtomicLong(0);
 
-  // -----------------------------------------
-  // LIGHT PURPLE EXTENSION
-  // -----------------------------------------
-  "&::before": {
-    content: '""',
 
-    position: "absolute",
+//                 boolean fileFound = false;
 
-    left: 48,
-    top: 0,
+//                 for (FileStatus status : fileStatuses) {
+//                     if (!status.isFile())
+//                         continue;
+//                     String actualFileName = status.getPath().getName();
+//                         fileFound = true;
+//                         sendProgress(taskId, userId, 0, "Starting download...", "PROCESSING");
+//                         ZipEntry zipEntry = new ZipEntry(actualFileName);
+//                         zipOut.putNextEntry(zipEntry);
 
-    width: 0,
-    height: 48,
+//                         try (FSDataInputStream hdfsStream = hdfsFileSystem.open(status.getPath())) {
+//                             // --- REPLACED StreamUtils.copy WITH MANUAL LOOP ---
+//                             byte[] buffer = new byte[32 * 1024]; // 32KB buffer
+//                             int bytesRead;
+//                             int lastPercent = 0;
+//                             while ((bytesRead = hdfsStream.read(buffer)) != -1) {
+//                                 zipOut.write(buffer, 0, bytesRead);
+//                                 // Update global counter
+//                                 long currentTotal = globalBytesRead.addAndGet(bytesRead);
+//                                 // Calculate Percentage
+//                                 int percent = (int) ((currentTotal * 100) / finalTotalSize);
+//                                 // Cap at 99% so 100% is only sent when fully done
+//                                 if (percent > 99)
+//                                     percent = 99;
+//                                 // Throttle: Send update only if percent changed by 5%
+//                                 if (percent >= lastPercent + 5) {
+//                                     sendProgress(taskId, userId, percent, "Downloading... " + percent + "%",
+//                                             "PROCESSING");
+//                                     lastPercent = percent;
+//                                 }
+//                             }
+//                         } finally {
+//                             zipOut.closeEntry();
+//                         }
+//                         log.info("Streamed file {} into zip response.", actualFileName);
 
-    background: `linear-gradient(
-      to right,
-      ${alpha(theme.palette.primary.main, 0.08)} 0%,
-      ${alpha(theme.palette.primary.main, 0.12)} 100%
-    )`,
+//                 }
 
-    borderRadius: "0 24px 24px 0",
+//                 if (!fileFound) {
+//                     log.info("No report files found matching prefix: " + searchPattern);
+//                     // Throw immediately so a proper HTTP 404 is sent to the client
+//                     throw new ResourceNotFoundException("No report files found matching prefix: " + searchPattern);
+//                 }
 
-    transition: "width 0.3s ease",
+//                 // Notification is only sent AFTER all files are confirmed found and streamed
+//                 String successMsg = String.format("%s downloaded successfully.", reportDisplayName);
 
-    zIndex: 0,
-  },
+//                 sendProgress(taskId, userId, 100, "Download Complete", "COMPLETED");
 
-  // -----------------------------------------
-  // DARK PURPLE 48px CIRCLE
-  // -----------------------------------------
-  "&::after": {
-    content: '""',
+//                 sendNotification(userId, successMsg, "/glif-reports", fileName + "_" + date);
+//                 // sendNotification(userId, "Report(s) downloaded successfully.",
+//                 // "/glif-reports", fileName + "_" + date);
 
-    position: "absolute",
+//             } catch (ResourceNotFoundException e) {
+//                 // If a resource error happens before streaming starts, it's caught here
+//                 log.error("Resource not found error: {}", e.getMessage());
+//                 sendNotification(userId, reportDisplayName + " is not available.", "/glif-reports",
+//                         fileName + "_" + date);
+//                 // Note: The controller must catch this exception to return a proper 404
+// //                sendProgress(taskId, userId, 100, "Download Failed", "COMPLETED");
+//             } catch (IOException e) {
+//                 // If an I/O error happens DURING streaming, the client will see a failed
+//                 // download
+//                 // Includes the internet/network-down , HDFS down and NameNode not reachable
+//                 // cases
+//                 log.error("Streaming I/O error for user {}: {}", userId, e.getMessage(), e);
+//                 sendNotification(userId,
+//                         "Download failed due to a streaming or internet issue. Please check your connection and try again.",
+//                         "/glif-reports", fileName + "_" + date);
+//             }
+//         };
 
-    left: 0,
-    top: 0,
-
-    width: 48,
-    height: 48,
-
-    borderRadius: "50%",
-
-    backgroundColor: theme.palette.primary.main,
-
-    zIndex: 1,
-  },
-
-  // -----------------------------------------
-  // PLUS ICON
-  // -----------------------------------------
-  "& .MuiSvgIcon-root": {
-    position: "relative",
-
-    zIndex: 2,
-
-    flexShrink: 0,
-
-    width: 24,
-    height: 24,
-
-    minWidth: 24,
-    minHeight: 24,
-
-    // 12 + 24 + 12 = 48
-    marginLeft: 12,
-    marginRight: 0,
-
-    color: "#ffffff",
-  },
-
-  // -----------------------------------------
-  // CREATE SEGMENT TEXT
-  // -----------------------------------------
-  "& .create-circle-text": {
-    position: "relative",
-
-    zIndex: 2,
-
-    display: "flex",
-    alignItems: "center",
-
-    height: 48,
-
-    opacity: 0,
-
-    width: 0,
-    maxWidth: 0,
-
-    marginLeft: 16,
-    padding: 0,
-
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-
-    flexShrink: 0,
-
-    color: "#ffffff",
-
-    fontSize: "14px",
-    fontWeight: 500,
-
-    lineHeight: 1,
-
-    textAlign: "left",
-
-    transition:
-      "opacity 0.2s ease, width 0.3s ease, margin-left 0.3s ease",
-  },
-
-  // -----------------------------------------
-  // HOVER
-  // -----------------------------------------
-  "&:hover": {
-    width: 180,
-    minWidth: 180,
-
-    height: 48,
-
-    borderRadius: "24px",
-
-    padding: 0,
-
-    // IMPORTANT:
-    // Keep the main FAB background transparent.
-    // The ::before creates the light extension.
-    backgroundColor: "transparent",
-
-    border: "none",
-    boxShadow: "none",
-
-    justifyContent: "flex-start",
-  },
-
-  // -----------------------------------------
-  // EXPAND LIGHT PURPLE EXTENSION
-  // -----------------------------------------
-  "&:hover::before": {
-    width: 132,
-  },
-
-  // -----------------------------------------
-  // SHOW CREATE SEGMENT
-  // -----------------------------------------
-  "&:hover .create-circle-text": {
-    opacity: 1,
-
-    width: 108,
-    maxWidth: 108,
-
-    marginLeft: 16,
-
-    color: "#ffffff",
-  },
-}));
+//         String downloadName = fileName + "_" + formattedDate + ".zip";
+//         return new ReportStreamResponse(downloadName, streamingBody);
+//     }
