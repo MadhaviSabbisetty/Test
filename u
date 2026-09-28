@@ -1,226 +1,159 @@
-export const FabStyle = styled(Fab)(({ theme }) => ({
-  width: 48,
-  height: 48,
-  minWidth: 48,
-  minHeight: 48,
+  
+  // width: 48,
+  // height: 48,
+  // minWidth: 48,
+  // minHeight: 48,
 
-  padding: 0,
-  margin: 0,
+  // padding: 0,
+  // margin: 0,
 
-  position: "relative",
+  // position: "relative",
 
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
+  // display: "flex",
+  // alignItems: "center",
+  // justifyContent: "center",
 
-  flexShrink: 0,
-  boxSizing: "border-box",
+  // borderRadius: "50%",
+  // overflow: "hidden",
 
-  borderRadius: 24,
-  overflow: "hidden",
+  // flexShrink: 0,
+  // boxSizing: "border-box",
 
-  backgroundColor: theme.palette.primary.main,
+  // backgroundColor: theme.palette.primary.main,
 
-  border: "2px solid transparent",
-  boxShadow: "none",
+  // border: "none",
+  // boxShadow: "none",
 
-  /*
-   * IMPORTANT:
-   * Do not move this element with top/right during hover.
-   */
-  transform: "none",
+  // transition:
+  //   "width 0.3s ease, min-width 0.3s ease, border-radius 0.3s ease",
 
-  transition:
-    "width 0.3s ease, border-radius 0.3s ease, background 0.3s ease",
+  // // -----------------------------------------
+  // // DARK PURPLE PLUS CIRCLE
+  // // -----------------------------------------
+  // "&::after": {
+  //   content: '""',
 
-  // -----------------------------------------
-  // PLUS CIRCLE
-  // -----------------------------------------
-  "&::after": {
-    content: '""',
+  //   position: "absolute",
 
-    position: "absolute",
+  //   right: 0,
+  //   top: "50%",
 
-    right: 0,
-    top: "50%",
+  //   width: 48,
+  //   height: 48,
 
-    width: 44,
-    height: 44,
+  //   borderRadius: "50%",
 
-    borderRadius: "50%",
+  //   backgroundColor: theme.palette.primary.main,
+    
+  //   transform:"translateY(-50%)",
 
-    backgroundColor: theme.palette.primary.main,
+  //   zIndex: 3,
 
-    transform: "translateY(-50%)",
+  //   pointerEvents: "none",
+  // },
 
-    zIndex: 3,
 
-    pointerEvents: "none",
-  },
+  // // -----------------------------------------
+  // // PLUS ICON
+  // // -----------------------------------------
+  // "& .MuiSvgIcon-root": {
+  //   position: "absolute",
 
-  // -----------------------------------------
-  // PLUS ICON
-  // -----------------------------------------
-  "& .MuiSvgIcon-root": {
-    position: "absolute",
+  //   right: 12,
+  //   top: "50%",
 
-    right: 10,
-    top: "50%",
+  //   width: 24,
+  //   height: 24,
 
-    width: 24,
-    height: 24,
+  //   minWidth: 24,
+  //   minHeight: 24,
 
-    minWidth: 24,
-    minHeight: 24,
+  //   margin: 0,
 
-    margin: 0,
-    padding: 0,
+  //   color: "#ffffff",
 
-    color: "#ffffff",
+  //   transform:"translateY(-50%)",
 
-    transform: "translateY(-50%)",
+  //   zIndex: 4,
 
-    zIndex: 4,
+  //   flexShrink: 0,
+  // },
 
-    flexShrink: 0,
+  // // -----------------------------------------
+  // // CREATE SEGMENT TEXT
+  // // -----------------------------------------
+  // "& .create-circle-text": {
+  //   position: "absolute",
 
-    pointerEvents: "none",
-  },
+  //   left: 16,
+  //   right: 48,
 
-  // -----------------------------------------
-  // CREATE SEGMENT TEXT
-  // -----------------------------------------
-  "& .create-circle-text": {
-    position: "absolute",
+  //   top: 0,
 
-    left: 16,
-    right: 52,
+  //   height: 48,
 
-    top: 0,
+  //   display: "flex",
+  //   alignItems: "center",
 
-    height: 44,
+  //   opacity: 0,
 
-    display: "flex",
-    alignItems: "center",
+  //   width: "auto",
+  //   maxWidth: "none",
 
-    opacity: 0,
+  //   margin: 0,
+  //   padding: 0,
 
-    margin: 0,
-    padding: 0,
+  //   whiteSpace: "nowrap",
+  //   overflow: "hidden",
 
-    whiteSpace: "nowrap",
-    overflow: "hidden",
+  //   color: "#ffffff",
 
-    color: "#ffffff",
+  //   fontSize: "14px",
+  //   fontWeight: 500,
 
-    fontSize: "14px",
-    fontWeight: 500,
+  //   lineHeight: 1,
 
-    lineHeight: 1,
+  //   textAlign: "left",
 
-    textAlign: "left",
+  //   zIndex: 2,
 
-    zIndex: 2,
+  //   transition:
+  //     "opacity 0.2s ease",
+  // },
 
-    pointerEvents: "none",
+  // // -----------------------------------------
+  // // HOVER
+  // // -----------------------------------------
+  // "&:hover": {
+  //   width: 180,
+  //   minWidth: 180,
 
-    transition: "opacity 0.2s ease",
-  },
+  //   height: 48,
 
-  // -----------------------------------------
-  // HOVER
-  // -----------------------------------------
-  "&:hover": {
-    width: 180,
-    minWidth: 180,
+  //   borderRadius: "24px",
 
-    height: 48,
+  //   padding: 0,
 
-    borderRadius: 24,
+  //   // backgroundColor: "transparent",
 
-    padding: 0,
-    margin: 0,
+  //   backgroundImage: `linear-gradient(
+  //     to right,
+  //     ${theme.palette.primary.main} 0%,
+  //     ${lighten(theme.palette.primary.main, 0.08)} 30%,
+  //     ${lighten(theme.palette.primary.main, 0.18)} 60%,
+  //     ${lighten(theme.palette.primary.main, 0.30)} 100%
+  //   ) !important`,
 
-    /*
-     * The right edge remains fixed.
-     * The button expands only towards the LEFT.
-     */
-    backgroundImage: `linear-gradient(
-      to right,
-      ${theme.palette.primary.main} 0%,
-      ${lighten(theme.palette.primary.main, 0.08)} 30%,
-      ${lighten(theme.palette.primary.main, 0.18)} 60%,
-      ${lighten(theme.palette.primary.main, 0.30)} 100%
-    )`,
+  //   border: `2px solid ${theme.palette.primary.main}`,
 
-    border: `2px solid ${theme.palette.primary.main}`,
+  //   boxShadow: "none",
 
-    boxShadow: "none",
+  //   justifyContent: "flex-start",
+  // },
 
-    transform: "none",
-  },
-
-  "&:hover::after": {
-    right: 0,
-    top: "50%",
-
-    transform: "translateY(-50%)",
-  },
-
-  "&:hover .MuiSvgIcon-root": {
-    right: 10,
-    top: "50%",
-
-    transform: "translateY(-50%)",
-  },
-
-  "&:hover .create-circle-text": {
-    opacity: 1,
-  },
-}))
-
-
-
-
-<Box
-  sx={{
-    height: 64,
-    flexShrink: 0,
-
-    display: "flex",
-    justifyContent: "flex-end",
-    alignItems: "center",
-
-    px: 1,
-    pb: 1,
-
-    overflow: "visible",
-  }}
->
-  <Box
-    sx={{
-      width: 180,
-      height: 48,
-
-      display: "flex",
-      justifyContent: "flex-end",
-      alignItems: "center",
-
-      flexShrink: 0,
-
-      overflow: "visible",
-    }}
-  >
-    <FabStyle
-      onClick={() => setOpen(true)}
-      color="primary"
-    >
-      <span className="create-circle-text">
-        Create Segment
-      </span>
-
-      <AddIconStyle />
-    </FabStyle>
-  </Box>
-</Box>
-
+  // // -----------------------------------------
+  // // SHOW CREATE SEGMENT
+  // // -----------------------------------------
+  // "&:hover .create-circle-text": {
+  //   opacity: 1,
+  // },
