@@ -8,6 +8,9 @@ import { LineWeight, Opacity } from "@mui/icons-material";
 
 export const Boxdtatagrid = styled(Box)(({ theme }) => ({
   height: 500,
+  minHeight:500,
+  maxHeight:500,
+  overflow:"hidden",
 }));
 
 export const BoxStyle = styled(Box)(({ theme }) => ({
@@ -243,3 +246,884 @@ export const Chip1Style = styled(Chip)(({ theme }) => ({
   m: 0,
   width: "90%",
 }));
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Stack,
+  Typography,
+  Tooltip,
+  IconButton,
+} from "@mui/material";
+import useApi from "../../hooks/useApi";
+import CancelIcon from "@mui/icons-material/Cancel";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
+import GppBadIcon from "@mui/icons-material/GppBad";
+import InfoIcon from "@mui/icons-material/Info";
+import AddBoxIcon from "@mui/icons-material/AddBox";
+import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
+import EditDocumentIcon from "@mui/icons-material/EditDocument";
+import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
+import { DataGridStyles } from "./SegmentMasterStyles";
+import { useSelector } from "react-redux";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import {
+  getPermissions,
+  timeStampFormatter,
+} from "../../utils/CommonUtilities";
+import CustomChip from "../../utils/CustomChip";
+
+export default function MySegmentRequestsTab() {
+  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
+  const requestType = selectedMenuItem?.requestType || "";
+  const permissions = getPermissions(selectedMenuItem);
+  const [rows, setRows] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState(false);
+  const [requestId, setRequestId] = useState(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewData, setViewData] = useState(null);
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+
+  function CustomNoRowsOverlay() {
+    return (
+      <Stack height="100%" alignItems="center" justifyContent="center">
+        <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+        <Typography variant="h6">No Segment Requests Found</Typography>
+        <Typography>You have not created any Segment requests.</Typography>
+      </Stack>
+    );
+  }
+
+  const fetchData = useCallback(async () => {
+    const payload = { requestType };
+    const response = await callApi("/CR/my-requests", payload, "POST");
+    if (response?.data) {
+      const result = response.data.map((row) => {
+        let parsedPayload = row.payload ? row.payload : {};
+        parsedPayload = {
+          ...parsedPayload,
+          ...row,
+        };
+
+        return {
+          ...parsedPayload,
+        };
+      });
+      result.sort((a, b) => {
+        if (a.reqStatus === "PENDING" && b.reqStatus !== "PENDING") return -1;
+        if (a.reqStatus !== "PENDING" && b.reqStatus === "PENDING") return 1;
+        return new Date(b.reqDate) - new Date(a.reqDate);
+      });
+      setRows(result);
+    } else {
+      setRows([]);
+    }
+  }, [callApi]);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleCancelRequest = async () => {
+    try {
+      const payload = {
+        requestId,
+        remarks: "User canceled this Request",
+      };
+
+      const response = await callApi("/CR/cancel-request", payload, "PATCH");
+      if (response?.success) {
+        showSnackBar(
+          `Request Id ${requestId} Cancelled Successfully.`,
+          "success",
+        );
+      } else {
+        showSnackBar(
+          response?.message
+            ? response?.message
+            : "Failed to process your cancel request, Kindly try again",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      fetchData();
+      setConfirmDialog(false);
+    }
+  };
+
+  const handleViewClick = (data) => {
+    const { segmentCode, description } = data;
+
+    data.showData = { segmentCode, description };
+    setViewData(data);
+    setViewOpen(true);
+  };
+
+  const columns = useMemo(
+    () => [
+      { field: "id", headerName: "Request Id", flex: 0.5, minWidth: 150 },
+      {
+        field: "segmentCode",
+        headerName: "Segment Code",
+        flex: 0.8,
+        minWidth: 150,
+        sortable: true,
+      },
+      {
+        field: "description",
+        headerName: "Description",
+        flex: 2,
+        minWidth: 200,
+        sortable: true,
+      },
+      {
+        field: "changeType",
+        headerName: "Request Type",
+        flex: 0.5,
+        minWidth: 150,
+        align: "center",
+        headerAlign: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          const val = params.value;
+          const color =
+            val === "ADD" ? "success" : val === "DELETE" ? "error" : "warning";
+          const icon =
+            val === "ADD" ? (
+              <AddBoxIcon />
+            ) : val === "DELETE" ? (
+              <AutoDeleteIcon />
+            ) : (
+              <EditDocumentIcon />
+            );
+          return (
+            <CustomChip
+            sx={{
+              width:105,
+              justifyContent:"flex-start",
+            }}
+              icon={icon}
+              label={
+                val === "ADD"
+                  ? "Added"
+                  : val === "DELETE"
+                    ? "Deleted"
+                    : "Modified"
+              }
+              color={color}
+              variant="outlined"
+            />
+          );
+        },
+      },
+      {
+        field: "reqDate",
+        headerName: "Requested Date",
+        flex: 1,
+        minWidth: 200,
+        // align: "center",
+        // headerAlign: "center",
+        filterable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => timeStampFormatter(params.value),
+      },
+      {
+        field: "reqStatus",
+        headerName: "Status",
+        flex: 1,
+        minWidth: 120,
+        // align: "center",
+        // headerAlign: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Box
+            // sx={{
+            //   color:
+            //     params.value === "REJECTED"
+            //       ? "error.main"
+            //       : params.value === "ACCEPTED"
+            //         ? "success.dark"
+            //         : "warning.main",
+            //   fontWeight: "bold",
+            // }}
+          >
+            <CustomChip
+              variant="outlined"
+              icon={
+                params.value === "REJECTED" ? (
+                  <BlockFlippedIcon />
+                ) : params.value === "ACCEPTED" ? (
+                  <CheckCircleIcon />
+                ) : params.value === "CANCELLED" ? (
+                  <GppBadIcon />
+                ) : (
+                  <PendingActionsIcon />
+                )
+              }
+              label={
+                params.value === "REJECTED"
+                  ? "Rejected"
+                  : params.value === "ACCEPTED"
+                    ? "Approved"
+                    : params.value === "CANCELLED"
+                      ? "Cancelled"
+                      : "Pending"
+              }
+              sx={{
+              width:120,
+              justifyContent:"flex-start",
+                color:
+                  params.value === "REJECTED"
+                    ? "error.dark"
+                    : params.value === "ACCEPTED"
+                      ? "success.dark"
+                      : params.value === "CANCELLED"
+                        ? "primary.dark"
+                        : "warning.main",
+                        
+                "& .MuiChip-icon": {
+                  color:
+                    params.value === "REJECTED"
+                      ? "error.dark"
+                      : params.value === "ACCEPTED"
+                        ? "success.dark"
+                        : params.value === "CANCELLED"
+                          ? "primary.dark"
+                          : "warning.main",
+                },
+              }}
+            />
+          </Box>
+        ),
+      },
+      {
+        field: "action",
+        headerName: "Action",
+        flex: 0.6,
+        minWidth: 120,
+        // align: "center",
+        // headerAlign: "center",
+        justifyContent: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          return (
+            <Stack
+              direction="row"
+              spacing={1}
+              justifyContent="left"
+              alignItems="center"
+              sx={{ ml: 2, mt: 0.5 }}
+            >
+              {permissions.view && (
+                <Tooltip title="View">
+                  <IconButton
+                    // color="primary"
+                    onClick={() => handleViewClick(params.row)}
+                  >
+                    <VisibilityIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              {params.row.reqStatus === "PENDING" && permissions.cancel && (
+                <Tooltip title={"Cancel Request"}>
+                  <IconButton
+                    onClick={() => {
+                      setConfirmDialog(true);
+                      setRequestId(params.row.id);
+                    }}
+                  >
+                    <CancelIcon fontSize="inherit" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Stack>
+          );
+        },
+      },
+    ],
+    [permissions.cancel, permissions.view],
+  );
+
+  const filteredColumns = useMemo(() => {
+    if (permissions.view || permissions.cancel) {
+      return columns;
+    }
+    // Otherwise, filter out the column where field name is 'action'.
+    else {
+      return columns.filter((column) => column.field !== "action");
+    }
+  }, [columns, permissions]);
+
+  return (
+    <>
+      <DataGridStyles
+        rows={rows}
+        columns={filteredColumns}
+        disableRowSelectionOnClick
+        pageSizeOptions={[5, 10, 25, 50]}
+        initialState={{
+          pagination: { paginationModel: { pageSize: 10, page: 0 } },
+          // sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] },
+        }}
+        getRowId={(row) => row.id}
+        slots={{
+          noRowsOverlay: CustomNoRowsOverlay,
+        }}
+         sx={{
+          minHeight: 760,
+          width: "100%",
+         "& .MuiDataGrid-columnHeaders": {
+          backgroundColor: "#f5f5f5 !important",
+          fontWeight: 700,
+          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+          },
+          }}
+      />
+
+      {/* View Request Dialog */}
+      <ViewMyRequestDialog
+        open={viewOpen}
+        handleClose={() => setViewOpen(false)}
+        data={viewData}
+      />
+
+      {/* Cancel Dialog */}
+      <Dialog
+        open={confirmDialog}
+        onClose={() => {
+          setConfirmDialog(false);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>
+          Cancel Request ID: {requestId}
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ p: 1 }}>
+            Are you sure you want to cancel this request Please confirm ?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setConfirmDialog(false);
+            }}
+            variant="outlined"
+            sx=
+          {{
+            "&:hover":
+            {
+              color:"#fff",
+            },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCancelRequest}
+            color="error"
+            variant="contained"
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+}
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Grid,
+  IconButton,
+  Stack,
+  TextField,
+  Typography,
+  Tooltip,
+  styled,
+  Divider,
+  DialogActions,
+} from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Edit as EditIcon,
+  Add as AddIcon,
+  Close as CloseIcon,
+} from "@mui/icons-material";
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import { FabStyle, AddIconStyle, GridContainer, } from "./SegmentMasterStyles";
+import { useSelector } from "react-redux";
+import { getPermissions } from "../../utils/CommonUtilities";
+
+const OverlayBox = styled(Box)(() => ({
+  display: "flex",
+  flexDirection: "column",
+  height: "100%",
+  justifyContent: "center",
+  alignItems: "center",
+}));
+
+const CustomNoRowsOverlay = () => {
+  return (
+    <OverlayBox>
+      <ErrorOutlineIcon fontSize="large" />
+      <Typography variant="h5" fontSize="1.2rem">
+        Data is not available
+      </Typography>
+    </OverlayBox>
+  );
+};
+
+export default function SegmentMasterTab() {
+  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
+  const requestType = selectedMenuItem?.requestType || "";
+  const permissions = getPermissions(selectedMenuItem);
+  const [rows, setRows] = useState([]);
+  const [open, setOpen] = useState(false);
+  const { callApi } = useApi();
+  const [originalData, setOriginalData] = useState(null); // New state for original data
+  const [isDataSame, setIsDataSame] = useState(true);
+  const [editingId, setEditingId] = useState(null);
+  const [segmentData, setSegmentData] = useState({
+    segmentCode: "",
+    description: "",
+  });
+  const [errors, setErrors] = useState({});
+  const checkDataEquality = (current, original) => {
+    if (!original) return true; // If no original data, assume they are "same" initially for disable state
+    return (
+      current.description === original.description
+      // currencyCode is excluded as it is the ID and likely read-only
+    );
+  };
+  const snackbar = useCustomSnackbar();
+
+  // --- throttle snackbars so they don't spam while typing ---
+  const snackGateRef = useRef(true);
+  const notifyOnce = (msg, variant = "warning") => {
+    if (!snackGateRef.current) return;
+    snackGateRef.current = false;
+    snackbar(msg, variant);
+    setTimeout(() => (snackGateRef.current = true), 800);
+  };
+
+  const fetchData = async () => {
+    const payload = { requestType: "SEGMENT_CODE" };
+    const response = await callApi(
+      "/CM/common-master/segment-codes",
+      payload,
+      "GET",
+    );
+    setRows(response ? (response.data ?? []) : []);
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    if (editingId && originalData) {
+      setIsDataSame(checkDataEquality(segmentData, originalData));
+    }
+  }, [segmentData, originalData, editingId]);
+
+  // --- validators ---
+  const reDigits = /^[0-9]*$/;
+  // const reDesc = /^[a-zA-Z0-9\s/&()-.]*$/;
+  const reDesc = /^(?!.* {2})[a-zA-Z0-9\s/&(),-]*$/;
+
+  const validateField = (name, value) => {
+    let err = "";
+
+    if (name === "segmentCode") {
+      if (!value.trim()) err = "Segment Code is required";
+      else if (!reDigits.test(value)) err = "Only digits allowed";
+      else if (value.length !== 4) err = "Must be 4 digits";
+    }
+
+    if (name === "description") {
+      if (!value) err = "Description is required";
+      else if (!reDesc.test(value))
+        err =
+          "Invalid Format, Only alphabets, numbers, spaces(single spaces only between words) and ,()&/- are allowed!";
+      else if (value?.length < 5)
+        err = "Description must be at least 5 characters";
+    }
+
+    return err;
+  };
+
+  const isFormValid = () => {
+    return (
+      !validateField("segmentCode", segmentData.segmentCode) &&
+      !validateField("description", segmentData.description)
+    );
+  };
+
+  // --- live validation on change + snackbars for bad keystrokes ---
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+
+    // Allow soft typing for segmentCode: block invalid keystroke immediately
+    if (name === "segmentCode") {
+      if (!reDigits.test(value)) {
+        notifyOnce("Segment Code accepts digits only");
+        return; // block update
+      }
+      if (value.length > 4) {
+        notifyOnce("Segment Code must be 4 digits");
+        return; // block update
+      }
+    }
+
+    if (name === "description") {
+      if (value && !/^[A-Za-z0-9]$/.test(value[0])) {
+        notifyOnce("Should not start with special character");
+        return;
+      }
+      // soft block invalid characters
+      if (!reDesc.test(value)) {
+        notifyOnce(
+          "Invalid Format, Only alphabets, spaces(single spaces only between words) and ,()&/- are allowed!",
+        );
+        return;
+      }
+    }
+
+    setSegmentData((prev) => ({ ...prev, [name]: value }));
+
+    // update error for just this field
+    setErrors((prev) => ({
+      ...prev,
+      [name]: validateField(name, value),
+    }));
+  };
+
+  const validateFormAndSet = () => {
+    const newErrors = {
+      segmentCode: validateField("segmentCode", segmentData.segmentCode),
+      description: validateField("description", segmentData.description),
+    };
+    setErrors(newErrors);
+    const ok = !newErrors.segmentCode && !newErrors.description;
+    if (!ok) notifyOnce("Please fix validation errors", "error");
+    return ok;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateFormAndSet()) return;
+
+    if (editingId && isDataSame) {
+      snackbar("No Changes Detected!", "warning");
+      return; // Stop submission
+    }
+
+    const isEditing = editingId;
+    if (!isEditing) {
+      const segmentExists = rows.some(
+        (row) => row.segmentCode === segmentData.segmentCode,
+      );
+      if (segmentExists) {
+        snackbar("Segment code already exist", "warning");
+        return;
+      }
+    }
+
+    const payloadData = {
+      requestType,
+      changeType: editingId ? "UPDATE" : "ADD",
+      targetId: segmentData.segmentCode,
+      payload: {
+        segmentCode: segmentData.segmentCode.trim(),
+        description: segmentData.description.trim(),
+      },
+    };
+
+    try {
+      const response = await callApi("/CR/create-request", payloadData, "POST");
+      if (response) {
+        snackbar(
+          editingId
+            ? "Segment update request submitted successfully with request id " +
+                response?.data?.id
+            : "Segment creation request submitted successfully with request id " +
+                response?.data?.id,
+          "success",
+        );
+        handleClose();
+        fetchData();
+      }
+    } catch (error) {
+      snackbar(error?.message || "Request failed", "error");
+    }
+  };
+
+  const columns = useMemo(
+    () => [
+      {
+        field: "segmentCode",
+        headerName: "Segment Code",
+        flex: 1,
+        minWidth: 180,
+        sortable: true,
+      },
+      {
+        field: "description",
+        headerName: "Description",
+        flex: 3,
+        minWidth: 200,
+        sortable: true,
+      },
+      {
+        field: "actions",
+        headerName: "Actions",
+        flex: 0.6,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Box
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            justifyContent="center"
+            sx={{ Height: "100%" }}
+          >
+            <Tooltip title="Approve">
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() => handleEdit(params.row)}
+              >
+                <EditIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const filteredColumns = useMemo(() => {
+    if (permissions.modify || permissions.block || permissions.unblock) {
+      return columns;
+    }
+    // Otherwise, filter out the column where field name is 'action'.
+    else {
+      return columns.filter((column) => column.field !== "action");
+    }
+  }, [columns, permissions.block, permissions.modify, permissions.unblock]);
+
+  const resetForm = () => {
+    setSegmentData({ segmentCode: "", description: "" });
+    setOriginalData(null); // Clear original data on close
+    setErrors({});
+    setEditingId(null);
+    setIsDataSame(true);
+  };
+
+  const handleEdit = (row) => {
+    const initialData = {
+      segmentCode: String(row.segmentCode ?? ""),
+      description: String(row.description ?? ""),
+    };
+    setSegmentData(initialData);
+    setOriginalData(initialData); // Store the original data here
+    setEditingId(row.segmentCode);
+    setOpen(true);
+    setIsDataSame(true);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    resetForm();
+  };
+
+  return (
+    <Box>
+      <DataGrid
+        rows={rows}
+        columns={filteredColumns}
+        disableRowSelectionOnClick
+        pageSizeOptions={[5, 10, 25, 50]}
+        initialState={{
+          pagination: { paginationModel: { pageSize: 10, page: 0 } },
+          sorting: { sortModel: [{ field: "segmentCode", sort: "asc" }] },
+        }}
+        getRowId={(row) => row.segmentCode}
+        slots={{
+          noRowsOverlay: CustomNoRowsOverlay,
+        }}
+        sx={{
+          minHeight: 695,
+          width: "100%",
+         "& .MuiDataGrid-columnHeaders": {
+          backgroundColor: "#f5f5f5 !important",
+          fontWeight: 700,
+          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+        },
+        }}
+      />
+      {/* <Box
+      sx={{
+          display:"flex",
+          justifyContent:"flex-end",
+          mt:1,
+          px:1,
+          pb:1,
+        }}>
+    
+        <FabStyle
+          onClick={() => setOpen(true)}
+          color="primary"
+        >
+          <AddIconStyle />
+          <Box
+          component="span"
+          className="create-circle-text"
+          sx={{
+            fontSize:"14px",
+            fontWeight:500,
+          }}>
+            Create Segement 
+
+          </Box>
+        </FabStyle>      
+      </Box> */}
+
+      
+<Box
+  sx={{
+    display: "flex",
+    justifyContent: "flex-end",
+    mt: 1,
+    px: 1,
+    pb: 1,
+  }}
+>
+  <FabStyle
+    onClick={() => setOpen(true)}
+    color="primary"
+  >
+
+    <span className="create-circle-text">
+      Create Segment
+    </span>
+    
+    <AddIconStyle />
+    
+  </FabStyle>
+</Box>
+      
+
+      <Dialog
+        open={open}
+        maxWidth="sm"
+        fullWidth
+        component="form"
+        onSubmit={handleSubmit}
+      >
+        <DialogTitle>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
+            <Typography variant="h6" color="primary">
+              {editingId ? "Edit Segment" : "Add New Segment"}
+            </Typography>
+            <IconButton onClick={handleClose}>
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+
+        <Divider />
+
+        <DialogContent>
+          <GridContainer container spacing={2}>
+            <Grid size={{ xs: 12 }}>
+              <TextField
+                fullWidth
+                label="Segment Code *"
+                name="segmentCode"
+                value={segmentData.segmentCode}
+                onChange={handleChange}
+                disabled={!!editingId}
+                error={!!errors.segmentCode}
+                helperText={errors.segmentCode || "Exactly 4 digits"}
+                inputProps={{ maxLength: 4, inputMode: "numeric" }}
+                sx={{ mb: 3 }}
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12 }}>
+              <TextField
+                fullWidth={true}
+                label="Description *"
+                name="description"
+                value={segmentData.description}
+                onChange={handleChange}
+                error={!!errors.description}
+                inputProps={{ maxLength: 100 }}
+                helperText={
+                  errors.description ||
+                  "Allowed 5-100 characters (A-Z, 0-9, spaces,/,&,(,),- )"
+                }
+                multiline
+                rows={3}
+              />
+            </Grid>
+          </GridContainer>
+        </DialogContent>
+
+        <Divider />
+        <DialogActions>
+          <Button
+            type="submit"
+            variant="contained"
+            startIcon={editingId ? <EditIcon /> : <AddIcon />}
+            disabled={!isFormValid()}
+          >
+            {editingId ? "Update" : "Add"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}
