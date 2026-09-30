@@ -1,32 +1,26 @@
-import React, { useEffect, useState, useMemo } from "react";
-import {
-  Box,
-  Fab,
-  Switch,
-  IconButton,
-  Stack,
-  Tooltip,
-  Typography,
-  Paper,
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import { DataGrid } from "@mui/x-data-grid";
-import EditIcon from "@mui/icons-material/Edit";
-import CreateAnnouncementDialog from "./components/CreateAnnouncementDialog";
-import EditAnnouncementDialog from "./components/EditAnnouncementDialog";
-import ViewAnnouncementDialog from "./components/ViewAnnouncementDialog";
-import useApi from "../../hooks/useApi";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import OnlinePredictionIcon from "@mui/icons-material/OnlinePrediction";
-import CustomChip from "../../utils/CustomChip";
-import { timeStampFormatter } from "../../utils/CommonUtilities";
-import InfoIcon from "@mui/icons-material/Info";
-import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
-import WarningIcon from "@mui/icons-material/Warning";
+import * as React from "react";
+import Tabs from "@mui/material/Tabs";
+import Box from "@mui/material/Box";
 import { styled, lighten } from "@mui/material/styles";
+import { DataGrid } from "@mui/x-data-grid";
+import { Chip, Fab, Grid, Stack, DialogTitle } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
 
-export const FabStyle = styled(Fab)(({ theme }) => ({
 
+export const DataPMastermainBox = styled(Box)(({ theme }) => ({
+  py: 2,
+}));
+export const DataPTabContainer = styled(Box)(({ theme }) => ({
+  borderBottom: 1,
+  borderColor: "divider",
+}));
+
+
+export const DataPMasterTabs = styled(Tabs)(({ theme }) => ({
+  width: "100%",
+}));
+
+export const DataPaamerer1Fab = styled(Fab)(({ theme }) => ({
   // position: "fixed",     
   // borderRadius: "8px",
   // fontSize: "15px",
@@ -119,12 +113,12 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   // CREATE SEGMENT TEXT
   // -----------------------------------------
   "& .create-circle-text": {
-    position: "absolute",
+    position: "relative",
 
-    left: 16,
-    right: 48,
+    left: "auto",
+    right: "auto",
 
-    top: 0,
+    top: "auto",
 
     height: 48,
 
@@ -133,14 +127,11 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
     opacity: 0,
 
-    width: "auto",
-    maxWidth: "none",
-
     margin: 0,
-    padding: 0,
+    padding: "0 64px 0 16px",
 
     whiteSpace: "nowrap",
-    overflow: "hidden",
+    overflow: "visible",
 
     color: "#ffffff",
 
@@ -148,8 +139,6 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
     fontWeight: 500,
 
     lineHeight: 1,
-
-    textAlign: "left",
 
     zIndex: 2,
 
@@ -161,9 +150,9 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
 
   ".fab-hover-area:hover &":{
 
-    width:"210px",
+    width:"max-content",
 
-    minWidth:"210px",
+    minWidth:"0",
 
     height:48,
 
@@ -188,363 +177,182 @@ export const FabStyle = styled(Fab)(({ theme }) => ({
   ".fab-hover-area:hover & .create-circle-text":{
     opacity:1,
   },
-
 }));
 
-export default function Announcements() {
+export const DataPaamererAddicon = styled(AddIcon)(({ theme }) => ({
+  mr: 1,
+}));
+export const DataPtab1DialogTitle = styled(DialogTitle)(({ theme }) => ({
+  // m: 0,
+  // p: 2,
+}));
+
+export const DataPTab1Fab = styled(Fab)(({ theme }) => ({
+  position: "fixed",
+  borderRadius: 1,
+  fontSize: "15px",
+  bottom: theme.spacing(8),
+  right: theme.spacing(4),
+  zIndex: 1200,
+}));
+
+export const DataPTab1Addicon = styled(AddIcon)(({ theme }) => ({
+  margin:0,
+  flexShrink:0,
+}));import { useEffect, useState } from "react";
+import {
+  Box,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  IconButton,
+  Button,
+  Paper,
+} from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import EditIcon from "@mui/icons-material/Edit";
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import FileDefinitionDialog from "./FileDefinitionDialog";
+import { data } from "react-router-dom";
+import { DataPaamerer1Fab, DataPTab1Addicon } from "./FileDefinitionStyle";
+export default function FileDefinitionTab() {
   const { callApi } = useApi();
+  const snackbar = useCustomSnackbar();
 
   const [rows, setRows] = useState([]);
-  const [roles, setRoles] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [mode, setMode] = useState("CREATE");
+  const [selectedData, setSelectedData] = useState(null);
 
-  const [openCreate, setOpenCreate] = useState(false);
-  const [editRow, setEditRow] = useState(null);
-  const [viewRow, setViewRow] = useState(null);
-  const [openViewDailog, setOpenViewDailog] = useState(false);
+  const normalizeRows = (rows) =>
+    rows.map((r) => ({
+      ...r,
+      toBeIncluded:
+        r.toBeIncluded === true ||
+        r.toBeIncluded === "true" ||
+        r.toBeIncluded === "YES",
+      dataType: r.dataType?.toUpperCase(),
+    }));
 
-  // ---------- INITIAL LOAD ----------
+  const fetchData = async () => {
+    try {
+      const res = await callApi("/CM/common-master/data-parameters", {}, "GET");
+      const res1 = await callApi(
+        "/CM/common-master/files-sub-types",
+        {},
+        "GET",
+      );
+      console.log("res1", res1);
+      const data = res?.data || [];
+      console.log("data", data);
+      if (!Array.isArray(data)) {
+        const formatted = Object.keys(data || {}).map((key) => ({
+          fileType: key,
+          rows: normalizeRows(data[key]),
+        }));
+        setRows(formatted);
+      } else {
+        setRows(data);
+      }
+    } catch {
+      snackbar("Failed to load data", "error");
+    }
+  };
+
   useEffect(() => {
-    fetchRoles();
-    fetchRows();
+    fetchData();
   }, []);
 
-  // ---------- FETCH ROLES ----------
-  async function fetchRoles() {
-    try {
-      const res = await callApi("/UM/role/get-roles", null, "GET");
-      const data = res?.data ?? res;
-      setRoles(Array.isArray(data) ? data : data?.data ?? []);
-    } catch (err) {
-      console.error("fetchRoles error", err);
-      setRoles([]);
-    }
-  }
-
-  // ---------- FETCH ANNOUNCEMENTS ----------
-  const fetchRows = async () => {
-    setLoading(true);
-    try {
-      const res = await callApi("/CM/announcements/list", null, "GET");
-      const payload = res?.data ?? res;
-      const list = payload?.data ?? payload;
-      setRows(Array.isArray(list) ? list : []);
-    } catch (err) {
-      console.error("fetchRows error", err);
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ---------- ACTIVE/INACTIVE TOGGLE ----------
-  const handleToggle = async (row) => {
-    try {
-      const res = await callApi(
-        `/CM/announcements/${row.id}/toggle`,
-        null,
-        "PATCH"
-      );
-      const updated = res?.data ?? res;
-
-      setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-    } catch (err) {
-      console.error("toggle error", err);
-      if (err?.response?.status === 400) {
-        alert(err.response.data?.message ?? "Toggle not allowed");
-      }
-    }
-  };
-
-  // ---------- CREATE SAVE ----------
-  const handleCreateSave = async (payload) => {
-    try {
-      await callApi("/CM/announcements", payload, "POST");
-      setOpenCreate(false);
-      fetchRows();
-    } catch (err) {
-      console.error("create error", err);
-    }
-  };
-
-  // ---------- EDIT SAVE ----------
-  const handleEditSave = async (updated) => {
-    try {
-      await callApi(`/CM/announcements/${updated.id}`, updated, "PUT");
-      setEditRow(null);
-      fetchRows();
-    } catch (err) {
-      console.error("edit save error", err);
-    }
-  };
-
-  // ---------- ROLE NAME MAPPING ----------
-  const roleMap = useMemo(() => {
-    const m = {};
-    roles.forEach((r) => (m[String(r.id)] = r.name));
-    return m;
-  }, [roles]);
-
-  const columns = [
-    { field: "title", headerName: "Title", flex: 1 },
-    {
-      field: "severity",
-      headerName: "Severity",
-      flex: 1,
-
-      renderCell: (params) => {
-        const sev = params.value;
-        const icon =
-          sev === "CRITICAL" ? (
-            <InfoIcon fontSize="small" />
-          ) : sev === "WARN" ? (
-            <WarningIcon fontSize="small" />
-          ) : (
-            <PriorityHighIcon fontSize="small" />
-          );
-        const color =
-          sev === "CRITICAL" ? "error" : sev === "WARN" ? "warning" : "info";
-        return (
-          <CustomChip
-            variant="outlined"
-            label={sev}
-            color={color}
-            icon={icon}
-            sx={{
-              width:105,
-              justifyContent:"flex-start",
-            }}
-          />
-        );
-      },
-    },
-    {
-      field: "targetRoles",
-      headerName: "Target Roles",
-      flex: 1,
-      renderCell: (params) => {
-        const tr = params.row.targetRoles;
-
-        if (!tr || tr === "ALL") return "ALL";
-
-        const arr = Array.isArray(tr)
-          ? tr
-          : String(tr)
-              .split(",")
-              .map((x) => x.trim());
-
-        return arr.map((id) => roleMap[id] ?? id).join(", ");
-      },
-    },
-
-    {
-      field: "startDate",
-      headerName: "Start Date",
-      flex: 1,
-      sortable: true,
-      renderCell: (p) => (
-        <Typography
-          variant="body1"
-          component="span"
-          sx={{ fontSize: "0.9rem" }}
-        >
-          {timeStampFormatter(p?.row?.startDate) || "NA"}
-        </Typography>
-      ),
-    },
-
-    {
-      field: "expiryDate",
-      headerName: "Expiry Date",
-      flex: 1,
-      sortable: true,
-      renderCell: (p) => (
-        <Typography
-          variant="body1"
-          component="span"
-          sx={{ fontSize: "0.9rem" }}
-        >
-          {timeStampFormatter(p?.row?.expiryDate) || "NA"}
-        </Typography>
-      ),
-    },
-
-    {
-      field: "displayStatus",
-      headerName: "Status",
-      flex: 1,
-      // sortable: true,
-      renderCell: (params) => (
-        <CustomChip
-          color={
-            params.value === "ACTIVE"
-              ? "#3b803fff"
-              : params.value === "EXPIRED"
-              ? "#d32f2f"
-              : params.value === "SCHEDULED"
-              ? "#1976d2"
-              : "#9e9e9e"
-          }
-          variant="outlined"
-          icon={<OnlinePredictionIcon />}
-          label={params.value}
-          sx={{
-              width:120,
-              justifyContent:"flex-start",
-            }}
-        />
-      ),
-    },
-
-    {
-      field: "action",
-      headerName: "Actions",
-      flex: 1,
-
-      renderCell: (params) => (
-        <Stack
-          direction="row"
-          spacing={1}
-          justifyContent="center"
-          alignItems="center"
-          sx={{ height: "100%" }}
-        >
-          <Tooltip
-            title={
-              params.row.isActive === "Y"
-                ? "Inactive Announcement"
-                : "Activate Announcement"
-            }
-          >
-            {/* <IconButton
-              color={params.row.isActive === "Y" ? "error" : "success"}
-              onClick={() => handleToggle(params.row)}
-            >
-              <CampaignIcon fontSize="inherit" />
-            </IconButton> */}
-            <Switch
-              checked={params.row.isActive === "Y"}
-              onChange={() => handleToggle(params.row)}
-            />
-          </Tooltip>
-
-          <Tooltip title="Edit Announcement">
-            <IconButton onClick={() => setEditRow(params.row)}>
-              <EditIcon fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
-
-          <Tooltip title="View Announcement">
-            <IconButton
-              onClick={() => {
-                setOpenViewDailog(true);
-                setViewRow(params.row);
-              }}
-            >
-              <VisibilityIcon fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      ),
-    },
-  ];
-
   return (
-    <Paper
-    elevation={2}
-    sx={{
-      display:"flex",
-      flexDirection:"column",
-      borderRadius:2,
-      overflow:"hidden",
-      minHeight:"calc(100vh - 122px)",
-      width:"100%",
-    }}>
-    <Box sx={{
-      p:2,
-      flex:1,
-      minHeight:0,
-      display:"flex",
-      flexDirection:"column",
-    }}>
-      <DataGrid
-        rows={rows}
-        columns={columns}
-        loading={loading}
-        pageSizeOptions={[5, 10, 25]}
-        disableRowSelectionOnClick
-         sx={{
-          height:"100%",
-          width: "100%",
-         "& .MuiDataGrid-columnHeaders": {
-          backgroundColor: "#f5f5f5 !important",
-          fontWeight: 700,
-          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
-          position: 'sticky',
-          top: 0,
-          zIndex: 1,
-        },
-        }}
-      />
-        <Box
-            sx={{
-                height:64,
-                flexShrink:0,
-                display:"flex",
-                justifyContent:"flex-end",
-                alignItems:"center",
-                px:1,
-                pb:1,
-                }}
-            >
+    <>
+      <Box sx={{
+        mt:2,
+        width:"100%",
+        display:"flex",
+        flexDirection:"column",
+      }}>
+        <Paper sx={{ width:"100%", }}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>File Type</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow key={row.fileType}>
+                  <TableCell>{row.fileType}</TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      onClick={() => {
+                        setMode("VIEW");
+                        setSelectedData(row);
+                        setDialogOpen(true);
+                      }}
+                    >
+                      <VisibilityIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Paper>
+      
+      <Box
+          sx={{
+            height:64,
+            flexShrink:0,
+            display:"flex",
+            justifyContent:"flex-end",
+            alignItems:"center",
+            px:1,
+            pb:1,
+          }}
+      >
         <Box
         className="fab-hover-area"
         sx={{
           position:"relative",
-          width:210,
+          width:"fit-content",
           height:48,
           flexShrink:0,
           transform:"translateY(8px)",
         }}>
-        <FabStyle
-          onClick={() => setOpenCreate(true)}
+        <DataPaamerer1Fab
           color="primary"
+          onClick={() =>{
+            setMode("CREATE");
+            setSelectedData(null);
+            setDialogOpen(true);
+          }}
         >
 
           <span className="create-circle-text">
-            Create Announcement
+            Create File Type
           </span>
           
-          <AddIcon   
-            />
+          <DataPTab1Addicon />
           
-        </FabStyle>
+        </DataPaamerer1Fab>
         </Box>
-        </Box>
-
-      <CreateAnnouncementDialog
-        open={openCreate}
-        onClose={() => setOpenCreate(false)}
-        onSave={handleCreateSave}
-      />
-
-      {editRow && (
-        <EditAnnouncementDialog
-          open={Boolean(editRow)}
-          record={editRow}
-          onClose={() => setEditRow(null)}
-          onSave={handleEditSave}
+      </Box>
+        <FileDefinitionDialog
+          open={dialogOpen}
+          mode={mode}
+          setMode={setMode}
+          data={selectedData}
+          allData={rows}
+          refresh={fetchData}
+          onClose={() => setDialogOpen(false)}
         />
-      )}
-
-      {viewRow && (
-        <ViewAnnouncementDialog
-          open={openViewDailog}
-          data={viewRow}
-          onClose={() => setOpenViewDailog(false)}
-        />
-      )}
-    </Box>
-    </Paper>
+      </Box>
+    </>
   );
 }
