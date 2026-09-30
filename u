@@ -1,466 +1,155 @@
-import React, {
-  useEffect,
-  useState,
-  useCallback,
-  useMemo,
-  useRef,
-} from "react";
-import { Box, Fab, IconButton, Tooltip, Typography } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import { DataGrid } from "@mui/x-data-grid";
-import OnlinePredictionIcon from "@mui/icons-material/OnlinePrediction";
-import EditIcon from "@mui/icons-material/Edit";
-import useApi from "../../hooks/useApi";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import CustomChip from "../../utils/CustomChip";
-import CGLDialog from "./CGLDialog";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import TrendingDownIcon from "@mui/icons-material/TrendingDown";
-import BookmarkAddedIcon from "@mui/icons-material/BookmarkAdded";
-import BookmarkRemoveIcon from "@mui/icons-material/BookmarkRemove";
-import DatasetIcon from "@mui/icons-material/Dataset";
-import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
-import GppGoodIcon from "@mui/icons-material/GppGood";
-import GppBadIcon from "@mui/icons-material/GppBad";
-import NoteIcon from "@mui/icons-material/Note";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import CancelIcon from "@mui/icons-material/Cancel";
-import { useSelector } from "react-redux";
-import { getPermissions } from "../../utils/CommonUtilities";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
-import styled from "@emotion/styled";
-import { GridFooterContainer, GridPagination} from "@mui/x-data-grid";
+width: 48,
+  height: 48,
+  minWidth: 48,
+  minHeight: 48,
 
-/* ================= CONSTANTS ================= */
+  padding: 0,
+  margin: 0,
 
-const ACCOUNT_CLASSIFICATIONS = [
-  {
-    value: "A",
-    label: "Asset",
-    icon: <DatasetIcon fontSize="small" />,
-  },
-  {
-    value: "L",
-    label: "Liability",
-    icon: <AccountBalanceWalletIcon fontSize="small" />,
-  },
-  { value: "I", label: "Income", icon: <TrendingUpIcon fontSize="small" /> },
-  { value: "E", label: "Expense", icon: <TrendingDownIcon fontSize="small" /> },
-  { value: "M", label: "Memo A/c", icon: <NoteIcon fontSize="small" /> },
-];
+  position: "absolute",
+  right:0,
+  top:0,
 
-const OverlayBox = styled(Box)(() => ({
   display: "flex",
-  flexDirection: "column",
-  height: "100%",
-  justifyContent: "center",
   alignItems: "center",
-}));
+  justifyContent: "center",
 
-const CustomNoRowsOverlay = () => (
-  <OverlayBox>
-    <ErrorOutlineIcon fontSize="large" />
-    <Typography fontSize="1.1rem">No data to display yet</Typography>
-  </OverlayBox>
-);
+  borderRadius: "50%",
+  overflow: "hidden",
 
+  flexShrink: 0,
+  boxSizing: "border-box",
 
-/* ================= COMPONENT ================= */
+  backgroundColor: theme.palette.primary.main,
 
-export default function CGLMasterTab() {
-  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
-  const requestType = selectedMenuItem?.requestType || "";
-  const permissions = getPermissions(selectedMenuItem);
+  border: "none",
+  boxShadow: "none",
 
-  const { callApi } = useApi();
-  const snackbar = useCustomSnackbar();
+  transition:"width 0.3s ease, min-width 0.3s ease, border-radius 0.3s ease",
+ 
+  // -----------------------------------------
+  // DARK PURPLE PLUS CIRCLE
+  // -----------------------------------------
+  "&::after": {
+    content: '""',
 
-  const [rows, setRows] = useState([]);
-  const [rowCount, setRowCount] = useState(0);
-  const [loading, setLoading] = useState(false);
+    position: "absolute",
 
-  const [openDialog, setOpenDialog] = useState(false);
-  const [editRow, setEditRow] = useState(null);
+    right: 0,
+    top: "50%",
 
-  /* ===== SERVER GRID STATE ===== */
+    width: 48,
+    height: 48,
 
-  const [paginationModel, setPaginationModel] = useState({
-    page: 0,
-    pageSize: 20,
-  });
+    borderRadius: "50%",
 
-  const [sortModel, setSortModel] = useState([]);
-  const [filterModel, setFilterModel] = useState({ items: [] });
+    backgroundColor: theme.palette.primary.main,
+    
+    transform:"translateY(-50%)",
 
-  /* ===== REFS TO PREVENT DOUBLE CALLS ===== */
+    zIndex: 3,
 
-  const lastFilterRef = useRef("");
-  const lastQueryRef = useRef("");
+    pointerEvents: "none",
+  },
 
-  /* ================= FETCH DATA ================= */
+  // -----------------------------------------
+  // PLUS ICON
+  // -----------------------------------------
+  "& .MuiSvgIcon-root": {
+    position: "absolute",
 
-  const fetchRows = useCallback(async () => {
-    if (!requestType) return;
+    right: 12,
+    top: "50%",
 
-    const sortField = sortModel[0]?.field;
-    const sortOrder = sortModel[0]?.sort;
+    width: 24,
+    height: 24,
 
-    const filters = filterModel.items
-      .filter(
-        (f) =>
-          f.operator &&
-          f.value !== undefined &&
-          f.value !== null &&
-          f.value !== "",
-      )
-      .map((f) => ({
-        field: f.field,
-        operator: f.operator,
-        value: f.value,
-      }));
+    minWidth: 24,
+    minHeight: 24,
 
-    const querySignature = JSON.stringify({
-      page: paginationModel.page,
-      size: paginationModel.pageSize,
-      sortField,
-      sortOrder,
-      filters,
-    });
+    margin: 0,
 
-    // PREVENT DUPLICATE API CALL
-    if (lastQueryRef.current === querySignature) return;
-    lastQueryRef.current = querySignature;
+    color: "#ffffff",
 
-    try {
-      setLoading(true);
-      const payload = {
-        // requestType,
-        page: paginationModel.page,
-        size: paginationModel.pageSize,
-        sortField: sortField || "cglNumber",
-        sortOrder: sortOrder || "asc",
-        filters,
-      };
-      const resp = await callApi("/CM/common-master/cgls", payload, "POST");
+    transform:"translateY(-50%)",
 
-      setRows(resp?.data?.data || []);
-      setRowCount(resp?.data?.totalElements || 0);
-    } catch (err) {
-      snackbar(err?.message || "Failed to load CGLs", "error");
-      setRows([]);
-      setRowCount(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [callApi, requestType, snackbar, paginationModel, sortModel, filterModel]);
+    zIndex: 4,
 
-  /* ================= EFFECTS ================= */
+    flexShrink: 0,
 
-  // Main fetch
-  useEffect(() => {
-    fetchRows();
-  }, [fetchRows]);
+    pointerEvents:"none",
+  },
 
-  // Reset page ONLY when filter meaningfully changes
-  useEffect(() => {
-    const current = JSON.stringify(filterModel.items || []);
-    if (current === lastFilterRef.current) return;
+  // -----------------------------------------
+  // CREATE SEGMENT TEXT
+  // -----------------------------------------
+  "& .create-circle-text": {
+    position: "absolute",
 
-    lastFilterRef.current = current;
+    left: 16,
+    right: 48,
 
-    setPaginationModel((p) => (p.page === 0 ? p : { ...p, page: 0 }));
-  }, [filterModel]);
+    top: 0,
 
-  /* ================= DIALOG ================= */
+    height: 48,
 
-  const handleOpenCreate = () => {
-    setEditRow(null);
-    setOpenDialog(true);
-  };
+    display: "flex",
+    alignItems: "center",
 
-  const handleOpenEdit = (row) => {
-    setEditRow(row);
-    setOpenDialog(true);
-  };
+    opacity: 0,
 
-  const handleSaved = () => {
-    setOpenDialog(false);
-    setEditRow(null);
-    lastQueryRef.current = ""; // force reload
-    fetchRows();
-  };
+    width: "auto",
+    maxWidth: "none",
 
-  /* ================= COLUMNS ================= */
+    margin: 0,
+    padding: 0,
 
-  const columns = useMemo(
-    () => [
-      // { field: "cglNumber", headerName: "CGL Code", flex: 1 },
-      {
-        field: "cglNumber",
-        headerName: "CGL Code",
-        flex: 1,
-        minWidth: 150,
-        renderCell: (params) => (
-          <Box>
-            {params.value}
-          </Box>
-        ),
-      },
+    whiteSpace: "nowrap",
+    overflow: "hidden",
 
-      {
-        field: "description",
-        headerName: "Description",
-        flex: 2,
-        minWidth: 300,
-      },
+    color: "#ffffff",
 
-      {
-        field: "acClassification",
-        headerName: "Account Classification",
-        flex: 1.2,
-        minWidth: 210,
-        type: "singleSelect",
-        valueOptions: ACCOUNT_CLASSIFICATIONS.map((a) => ({
-          value: a.value, // A, L, I, E, M
-          label: a.label,
-        })),
-        renderCell: (params) => {
-          const found = ACCOUNT_CLASSIFICATIONS.find(
-            (x) => x.value === params.value,
-          );
-          return (
-            <CustomChip
-              label={found?.label}
-              icon={found?.icon}
-              variant="outlined"
-            />
-          );
-        },
-      },
+    fontSize: "14px",
+    fontWeight: 500,
 
-      {
-        field: "balCompare",
-        headerName: "Balance Compare",
-        flex: 1,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <CustomChip
-            size="small"
-            variant="outlined"
-            icon={
-              params.row.balCompare ? (
-                <BookmarkAddedIcon />
-              ) : (
-                <BookmarkRemoveIcon />
-              )
-            }
-            label={params.row.balCompare ? "Include" : "Exclude"}
-            row={params.row}
-          />
-        ),
-      },
+    lineHeight: 1,
 
-      {
-        field: "manualPosting",
-        headerName: "Manual Posting",
-        flex: 1,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <CustomChip
-            size="small"
-            variant="outlined"
-            icon={params.row.manualPosting ? <GppGoodIcon /> : <GppBadIcon />}
-            label={params.row.manualPosting ? "Allowed" : "Not Allowed"}
-            row={params.row}
-          />
-        ),
-      },
-      {
-        field: "balFwd",
-        headerName: "Balance Forward",
-        flex: 1,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <CustomChip
-            size="small"
-            variant="outlined"
-            icon={params.row.balFwd ? <CheckCircleIcon /> : <CancelIcon />}
-            label={params.row.balFwd ? "Yes" : "No"}
-            row={params.row}
-          />
-        ),
-      },
+    textAlign: "left",
 
-      {
-        field: "status",
-        headerName: "Status",
-        flex: 0.7,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        type: "singleSelect",
-        // sortable: false,
-        valueOptions: [
-          { value: 1, label: "Active" },
-          { value: 0, label: "In Active" },
-        ],
+    zIndex: 2,
 
-        renderCell: (params) => (
-          <CustomChip
-            icon={<OnlinePredictionIcon />}
-            label={params.value === 1 ? "Active" : "In Active"}
-            color={params.value === 1 ? "success" : "error"}
-            variant="outlined"
-            sx={{
-              width:105,
-              justifyContent:"flex-start",
-            }}
-          />
-        ),
-      },
+    transition:
+      "opacity 0.2s ease",
 
-      {
-        field: "actions",
-        headerName: "Actions",
-        flex: 0.6,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
+    pointerEvents:"none",
+  },
 
-        renderCell: (params) => (
-          <Tooltip title="Edit">
-            <IconButton
-              onClick={() => handleOpenEdit(params.row)}
-              color="primary"
-            >
-              <EditIcon />
-            </IconButton>
-          </Tooltip>
-        ),
-      },
-    ],
-    [],
-  );
+  ".fab-hover-area:hover &":{
 
-  const filteredColumns = useMemo(() => {
-    if (permissions.modify || permissions.block || permissions.unblock) {
-      return columns;
-    }
-    return columns.filter((c) => c.field !== "actions");
-  }, [columns, permissions]);
+    width:180,
 
-  /* ================= RENDER ================= */
+    minWidth:180,
 
-  return (
-    <Box sx={{
-      height:760,
-      width:"100%",
-      overflow:"hidden",
-      display:"flex",
-      flexDirection:"column",
-    }}>
-      <Box sx={{
-        flex:1,minHeight:0,width:"100%",overflow:"hidden",
-      }}>
-      <DataGrid
-        rows={rows}
-        columns={filteredColumns}
-        getRowId={(row) => row.cglNumber}
-        loading={loading}
-        paginationMode="server"
-        sortingMode="server"
-        filterMode="server"
-        rowCount={rowCount}
-        paginationModel={paginationModel}
-        onPaginationModelChange={setPaginationModel}
-        sortModel={sortModel}
-        onSortModelChange={setSortModel}
-        filterModel={filterModel}
-        onFilterModelChange={setFilterModel}
-        pageSizeOptions={[10, 20, 50, 100]}
-        disableRowSelectionOnClick
-        slots={{
-          noRowsOverlay: CustomNoRowsOverlay,
-        
-        }}
-         sx={{
-          height:"100%",
-          width: "100%",
-         "& .MuiDataGrid-columnHeaders": {
-          backgroundColor: "#f5f5f5 !important",
-          fontWeight: 700,
-          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
-          position: 'sticky',
-          top: 0,
-          zIndex: 1,
-        },
-        }}
-      /></Box>
-      
-      <Box
-          sx={{
-            height:64,
-            flexShrink:0,
-            display:"flex",
-            justifyContent:"flex-end",
-            alignItems:"center",
-            px:1,
-            pb:1,
-          }}
-      >
-        <Box
-        className="fab-hover-area"
-        sx={{
-          position:"relative",
-          width:180,
-          height:48,
-          flexShrink:0,
-          transform:"translateY(8px)",
-        }}>
-        <Fab
-          onClick={() => setOpen(true)}
-          color="primary"
-        >
+    height:48,
 
-          <span className="create-circle-text">
-            Create CGL
-          </span>
-          
-          <AddIcon sx={{  
-            margin:0,
-            flexShrink:0,
-          }} />
-          
-        </Fab>
-        </Box>
-      </Box>
+    borderRadius:"24px",
+    padding:0,
+    backgroundImage:`linear-gradient(
+      to right,
+      ${theme.palette.primary.main} 0%,
+      ${lighten(theme.palette.primary.main, 0.08)} 30%,
+      ${lighten(theme.palette.primary.main, 0.18)} 60%,
+      ${lighten(theme.palette.primary.main, 0.30)} 100%
+    ) !important`,
 
-      <CGLDialog
-        open={openDialog}
-        onClose={() => setOpenDialog(false)}
-        onSaved={handleSaved}
-        editInitialData={editRow}
-        accountClassifications={ACCOUNT_CLASSIFICATIONS}
-        permissions={permissions}
-      />
-    </Box>
-  );
-}
+    border:"none",
+
+    boxShadow:` inset 0 0 0 2px ${theme.palette.primary.main}`,
+
+    justifyContent:"flex-start",
+
+  },
+  
+  ".fab-hover-area:hover & .create-circle-text":{
+    opacity:1,
+  },
