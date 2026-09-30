@@ -379,7 +379,8 @@ const RequestAnalytics = ({ data = [], showDeleteRequest = false }) => {
   );
 };
 
-export default RequestAnalytics;
+
+
 import { Check, Clear, Visibility } from "@mui/icons-material";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import AddBoxIcon from "@mui/icons-material/AddBox";
@@ -698,10 +699,6 @@ export default function CommonRequestScreen() {
           const val = p.value;
           return (
             <CustomChip
-            sx={{
-              width:105,
-              justifyContent:"flex-start",
-            }}
               icon={
                 val === "ADD" ? (
                   <AddBoxIcon />
@@ -825,10 +822,22 @@ export default function CommonRequestScreen() {
       <Card
         sx={{
           width: "100%",
+          height: "calc(100vh - 125px)",
+          minHeight: 0,
           boxShadow: 3,
           borderRadius: 2,
           bgcolor: "background.paper",
-          overflow: "hidden", // Prevents DataGrid from spilling over rounded corners
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+
+          "@media (max-width: 900px)": {
+            height: "calc(100vh - 95px)",
+          },
+
+          "@media (max-width: 600px)": {
+            height: "calc(100vh - 85px)",
+          },
         }}
       >
         <RequestAnalytics data={rows} showDeleteRequest={showDeleteRequest} />
@@ -849,10 +858,25 @@ export default function CommonRequestScreen() {
           getRowId={(row) => row.id}
           sx={{
             ...styles.dataGrid,
-            border: "none", // Remove standard borders so it flows with the card
+
+            flex: 1,
+            minHeight: 0,
+            height: 0,
+            maxHeight: "none",
+
+            border: "none",
+
+            overflow: "hidden",
+
+            "& .MuiDataGrid-virtualScroller": {
+              overflowX: "hidden !important",
+            },
+
             "& .MuiDataGrid-columnHeaders": {
-               backgroundColor: "#f5f5f5 !important",
               borderTop: "none",
+            },
+            "& .MuiDataGrid-main": {
+              overflow: "hidden",
             },
           }}
           slots={{
@@ -923,16 +947,7 @@ export default function CommonRequestScreen() {
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={closeConfirmDialog} 
-          sx=
-          {{
-            "&:hover":
-            {
-              color:"#fff",
-            },
-            }}>
-              Cancel
-            </Button>
+          <Button onClick={closeConfirmDialog}>Cancel</Button>
           <Button
             variant="contained"
             onClick={handleConfirm}
@@ -942,7 +957,9 @@ export default function CommonRequestScreen() {
           </Button>
         </DialogActions>
       </Dialog>
+
       <LoadingOverlay loading={loading} />
     </Box>
   );
 }
+ 
