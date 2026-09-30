@@ -1,358 +1,427 @@
-import * as React from "react";
-import Tabs from "@mui/material/Tabs";
-import Box from "@mui/material/Box";
-import { styled, lighten } from "@mui/material/styles";
-import { DataGrid } from "@mui/x-data-grid";
-import { Chip, Fab, Grid, Stack, DialogTitle } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-
-
-export const DataPMastermainBox = styled(Box)(({ theme }) => ({
-  py: 2,
-}));
-export const DataPTabContainer = styled(Box)(({ theme }) => ({
-  borderBottom: 1,
-  borderColor: "divider",
-}));
-
-
-export const DataPMasterTabs = styled(Tabs)(({ theme }) => ({
-  width: "100%",
-}));
-
-export const DataPaamerer1Fab = styled(Fab)(({ theme }) => ({
-  // position: "fixed",     
-  // borderRadius: "8px",
-  // fontSize: "15px",
-  // bottom: theme.spacing(4),
-  // right: theme.spacing(4),  
-  // zIndex: 1000,
-  width: 48,
-  height: 48,
-  minWidth: 48,
-  minHeight: 48,
-
-  padding: 0,
-  margin: 0,
-
-  position: "absolute",
-  right:0,
-  top:0,
-
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-
-  borderRadius: "50%",
-  overflow: "hidden",
-
-  flexShrink: 0,
-  boxSizing: "border-box",
-
-  backgroundColor: theme.palette.primary.main,
-
-  border: "none",
-  boxShadow: "none",
-
-  transition:"width 0.3s ease, min-width 0.3s ease, border-radius 0.3s ease",
- 
-  // -----------------------------------------
-  // DARK PURPLE PLUS CIRCLE
-  // -----------------------------------------
-  "&::after": {
-    content: '""',
-
-    position: "absolute",
-
-    right: 0,
-    top: "50%",
-
-    width: 48,
-    height: 48,
-
-    borderRadius: "50%",
-
-    backgroundColor: theme.palette.primary.main,
-    
-    transform:"translateY(-50%)",
-
-    zIndex: 3,
-
-    pointerEvents: "none",
-  },
-
-  // -----------------------------------------
-  // PLUS ICON
-  // -----------------------------------------
-  "& .MuiSvgIcon-root": {
-    position: "absolute",
-
-    right: 12,
-    top: "50%",
-
-    width: 24,
-    height: 24,
-
-    minWidth: 24,
-    minHeight: 24,
-
-    margin: 0,
-
-    color: "#ffffff",
-
-    transform:"translateY(-50%)",
-
-    zIndex: 4,
-
-    flexShrink: 0,
-
-    pointerEvents:"none",
-  },
-
-  // -----------------------------------------
-  // CREATE SEGMENT TEXT
-  // -----------------------------------------
-  "& .create-circle-text": {
-    position: "relative",
-
-    left: "auto",
-    right: "auto",
-
-    top: "auto",
-
-    height: 48,
-
-    display: "flex",
-    alignItems: "center",
-
-    opacity: 0,
-
-    margin: 0,
-    padding: "0 64px 0 16px",
-
-    whiteSpace: "nowrap",
-    overflow: "visible",
-
-    color: "#ffffff",
-
-    fontSize: "14px",
-    fontWeight: 500,
-
-    lineHeight: 1,
-
-    zIndex: 2,
-
-    transition:
-      "opacity 0.2s ease",
-
-    pointerEvents:"none",
-  },
-
-  ".fab-hover-area:hover &":{
-
-    width:"max-content",
-
-    minWidth:"0",
-
-    height:48,
-
-    borderRadius:"24px",
-    padding:0,
-    backgroundImage:`linear-gradient(
-      to right,
-      ${theme.palette.primary.main} 0%,
-      ${lighten(theme.palette.primary.main, 0.08)} 30%,
-      ${lighten(theme.palette.primary.main, 0.18)} 60%,
-      ${lighten(theme.palette.primary.main, 0.30)} 100%
-    ) !important`,
-
-    border:"none",
-
-    boxShadow:` inset 0 0 0 2px ${theme.palette.primary.main}`,
-
-    justifyContent:"flex-start",
-
-  },
-  
-  ".fab-hover-area:hover & .create-circle-text":{
-    opacity:1,
-  },
-}));
-
-export const DataPaamererAddicon = styled(AddIcon)(({ theme }) => ({
-  mr: 1,
-}));
-export const DataPtab1DialogTitle = styled(DialogTitle)(({ theme }) => ({
-  // m: 0,
-  // p: 2,
-}));
-
-export const DataPTab1Fab = styled(Fab)(({ theme }) => ({
-  position: "fixed",
-  borderRadius: 1,
-  fontSize: "15px",
-  bottom: theme.spacing(8),
-  right: theme.spacing(4),
-  zIndex: 1200,
-}));
-
-export const DataPTab1Addicon = styled(AddIcon)(({ theme }) => ({
-  margin:0,
-  flexShrink:0,
-}));import { useEffect, useState } from "react";
 import {
   Box,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
+  Chip,
   IconButton,
-  Button,
   Paper,
+  Stack,
+  Tooltip,
+  Typography,
+  styled,
 } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import VisibilityIcon from "@mui/icons-material/Visibility";
+import { DataGrid } from "@mui/x-data-grid";
 import EditIcon from "@mui/icons-material/Edit";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import SecurityIcon from "@mui/icons-material/Security";
+import CustomChip from "../../../utils/CustomChip";
+import { useMemo } from "react";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+
+const OverlayBox = styled(Box)(() => ({
+  display: "flex",
+  flexDirection: "column",
+  height: "100%",
+  justifyContent: "center",
+  alignItems: "center",
+}));
+
+const CustomNoRowsOverlay = () => {
+  return (
+    <OverlayBox>
+      <ErrorOutlineIcon fontSize="large" />
+      <Typography variant="h5" fontSize="1.2rem">
+        No data to display yet
+      </Typography>
+    </OverlayBox>
+  );
+};
+
+export default function RolesTable({
+  rows,
+  isLoading,
+  onEditRow,
+  screenActions,
+  roleAccessList = [],
+}) {
+  const columns = useMemo(
+    () => [
+      {
+        field: "roleName",
+        headerName: "Role",
+        flex: 0.8,
+        minWidth: 120,
+        align: "left",
+        headerAlign: "left",
+      },
+      {
+        field: "description",
+        headerName: "Role Description",
+        flex: 3,
+        minWidth: 300,
+      },
+      {
+        field: "roleAccess",
+        headerName: "Access Level",
+        flex: 0.7,
+        minWidth: 120,
+        headerAlign: "center",
+        align: "center",
+        sortable: true,
+        filterable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          const access = roleAccessList?.find(
+            (item) =>
+              String(item.accessFlag).trim() ===
+              String(params.row.roleAccess).trim(),
+          );
+
+          return (
+            <Tooltip title={access?.accessDescription || ""} placement="top">
+              <span>
+                <CustomChip
+                  variant="outlined"
+                  size="sm"
+                  icon={<SecurityIcon sx={{ width: 15, height: 15 }} />}
+                  label={access?.accessName || params.row.roleAccess || "NA"}
+                />
+              </span>
+            </Tooltip>
+          );
+        },
+      },
+      {
+        field: "action",
+        headerName: "Actions",
+        flex: 0.7,
+        minWidth: 120,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Stack
+            direction="row"
+            spacing={1}
+            justifyContent="center"
+            alignItems="center"
+            sx={{ height: "100%" }}
+          >
+            <Tooltip title="View Permissions">
+              <IconButton
+                onClick={() => {
+                  onEditRow(params.row, false);
+                }}
+              >
+                <VisibilityIcon fontSize="inherit" />
+              </IconButton>
+            </Tooltip>
+
+            {screenActions.modify && (
+              <Tooltip title="Edit Role">
+                <IconButton
+                  color="primary"
+                  onClick={() => onEditRow(params.row, true)}
+                >
+                  <EditIcon fontSize="inherit" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Stack>
+        ),
+      },
+    ],
+    [onEditRow, roleAccessList, screenActions.modify],
+  );
+
+  const filteredColumns = useMemo(() => {
+    if (screenActions.modify) {
+      return columns;
+    }
+    return columns.filter((column) => column.field !== "action");
+  }, [screenActions.modify, columns]); // Added columns to dependencies to prevent stale state
+
+  return (
+    <Paper sx={{ width: "100%", overflow: "hidden" }}>
+      <DataGrid
+        rows={rows}
+        columns={filteredColumns}
+        disableRowSelectionOnClick
+        pageSizeOptions={[5, 10, 25, 50]}
+        getRowId={(row) => row.roleId}
+        loading={isLoading}
+        autoHeight
+        initialState={{
+          pagination: { paginationModel: { pageSize: 10, page: 0 } },
+          sorting: { sortModel: [{ field: "roleId", sort: "asc" }] },
+        }}
+        slots={{
+          noRowsOverlay: CustomNoRowsOverlay,
+        }}
+        slotProps={{
+          loadingOverlay: {
+            variant: "skeleton",
+          },
+        }}
+      />
+    </Paper>
+  );
+}
+import { Chip, Fab, Grid, Stack, DialogTitle } from "@mui/material";
+import { styled } from "@mui/material/styles";
+import AddIcon from "@mui/icons-material/Add";
+const RoleManagementStyles = {
+  rootBox: {
+    // top-level Box wrapper in RoleManagement
+  },
+  tabsWrapper: {
+    borderBottom: 1,
+    borderColor: "divider",
+  },
+  tabs: {
+    width: "100%",
+  },
+};
+
+const Tab1Styles = {
+  container: { p: { xs: 2, md: 3 } },
+  paper: { mt: 2 },
+  fab: (theme) => ({
+    position: "fixed",
+    borderRadius: 1,
+    fontSize: "15px",
+    bottom: (theme) => theme.spacing(8),
+    right: (theme) => theme.spacing(4),
+  }),
+};
+
+const RolesTableStyles = {
+  dataGrid: {},
+};
+
+const RolesDialogStyles = {
+  dialog: {}, // unused directly but present for future
+  dialogTitleBox: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  formStack: { spacing: 2, mt: 2.5 },
+  permissionsList: { minHeight: 400, overflowY: "auto" },
+  dialogActions: { px: 3, pb: 2 },
+};
+
+const Tab2Styles = {
+  container: { p: { xs: 2, md: 3 } },
+  paper: { mt: 2 },
+  dataGrid: {},
+  confirmDialogActions: {},
+};
+
+const RoleApprovalsStyles = {
+  rootBox: { p: 2 },
+  dataGrid: {},
+  noRowsOverlayBox: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    height: "100%",
+  },
+  dialogTitle: { fontWeight: 600 },
+  remarkField: { mt: 1 },
+};
+
+export {
+  RoleManagementStyles,
+  Tab1Styles,
+  RolesTableStyles,
+  RolesDialogStyles,
+  Tab2Styles,
+  RoleApprovalsStyles,
+};
+
+export const RollTab1Addicon = styled(AddIcon)(({ theme }) => ({
+  mr: 1,
+}));
+import { useCallback, useEffect, useState } from "react";
 import useApi from "../../hooks/useApi";
 import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import FileDefinitionDialog from "./FileDefinitionDialog";
-import { data } from "react-router-dom";
-import { DataPaamerer1Fab, DataPTab1Addicon } from "./FileDefinitionStyle";
-export default function FileDefinitionTab() {
+import { Box, Fab, Paper, Typography, styled } from "@mui/material";
+import _ from "lodash";
+import PermissionsDialog from "./components/PermissionsDialog";
+import RolesTable from "./components/RolesTable";
+import RolesDialog from "./components/RolesDialog";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import { RollTab1Addicon } from "./roleManagementStyles";
+
+const OverlayBox = styled(Box)(() => ({
+  display: "flex",
+  flexDirection: "column",
+  height: "100%",
+  justifyContent: "center",
+  alignItems: "center",
+}));
+
+const CustomNoRowsOverlay = () => {
+  return (
+    <OverlayBox>
+      <ErrorOutlineIcon fontSize="large" />
+      <Typography variant="h5" fontSize="1.2rem">
+        No data to display yet
+      </Typography>
+    </OverlayBox>
+  );
+};
+
+export default function RoleManagementTab1(props) {
+  const screenActions = props?.permissions || {};
   const { callApi } = useApi();
   const snackbar = useCustomSnackbar();
-
+  const emptyForm = {
+    roleId: "",
+    roleName: "",
+    description: "",
+    roleAccess: null,
+    roleStatus: "ACTIVE",
+    permissions: [],
+  };
   const [rows, setRows] = useState([]);
+  const [form, setForm] = useState(emptyForm);
+  const [initialForm, setInitialForm] = useState(emptyForm);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [mode, setMode] = useState("CREATE");
-  const [selectedData, setSelectedData] = useState(null);
+  const [permDialogOpen, setPermDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [roleAccessList, setRoleAccessList] = useState([]);
 
-  const normalizeRows = (rows) =>
-    rows.map((r) => ({
-      ...r,
-      toBeIncluded:
-        r.toBeIncluded === true ||
-        r.toBeIncluded === "true" ||
-        r.toBeIncluded === "YES",
-      dataType: r.dataType?.toUpperCase(),
-    }));
-
-  const fetchData = async () => {
+  const fetchRoles = useCallback(async () => {
+    setIsLoading(true);
+    setPermDialogOpen(false);
+    setDialogOpen(false);
     try {
-      const res = await callApi("/CM/common-master/data-parameters", {}, "GET");
-      const res1 = await callApi(
-        "/CM/common-master/files-sub-types",
+      const data = await callApi(
+        "/UM/role/get-roles",
+        { permissions: true },
+        "GET",
+      );
+
+      const roles = data?.result?.roles ?? [];
+      setRows(roles);
+    } catch (e) {
+      console.error(e);
+      setRows([]);
+      snackbar("Failed to fetch roles. Check API or network.", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [callApi, snackbar]);
+
+  const fetchRoleAccessList = useCallback(async () => {
+    try {
+      const response = await callApi(
+        "/UM/role/get-role-access-list",
         {},
         "GET",
       );
-      console.log("res1", res1);
-      const data = res?.data || [];
-      console.log("data", data);
-      if (!Array.isArray(data)) {
-        const formatted = Object.keys(data || {}).map((key) => ({
-          fileType: key,
-          rows: normalizeRows(data[key]),
-        }));
-        setRows(formatted);
-      } else {
-        setRows(data);
-      }
-    } catch {
-      snackbar("Failed to load data", "error");
+      const list = response?.result?.roleAccessList ?? [];
+      setRoleAccessList(list);
+    } catch (error) {
+      console.error("Failed to fetch role access list:", error);
+      setRoleAccessList([]);
     }
-  };
+  }, [callApi]);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchRoles();
+    fetchRoleAccessList();
+  }, [fetchRoles, fetchRoleAccessList]);
+
+  const handleEditRow = (row, isEdit) => {
+    setForm({ ...row });
+    setInitialForm({ ...row });
+    isEdit ? setDialogOpen(true) : setPermDialogOpen(true);
+  };
+
+  const handleSavePermissionOrder = async (ordered, original) => {
+    const isSameOrder = _.isEqual(original, ordered);
+
+    if (isSameOrder) {
+      snackbar("Kindly Change the order before saving it", "warning");
+      return;
+    }
+
+    try {
+      const payload = {
+        selectedRole: form?.roleId,
+        permissions: ordered,
+      };
+      console.log(payload);
+      const response = await callApi(
+        "/UM/role/save-permission-order",
+        payload,
+        "PATCH",
+      );
+      snackbar(response?.message, "success");
+    } catch (err) {
+      console.error(err);
+      snackbar("Error while processing request", "error");
+    }
+    fetchRoles();
+  };
 
   return (
-    <>
-      <Box sx={{
-        mt:2,
-        width:"100%",
-        display:"flex",
-        flexDirection:"column",
-      }}>
-        <Paper sx={{ width:"100%", }}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>File Type</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
+    <Box>
+      <RolesTable
+        rows={rows}
+        isLoading={isLoading}
+        onEditRow={(row, isEdit) => handleEditRow(row, isEdit)}
+        screenActions={screenActions}
+        roleAccessList={roleAccessList}
+      />
 
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.fileType}>
-                  <TableCell>{row.fileType}</TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      onClick={() => {
-                        setMode("VIEW");
-                        setSelectedData(row);
-                        setDialogOpen(true);
-                      }}
-                    >
-                      <VisibilityIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Paper>
-      
-      <Box
-          sx={{
-            height:64,
-            flexShrink:0,
-            display:"flex",
-            justifyContent:"flex-end",
-            alignItems:"center",
-            px:1,
-            pb:1,
-          }}
-      >
-        <Box
-        className="fab-hover-area"
-        sx={{
-          position:"relative",
-          width:"fit-content",
-          height:48,
-          flexShrink:0,
-          transform:"translateY(8px)",
-        }}>
-        <DataPaamerer1Fab
+      <RolesDialog
+        open={dialogOpen}
+        form={form}
+        setForm={setForm}
+        fetchRoles={fetchRoles}
+        initialForm={initialForm}
+        screenActions={screenActions}
+        onClose={() => setDialogOpen(false)}
+        roles={rows}
+        roleAccessList={roleAccessList}
+      />
+
+      <PermissionsDialog
+        open={permDialogOpen}
+        handleSavePermissionOrder={(ordered, original) =>
+          handleSavePermissionOrder(ordered, original)
+        }
+        onClose={() => {
+          setPermDialogOpen(false);
+        }}
+        permissions={form?.permissions || []}
+        roleName={form?.roleName || ""}
+      />
+
+      {screenActions.create && (
+        <Fab
           color="primary"
-          onClick={() =>{
-            setMode("CREATE");
-            setSelectedData(null);
+          variant="extended"
+          onClick={() => {
+            setForm(emptyForm);
             setDialogOpen(true);
           }}
+          sx={{
+            position: "fixed",
+            bottom: 15,
+            right: 30,
+            borderRadius: 1,
+          }}
         >
-
-          <span className="create-circle-text">
-            Create File Type
-          </span>
-          
-          <DataPTab1Addicon />
-          
-        </DataPaamerer1Fab>
-        </Box>
-      </Box>
-        <FileDefinitionDialog
-          open={dialogOpen}
-          mode={mode}
-          setMode={setMode}
-          data={selectedData}
-          allData={rows}
-          refresh={fetchData}
-          onClose={() => setDialogOpen(false)}
-        />
-      </Box>
-    </>
+          <RollTab1Addicon />
+          Create Role
+        </Fab>
+      )}
+    </Box>
   );
 }
