@@ -1,656 +1,346 @@
-import * as React from "react";
-import Tabs from "@mui/material/Tabs";
-import Box from "@mui/material/Box";
-import { styled, lighten } from "@mui/material/styles";
-import { DataGrid } from "@mui/x-data-grid";
-import { Chip, Fab, Grid, Stack, DialogTitle } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-
-export const FileMastermainBox = styled(Box)(({ theme }) => ({
-  py: 2,
-}));
-
-export const FileTabContainer = styled(Box)(({ theme }) => ({
-  borderBottom: 1,
-  borderColor: "divider",
-}));
-
-export const FileMasterTabs = styled(Tabs)(({ theme }) => ({
-  width: "100%",
-}));
-
-////tab1
-export const CircleTab1Container = styled(Box)(({ theme }) => ({
-  p: 2,
-}));
-
-export const CircleTab1Stack = styled(Stack)(({ theme }) => ({
-  alignItems: "center",
-  justifyContent: "center",
-  height: "60vh",
-}));
-
-export const CircleMasterDataGrid = styled(DataGrid)(({ theme }) => ({}));
-
-export const CircleTab1Addicon = styled(AddIcon)(({ theme }) => ({
-    margin:0,
-  flexShrink:0,
-}));
-
-export const CircleTab1Fab = styled(Fab)(({ theme }) => ({
-  // position: "fixed",
-  // borderRadius: "8px",
-  // fontSize: "15px",
-  // bottom: theme.spacing(4),
-  // right: theme.spacing(4),
-  // zIndex: 1200,
-
-  width: 48,
-  height: 48,
-  minWidth: 48,
-  minHeight: 48,
-
-  padding: 0,
-  margin: 0,
-
-  position: "absolute",
-  right:0,
-  top:0,
-
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-
-  borderRadius: "50%",
-  overflow: "hidden",
-
-  flexShrink: 0,
-  boxSizing: "border-box",
-
-  backgroundColor: theme.palette.primary.main,
-
-  border: "none",
-  boxShadow: "none",
-
-  transition:"width 0.3s ease, min-width 0.3s ease, border-radius 0.3s ease",
- 
-  // -----------------------------------------
-  // DARK PURPLE PLUS CIRCLE
-  // -----------------------------------------
-  "&::after": {
-    content: '""',
-
-    position: "absolute",
-
-    right: 0,
-    top: "50%",
-
-    width: 48,
-    height: 48,
-
-    borderRadius: "50%",
-
-    backgroundColor: theme.palette.primary.main,
-    
-    transform:"translateY(-50%)",
-
-    zIndex: 3,
-
-    pointerEvents: "none",
-  },
-
-  // -----------------------------------------
-  // PLUS ICON
-  // -----------------------------------------
-  "& .MuiSvgIcon-root": {
-    position: "absolute",
-
-    right: 12,
-    top: "50%",
-
-    width: 24,
-    height: 24,
-
-    minWidth: 24,
-    minHeight: 24,
-
-    margin: 0,
-
-    color: "#ffffff",
-
-    transform:"translateY(-50%)",
-
-    zIndex: 4,
-
-    flexShrink: 0,
-
-    pointerEvents:"none",
-  },
-
-  // -----------------------------------------
-  // CREATE SEGMENT TEXT
-  // -----------------------------------------
-  "& .create-circle-text": {
-    position: "absolute",
-
-    left: 16,
-    right: 48,
-
-    top: 0,
-
-    height: 48,
-
-    display: "flex",
-    alignItems: "center",
-
-    opacity: 0,
-
-    width: "auto",
-    maxWidth: "none",
-
-    margin: 0,
-    padding: 0,
-
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-
-    color: "#ffffff",
-
-    fontSize: "14px",
-    fontWeight: 500,
-
-    lineHeight: 1,
-
-    textAlign: "left",
-
-    zIndex: 2,
-
-    transition:
-      "opacity 0.2s ease",
-
-    pointerEvents:"none",
-  },
-
-  ".fab-hover-area:hover &":{
-
-    width:180,
-
-    minWidth:180,
-
-    height:48,
-
-    borderRadius:"24px",
-    padding:0,
-    backgroundImage:`linear-gradient(
-      to right,
-      ${theme.palette.primary.main} 0%,
-      ${lighten(theme.palette.primary.main, 0.08)} 30%,
-      ${lighten(theme.palette.primary.main, 0.18)} 60%,
-      ${lighten(theme.palette.primary.main, 0.30)} 100%
-    ) !important`,
-
-    border:"none",
-
-    boxShadow:` inset 0 0 0 2px ${theme.palette.primary.main}`,
-
-    justifyContent:"flex-start",
-
-  },
-  
-  ".fab-hover-area:hover & .create-circle-text":{
-    opacity:1,
-  },
-
-}));
-
-export const CircleTab1Grid = styled(Grid)(({ theme }) => ({
-  mt: 1,
-}));
-export const CircleTab1chip = styled(Chip)(({ theme }) => ({
-  fontWeight: 500,
-}));
-
-export const Circletab1DialogTitle = styled(DialogTitle)(({ theme }) => ({
-  m: 0,
-  p: 2,
-}));
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   Box,
-  Button,
-  Dialog,
-  DialogContent,
-  DialogActions,
-  MenuItem,
-  Stack,
-  TextField,
-  Typography,
-  Checkbox,
-  FormControlLabel,
-  Tooltip,
+  Fab,
+  Switch,
   IconButton,
+  Stack,
+  Tooltip,
+  Typography,
+  Paper,
 } from "@mui/material";
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Close as CloseIcon,
-  Delete as DeleteIcon,
-} from "@mui/icons-material";
+import AddIcon from "@mui/icons-material/Add";
 import { DataGrid } from "@mui/x-data-grid";
+import EditIcon from "@mui/icons-material/Edit";
+import CreateAnnouncementDialog from "./components/CreateAnnouncementDialog";
+import EditAnnouncementDialog from "./components/EditAnnouncementDialog";
+import ViewAnnouncementDialog from "./components/ViewAnnouncementDialog";
 import useApi from "../../hooks/useApi";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import OnlinePredictionIcon from "@mui/icons-material/OnlinePrediction";
+import CustomChip from "../../utils/CustomChip";
+import { timeStampFormatter } from "../../utils/CommonUtilities";
+import InfoIcon from "@mui/icons-material/Info";
+import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
+import WarningIcon from "@mui/icons-material/Warning";
 
-const TYPE_OPTIONS = [
-  { value: "bancs24", label: "Bancs24" },
-  { value: "GLIF", label: "GLIF" },
-];
-
-const FREQUENCY_MAP = [
-  { label: "Daily", key: "D" },
-  { label: "Monthly", key: "M" },
-  { label: "Yearly", key: "Y" },
-];
-
-const EMPTY_FORM = {
-  type: "",
-  subType: "",
-  filePattern: "",
-  stream: "",
-  includeFile: "",
-  frequency: { D: false, M: false, Y: false },
-};
-
-export default function FileManagementTab() {
+export default function Announcements() {
   const { callApi } = useApi();
-  const snackbar = useCustomSnackbar();
 
   const [rows, setRows] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  const [roles, setRoles] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const [formData, setFormData] = useState(EMPTY_FORM);
-  const [originalData, setOriginalData] = useState(null);
-  const [isDataSame, setIsDataSame] = useState(true);
+  const [openCreate, setOpenCreate] = useState(false);
+  const [editRow, setEditRow] = useState(null);
+  const [viewRow, setViewRow] = useState(null);
+  const [openViewDailog, setOpenViewDailog] = useState(false);
 
-  const fetchData = async () => {
-    try {
-      const res = await callApi("/CM/common-master/files", null, "GET");
-      setRows(res?.data || []);
-    } catch {
-      snackbar("Failed to load file configurations", "error");
-    }
-  };
-
+  // ---------- INITIAL LOAD ----------
   useEffect(() => {
-    fetchData();
+    fetchRoles();
+    fetchRows();
   }, []);
 
-  const subTypeOptions = useMemo(() => {
-    const map = {};
-
-    rows.forEach((r) => {
-      if (!map[r.type]) map[r.type] = new Set();
-      if (r.subType) map[r.type].add(r.subType);
-    });
-
-    const result = {};
-    Object.keys(map).forEach((k) => {
-      result[k] = Array.from(map[k]);
-    });
-
-    return result;
-  }, [rows]);
-
-  useEffect(() => {
-    if (editingId && originalData) {
-      setIsDataSame(JSON.stringify(formData) === JSON.stringify(originalData));
-    }
-  }, [formData, originalData, editingId]);
-
-  const parseFrequency = (freq) => {
-    const result = { D: false, M: false, Y: false };
-
-    if (!freq) return result;
-
-    const parts = freq.toUpperCase().split("/");
-
-    parts.forEach((p) => {
-      if (p === "D") result.D = true;
-      if (p === "M") result.M = true;
-      if (p === "Y") result.Y = true;
-    });
-
-    return result;
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    if (name === "type") {
-      setFormData((prev) => ({
-        ...prev,
-        type: value,
-        subType: value === "GLIF" ? "GLIF" : "",
-      }));
-      return;
-    }
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleFrequencyChange = (key) => {
-    setFormData((prev) => ({
-      ...prev,
-      frequency: {
-        ...prev.frequency,
-        [key]: !prev.frequency[key],
-      },
-    }));
-  };
-
-  const handleEdit = (row) => {
-    const init = {
-      type: row.type || "",
-      subType: row.subType || "",
-      filePattern: row.filePattern || "",
-      stream: row.stream || "",
-      includeFile: row.includeFile || "",
-      frequency: parseFrequency(row.frequency),
-    };
-
-    setFormData(init);
-    setOriginalData(init);
-    setEditingId(row.fileId);
-    setOpen(true);
-  };
-
-  const handleDelete = async (row) => {
+  // ---------- FETCH ROLES ----------
+  async function fetchRoles() {
     try {
-      const payload = {
-        requestType: "FILE_TYPE_MASTER",
-        changeType: "DELETE",
-        targetId: row.filePattern,
-        payload: {
-          type: row.type,
-          subType: row.subType,
-          filePattern: row.filePattern,
-          stream: row.stream,
-          includeFile: row.includeFile,
-          frequency: row.frequency,
-        },
-      };
-
-      const response = await callApi("/CR/create-request", payload, "POST");
-      snackbar(
-        " delete request submitted successfully with request id " +
-          response?.data?.id,
-        "success",
-      );
-      fetchData();
+      const res = await callApi("/UM/role/get-roles", null, "GET");
+      const data = res?.data ?? res;
+      setRoles(Array.isArray(data) ? data : data?.data ?? []);
     } catch (err) {
-      snackbar(err?.message || "Delete failed", "error");
+      console.error("fetchRoles error", err);
+      setRoles([]);
     }
-  };
+  }
 
-  const handleClose = () => {
-    setOpen(false);
-    setEditingId(null);
-    setOriginalData(null);
-    setFormData(EMPTY_FORM);
-  };
-
-  const handleSubmit = async () => {
-    if (editingId && isDataSame) {
-      snackbar("No changes detected", "warning");
-      return;
-    }
-
-    // BASIC VALIDATION
-    if (!formData.type) {
-      snackbar("Type is required", "error");
-      return;
-    }
-
-    if (!formData.subType) {
-      snackbar("Sub Type is required", "error");
-      return;
-    }
-
-    if (!formData.filePattern) {
-      snackbar("File Pattern is required", "error");
-      return;
-    }
-
-    if (!formData.stream) {
-      snackbar("Stream is required", "error");
-      return;
-    }
-
-    if (!formData.includeFile) {
-      snackbar("Include File is required", "error");
-      return;
-    }
-
-    const payload = {
-      requestType: "FILE_TYPE_MASTER",
-      changeType: editingId ? "UPDATE" : "ADD",
-      targetId: formData.filePattern,
-      payload: {
-        ...formData,
-        frequency: Object.keys(formData.frequency)
-          .filter((k) => formData.frequency[k])
-          .join("/"),
-      },
-    };
-
+  // ---------- FETCH ANNOUNCEMENTS ----------
+  const fetchRows = async () => {
+    setLoading(true);
     try {
-      const response = await callApi("/CR/create-request", payload, "POST");
-
-      snackbar(
-        editingId
-          ? " update request submitted successfully with request id " +
-              response?.data?.id
-          : "creation request submitted successfully with request id " +
-              response?.data?.id,
-        "success",
-      );
-
-      handleClose();
-      fetchData();
+      const res = await callApi("/CM/announcements/list", null, "GET");
+      const payload = res?.data ?? res;
+      const list = payload?.data ?? payload;
+      setRows(Array.isArray(list) ? list : []);
     } catch (err) {
-      snackbar(err?.message || "Request failed", "error");
+      console.error("fetchRows error", err);
+      setRows([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const columns = useMemo(
-    () => [
-      { field: "type", headerName: "File Type", flex: 1 },
-      { field: "filePattern", headerName: "File Pattern", flex: 2 },
+  // ---------- ACTIVE/INACTIVE TOGGLE ----------
+  const handleToggle = async (row) => {
+    try {
+      const res = await callApi(
+        `/CM/announcements/${row.id}/toggle`,
+        null,
+        "PATCH"
+      );
+      const updated = res?.data ?? res;
 
-      {
-        field: "stream",
-        headerName: "Stream",
-        flex: 1,
-        renderCell: (params) =>
-          params.value === "Y" ? "Yes" : params.value === "N" ? "No" : "",
+      setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    } catch (err) {
+      console.error("toggle error", err);
+      if (err?.response?.status === 400) {
+        alert(err.response.data?.message ?? "Toggle not allowed");
+      }
+    }
+  };
+
+  // ---------- CREATE SAVE ----------
+  const handleCreateSave = async (payload) => {
+    try {
+      await callApi("/CM/announcements", payload, "POST");
+      setOpenCreate(false);
+      fetchRows();
+    } catch (err) {
+      console.error("create error", err);
+    }
+  };
+
+  // ---------- EDIT SAVE ----------
+  const handleEditSave = async (updated) => {
+    try {
+      await callApi(`/CM/announcements/${updated.id}`, updated, "PUT");
+      setEditRow(null);
+      fetchRows();
+    } catch (err) {
+      console.error("edit save error", err);
+    }
+  };
+
+  // ---------- ROLE NAME MAPPING ----------
+  const roleMap = useMemo(() => {
+    const m = {};
+    roles.forEach((r) => (m[String(r.id)] = r.name));
+    return m;
+  }, [roles]);
+
+  const columns = [
+    { field: "title", headerName: "Title", flex: 1 },
+    {
+      field: "severity",
+      headerName: "Severity",
+      flex: 1,
+
+      renderCell: (params) => {
+        const sev = params.value;
+        const icon =
+          sev === "CRITICAL" ? (
+            <InfoIcon fontSize="small" />
+          ) : sev === "WARN" ? (
+            <WarningIcon fontSize="small" />
+          ) : (
+            <PriorityHighIcon fontSize="small" />
+          );
+        const color =
+          sev === "CRITICAL" ? "error" : sev === "WARN" ? "warning" : "info";
+        return (
+          <CustomChip
+            variant="outlined"
+            label={sev}
+            color={color}
+            icon={icon}
+            sx={{
+              width:105,
+              justifyContent:"flex-start",
+            }}
+          />
+        );
       },
+    },
+    {
+      field: "targetRoles",
+      headerName: "Target Roles",
+      flex: 1,
+      renderCell: (params) => {
+        const tr = params.row.targetRoles;
 
-      {
-        field: "frequency",
-        headerName: "Frequency",
-        flex: 1,
-        renderCell: (params) => {
-          if (!params.value) return "";
+        if (!tr || tr === "ALL") return "ALL";
 
-          return params.value
-            .split(/[/,]/)
-            .map((f) => {
-              if (f === "D") return "Daily";
-              if (f === "M") return "Monthly";
-              if (f === "Y") return "Yearly";
-              return f;
-            })
-            .join(" / ");
-        },
+        const arr = Array.isArray(tr)
+          ? tr
+          : String(tr)
+              .split(",")
+              .map((x) => x.trim());
+
+        return arr.map((id) => roleMap[id] ?? id).join(", ");
       },
+    },
 
-      {
-        field: "includeFile",
-        headerName: "Include",
-        flex: 1,
-        renderCell: (params) =>
-          params.value === "Y" ? "Yes" : params.value === "N" ? "No" : "",
-      },
+    {
+      field: "startDate",
+      headerName: "Start Date",
+      flex: 1,
+      sortable: true,
+      renderCell: (p) => (
+        <Typography
+          variant="body1"
+          component="span"
+          sx={{ fontSize: "0.9rem" }}
+        >
+          {timeStampFormatter(p?.row?.startDate) || "NA"}
+        </Typography>
+      ),
+    },
 
-      {
-        field: "actions",
-        headerName: "Actions",
-        flex: 1,
-        align: "center",
-        renderCell: (params) => (
-          <Stack direction="row" spacing={1}>
-            <Tooltip title="Edit">
-              <IconButton
-                color="primary"
-                onClick={() => handleEdit(params.row)}
-              >
-                <EditIcon />
-              </IconButton>
-            </Tooltip>
+    {
+      field: "expiryDate",
+      headerName: "Expiry Date",
+      flex: 1,
+      sortable: true,
+      renderCell: (p) => (
+        <Typography
+          variant="body1"
+          component="span"
+          sx={{ fontSize: "0.9rem" }}
+        >
+          {timeStampFormatter(p?.row?.expiryDate) || "NA"}
+        </Typography>
+      ),
+    },
 
-            <Tooltip title="Delete">
-              <IconButton
-                color="error"
-                onClick={() => handleDelete(params.row)}
-              >
-                <DeleteIcon />
-              </IconButton>
-            </Tooltip>
-          </Stack>
-        ),
-      },
-    ],
-    [],
-  );
+    {
+      field: "displayStatus",
+      headerName: "Status",
+      flex: 1,
+      // sortable: true,
+      renderCell: (params) => (
+        <CustomChip
+          color={
+            params.value === "ACTIVE"
+              ? "#3b803fff"
+              : params.value === "EXPIRED"
+              ? "#d32f2f"
+              : params.value === "SCHEDULED"
+              ? "#1976d2"
+              : "#9e9e9e"
+          }
+          variant="outlined"
+          icon={<OnlinePredictionIcon />}
+          label={params.value}
+          sx={{
+              width:120,
+              justifyContent:"flex-start",
+            }}
+        />
+      ),
+    },
+
+    {
+      field: "action",
+      headerName: "Actions",
+      flex: 1,
+
+      renderCell: (params) => (
+        <Stack
+          direction="row"
+          spacing={1}
+          justifyContent="center"
+          alignItems="center"
+          sx={{ height: "100%" }}
+        >
+          <Tooltip
+            title={
+              params.row.isActive === "Y"
+                ? "Inactive Announcement"
+                : "Activate Announcement"
+            }
+          >
+            {/* <IconButton
+              color={params.row.isActive === "Y" ? "error" : "success"}
+              onClick={() => handleToggle(params.row)}
+            >
+              <CampaignIcon fontSize="inherit" />
+            </IconButton> */}
+            <Switch
+              checked={params.row.isActive === "Y"}
+              onChange={() => handleToggle(params.row)}
+            />
+          </Tooltip>
+
+          <Tooltip title="Edit Announcement">
+            <IconButton onClick={() => setEditRow(params.row)}>
+              <EditIcon fontSize="inherit" />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="View Announcement">
+            <IconButton
+              onClick={() => {
+                setOpenViewDailog(true);
+                setViewRow(params.row);
+              }}
+            >
+              <VisibilityIcon fontSize="inherit" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      ),
+    },
+  ];
 
   return (
-    <Box>
+    <Paper
+    elevation={2}
+    sx={{
+      display:"flex",
+      flexDirection:"column",
+      borderRadius:2,
+      overflow:"hidden",
+      minHeight:"calc(100vh - 210px)",
+      width:"100%",
+    }}>
+    <Box p={2} height="80vh">
       <DataGrid
         rows={rows}
         columns={columns}
-        getRowId={(row) => row.fileId}
-        autoHeight
+        loading={loading}
+        pageSizeOptions={[5, 10, 25]}
         disableRowSelectionOnClick
       />
 
-      <Button
-        variant="contained"
-        startIcon={<AddIcon />}
-        onClick={() => setOpen(true)}
+      <Fab
+        color="primary"
+        onClick={() => setOpenCreate(true)}
+        variant="extended"
+        sx={{
+          position: "fixed",
+          borderRadius: 1,
+          fontSize: "15px",
+          bottom: (theme) => theme.spacing(8),
+          right: (theme) => theme.spacing(4),
+        }}
       >
+        <AddIcon />
         Create
-      </Button>
+      </Fab>
 
-      <Dialog open={open} maxWidth="sm" fullWidth>
-        <DialogContent>
-          <Stack spacing={2}>
-            <Stack direction="row" justifyContent="space-between">
-              <Typography variant="h6">
-                {editingId
-                  ? "Edit File Configuration"
-                  : "Add File Configuration"}
-              </Typography>
-              <IconButton onClick={handleClose}>
-                <CloseIcon />
-              </IconButton>
-            </Stack>
-            <TextField
-              select
-              label="Type"
-              name="type"
-              value={formData.type || ""}
-              onChange={handleChange}
-              disabled={!!editingId}
-            >
-              {TYPE_OPTIONS.map((opt) => (
-                <MenuItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </MenuItem>
-              ))}
-            </TextField>
+      <CreateAnnouncementDialog
+        open={openCreate}
+        onClose={() => setOpenCreate(false)}
+        onSave={handleCreateSave}
+      />
 
-            <TextField
-              select
-              label="Sub Type"
-              name="subType"
-              value={formData.subType || ""}
-              onChange={handleChange}
-              disabled={formData.type === "GLIF"}
-            >
-              {(subTypeOptions[formData.type] || []).map((v) => (
-                <MenuItem key={v} value={v}>
-                  {v}
-                </MenuItem>
-              ))}
-            </TextField>
+      {editRow && (
+        <EditAnnouncementDialog
+          open={Boolean(editRow)}
+          record={editRow}
+          onClose={() => setEditRow(null)}
+          onSave={handleEditSave}
+        />
+      )}
 
-            <TextField
-              label="File Pattern"
-              name="filePattern"
-              value={formData.filePattern || ""}
-              onChange={handleChange}
-            />
-
-            <TextField
-              select
-              label="Stream"
-              name="stream"
-              value={formData.stream || ""}
-              onChange={handleChange}
-            >
-              <MenuItem value="Y">Yes</MenuItem>
-              <MenuItem value="N">No</MenuItem>
-            </TextField>
-
-            <Box>
-              <Typography>Frequency</Typography>
-
-              {FREQUENCY_MAP.map(({ label, key }) => (
-                <FormControlLabel
-                  key={key}
-                  control={
-                    <Checkbox
-                      checked={formData.frequency[key]}
-                      onChange={() => handleFrequencyChange(key)}
-                    />
-                  }
-                  label={label}
-                />
-              ))}
-            </Box>
-
-            <TextField
-              select
-              label="Include"
-              name="includeFile"
-              value={formData.includeFile || ""}
-              onChange={handleChange}
-            >
-              <MenuItem value="Y">Yes</MenuItem>
-              <MenuItem value="N">No</MenuItem>
-            </TextField>
-          </Stack>
-        </DialogContent>
-
-        <DialogActions>
-          <Button variant="contained" onClick={handleSubmit}>
-            {editingId ? "Update" : "Add"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {viewRow && (
+        <ViewAnnouncementDialog
+          open={openViewDailog}
+          data={viewRow}
+          onClose={() => setOpenViewDailog(false)}
+        />
+      )}
     </Box>
+    </Paper>
   );
 }
