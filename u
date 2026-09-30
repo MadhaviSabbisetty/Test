@@ -1,427 +1,703 @@
-import {
-  Box,
-  Chip,
-  IconButton,
-  Paper,
-  Stack,
-  Tooltip,
-  Typography,
-  styled,
-} from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
-import EditIcon from "@mui/icons-material/Edit";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import SecurityIcon from "@mui/icons-material/Security";
-import CustomChip from "../../../utils/CustomChip";
-import { useMemo } from "react";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
+import { useSelector } from "react-redux";
+import dayjs from "dayjs";
 
-const OverlayBox = styled(Box)(() => ({
-  display: "flex",
-  flexDirection: "column",
-  height: "100%",
-  justifyContent: "center",
-  alignItems: "center",
-}));
+import { Grid, Button, Paper, Stack, useTheme } from "@mui/material";
 
-const CustomNoRowsOverlay = () => {
-  return (
-    <OverlayBox>
-      <ErrorOutlineIcon fontSize="large" />
-      <Typography variant="h5" fontSize="1.2rem">
-        No data to display yet
-      </Typography>
-    </OverlayBox>
-  );
-};
+import StopCircleIcon from "@mui/icons-material/StopCircle";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import TaskAltIcon from "@mui/icons-material/TaskAlt";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
 
-export default function RolesTable({
-  rows,
-  isLoading,
-  onEditRow,
-  screenActions,
-  roleAccessList = [],
-}) {
-  const columns = useMemo(
-    () => [
-      {
-        field: "roleName",
-        headerName: "Role",
-        flex: 0.8,
-        minWidth: 120,
-        align: "left",
-        headerAlign: "left",
-      },
-      {
-        field: "description",
-        headerName: "Role Description",
-        flex: 3,
-        minWidth: 300,
-      },
-      {
-        field: "roleAccess",
-        headerName: "Access Level",
-        flex: 0.7,
-        minWidth: 120,
-        headerAlign: "center",
-        align: "center",
-        sortable: true,
-        filterable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => {
-          const access = roleAccessList?.find(
-            (item) =>
-              String(item.accessFlag).trim() ===
-              String(params.row.roleAccess).trim(),
-          );
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 
-          return (
-            <Tooltip title={access?.accessDescription || ""} placement="top">
-              <span>
-                <CustomChip
-                  variant="outlined"
-                  size="sm"
-                  icon={<SecurityIcon sx={{ width: 15, height: 15 }} />}
-                  label={access?.accessName || params.row.roleAccess || "NA"}
-                />
-              </span>
-            </Tooltip>
-          );
-        },
-      },
-      {
-        field: "action",
-        headerName: "Actions",
-        flex: 0.7,
-        minWidth: 120,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <Stack
-            direction="row"
-            spacing={1}
-            justifyContent="center"
-            alignItems="center"
-            sx={{ height: "100%" }}
-          >
-            <Tooltip title="View Permissions">
-              <IconButton
-                onClick={() => {
-                  onEditRow(params.row, false);
-                }}
-              >
-                <VisibilityIcon fontSize="inherit" />
-              </IconButton>
-            </Tooltip>
-
-            {screenActions.modify && (
-              <Tooltip title="Edit Role">
-                <IconButton
-                  color="primary"
-                  onClick={() => onEditRow(params.row, true)}
-                >
-                  <EditIcon fontSize="inherit" />
-                </IconButton>
-              </Tooltip>
-            )}
-          </Stack>
-        ),
-      },
-    ],
-    [onEditRow, roleAccessList, screenActions.modify],
-  );
-
-  const filteredColumns = useMemo(() => {
-    if (screenActions.modify) {
-      return columns;
-    }
-    return columns.filter((column) => column.field !== "action");
-  }, [screenActions.modify, columns]); // Added columns to dependencies to prevent stale state
-
-  return (
-    <Paper sx={{ width: "100%", overflow: "hidden" }}>
-      <DataGrid
-        rows={rows}
-        columns={filteredColumns}
-        disableRowSelectionOnClick
-        pageSizeOptions={[5, 10, 25, 50]}
-        getRowId={(row) => row.roleId}
-        loading={isLoading}
-        autoHeight
-        initialState={{
-          pagination: { paginationModel: { pageSize: 10, page: 0 } },
-          sorting: { sortModel: [{ field: "roleId", sort: "asc" }] },
-        }}
-        slots={{
-          noRowsOverlay: CustomNoRowsOverlay,
-        }}
-        slotProps={{
-          loadingOverlay: {
-            variant: "skeleton",
-          },
-        }}
-      />
-    </Paper>
-  );
-}
-import { Chip, Fab, Grid, Stack, DialogTitle } from "@mui/material";
-import { styled } from "@mui/material/styles";
-import AddIcon from "@mui/icons-material/Add";
-const RoleManagementStyles = {
-  rootBox: {
-    // top-level Box wrapper in RoleManagement
-  },
-  tabsWrapper: {
-    borderBottom: 1,
-    borderColor: "divider",
-  },
-  tabs: {
-    width: "100%",
-  },
-};
-
-const Tab1Styles = {
-  container: { p: { xs: 2, md: 3 } },
-  paper: { mt: 2 },
-  fab: (theme) => ({
-    position: "fixed",
-    borderRadius: 1,
-    fontSize: "15px",
-    bottom: (theme) => theme.spacing(8),
-    right: (theme) => theme.spacing(4),
-  }),
-};
-
-const RolesTableStyles = {
-  dataGrid: {},
-};
-
-const RolesDialogStyles = {
-  dialog: {}, // unused directly but present for future
-  dialogTitleBox: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  formStack: { spacing: 2, mt: 2.5 },
-  permissionsList: { minHeight: 400, overflowY: "auto" },
-  dialogActions: { px: 3, pb: 2 },
-};
-
-const Tab2Styles = {
-  container: { p: { xs: 2, md: 3 } },
-  paper: { mt: 2 },
-  dataGrid: {},
-  confirmDialogActions: {},
-};
-
-const RoleApprovalsStyles = {
-  rootBox: { p: 2 },
-  dataGrid: {},
-  noRowsOverlayBox: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    height: "100%",
-  },
-  dialogTitle: { fontWeight: 600 },
-  remarkField: { mt: 1 },
-};
-
-export {
-  RoleManagementStyles,
-  Tab1Styles,
-  RolesTableStyles,
-  RolesDialogStyles,
-  Tab2Styles,
-  RoleApprovalsStyles,
-};
-
-export const RollTab1Addicon = styled(AddIcon)(({ theme }) => ({
-  mr: 1,
-}));
-import { useCallback, useEffect, useState } from "react";
-import useApi from "../../hooks/useApi";
 import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import { Box, Fab, Paper, Typography, styled } from "@mui/material";
-import _ from "lodash";
-import PermissionsDialog from "./components/PermissionsDialog";
-import RolesTable from "./components/RolesTable";
-import RolesDialog from "./components/RolesDialog";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
-import { RollTab1Addicon } from "./roleManagementStyles";
+import useApi from "../../hooks/useApi";
+import {
+  getPermissions,
+  timeStampFormatter,
+} from "../../utils/CommonUtilities";
 
-const OverlayBox = styled(Box)(() => ({
-  display: "flex",
-  flexDirection: "column",
-  height: "100%",
-  justifyContent: "center",
-  alignItems: "center",
-}));
+import ProcessStatusHeader from "./components/ProcessStatusHeader";
+import ProcessStatusTable from "./components/ProcessStatusTable";
+import ProcessDetailsDialog from "./components/ProcessDetailsDialog";
+import ProcessSummaryDialog from "./components/ProcessSummaryDialog";
+import ActionConfirmDialog from "./components/ActionConfirmDialog";
+import LoadingOverlay from "../../utils/LoadingOverlay";
+import ProcessReportDownloadProgress from "./components/ProcessReportDownloadProgress";
+import useStreamApi from "../../hooks/useStreamApi";
+import { StageStatus } from "./util/StageStatus";
+import { convertDateString } from "../../utils/dateUtils";
+/* =====================================================
+CONFIG
+===================================================== */
 
-const CustomNoRowsOverlay = () => {
-  return (
-    <OverlayBox>
-      <ErrorOutlineIcon fontSize="large" />
-      <Typography variant="h5" fontSize="1.2rem">
-        No data to display yet
-      </Typography>
-    </OverlayBox>
-  );
+const EOD_DAG = "wrapper_test";
+const ETL_PROCESS_TYPE = "EOD";
+const ETL_PROCESS_ID = 0;
+
+const INITIAL_DATA_URL = "/PS/process/processes/data";
+const TRIGGER_DAG_URL = "/PS/airflow/trigger";
+const STOP_DAG_URL = "/PS/airflow/stop";
+const FINISH_EOD_URL = "/PS/process/finish-eod";
+
+// const service = resolveConfig("/PS");
+const STREAM_URL = `/PS/process/processes`;
+
+const APPROVE_REJECT_URL = "/PS/process/approve-reject";
+
+/* =====================================================
+   Date Validation Messages
+===================================================== */
+
+const getDateErrorMessage = (error, maxDate) => {
+  switch (error) {
+    case "invalidDate":
+      return "Invalid date format";
+    case "minDate":
+      return "Date is before allowed range";
+    case "maxDate":
+      return `Date cannot be after ${dayjs(maxDate).format("DD-MM-YYYY")}`;
+    default:
+      return "Enter a valid date";
+  }
 };
 
-export default function RoleManagementTab1(props) {
-  const screenActions = props?.permissions || {};
-  const { callApi } = useApi();
+/* =====================================================
+   NORMALIZATION
+===================================================== */
+
+const normalizeStageDetails = (stages = []) => {
+  return Array.from(stages.values())
+    .sort((a, b) => a._START_TIME_RAW - b._START_TIME_RAW)
+    .map((s) => ({
+      ...s,
+      _START_TIME_RAW: s.startTime,
+      _END_TIME_RAW: s.endTime,
+      startTime: s.startTime ? timeStampFormatter(s.startTime) : null,
+      endTime: s.endTime ? timeStampFormatter(s.endTime) : null,
+    }));
+};
+
+const normalizeProcesses = (data = []) =>
+  data.map((p) => ({
+    ...p,
+    type: p.type ?? p.processType,
+    stages: normalizeStageDetails(p.stages || []),
+  }));
+
+/* =====================================================
+   MAIN PAGE
+===================================================== */
+
+const ProcessStatusPage = () => {
   const snackbar = useCustomSnackbar();
-  const emptyForm = {
-    roleId: "",
-    roleName: "",
-    description: "",
-    roleAccess: null,
-    roleStatus: "ACTIVE",
-    permissions: [],
-  };
-  const [rows, setRows] = useState([]);
-  const [form, setForm] = useState(emptyForm);
-  const [initialForm, setInitialForm] = useState(emptyForm);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [permDialogOpen, setPermDialogOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [roleAccessList, setRoleAccessList] = useState([]);
+  const token = useSelector((s) => s.auth.token);
+  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
+  const permissions = getPermissions(selectedMenuItem);
+  const { callApi } = useApi();
+  const { startStream } = useStreamApi();
+  const theme = useTheme();
 
-  const fetchRoles = useCallback(async () => {
-    setIsLoading(true);
-    setPermDialogOpen(false);
-    setDialogOpen(false);
-    try {
-      const data = await callApi(
-        "/UM/role/get-roles",
-        { permissions: true },
-        "GET",
-      );
+  /* STATE */
+  const [currentEtlDate, setCurrentEtlDate] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [processes, setProcesses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [dateError, setDateError] = useState(null);
+  const isValidDayjsDate = (d) => dayjs.isDayjs(d) && d.isValid();
+  const [selectedProcess, setSelectedProcess] = useState(null);
 
-      const roles = data?.result?.roles ?? [];
-      setRows(roles);
-    } catch (e) {
-      console.error(e);
-      setRows([]);
-      snackbar("Failed to fetch roles. Check API or network.", "error");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [callApi, snackbar]);
+  const [summaryData, setSummaryData] = useState(null);
+  const [summaryMeta, setSummaryMeta] = useState(null);
 
-  const fetchRoleAccessList = useCallback(async () => {
-    try {
-      const response = await callApi(
-        "/UM/role/get-role-access-list",
-        {},
-        "GET",
-      );
-      const list = response?.result?.roleAccessList ?? [];
-      setRoleAccessList(list);
-    } catch (error) {
-      console.error("Failed to fetch role access list:", error);
-      setRoleAccessList([]);
-    }
-  }, [callApi]);
+  const [confirmConfig, setConfirmConfig] = useState(null);
+
+  const [downloadProgress, setDownloadProgress] = useState({
+    inProgress: false,
+    loadedBytes: 0,
+  });
+
+  const initialFetchDone = useRef(false);
+  const dagRunRef = useRef(null);
+
+  /* =====================================================
+      DERIVED STATE
+  ===================================================== */
+
+  /* Visible processes (exclude ETL from table) */
+  const visibleProcesses = useMemo(
+    () =>
+      processes.filter(
+        (p) => p.type !== ETL_PROCESS_TYPE && p.processId !== ETL_PROCESS_ID,
+      ),
+    [processes],
+  );
+
+  /* ETL process only */
+  const etlProcess = useMemo(
+    () => processes.find((p) => p.type === ETL_PROCESS_TYPE),
+    [processes],
+  );
+
+  const isInProgress =
+    etlProcess?.status === 1 || processes.some((p) => p.status === 1);
+
+  const allCompleted =
+    etlProcess?.status === 2 && processes.every((p) => p.status === 2);
+
+  const anyFailed =
+    etlProcess?.status === 3 && processes.some((p) => p.status === 3);
+
+  const hasEtl = Boolean(etlProcess);
+
+  const isCurrentDate =
+    selectedDate &&
+    currentEtlDate &&
+    selectedDate.format("YYYY-MM-DD") === currentEtlDate;
+
+  /* =====================================================
+     INITIAL LOAD
+  ===================================================== */
+
+  const loadByDate = useCallback(
+    async (date) => {
+      if (date && !isValidDayjsDate(date)) return;
+
+      const payload = {
+        etlDate: date ? date.format("YYYY-MM-DD") : "",
+      };
+
+      setLoading(true);
+      try {
+        const res = await callApi(INITIAL_DATA_URL, payload, "GET");
+
+        setCurrentEtlDate(res?.fincoreDate?.etlDate);
+        setSelectedDate(date || dayjs(res?.fincoreDate?.etlDate));
+        setProcesses(normalizeProcesses(res?.initialData || []));
+      } catch {
+        snackbar("Failed to load processes", "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [callApi, snackbar],
+  );
 
   useEffect(() => {
-    fetchRoles();
-    fetchRoleAccessList();
-  }, [fetchRoles, fetchRoleAccessList]);
+    if (initialFetchDone.current) return;
+    initialFetchDone.current = true;
+    loadByDate(null);
+  }, [loadByDate]);
 
-  const handleEditRow = (row, isEdit) => {
-    setForm({ ...row });
-    setInitialForm({ ...row });
-    isEdit ? setDialogOpen(true) : setPermDialogOpen(true);
+  /* =====================================================
+     SSE STREAM
+  ===================================================== */
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (
+      selectedDate &&
+      currentEtlDate &&
+      selectedDate.format("YYYY-MM-DD") !== currentEtlDate
+    )
+      return;
+
+    const controller = new AbortController();
+
+    startStream(STREAM_URL, {
+      onOpen: () => {
+        console.log("Connection Established for process");
+      },
+      onMessage: (data) => {
+        console.log("Update Recieved from process status stream", data);
+        setProcesses(normalizeProcesses(data?.initialData || []));
+      },
+    });
+
+    return () => controller.abort();
+  }, [token, loading, selectedDate, currentEtlDate, startStream]);
+
+  /* =====================================================
+     DAG ACTIONS
+  ===================================================== */
+
+  const triggerDag = async (process, remarks) => {
+    const { dagId, processId } = process;
+
+    // 1. Find the latest Difference run (ID 3)
+    const latestDiff = processes
+      .filter((item) => item.processId === 3)
+      .reduce(
+        (prev, current) => (prev.runId > current.runId ? prev : current),
+        {},
+      );
+
+    const diffStatus = latestDiff?.status;
+
+    // Check for Completed (Accepted) status
+
+    if (
+      diffStatus === StageStatus.COMPLETED &&
+      processId !== 6 &&
+      processId !== 13
+    ) {
+      return snackbar(
+        "Summaries are already approved. Cannot trigger again.",
+        "error",
+      );
+    }
+
+    // Block process Id's [ 0 (EOD), 1 (CBS), 2(GLIF) ] if Difference is In-progress or Pending Approval
+    const isLocked = [
+      StageStatus.STARTED,
+      StageStatus.WAITING_FOR_APPROVAL,
+    ].includes(diffStatus);
+
+    if ([0, 1, 2].includes(processId) && isLocked) {
+      return snackbar(
+        "Difference process is currently In-Progress or Pending Approval.",
+        "error",
+      );
+    }
+
+    setApiLoading(true);
+    try {
+      const response = await callApi(
+        TRIGGER_DAG_URL,
+        { dagId, conf: {}, remarks, processId },
+        "POST",
+      );
+      dagRunRef.current = response?.data?.airflowResponse?.dag_run_id;
+      snackbar("Process started", "success");
+      loadByDate();
+    } catch (e) {
+      snackbar("Start failed: " + e.message, "error");
+    } finally {
+      setApiLoading(false);
+    }
   };
 
-  const handleSavePermissionOrder = async (ordered, original) => {
-    const isSameOrder = _.isEqual(original, ordered);
+  const stopDag = async (
+    dagId,
+    remarks,
+    processId = 0,
+    dagRunId = etlProcess.airflowRunId,
+  ) => {
+    setApiLoading(true);
+    try {
+      await callApi(
+        STOP_DAG_URL,
+        { dagId, dagRunId, conf: {}, remarks, processId },
+        "POST",
+      );
+      snackbar("Process stopped", "success");
+      loadByDate();
+    } catch (e) {
+      snackbar("Stop failed, " + e.message, "error");
+    } finally {
+      setApiLoading(false);
+    }
+  };
 
-    if (isSameOrder) {
-      snackbar("Kindly Change the order before saving it", "warning");
+  const finishEod = async (remarks) => {
+    try {
+      setApiLoading(true);
+      await callApi(FINISH_EOD_URL, { remarks });
+      snackbar("EOD Finished", "success");
+      loadByDate();
+    } catch {
+      snackbar("Finish failed", "error");
+    } finally {
+      setApiLoading(false);
+    }
+  };
+
+  const handleConfirmAction = async (remarks) => {
+    const { action, process } = confirmConfig;
+    if (action === "accept") {
+      await handleApproveRejectAction("ACCEPT", remarks);
+    } else if (action === "reject") {
+      await handleApproveRejectAction("REJECT", remarks);
+    } else if (action === "finishEod") {
+      await finishEod(remarks);
+    } else if (action === "stop") {
+      await stopDag(
+        process.dagId,
+        remarks,
+        process.processId,
+        process.airflowRunId,
+      );
+    } else {
+      await triggerDag(process, remarks);
+    }
+
+    setConfirmConfig(null);
+  };
+
+  /* =====================================================
+     SUMMARY OPEN
+  ===================================================== */
+
+  const handleOpenSummary = (row) => {
+    console.log("row >", row);
+    const safeParse = (jsonString) => {
+      try {
+        return jsonString ? JSON.parse(jsonString) : {};
+      } catch (e) {
+        console.error("JSON Parsing Error:", e);
+        return {};
+      }
+    };
+    const stageBalComp = row?.stages?.find(
+      (s) => s.stageId === "difference_summary",
+    );
+
+    const stageCiba = row?.stages?.find(
+      (s) => s.stageId === "intr_summary_calculated",
+    );
+    const stageSuspense = row?.stages?.find(
+      (s) => s.stageId === "cntr_summary_calculated",
+    );
+
+    if (
+      !stageBalComp?.summary &&
+      !stageCiba?.summary &&
+      !stageSuspense?.summary
+    ) {
+      snackbar("Summary not available", "warning");
       return;
     }
 
-    try {
-      const payload = {
-        selectedRole: form?.roleId,
-        permissions: ordered,
-      };
-      console.log(payload);
-      const response = await callApi(
-        "/UM/role/save-permission-order",
-        payload,
-        "PATCH",
-      );
-      snackbar(response?.message, "success");
-    } catch (err) {
-      console.error(err);
-      snackbar("Error while processing request", "error");
-    }
-    fetchRoles();
+    const differenceSummary = safeParse(stageBalComp?.summary);
+    const cibaSummary = safeParse(stageCiba?.summary);
+    const suspenseSummary = safeParse(stageSuspense?.summary);
+
+    const recondate =
+      differenceSummary?.date ??
+      cibaSummary?.date ??
+      suspenseSummary?.date ??
+      "";
+
+    setSummaryMeta(row);
+
+    setSummaryData({
+      processRunId: row.runId,
+      RECON_RUN_DATE: recondate,
+      differenceSummary: differenceSummary?.summary || [],
+      cibaSummary: cibaSummary?.summary || [],
+      suspenseSummary: suspenseSummary?.summary || [],
+      stages: row?.stages || [],
+      process: row,
+    });
   };
 
+  /* =====================================================
+     SUMMARY APPROVE / REJECT
+  ===================================================== */
+
+  const handleApproveRejectAction = async (action, remarks) => {
+    try {
+      setApiLoading(true);
+      const response = await callApi(
+        APPROVE_REJECT_URL,
+        {
+          actionFlag: action,
+          processRunId: summaryMeta.processRunId,
+          remarks,
+        },
+        "PATCH",
+      );
+      if (response.success) {
+        const message = `${action == "ACCEPT" ? "Accepted" : "Rejected"} data Successfully for ETL date ${currentEtlDate.split("-").reverse().join("-")}`;
+        snackbar(message, "success");
+        setSummaryData(null);
+        loadByDate();
+      } else {
+        snackbar(
+          "Action failed. Something went wrong, please try again later.",
+          "success",
+        );
+      }
+    } catch {
+      snackbar(
+        "Action failed. Something went wrong, please try again later.",
+        "error",
+      );
+    } finally {
+      setApiLoading(false);
+      setSummaryData(null);
+      loadByDate();
+    }
+  };
+
+  /* =====================================================
+     DOWNLOAD SUMMARY REPORT
+  ===================================================== */
+
+  const handleDownloadSummaryReport = async (fileName, runDate, runId) => {
+    setDownloadProgress({ inProgress: true, loadedBytes: 0 });
+    runId = runId.toString();
+    const payload = { runId, fileName, date: convertDateString(runDate) };
+
+    try {
+      const res = await callApi(
+        "/RS/reports/download-temp-reports",
+        payload,
+        "POST",
+        "blob",
+        "application/json",
+        {
+          onDownloadProgress: (e) => {
+            if (e?.loaded) {
+              setDownloadProgress({
+                inProgress: true,
+                loadedBytes: e.loaded,
+              });
+            }
+          },
+        },
+        false,
+      );
+
+      const url = window.URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${fileName}_${runDate}_${runId}.zip`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      snackbar("Download failed", "error");
+    } finally {
+      setDownloadProgress({ inProgress: false, loadedBytes: 0 });
+    }
+  };
+
+  /* =====================================================
+     RENDER
+  ===================================================== */
+
   return (
-    <Box>
-      <RolesTable
-        rows={rows}
-        isLoading={isLoading}
-        onEditRow={(row, isEdit) => handleEditRow(row, isEdit)}
-        screenActions={screenActions}
-        roleAccessList={roleAccessList}
+    <>
+      <Paper sx={{
+      display:"flex",
+      flexDirection:"column",
+      borderRadius:2,
+      overflow:"hidden",
+      minHeight:"calc(100vh - 300px)",
+      width:"100%",
+      p:3,
+    }}>
+        <ProcessStatusHeader
+          etlDate={currentEtlDate}
+          etlProcess={etlProcess}
+          handleRefreshClick={() => loadByDate(null)}
+        />
+
+        {/* GLOBAL DOWNLOAD PROGRESS */}
+        {downloadProgress.inProgress && !summaryData && (
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              my: 2,
+              border: "1px solid",
+              borderColor: "divider",
+              bgcolor:
+                theme.palette.mode === "light"
+                  ? "background.paper"
+                  : "grey.900",
+            }}
+          >
+            <ProcessReportDownloadProgress
+              downloadProgress={downloadProgress}
+            />
+          </Paper>
+        )}
+
+        {/* DATE PICKER */}
+        {currentEtlDate && (
+          <Stack alignItems="center" mt={3} mb={2}>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <DatePicker
+                label="ETL Date (DD-MM-YYYY)"
+                format="DD-MM-YYYY"
+                inputFormat="DD-MM-YYYY"
+                views={["year", "month", "day"]}
+                minDate={dayjs("2026-03-31")}
+                maxDate={dayjs(currentEtlDate)}
+                value={selectedDate}
+                disabled={loading || apiLoading}
+                onChange={(newDate) => {
+                  setSelectedDate(newDate);
+
+                  // Trigger API ONLY when valid
+                  if (isValidDayjsDate(newDate) && !dateError) {
+                    loadByDate(newDate);
+                  }
+                }}
+                onError={(error) => {
+                  setDateError(error);
+                }}
+                slotProps={{
+                  textField: {
+                    placeholder: "DD-MM-YYYY",
+                    error: Boolean(dateError),
+                    helperText: dateError
+                      ? getDateErrorMessage(dateError, currentEtlDate)
+                      : "Select or type a valid ETL date",
+                    onBlur: () => {
+                      // Prevent half-typed garbage from staying
+                      if (!isValidDayjsDate(selectedDate)) {
+                        setSelectedDate(dayjs(currentEtlDate));
+                        setDateError(null);
+                      }
+                    },
+                  },
+                  day: {
+                    showDaysOutsideCurrentMonth: true,
+                  },
+                }}
+              />
+            </LocalizationProvider>
+          </Stack>
+        )}
+
+        {/* EOD BUTTONS */}
+        {(permissions.start ||
+          permissions.terminate ||
+          permissions.finish ||
+          permissions.restarteod) &&
+          (!hasEtl || isInProgress || allCompleted || anyFailed) &&
+          isCurrentDate && (
+            <Grid container justifyContent="center" m={3}>
+              <>
+                {/* START EOD */}
+                {permissions.start && !hasEtl && (
+                  <Button
+                    startIcon={<PlayArrowIcon />}
+                    variant="contained"
+                    onClick={() =>
+                      setConfirmConfig({
+                        action: "start",
+                        process: { dagId: EOD_DAG, processId: ETL_PROCESS_ID },
+                      })
+                    }
+                  >
+                    Start EOD
+                  </Button>
+                )}
+
+                {/* STOP EOD */}
+                {/* {permissions.terminate && isInProgress && (
+                  <Button
+                    startIcon={<StopCircleIcon />}
+                    // color="warning" // Added color to distinguish action
+                    variant="contained"
+                    onClick={() =>
+                      setConfirmConfig({
+                        action: "stop",
+                        process: { dagId: EOD_DAG, processId: ETL_PROCESS_ID },
+                      })
+                    }
+                    sx={{ ml: 2 }}
+                  >
+                    Stop EOD
+                  </Button>
+                )} */}
+
+                {/* RESTART EOD */}
+                {/* {permissions.restarteod && (anyFailed || allCompleted) && (
+                  <Button
+                    startIcon={<RestartAltIcon />}
+                    variant="contained"
+                    onClick={() =>
+                      setConfirmConfig({
+                        action: "restart",
+                        process: { dagId: EOD_DAG, processId: ETL_PROCESS_ID },
+                      })
+                    }
+                    sx={{ ml: 2 }}
+                  >
+                    Restart EOD
+                  </Button>
+                )} */}
+
+                {/* FINISH EOD */}
+                {/* {permissions.finish && allCompleted && (
+                  <Button
+                    startIcon={<TaskAltIcon />}
+                    color="success"
+                    variant="contained"
+                    onClick={() =>
+                      setConfirmConfig({ action: "finishEod", process: null })
+                    }
+                    sx={{ ml: 2 }}
+                  >
+                    Finish EOD
+                  </Button>
+                )} */}
+              </>
+            </Grid>
+          )}
+
+        {/* DETAILS */}
+        <ProcessDetailsDialog
+          process={selectedProcess}
+          isCurrentDate={isCurrentDate}
+          onClose={() => setSelectedProcess(null)}
+          onStart={(p) => setConfirmConfig({ action: "restart", process: p })}
+          onStop={(p) => setConfirmConfig({ action: "stop", process: p })}
+          permissions={permissions}
+        />
+
+        {/* SUMMARY */}
+        <ProcessSummaryDialog
+          open={!!summaryData}
+          data={summaryData}
+          isCurrentDate={isCurrentDate}
+          onClose={() => setSummaryData(null)}
+          onAccept={() => setConfirmConfig({ action: "accept" })}
+          onReject={() => setConfirmConfig({ action: "reject" })}
+          onDownload={handleDownloadSummaryReport}
+          downloadProgress={downloadProgress}
+          permissions={permissions}
+        />
+
+        {/* TABLE */}
+        <Paper>
+          <ProcessStatusTable
+            loading={loading}
+            processes={visibleProcesses}
+            isCurrentDate={isCurrentDate}
+            actions={{
+              onStart: (p) =>
+                setConfirmConfig({ action: "restart", process: p }),
+              onStop: (p) => setConfirmConfig({ action: "stop", process: p }),
+              onView: (p) => setSelectedProcess(p),
+              onSummary: handleOpenSummary,
+            }}
+            permissions={permissions}
+          />
+        </Paper>
+      </Paper>
+
+      {/* CONFIRM */}
+      <ActionConfirmDialog
+        open={!!confirmConfig}
+        actionType={confirmConfig?.action}
+        processName={confirmConfig?.process?.type || currentEtlDate}
+        onConfirm={handleConfirmAction}
+        onClose={() => setConfirmConfig(null)}
       />
 
-      <RolesDialog
-        open={dialogOpen}
-        form={form}
-        setForm={setForm}
-        fetchRoles={fetchRoles}
-        initialForm={initialForm}
-        screenActions={screenActions}
-        onClose={() => setDialogOpen(false)}
-        roles={rows}
-        roleAccessList={roleAccessList}
-      />
-
-      <PermissionsDialog
-        open={permDialogOpen}
-        handleSavePermissionOrder={(ordered, original) =>
-          handleSavePermissionOrder(ordered, original)
-        }
-        onClose={() => {
-          setPermDialogOpen(false);
-        }}
-        permissions={form?.permissions || []}
-        roleName={form?.roleName || ""}
-      />
-
-      {screenActions.create && (
-        <Fab
-          color="primary"
-          variant="extended"
-          onClick={() => {
-            setForm(emptyForm);
-            setDialogOpen(true);
-          }}
-          sx={{
-            position: "fixed",
-            bottom: 15,
-            right: 30,
-            borderRadius: 1,
-          }}
-        >
-          <RollTab1Addicon />
-          Create Role
-        </Fab>
-      )}
-    </Box>
+      <LoadingOverlay loading={apiLoading} />
+    </>
   );
-}
+};
+
+export default ProcessStatusPage;
