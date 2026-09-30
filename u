@@ -6,21 +6,38 @@ import { DataGrid } from "@mui/x-data-grid";
 import { Chip, Fab, Grid, Stack, DialogTitle } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 
-
-export const DataPMastermainBox = styled(Box)(({ theme }) => ({
+export const FileMastermainBox = styled(Box)(({ theme }) => ({
   py: 2,
 }));
-export const DataPTabContainer = styled(Box)(({ theme }) => ({
+
+export const FileTabContainer = styled(Box)(({ theme }) => ({
   borderBottom: 1,
   borderColor: "divider",
 }));
 
-
-export const DataPMasterTabs = styled(Tabs)(({ theme }) => ({
+export const FileMasterTabs = styled(Tabs)(({ theme }) => ({
   width: "100%",
 }));
 
-export const DataPaamerer1Fab = styled(Fab)(({ theme }) => ({
+////tab1
+export const CircleTab1Container = styled(Box)(({ theme }) => ({
+  p: 2,
+}));
+
+export const CircleTab1Stack = styled(Stack)(({ theme }) => ({
+  alignItems: "center",
+  justifyContent: "center",
+  height: "60vh",
+}));
+
+export const CircleMasterDataGrid = styled(DataGrid)(({ theme }) => ({}));
+
+export const CircleTab1Addicon = styled(AddIcon)(({ theme }) => ({
+    margin:0,
+  flexShrink:0,
+}));
+
+export const CircleTab1Fab = styled(Fab)(({ theme }) => ({
   // position: "fixed",
   // borderRadius: "8px",
   // fontSize: "15px",
@@ -183,89 +200,84 @@ export const DataPaamerer1Fab = styled(Fab)(({ theme }) => ({
   ".fab-hover-area:hover & .create-circle-text":{
     opacity:1,
   },
+
 }));
 
-export const DataPaamererAddicon = styled(AddIcon)(({ theme }) => ({
-  margin:0,
-  flexShrink:0,
+export const CircleTab1Grid = styled(Grid)(({ theme }) => ({
+  mt: 1,
 }));
-export const DataPtab1DialogTitle = styled(DialogTitle)(({ theme }) => ({
-  // m: 0,
-  // p: 2,
+export const CircleTab1chip = styled(Chip)(({ theme }) => ({
+  fontWeight: 500,
 }));
 
-export const DataPTab1Fab = styled(Fab)(({ theme }) => ({
-  position: "fixed",
-  borderRadius: 1,
-  fontSize: "15px",
-  bottom: theme.spacing(8),
-  right: theme.spacing(4),
-  zIndex: 1200,
+export const Circletab1DialogTitle = styled(DialogTitle)(({ theme }) => ({
+  m: 0,
+  p: 2,
 }));
-
-export const DataPTab1Addicon = styled(AddIcon)(({ theme }) => ({
-  mr: 1,
-}));import { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  IconButton,
   Button,
-  Paper,
+  Dialog,
+  DialogContent,
+  DialogActions,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+  Checkbox,
+  FormControlLabel,
+  Tooltip,
+  IconButton,
 } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import EditIcon from "@mui/icons-material/Edit";
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Close as CloseIcon,
+  Delete as DeleteIcon,
+} from "@mui/icons-material";
+import { DataGrid } from "@mui/x-data-grid";
 import useApi from "../../hooks/useApi";
 import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import FileDefinitionDialog from "./FileDefinitionDialog";
-import { data } from "react-router-dom";
-import { DataPaamerer1Fab, DataPTab1Addicon } from "./FileDefinitionStyle";
-export default function FileDefinitionTab() {
+
+const TYPE_OPTIONS = [
+  { value: "bancs24", label: "Bancs24" },
+  { value: "GLIF", label: "GLIF" },
+];
+
+const FREQUENCY_MAP = [
+  { label: "Daily", key: "D" },
+  { label: "Monthly", key: "M" },
+  { label: "Yearly", key: "Y" },
+];
+
+const EMPTY_FORM = {
+  type: "",
+  subType: "",
+  filePattern: "",
+  stream: "",
+  includeFile: "",
+  frequency: { D: false, M: false, Y: false },
+};
+
+export default function FileManagementTab() {
   const { callApi } = useApi();
   const snackbar = useCustomSnackbar();
 
   const [rows, setRows] = useState([]);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [mode, setMode] = useState("CREATE");
-  const [selectedData, setSelectedData] = useState(null);
+  const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
-  const normalizeRows = (rows) =>
-    rows.map((r) => ({
-      ...r,
-      toBeIncluded:
-        r.toBeIncluded === true ||
-        r.toBeIncluded === "true" ||
-        r.toBeIncluded === "YES",
-      dataType: r.dataType?.toUpperCase(),
-    }));
+  const [formData, setFormData] = useState(EMPTY_FORM);
+  const [originalData, setOriginalData] = useState(null);
+  const [isDataSame, setIsDataSame] = useState(true);
 
   const fetchData = async () => {
     try {
-      const res = await callApi("/CM/common-master/data-parameters", {}, "GET");
-      const res1 = await callApi(
-        "/CM/common-master/files-sub-types",
-        {},
-        "GET",
-      );
-      console.log("res1", res1);
-      const data = res?.data || [];
-      console.log("data", data);
-      if (!Array.isArray(data)) {
-        const formatted = Object.keys(data || {}).map((key) => ({
-          fileType: key,
-          rows: normalizeRows(data[key]),
-        }));
-        setRows(formatted);
-      } else {
-        setRows(data);
-      }
+      const res = await callApi("/CM/common-master/files", null, "GET");
+      setRows(res?.data || []);
     } catch {
-      snackbar("Failed to load data", "error");
+      snackbar("Failed to load file configurations", "error");
     }
   };
 
@@ -273,87 +285,372 @@ export default function FileDefinitionTab() {
     fetchData();
   }, []);
 
+  const subTypeOptions = useMemo(() => {
+    const map = {};
+
+    rows.forEach((r) => {
+      if (!map[r.type]) map[r.type] = new Set();
+      if (r.subType) map[r.type].add(r.subType);
+    });
+
+    const result = {};
+    Object.keys(map).forEach((k) => {
+      result[k] = Array.from(map[k]);
+    });
+
+    return result;
+  }, [rows]);
+
+  useEffect(() => {
+    if (editingId && originalData) {
+      setIsDataSame(JSON.stringify(formData) === JSON.stringify(originalData));
+    }
+  }, [formData, originalData, editingId]);
+
+  const parseFrequency = (freq) => {
+    const result = { D: false, M: false, Y: false };
+
+    if (!freq) return result;
+
+    const parts = freq.toUpperCase().split("/");
+
+    parts.forEach((p) => {
+      if (p === "D") result.D = true;
+      if (p === "M") result.M = true;
+      if (p === "Y") result.Y = true;
+    });
+
+    return result;
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+
+    if (name === "type") {
+      setFormData((prev) => ({
+        ...prev,
+        type: value,
+        subType: value === "GLIF" ? "GLIF" : "",
+      }));
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleFrequencyChange = (key) => {
+    setFormData((prev) => ({
+      ...prev,
+      frequency: {
+        ...prev.frequency,
+        [key]: !prev.frequency[key],
+      },
+    }));
+  };
+
+  const handleEdit = (row) => {
+    const init = {
+      type: row.type || "",
+      subType: row.subType || "",
+      filePattern: row.filePattern || "",
+      stream: row.stream || "",
+      includeFile: row.includeFile || "",
+      frequency: parseFrequency(row.frequency),
+    };
+
+    setFormData(init);
+    setOriginalData(init);
+    setEditingId(row.fileId);
+    setOpen(true);
+  };
+
+  const handleDelete = async (row) => {
+    try {
+      const payload = {
+        requestType: "FILE_TYPE_MASTER",
+        changeType: "DELETE",
+        targetId: row.filePattern,
+        payload: {
+          type: row.type,
+          subType: row.subType,
+          filePattern: row.filePattern,
+          stream: row.stream,
+          includeFile: row.includeFile,
+          frequency: row.frequency,
+        },
+      };
+
+      const response = await callApi("/CR/create-request", payload, "POST");
+      snackbar(
+        " delete request submitted successfully with request id " +
+          response?.data?.id,
+        "success",
+      );
+      fetchData();
+    } catch (err) {
+      snackbar(err?.message || "Delete failed", "error");
+    }
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    setEditingId(null);
+    setOriginalData(null);
+    setFormData(EMPTY_FORM);
+  };
+
+  const handleSubmit = async () => {
+    if (editingId && isDataSame) {
+      snackbar("No changes detected", "warning");
+      return;
+    }
+
+    // BASIC VALIDATION
+    if (!formData.type) {
+      snackbar("Type is required", "error");
+      return;
+    }
+
+    if (!formData.subType) {
+      snackbar("Sub Type is required", "error");
+      return;
+    }
+
+    if (!formData.filePattern) {
+      snackbar("File Pattern is required", "error");
+      return;
+    }
+
+    if (!formData.stream) {
+      snackbar("Stream is required", "error");
+      return;
+    }
+
+    if (!formData.includeFile) {
+      snackbar("Include File is required", "error");
+      return;
+    }
+
+    const payload = {
+      requestType: "FILE_TYPE_MASTER",
+      changeType: editingId ? "UPDATE" : "ADD",
+      targetId: formData.filePattern,
+      payload: {
+        ...formData,
+        frequency: Object.keys(formData.frequency)
+          .filter((k) => formData.frequency[k])
+          .join("/"),
+      },
+    };
+
+    try {
+      const response = await callApi("/CR/create-request", payload, "POST");
+
+      snackbar(
+        editingId
+          ? " update request submitted successfully with request id " +
+              response?.data?.id
+          : "creation request submitted successfully with request id " +
+              response?.data?.id,
+        "success",
+      );
+
+      handleClose();
+      fetchData();
+    } catch (err) {
+      snackbar(err?.message || "Request failed", "error");
+    }
+  };
+
+  const columns = useMemo(
+    () => [
+      { field: "type", headerName: "File Type", flex: 1 },
+      { field: "filePattern", headerName: "File Pattern", flex: 2 },
+
+      {
+        field: "stream",
+        headerName: "Stream",
+        flex: 1,
+        renderCell: (params) =>
+          params.value === "Y" ? "Yes" : params.value === "N" ? "No" : "",
+      },
+
+      {
+        field: "frequency",
+        headerName: "Frequency",
+        flex: 1,
+        renderCell: (params) => {
+          if (!params.value) return "";
+
+          return params.value
+            .split(/[/,]/)
+            .map((f) => {
+              if (f === "D") return "Daily";
+              if (f === "M") return "Monthly";
+              if (f === "Y") return "Yearly";
+              return f;
+            })
+            .join(" / ");
+        },
+      },
+
+      {
+        field: "includeFile",
+        headerName: "Include",
+        flex: 1,
+        renderCell: (params) =>
+          params.value === "Y" ? "Yes" : params.value === "N" ? "No" : "",
+      },
+
+      {
+        field: "actions",
+        headerName: "Actions",
+        flex: 1,
+        align: "center",
+        renderCell: (params) => (
+          <Stack direction="row" spacing={1}>
+            <Tooltip title="Edit">
+              <IconButton
+                color="primary"
+                onClick={() => handleEdit(params.row)}
+              >
+                <EditIcon />
+              </IconButton>
+            </Tooltip>
+
+            <Tooltip title="Delete">
+              <IconButton
+                color="error"
+                onClick={() => handleDelete(params.row)}
+              >
+                <DeleteIcon />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        ),
+      },
+    ],
+    [],
+  );
+
   return (
-    <>
-      <Box mt={2}>
-        <Paper>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>File Type</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
+    <Box>
+      <DataGrid
+        rows={rows}
+        columns={columns}
+        getRowId={(row) => row.fileId}
+        autoHeight
+        disableRowSelectionOnClick
+      />
 
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.fileType}>
-                  <TableCell>{row.fileType}</TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      onClick={() => {
-                        setMode("VIEW");
-                        setSelectedData(row);
-                        setDialogOpen(true);
-                      }}
-                    >
-                      <VisibilityIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Paper>
-      
-      <Box
-          sx={{
-            height:64,
-            flexShrink:0,
-            display:"flex",
-            justifyContent:"flex-end",
-            alignItems:"center",
-            px:1,
-            pb:1,
-          }}
+      <Button
+        variant="contained"
+        startIcon={<AddIcon />}
+        onClick={() => setOpen(true)}
       >
-        <Box
-        className="fab-hover-area"
-        sx={{
-          position:"relative",
-          width:180,
-          height:48,
-          flexShrink:0,
-          transform:"translateY(8px)",
-        }}>
-        <DataPaamerer1Fab
-          onClick={() =>{
-            setMode("CREATE");
-            setSelectedData(null);
-            setDialogOpen(true);
-          }}
-          color="primary"
-        >
+        Create
+      </Button>
 
-          <span className="create-circle-text">
-            Create File Type
-          </span>
-          
-          <DataPTab1Addicon />
-          
-        </DataPaamerer1Fab>
-        </Box>
-      </Box>
-        <FileDefinitionDialog
-          open={dialogOpen}
-          mode={mode}
-          setMode={setMode}
-          data={selectedData}
-          allData={rows}
-          refresh={fetchData}
-          onClose={() => setDialogOpen(false)}
-        />
-      </Box>
-    </>
+      <Dialog open={open} maxWidth="sm" fullWidth>
+        <DialogContent>
+          <Stack spacing={2}>
+            <Stack direction="row" justifyContent="space-between">
+              <Typography variant="h6">
+                {editingId
+                  ? "Edit File Configuration"
+                  : "Add File Configuration"}
+              </Typography>
+              <IconButton onClick={handleClose}>
+                <CloseIcon />
+              </IconButton>
+            </Stack>
+            <TextField
+              select
+              label="Type"
+              name="type"
+              value={formData.type || ""}
+              onChange={handleChange}
+              disabled={!!editingId}
+            >
+              {TYPE_OPTIONS.map((opt) => (
+                <MenuItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              select
+              label="Sub Type"
+              name="subType"
+              value={formData.subType || ""}
+              onChange={handleChange}
+              disabled={formData.type === "GLIF"}
+            >
+              {(subTypeOptions[formData.type] || []).map((v) => (
+                <MenuItem key={v} value={v}>
+                  {v}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              label="File Pattern"
+              name="filePattern"
+              value={formData.filePattern || ""}
+              onChange={handleChange}
+            />
+
+            <TextField
+              select
+              label="Stream"
+              name="stream"
+              value={formData.stream || ""}
+              onChange={handleChange}
+            >
+              <MenuItem value="Y">Yes</MenuItem>
+              <MenuItem value="N">No</MenuItem>
+            </TextField>
+
+            <Box>
+              <Typography>Frequency</Typography>
+
+              {FREQUENCY_MAP.map(({ label, key }) => (
+                <FormControlLabel
+                  key={key}
+                  control={
+                    <Checkbox
+                      checked={formData.frequency[key]}
+                      onChange={() => handleFrequencyChange(key)}
+                    />
+                  }
+                  label={label}
+                />
+              ))}
+            </Box>
+
+            <TextField
+              select
+              label="Include"
+              name="includeFile"
+              value={formData.includeFile || ""}
+              onChange={handleChange}
+            >
+              <MenuItem value="Y">Yes</MenuItem>
+              <MenuItem value="N">No</MenuItem>
+            </TextField>
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button variant="contained" onClick={handleSubmit}>
+            {editingId ? "Update" : "Add"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 }
