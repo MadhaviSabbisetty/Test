@@ -1,736 +1,748 @@
-import { minLength } from "zod";
-
-export const analyticsStyles = {
-  card: {
-    p: 2,
-    mb: 0,
-    boxShadow:"none",
-    borderRadius:0,
-    bgcolor:"transparent",
-    height:"100%",
-    overflow:"hidden",
-  },
-
-  headerTitle: {
-    mb: 0.5,
-    fontWeight: 600,
-  },
-
-  headerSubtitle: {
-    color: "gray",
-    mb: 2,
-    display: "block",
-  },
-
-  wrapper: {
-    display: "flex",
-    flexDirection: { xs: "column", lg: "row" },
-    gap: 2,
-    alignItems: "flex-start",
-  },
-
-  pieWrapper: {
-    flex: 1,
-    position: "relative",
-    height: "100%",
-    minHeight:0,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-  },
-
-  pieChartBox: {
-    width: "100%",
-    height: 180,
-  },
-
-  pieCenterBox: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%, -90%)",
-    textAlign: "center",
-  },
-
-  pieCenterSubtitle: {
-    color: "gray",
-  },
-
-  pieCenterValue: {
-    fontWeight: "bold",
-    color: "white",
-  },
-
-  legendRow: {
-    mt: 1,
-    flexWrap: "wrap",
-    width: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  legendChipBox: {
-    bgcolor: "rgba(255,255,255,0.05)",
-    borderRadius: 2,
-    px: 1,
-    py: 0.3,
-  },
-
-  legendColorDot: (color) => ({
-    width: 10,
-    height: 10,
-    borderRadius: "50%",
-    bgcolor: color,
-  }),
-
-  barChartArea: {
-    flex: 1,
-    width: "100%",
-    height: "100%",
-    minHeight:0,
-  },
-};
-
-export const paperStyles = {
-  position: "fixed",
-  top: 16,
-  right: 16,
-  zIndex: 3000,
-  p: 2,
-  pr: 2.5,
-  borderRadius: 1,
-  display: "flex",
-  alignItems: "center",
-  gap: 1.5,
-  width: { xs: "90%", sm: 380 },
-  backgroundColor: "rgba(255,255,255,0.7)",
-  backdropFilter: "blur(10px)",
-  cursor: "pointer",
-  boxShadow: "0 8px 20px rgba(0,0,0,0.15)",
-  transition: "all 0.25s ease",
-  "&:hover": {
-    transform: "scale(1.015)",
-    boxShadow: "0 10px 24px rgba(0,0,0,0.22)",
-  },
-};
-
-export const avatarStyles = {
-  bgcolor: "#5D3FD3",
-  width: 44,
-  height: 44,
-};
-
-export const iconStyles = {
-  fontSize: 22,
-};
-
-export const menuTitleStyles = {
-  mb: 0.2,
-};
-
-export const messageTextStyles = {
-  mb: 0.3,
-  fontSize: "0.85rem",
-  color: "text.primary",
-};
-
-export const captionTextStyles = {
-  color: "text.secondary",
-};import React, { useState } from "react";
-import { Box, Tabs, Tab, Paper } from "@mui/material";
-import PendingRequestsTab from "./components/tabs/PendingRequestsTab";
-import MyRequestsTab from "./components/tabs/MyRequestsTab";
-import { styles } from "./TemplateRequestScreenStyles";
-import PendingActionsIcon from '@mui/icons-material/PendingActions';
-import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
-import PendingIcon from '@mui/icons-material/Pending';
-import { useOutletContext } from "react-router-dom";
-import ReportBuilderComponent from "../reportTemplateBuilder/ReportBuilder.component";
-
-export default function TemplateRequestScreen() {
-  const [tabIndex, setTabIndex] = useState(0);
-  const [editingRequestId, setEditingRequestId] = useState(null);
-  const outletContext = useOutletContext();
-  const { setShowComponentTitle } = outletContext || {};
-  const handleTabChange = (event, newValue) => {
-    setTabIndex(newValue);
-  };
-
-  return (
-    <Paper
-        elevation={2}
-        sx={{
-          display:"flex",
-          flexDirection:"column",
-          borderRadius:2,
-          overflow:"hidden",
-          minHeight:"calc(100vh - 210px)",
-          width:"100%",
-        }}>
-    <Box sx={{...styles.container,
-      mt: { xs:-2, md: -4},
-      height:"100%",
-      minHeight:0,
-      overflow:"hidden",
-    }}>
-      {/* <Paper sx={{ mb: 2, borderRadius: 1 }}> */}
-      {!editingRequestId &&
-        <Box 
-        sx={{
-          borderBottom: 1,
-          borderColor: "divider", 
-          width: "100%",
-          height:"100%",
-          minHeight:0,
-          display:"flex",
-          flexDirection:"column",
-          overflow:"hidden",
-        }}>
-          <Tabs
-            value={tabIndex}
-            onChange={handleTabChange}
-            indicatorColor="primary"
-            textColor="primary"
-            variant="fullWidth"
-            sx={{
-              px: 2,
-              pt: 1,
-              width: "100%",
-              "& .MuiTabs-flexContainer": {
-                width: "100%",
-                justifyContent: "space-between",
-              },
-
-              "& .MuiTab-root":{
-                borderRadius:"10px 10px 0 0",
-              },
-
-              "& .MuiTab-root.Mui-selected":{
-                borderRadius:"10px 10px 0 0",
-              },
-            }}
-          >
-            <Tab
-              icon={<PendingActionsIcon />}
-              iconPosition="start"
-              label="Pending Requests" sx={{ fontWeight: 'bold', textTransform: 'none', fontSize: '0.95rem', minHeight: 48, px: 3 }} />
-            <Tab
-              icon={<AssignmentIndIcon />}
-              iconPosition="start"
-              label="My Requests" sx={{ fontWeight: 'bold', textTransform: 'none', fontSize: '0.95rem', minHeight: 48, px: 3 }} />
-          </Tabs>
-          {/* </Paper> */}
-            <Box 
-            sx={{
-              flex:1,
-              minHeight:0,
-              width:"100%",
-              pt:1,
-              overflow:"hidden",
-            }}>
-          {/* Tab Panels */}
-          {tabIndex === 0 && <PendingRequestsTab />}
-          {tabIndex === 1 && <MyRequestsTab editHandler={setEditingRequestId} />}
-          </Box>
-        </Box>
-      }
-      {editingRequestId &&
-        <Box sx={{ height: "100vh", bgcolor: "background.default" }}>
-          <ReportBuilderComponent
-            setShowComponentTitle={setShowComponentTitle}
-            id={editingRequestId}
-            onBack={() => setEditingRequestId(null)}
-            forModify={true}
-          />
-        </Box>
-      }
-    </Box>
-    </Paper>
-  );
-}import React, { useMemo } from "react";
-import { Box, Typography, Card, Stack, Chip } from "@mui/material";
-
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from "recharts";
-
-import { analyticsStyles as s } from "./TemplateRequestAnalyticsStyles";
-
-const COLORS = ["#d87093", "#6a5acd", "#20b2aa", "#0062ff", "#0d5e01"];
-
-const RequestAnalytics = ({ data = [] }) => {
-  const { total, pieData } = useMemo(() => {
-    const counts = { add: 0, modify: 0, delete: 0, statusUpdate: 0, rollback: 0 };
-
-    data.forEach((d) => {
-      if (d.changeType === "ADD") counts.add++;
-      if (d.changeType === "UPDATE") counts.modify++;
-      if (d.changeType === "DELETE") counts.delete++;
-      if (d.changeType === "STATUS") counts.statusUpdate++;
-      if (d.changeType === "ROLLBACK") counts.rollback++;
-    });
-
-    return {
-      total: data.length,
-      pieData: [
-        { name: "Add Requests", value: counts.add },
-        { name: "Modify Requests", value: counts.modify },
-        { name: "Delete Requests", value: counts.delete },
-        { name: "Status Change Requests", value: counts.statusUpdate },
-        { name: "Rollback Requests", value: counts.rollback },
-      ],
-    };
-  }, [data]);
-
-  const histogramData = useMemo(() => {
-    const map = {};
-    data.forEach((item) => {
-      if (item.reqDate) {
-        const date = new Date(item.reqDate).toLocaleDateString("en-GB");
-        map[date] = (map[date] || 0) + 1;
-      }
-    });
-
-    return Object.keys(map).map((d) => ({ date: d, count: map[d] }));
-  }, [data]);
-
-  return (
-    <Card sx={s.card}>
-      <Typography sx={s.headerTitle}>Request Analytics Overview</Typography>
-      <Typography variant="caption" sx={s.headerSubtitle}>
-        Requests comparison by type and daily frequency
-      </Typography>
-
-      {total > 0 ? (
-        <Box sx={s.wrapper}>
-          {/* PIE SECTION */}
-          <Box sx={s.pieWrapper}>
-            <Box sx={s.pieChartBox}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <defs>
-                    {COLORS.map((color, idx) => (
-                      <linearGradient
-                        key={idx}
-                        id={`gradient-${idx}`}
-                        x1="0"
-                        y1="0"
-                        x2="1"
-                        y2="1"
-                      >
-                        <stop stopColor={color} stopOpacity={1} offset="0%" />
-                        <stop
-                          stopColor={color}
-                          stopOpacity={0.65}
-                          offset="100%"
-                        />
-                      </linearGradient>
-                    ))}
-                  </defs>
-
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={52}
-                    outerRadius={76}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {pieData.map((_, i) => (
-                      <Cell key={i} fill={`url(#gradient-${i})`} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-
-              {/* Center Label */}
-              <Box sx={s.pieCenterBox}>
-                <Typography variant="caption" sx={s.pieCenterSubtitle}>
-                  Total Requests
-                </Typography>
-                <Typography sx={s.pieCenterValue}>{total}</Typography>
-              </Box>
-            </Box>
-
-            {/* Legend row */}
-            <Stack direction="row" spacing={2.5} sx={s.legendRow}>
-              {pieData.map((p, i) => (
-                <Stack
-                  key={p.name}
-                  direction="row"
-                  alignItems="center"
-                  spacing={0.5}
-                  sx={s.legendChipBox}
-                >
-                  <Box sx={s.legendColorDot(COLORS[i])} />
-                  <Typography variant="caption">{p.name}</Typography>
-                  <Chip
-                    label={p.value}
-                    sx={{ bgcolor: COLORS[i], color: "white",
-                      borderRadius:"5px",}}
-                    size="small"
-                  />
-                </Stack>
-              ))}
-            </Stack>
-          </Box>
-
-          {/* BAR SECTION */}
-          <Box sx={s.barChartArea}>
-            <ResponsiveContainer>
-              <BarChart data={histogramData}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="rgba(255,255,255,0.3)"
-                />
-                <XAxis
-                  dataKey="date"
-                  stroke="black"
-                  fontSize={10}
-                  tickMargin={4}
-                />
-                <YAxis stroke="black" fontSize={10} />
-                <Tooltip />
-                <Bar
-                  dataKey="count"
-                  fill="url(#gradient-0)"
-                  radius={[6, 6, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </Box>
-        </Box>
-      ) : (
-        <Typography>No data to display</Typography>
-      )}
-    </Card>
-  );
-};
-
-export default RequestAnalytics;import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Box, Card, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Typography, Button, Stack, Tooltip, IconButton, Divider } from "@mui/material";
-import InfoIcon from "@mui/icons-material/Info";
+import React, { useState } from "react";
 import { DataGrid } from "@mui/x-data-grid";
-import { Check, Clear, Visibility } from "@mui/icons-material";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import RestoreIcon from "@mui/icons-material/Restore";
-import AccountCircleIcon from "@mui/icons-material/AccountCircle";
-import ChangeCircleSharpIcon from "@mui/icons-material/ChangeCircleSharp";
-import { useNavigate } from "react-router-dom";
-import { useSelector } from "react-redux";
+import {
+  Box,
+  Paper,
+  IconButton,
+  Tooltip,
+  Chip,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Alert,
+  Stack,
+} from "@mui/material";
 
-import useApi from "../../../../hooks/useApi";
-import useCustomSnackbar from "../../../../utils/useCustomSnackbar";
-import CustomChip from "../../../../utils/CustomChip";
-import { timeStampFormatter } from "../../../../utils/CommonUtilities";
-import LoadingOverlay from "../../../../utils/LoadingOverlay";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import HistoryIcon from "@mui/icons-material/History";
+import DownloadIcon from "@mui/icons-material/Download";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import PauseCircleIcon from "@mui/icons-material/PauseCircle";
+import DraftsIcon from "@mui/icons-material/Drafts";
 
-import TemplateRequestAnalytics from "../analytics/TemplateRequestAnalytics";
-import ViewRequestDialog from "../dialogs/ViewRequestDialog";
-import CompareTemplateDialog from "../dialogs/CompareTemplate/CompareTemplateDialog";
-import { styles } from "../../TemplateRequestScreenStyles";
+import TemplateViewDialog from "../../common/TemplateViewDialog";
 
-const BASE_URL_CONFIG = "/TC/template-config"
+const TemplateTable = ({ data }) => {
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
 
-export default function PendingRequestsTab() {
-  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
-  const requestType = selectedMenuItem?.requestType || "";
-  const navigate = useNavigate();
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
+  const [openView, setOpenView] = useState(false);
 
-  const [loading, setLoading] = useState(false);
-  const [dataGridLoading, setDataGridLoading] = useState(true);
-  const [rows, setRows] = useState([]);
-  const [remarks, setRemarks] = useState("");
-
-  const [viewOpen, setViewOpen] = useState(false);
-  const [viewData, setViewData] = useState(null);
-  const [compareOpen, setCompareOpen] = useState(false);
-  const [selectedRequestId, setSelectedRequestId] = useState(null);
-
-  const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null, rowId: null });
-
-  const fetchData = useCallback(async () => {
-    if (!requestType) return;
-    try {
-      const response = await callApi(BASE_URL_CONFIG + "/template-requests/pending", null, "GET");
-      const result = response?.data || response || [];
-
-      const data = result.map((row) => ({
-        ...row,
-        ...(typeof row.summary === "object" ? row.summary : {}),
-      }));
-
-      setRows(data);
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error fetching data", "error");
-    } finally {
-      setRemarks("");
-      setDataGridLoading(false);
-      setConfirmDialog({ open: false, type: null, rowId: null });
-    }
-  }, [callApi, showSnackBar, requestType]);
-
-  useEffect(() => {
-    setRows([]);
-    setRemarks("");
-    setConfirmDialog({ open: false, type: null, rowId: null });
-    fetchData();
-  }, [fetchData, navigate]);
-
-  const handleConfirm = async () => {
-    if (confirmDialog.type === "reject" && remarks.trim().length < 5) {
-      showSnackBar("Please provide minimum 5 characters remarks before rejecting", "warning");
-      return;
-    }
-    setLoading(true);
-
-    try {
-      const payload = {
-        requestId: confirmDialog.rowId,
-        status: confirmDialog.type === "reject" ? "REJECTED" : "ACCEPTED",
-        remarks: confirmDialog.type === "reject" ? remarks.trim() : "No Remarks",
-      };
-
-      const res = await callApi(BASE_URL_CONFIG + "/template-requests/process", payload, "PATCH");
-      if (res?.success || res) {
-        showSnackBar(confirmDialog.type === "accept" ? "Request Approved" : "Request Rejected", "success");
-        fetchData();
-      } else {
-        showSnackBar("Failed to process request" + res?.message, "error");
-      }
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error while processing request", "error");
-    } finally {
-      closeConfirmDialog();
-      setLoading(false);
-    }
+  const closeAllDialogs = () => {
+    setOpenView(false);
+    setSelectedTemplate(null);
   };
 
-  const generateProps = (value) => {
-    let props = {};
-    switch (value) {
-      case "ADD": {
-        props = {
-          ...props,
-          icon: <AddBoxIcon />,
-          label: "Added",
-          color: "success"
-        }
-        break;
-      };
-      case "DELETE": {
-        props = {
-          ...props,
-          icon: <AutoDeleteIcon />,
-          label: "Deleted",
-          color: "error"
-        }
-        break;
-      }
-      case "STATUS": {
-        props = {
-          ...props,
-          icon: <ChangeCircleSharpIcon />,
-          label: "Status-change",
-          color: "info"
-        }
-        break;
-      }
-      case "UPDATE": {
-        props = {
-          ...props,
-          icon: <EditDocumentIcon />,
-          label: "Modified",
-          color: "warning"
-        }
-        break;
-      }
-      case "ROLLBACK": {
-        props = {
-          ...props,
-          icon: <RestoreIcon />,
-          label: "Rollback",
-          color: "success"
-        }
-        break;
-      }
-    }
-    return props;
-  }
-
-  const handleViewClick = (data) => {
-    if (data.changeType === "UPDATE") {
-      setSelectedRequestId(data.id);
-      setCompareOpen(true);
-    } else {
-      setViewData(data);
-      setViewOpen(true);
-    }
-  };
-
-  const openConfirmDialog = (type, id) => setConfirmDialog({ open: true, type, rowId: id });
-  const closeConfirmDialog = () => setConfirmDialog({ open: false, type: null, rowId: null });
-
-  const allColumns = useMemo(() => [
-    { field: "reportId", headerName: "Report Id", flex: 0.5 },
-    { field: "reportName", headerName: "Report Name", flex: 1.2 },
+  const columns = [
     {
-      field: "changeType", headerName: "Type", flex: 0.6,
-      renderCell: (p) => (
-        <CustomChip
-          {...generateProps(p.value)}
-          size="small" variant="outlined"
-        />
+      field: "templateId",
+      headerName: "Template ID",
+      width: 130,
+      headerClassName: "table-header",
+      renderCell: (params) => (
+        <Box
+          sx={{
+            // fontFamily: "JetBrains Mono, monospace",
+            // fontSize: "0.875rem",
+            // color: "#6b7280",
+            ml: 1,
+            fontWeight: 500,
+          }}
+        >
+          {params.value}
+        </Box>
       ),
     },
     {
-      field: "creatorId", headerName: "Creator", flex: 0.8,
-      renderCell: (p) => <CustomChip icon={<AccountCircleIcon />} size="small" color="info" label={p.value} variant="outlined" />,
+      field: "reportId",
+      headerName: "Report ID",
+      width: 130,
+      headerClassName: "table-header",
+      renderCell: (params) => (
+        <Box
+          sx={{
+            fontWeight: 500,
+          }}
+        >
+          {params.value}
+        </Box>
+      ),
     },
     {
-      field: "reqDate", headerName: "Date", flex: 1,
-      renderCell: (p) => <Typography variant="body1" component="span" sx={styles.requestDate}>{timeStampFormatter(p.value)}</Typography>,
+      field: "templateName",
+      headerName: "Report Name",
+      flex: 1,
+      minWidth: 310,
+      headerClassName: "table-header",
+      renderCell: (params) => (
+        <Box
+          sx={{
+            fontWeight: 600,
+            // color: "#111827",
+            // fontSize: "0.9375rem",
+          }}
+        >
+          {params.value}
+        </Box>
+      ),
     },
     {
-      field: "actions", headerName: "Actions", flex: 0.7,
-      renderCell: (p) => (
-        <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" style={styles.StackStyle}>
-          <Tooltip title="Approve">
-            <IconButton color="success" onClick={() => openConfirmDialog("accept", p.row.id)}><Check /></IconButton>
-          </Tooltip>
-          <Tooltip title="Reject">
-            <IconButton color="error" onClick={() => openConfirmDialog("reject", p.row.id)}><Clear /></IconButton>
-          </Tooltip>
-          <Tooltip title="View">
-            <IconButton onClick={() => handleViewClick(p.row)}><Visibility /></IconButton>
+      field: "description",
+      headerName: "Description",
+      flex: 1.5,
+      minWidth: 300,
+      headerClassName: "table-header",
+      renderCell: (params) => (
+        <Box
+          sx={{
+            // color: "#6b7280",
+            // fontSize: "0.875rem",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {params.value || "—"}
+        </Box>
+      ),
+    },
+    {
+      field: "actions",
+      headerName: "Actions",
+      width: 180,
+      sortable: false,
+      headerClassName: "table-header",
+      renderCell: (params) => (
+        <Stack
+          direction="row"
+          spacing={1}
+          justifyContent="center"
+          alignItems="center"
+          sx={{ height:"100%" }}
+        >
+          <Tooltip title="Quick View">
+            <IconButton
+              size="small"
+              onClick={() => {
+                setSelectedTemplate(params.row);
+                setOpenView(true);
+              }}
+              sx={
+                {
+                  width:42,
+                  height:42,
+                  minHeight:42,
+                  minWidth:42,
+                  padding:0,
+                  borderRadius:"50%",
+                  display:"flex",
+                  alignItems:"center",
+                  justifyContent:"center",
+                  // color: "#3b82f6",
+                  // "&:hover": { bgcolor: "#dbeafe" },
+                }
+              }
+            >
+              <VisibilityIcon sx={{fontSize:24}} />
+            </IconButton>
           </Tooltip>
         </Stack>
       ),
     },
-  ], []);
+  ];
 
   return (
-    <Box
+    <Paper
+    elevation={0}
+     sx={{
+      display:"flex",
+      flexDirection:"column",
+      borderRadius:2,
+      overflow:"hidden",
+      minHeight:"calc(100vh - 157px)",
+      width:"100%",
+      p:2,
+    }}
+    > <Box 
+    sx={{
+      flex:1,
+      minHeight:0,
+      display:"flex",
+      flexDirection:"column",
+      overflow:"hidden",
+    }}>
+      <DataGrid
+        rows={data}
+        columns={columns}
+        getRowId={(row) => row.templateId}
+        initialState={{
+          pagination: { paginationModel: { pageSize: 10 } },
+        }}
+        pageSizeOptions={[5, 10, 25, 50]}
+        disableRowSelectionOnClick
+        sx={{
+          minHeight: 750,
+          width: "100%",
+         "& .MuiDataGrid-columnHeaders": {
+          backgroundColor: "#f5f5f5 !important",
+          fontWeight: 700,
+          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+          },
+          }}
+      />
+
+      {selectedTemplate && (
+        <>
+          <TemplateViewDialog
+            open={openView}
+            handleClose={closeAllDialogs}
+            template={selectedTemplate}
+          />
+        </>
+      )}
+      </Box>
+    </Paper>
+  );
+};
+
+export default TemplateTable;
+import React, { useState } from "react";
+import { DataGrid } from "@mui/x-data-grid";
+import {
+  Box,
+  Paper,
+  IconButton,
+  Tooltip,
+  Chip,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Alert,
+  Stack,
+} from "@mui/material";
+
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import HistoryIcon from "@mui/icons-material/History";
+import DownloadIcon from "@mui/icons-material/Download";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import PauseCircleIcon from "@mui/icons-material/PauseCircle";
+import DraftsIcon from "@mui/icons-material/Drafts";
+
+import TemplateViewDialog from "../../common/TemplateViewDialog";
+import DeleteConfirmDialog from "./DeleteConfirmDialog";
+import StatusChangeDialog from "./StatusChangeDialog";
+import VersionHistoryDialog from "./VersionHistoryDialog";
+import QuickExportMenu from "./QuickExportMenu";
+
+import { templateApi } from "../api/templateApi";
+import useCustomSnackbar from "../../../utils/useCustomSnackbar";
+import useApi from "../../../hooks/useApi";
+import RemarksDialog from "./RemarksDialog";
+
+const TemplateTable = ({ data, onRefresh, onEditClick }) => {
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [exportAnchor, setExportAnchor] = useState(null);
+
+  const [openView, setOpenView] = useState(false);
+  const [openDelete, setOpenDelete] = useState(false);
+  const [openStatus, setOpenStatus] = useState(false);
+  const [openVersions, setOpenVersions] = useState(false);
+  const [newStatus, setNewStatus] = useState(null);
+  const [processing, setProcessing] = useState(false)
+
+  const { callApi } = useApi();
+  const snackbar = useCustomSnackbar();
+
+  const handleMenuOpen = (event, template) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedTemplate(template);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleAction = (actionType) => {
+    handleMenuClose();
+    switch (actionType) {
+      case "view":
+        setOpenView(true);
+        break;
+      case "edit":
+        // Navigate to editor with template ID
+        onEditClick(selectedTemplate);
+        break;
+      case "delete":
+        setOpenDelete(true);
+        break;
+      case "status":
+        setOpenStatus(true);
+        break;
+      case "versions":
+        setOpenVersions(true);
+        break;
+      case "export":
+        // Quick export is handled separately
+        break;
+      default:
+        break;
+    }
+  };
+
+  // const handleExportClick = (event, template) => {
+  //   setExportAnchor(event.currentTarget);
+  //   setSelectedTemplate(template);
+  // };
+
+  const closeAllDialogs = () => {
+    setOpenView(false);
+    setOpenDelete(false);
+    setOpenStatus(false);
+    setOpenVersions(false);
+    setSelectedTemplate(null);
+  };
+
+  const handleDeleteSuccess = () => {
+    snackbar("Template deleted successfully", "success");
+    onRefresh();
+    closeAllDialogs();
+  };
+
+  const handleStatusChange = async (remarks) => {
+    try {
+      setProcessing(true);
+      const payload = {
+        status: newStatus,
+        remarks: remarks,
+        templateId: selectedTemplate?.templateId,
+        targetId: selectedTemplate?.reportId,
+        template: {
+          templateMeta: {
+            templateId: selectedTemplate.templateId,
+            version: selectedTemplate.versionNo,
+          },
+          reportMeta: {
+            reportId: selectedTemplate.reportId,
+            reportName: selectedTemplate.templateName
+          }
+        }
+      }
+
+      await templateApi.updateTemplateStatus(
+        callApi,
+        selectedTemplate.templateId,
+        payload
+      );
+
+      setNewStatus(null);
+      snackbar(`Request for status update created successfully.`, "success");
+      onRefresh();
+      closeAllDialogs();
+    } catch (error) {
+      setNewStatus(null);
+      snackbar(error.message ?? "Failed to create request for status update!", "error");
+    } finally {
+      setProcessing(false)
+    }
+  };
+
+  const statusChangeConfirm = (newStatus) => {
+    setOpenStatus(false);
+    setNewStatus(newStatus)
+  }
+
+  const handleRollback = async (version, remarks) => {
+    try {
+      const payload = {
+        rollbackTo: version,
+        remarks: remarks,
+        targetId: selectedTemplate?.reportId,
+        template: {
+          templateMeta: {
+            templateId: selectedTemplate.templateId,
+            version: selectedTemplate.versionNo,
+          },
+          reportMeta: {
+            reportId: selectedTemplate.reportId,
+            reportName: selectedTemplate.templateName
+          }
+        }
+      }
+      await templateApi.rollbackToVersion(
+        callApi,
+        payload
+      );
+      snackbar(`Request for template rollback created successfully.`, "success");
+      onRefresh();
+      closeAllDialogs();
+    } catch (error) {
+      snackbar(error.message ?? "Failed to create request for template rollback!", "error");
+    }
+  };
+
+  // Status chip styling
+  const getStatusConfig = (status) => {
+    const configs = {
+      ACTIVE: {
+        color: "#0F6A3A",
+        bg: "#ECFDF5",
+        icon: CheckCircleIcon,
+      },
+      INACTIVE: {
+        color: "#6b7280",
+        bg: "#f3f4f6",
+        icon: PauseCircleIcon,
+      },
+      DRAFT: {
+        color: "#0B4DA0",
+        bg: "#E6F0FF",
+        icon: DraftsIcon,
+      },
+    };
+    return configs[status] || configs.INACTIVE;
+  };
+
+  const columns = [
+    {
+      field: "templateId",
+      headerName: "Template ID",
+      width: 130,
+      headerClassName: "table-header",
+      renderCell: (params) => (
+        <Box
+          sx={{
+            // fontFamily: "JetBrains Mono, monospace",
+            // fontSize: "0.875rem",
+            // color: "#6b7280",
+            ml: 1,
+            fontWeight: 500,
+          }}
+        >
+          {params.value}
+        </Box>
+      ),
+    },
+    {
+      field: "reportId",
+      headerName: "Report ID",
+      width: 200,
+      headerClassName: "table-header",
+      renderCell: (params) => (
+        <Box
+          sx={{
+            fontWeight: 500,
+          }}
+        >
+          {params.value}
+        </Box>
+      ),
+    },
+    {
+      field: "templateName",
+      headerName: "Report Name",
+      flex: 1,
+      width: 250,
+      headerClassName: "table-header",
+      renderCell: (params) => (
+        <Box
+          sx={{
+            fontWeight: 600,
+            // color: "#111827",
+            // fontSize: "0.9375rem",
+          }}
+        >
+          {params.value}
+        </Box>
+      ),
+    },
+    {
+      field: "description",
+      headerName: "Description",
+      flex: 1.5,
+      width: 250,
+      headerClassName: "table-header",
+      renderCell: (params) => (
+        <Box
+          sx={{
+            // color: "#6b7280",
+            // fontSize: "0.875rem",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {params.value || "—"}
+        </Box>
+      ),
+    },
+    {
+      field: "versionNo",
+      headerName: "Version",
+      width: 100,
+      headerClassName: "table-header",
+      renderCell: (params) => (
+        <Chip
+          label={`v ${params.value || "1"}`}
+          size="small"
+          sx={{
+            fontWeight: 600,
+            // fontSize: "0.75rem",
+            // bgcolor: "#ede9fe",
+            // color: "#7c3aed",
+            // border: "1px solid #c4b5fd",
+          }}
+        />
+      ),
+    },
+    {
+      field: "status",
+      headerName: "Status",
+      width: 140,
+      headerClassName: "table-header",
+      renderCell: (params) => {
+        const config = getStatusConfig(params.value);
+        const StatusIcon = config.icon;
+
+        return (
+          <Chip
+            icon={<StatusIcon sx={{ fontSize: "1rem !important" }} />}
+            label={params.value}
+            size="small"
+            sx={{
+              bgcolor: config.bg,
+              color: config.color,
+              fontWeight: 600,
+              // fontSize: "0.8125rem",
+              border: `1px solid ${config.color}25`,
+              "& .MuiChip-icon": {
+                color: config.color,
+              },
+            }}
+          />
+        );
+      },
+    },
+
+    {
+      field: "actions",
+      headerName: "Actions",
+      width: 160,
+      sortable: false,
+      headerClassName: "table-header",
+      renderCell: (params) => (
+        <Stack
+          direction="row"
+          spacing={1}
+          justifyContent="center"
+          alignItems="center"
+          sx={{ height:"100%" }}
+        >
+          <Tooltip title="Quick View">
+            <IconButton
+              size="small"
+              onClick={() => {
+                setSelectedTemplate(params.row);
+                setOpenView(true);
+              }}
+              sx={
+                {
+                  
+                  // color: "#3b82f6",
+                  // "&:hover": { bgcolor: "#dbeafe" },
+                }
+              }
+            >
+              <VisibilityIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+
+          {/* <Tooltip title="Quick Export">
+            <IconButton
+              size="small"
+              onClick={(e) => handleExportClick(e, params.row)}
+              sx={
+                {
+                  // color: "#10b981",
+                  // "&:hover": { bgcolor: "#d1fae5" },
+                }
+              }
+            >
+              <DownloadIcon fontSize="small" />
+            </IconButton>
+          </Tooltip> */}
+
+          <Tooltip title="Version History">
+            <IconButton
+              size="small"
+              onClick={() => {
+                setSelectedTemplate(params.row);
+                setOpenVersions(true);
+              }}
+              sx={
+                {
+                  // color: "#8b5cf6",
+                  // "&:hover": { bgcolor: "#ede9fe" },
+                }
+              }
+            >
+              <HistoryIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="More Actions">
+            <IconButton
+              size="small"
+              onClick={(e) => handleMenuOpen(e, params.row)}
+              sx={
+                {
+                  // color: "#6b7280",
+                  // "&:hover": { bgcolor: "#f3f4f6" },
+                }
+              }
+            >
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      ),
+    },
+  ];
+
+  return (
+    <Paper
+      elevation={0}
       sx={{
-        // height: "calc(100vh - 120px)",
-        height:"100%",
         width: "100%",
-        minHeight: 0,
-        display: "flex",
-        flexDirection: "column",
         overflow: "hidden",
       }}
     >
-      <Card 
-      sx={{
-        width: "100%",
-        height: "100%",
-        minHeight: 0,
-        boxShadow: 3,
-        borderRadius: "12px",
-        bgcolor: "background.paper",
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-      }}>
-        <Box 
-        sx={{
-          flex:"0 0 50%",
-          minHeight:0,
-          overflow:"hidden",
-        }}>
-        <TemplateRequestAnalytics data={rows} />
-        </Box>
-
-        <Divider />
-
-        <Box 
-        sx={{
-          flex:"0 0 50%",
-          minHeight:0,
-          display:"flex",
-          overflow:"hidden",
-        }}>
       <DataGrid
-        rows={rows}
-        columns={allColumns}
-        loading={dataGridLoading}
-        disableRowSelectionOnClick
-        pageSizeOptions={[5, 10, 25, 50]}
+        rows={data}
+        columns={columns}
+        getRowId={(row) => row.templateId}
         initialState={{
-          pagination: { paginationModel: { pageSize: 5 } },
-          sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] },
+          pagination: { paginationModel: { pageSize: 10 } },
         }}
-        getRowId={(row) => row.id}
+        pageSizeOptions={[5, 10, 25, 50]}
+        disableRowSelectionOnClick
         sx={{
-          ...styles.dataGrid,
-          flex: 1,
-          minHeight: 0,
-        }}
- 
-        slots={{
-          noRowsOverlay: () => (
-            <Stack height="100%" alignItems="center" justifyContent="center">
-              <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-              <Typography variant="h6">No Pending Requests Found</Typography>
-              <Typography>All {selectedMenuItem.title} have been processed.</Typography>
-            </Stack>
-          ),
+          minHeight: 400,
         }}
       />
-      </Box>
-      </Card>
-      <ViewRequestDialog open={viewOpen} handleClose={() => { setViewOpen(false); setViewData(null); }} data={viewData} />
-      <CompareTemplateDialog open={compareOpen} requestId={selectedRequestId} onClose={() => { setCompareOpen(false); setSelectedRequestId(null); }} />
+      {/* Actions Menu */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+      >
+        <Box>
+          <MenuItem onClick={() => handleAction("edit")}>
+            <ListItemIcon>
+              <EditIcon
+                fontSize="small"
+                sx={
+                  {
+                    /* color: "#3b82f6" */
+                  }
+                }
+              />
+            </ListItemIcon>
+            <ListItemText>Edit Report</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => handleAction("status")}>
+            <ListItemIcon>
+              <CheckCircleIcon
+                fontSize="small"
+                sx={
+                  {
+                    /* color: "#10b981" */
+                  }
+                }
+              />
+            </ListItemIcon>
+            <ListItemText>Change Status</ListItemText>
+          </MenuItem>
+          <MenuItem
+            onClick={() => handleAction("delete")}
+            sx={{
+              /* color: "#ef4444" */
+              color: "error.main",
+            }}
+          >
+            <ListItemIcon>
+              <DeleteIcon
+                fontSize="small"
+                sx={{
+                  /* color: "#ef4444" */
+                  color: "error.main",
+                }}
+              />
+            </ListItemIcon>
+            <ListItemText>Delete Report</ListItemText>
+          </MenuItem>
+        </Box>
+      </Menu>
+      {/* Quick Export Menu */}
+      <QuickExportMenu
+        anchorEl={exportAnchor}
+        open={Boolean(exportAnchor)}
+        onClose={() => setExportAnchor(null)}
+        template={selectedTemplate}
+        onSuccess={(msg) => snackbar(msg, "success")}
+        onError={(msg) => snackbar(msg, "error")}
+      />
 
-      <Dialog maxWidth="sm" fullWidth open={confirmDialog.open} onClose={closeConfirmDialog}>
-        <DialogTitle>{confirmDialog.type === "accept" ? "Confirm Approval" : "Confirm Rejection"}</DialogTitle>
-        <Divider />
-        <DialogContent>
-          <Typography mb={2}>{confirmDialog.type === "accept" ? "Are you sure you want to approve the request?" : "Please provide remarks to reject this request."}</Typography>
-          {confirmDialog.type === "reject" && (
-            <TextField
-              fullWidth label="Remarks" value={remarks} multiline rows={4}
-              onChange={(e) => setRemarks(e.target.value)} margin="dense"
-              slotProps={{ htmlInput: { maxLength: 200 } }}
-              helperText={remarks?.length !== 0 && remarks?.length < 5 ? "Enter at least 5 characters" : "Allowed 5-200 characters"}
-              error={remarks?.length !== 0 && remarks?.length < 5}
-            />
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeConfirmDialog} 
-          sx=
-          {{
-            "&:hover":
-            {
-              color:"#fff",
-            },
-            }}>
-              Cancel
-            </Button>
-          <Button variant="contained" onClick={handleConfirm} color={confirmDialog.type === "accept" ? "success" : "error"}>
-            {confirmDialog.type === "accept" ? "Approve" : "Reject"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-      <LoadingOverlay loading={loading} />
-    </Box>
+      {(newStatus == null) && selectedTemplate && (
+        <>
+          <TemplateViewDialog
+            open={openView}
+            handleClose={closeAllDialogs}
+            template={selectedTemplate}
+          />
+
+          <DeleteConfirmDialog
+            open={openDelete}
+            template={selectedTemplate}
+            onClose={closeAllDialogs}
+            onConfirm={handleDeleteSuccess}
+          />
+
+          <StatusChangeDialog
+            open={openStatus}
+            template={selectedTemplate}
+            onClose={closeAllDialogs}
+            onConfirm={statusChangeConfirm}
+          />
+
+          <VersionHistoryDialog
+            open={openVersions}
+            template={selectedTemplate}
+            onClose={closeAllDialogs}
+            onRollback={handleRollback}
+          />
+        </>
+      )}
+      {(newStatus != null) &&
+        <RemarksDialog
+          open={newStatus != null}
+          onConfirm={handleStatusChange}
+          onClose={() => { setNewStatus(null), closeAllDialogs() }}
+          saving={processing}
+        />
+      }
+    </Paper>
   );
-}
+};
+
+export default TemplateTable;
