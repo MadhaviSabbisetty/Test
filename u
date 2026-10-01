@@ -1,289 +1,551 @@
-import React, { useState } from "react";
-import { DataGrid } from "@mui/x-data-grid";
+import React, { useMemo } from "react";
+import { Box, Typography, Card, Stack, Chip } from "@mui/material";
+
 import {
-  Box,
-  Paper,
-  IconButton,
+  PieChart,
+  Pie,
+  Cell,
   Tooltip,
-  Chip,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
-  Alert,
-  Stack,
-} from "@mui/material";
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from "recharts";
 
-import MoreVertIcon from "@mui/icons-material/MoreVert";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import HistoryIcon from "@mui/icons-material/History";
-import DownloadIcon from "@mui/icons-material/Download";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import PauseCircleIcon from "@mui/icons-material/PauseCircle";
-import DraftsIcon from "@mui/icons-material/Drafts";
+import { analyticsStyles as s } from "./TemplateRequestAnalyticsStyles";
 
-import TemplateViewDialog from "../../common/TemplateViewDialog";
+const COLORS = ["#d87093", "#6a5acd", "#20b2aa", "#0062ff", "#0d5e01"];
 
-const TemplateTable = ({ data }) => {
-  const [selectedTemplate, setSelectedTemplate] = useState(null);
+const RequestAnalytics = ({ data = [] }) => {
+  const { total, pieData } = useMemo(() => {
+    const counts = { add: 0, modify: 0, delete: 0, statusUpdate: 0, rollback: 0 };
 
-  const [openView, setOpenView] = useState(false);
+    data.forEach((d) => {
+      if (d.changeType === "ADD") counts.add++;
+      if (d.changeType === "UPDATE") counts.modify++;
+      if (d.changeType === "DELETE") counts.delete++;
+      if (d.changeType === "STATUS") counts.statusUpdate++;
+      if (d.changeType === "ROLLBACK") counts.rollback++;
+    });
 
-  const closeAllDialogs = () => {
-    setOpenView(false);
-    setSelectedTemplate(null);
-  };
+    return {
+      total: data.length,
+      pieData: [
+        { name: "Add Requests", value: counts.add },
+        { name: "Modify Requests", value: counts.modify },
+        { name: "Delete Requests", value: counts.delete },
+        { name: "Status Change Requests", value: counts.statusUpdate },
+        { name: "Rollback Requests", value: counts.rollback },
+      ],
+    };
+  }, [data]);
 
-  const columns = [
-    {
-      field: "templateId",
-      headerName: "Template ID",
-      width: 130,
-      headerClassName: "table-header",
-      renderCell: (params) => (
-        <Box
-          sx={{
-            // fontFamily: "JetBrains Mono, monospace",
-            // fontSize: "0.875rem",
-            // color: "#6b7280",
-            ml: 1,
-            fontWeight: 500,
-          }}
-        >
-          {params.value}
-        </Box>
-      ),
-    },
-    {
-      field: "reportId",
-      headerName: "Report ID",
-      width: 130,
-      headerClassName: "table-header",
-      renderCell: (params) => (
-        <Box
-          sx={{
-            fontWeight: 500,
-          }}
-        >
-          {params.value}
-        </Box>
-      ),
-    },
-    {
-      field: "templateName",
-      headerName: "Report Name",
-      flex: 1,
-      minWidth: 310,
-      headerClassName: "table-header",
-      renderCell: (params) => (
-        <Box
-          sx={{
-            fontWeight: 600,
-            // color: "#111827",
-            // fontSize: "0.9375rem",
-          }}
-        >
-          {params.value}
-        </Box>
-      ),
-    },
-    {
-      field: "description",
-      headerName: "Description",
-      flex: 1.5,
-      minWidth: 300,
-      headerClassName: "table-header",
-      renderCell: (params) => (
-        <Box
-          sx={{
-            // color: "#6b7280",
-            // fontSize: "0.875rem",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {params.value || "—"}
-        </Box>
-      ),
-    },
-    {
-      field: "actions",
-      headerName: "Actions123",
-      width: 180,
-      sortable: false,
-      headerClassName: "table-header",
-      renderCell: (params) => (
-        <Stack
-          direction="row"
-          spacing={1}
-          justifyContent="center"
-          alignItems="center"
-          sx={{ height:"100%" }}
-        >
-          <Tooltip title="Quick View">
-            <IconButton
-              size="small"
-              onClick={() => {
-                setSelectedTemplate(params.row);
-                setOpenView(true);
-              }}
-              sx={
-                {
-                  width:42,
-                  height:42,
-                  minHeight:42,
-                  minWidth:42,
-                  padding:0,
-                  borderRadius:"50%",
-                  display:"flex",
-                  alignItems:"center",
-                  justifyContent:"center",
-                  // color: "#3b82f6",
-                  // "&:hover": { bgcolor: "#dbeafe" },
-                }
-              }
-            >
-              <VisibilityIcon sx={{fontSize:24}} />
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      ),
-    },
-  ];
+  const histogramData = useMemo(() => {
+    const map = {};
+    data.forEach((item) => {
+      if (item.reqDate) {
+        const date = new Date(item.reqDate).toLocaleDateString("en-GB");
+        map[date] = (map[date] || 0) + 1;
+      }
+    });
+
+    return Object.keys(map).map((d) => ({ date: d, count: map[d] }));
+  }, [data]);
 
   return (
-    // <Paper
-    //   elevation={0}
-    //  sx={{
-    //   display:"flex",
-    //   flexDirection:"column",
-    //   borderRadius:2,
-    //   overflow:"hidden",
-    //   height:"calc(100vh - 122px)",
-    //   width:"100%",
-    //   p:2,
-    //   boxSizing:"border-box",
-    // }}
-    // > <Box 
-    // sx={{
-    //   // p:2,
-    //   flex:1,
-    //   minHeight:0,
-    //   display:"flex",
-    //   flexDirection:"column",
-    //   overflow:"hidden",
-    // }}>
-    //   <DataGrid
-    //     rows={data}
-    //     columns={columns}
-    //     getRowId={(row) => row.templateId}
-    //     initialState={{
-    //       pagination: { paginationModel: { pageSize: 10 } },
-    //     }}
-    //     pageSizeOptions={[5, 10, 25, 50]}
-    //     disableRowSelectionOnClick
-    //     sx={{
-    //       minHeight: 790,
-    //       width: "100%",
-    //      "& .MuiDataGrid-columnHeaders": {
-    //       backgroundColor: "#f5f5f5 !important",
-    //       fontWeight: 700,
-    //       borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
-    //       position: 'sticky',
-    //       top: 0,
-    //       zIndex: 1,
-    //       },
-    //       }}
-    //   />
+    <Card sx={s.card}>
+      <Typography sx={s.headerTitle}>Request Analytics Overview</Typography>
+      <Typography variant="caption" sx={s.headerSubtitle}>
+        Requests comparison by type and daily frequency
+      </Typography>
 
-     <Paper
-      elevation={0}
-      sx={{
-        display: "flex",
-        flexDirection: "column",
+      {total > 0 ? (
+        <Box sx={s.wrapper}>
+          {/* PIE SECTION */}
+          <Box sx={s.pieWrapper}>
+            <Box sx={s.pieChartBox}>
+              <ResponsiveContainer>
+                <PieChart>
+                  <defs>
+                    {COLORS.map((color, idx) => (
+                      <linearGradient
+                        key={idx}
+                        id={`gradient-${idx}`}
+                        x1="0"
+                        y1="0"
+                        x2="1"
+                        y2="1"
+                      >
+                        <stop stopColor={color} stopOpacity={1} offset="0%" />
+                        <stop
+                          stopColor={color}
+                          stopOpacity={0.65}
+                          offset="100%"
+                        />
+                      </linearGradient>
+                    ))}
+                  </defs>
 
-        width: "100%",
-        height: "calc(100vh - 122px)",
-        maxHeight: "calc(100vh - 122px)",
-        minHeight: 0,
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={52}
+                    outerRadius={76}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {pieData.map((_, i) => (
+                      <Cell key={i} fill={`url(#gradient-${i})`} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
 
-        p: 2,
-        boxSizing: "border-box",
+              {/* Center Label */}
+              <Box sx={s.pieCenterBox}>
+                <Typography variant="caption" sx={s.pieCenterSubtitle}>
+                  Total Requests
+                </Typography>
+                <Typography sx={s.pieCenterValue}>{total}</Typography>
+              </Box>
+            </Box>
 
-        borderRadius: 2,
-        overflow: "hidden",
-        bgcolor: "background.paper",
-      }}
-    >
-      <Box
-        sx={{
-          width: "100%",
-          height: "100%",
-          flex: 1,
-          minHeight: 0,
+            {/* Legend row */}
+            <Stack direction="row" spacing={1.5} sx={s.legendRow}>
+              {pieData.map((p, i) => (
+                <Stack
+                  key={p.name}
+                  direction="row"
+                  alignItems="center"
+                  spacing={0.5}
+                  sx={s.legendChipBox}
+                >
+                  <Box sx={s.legendColorDot(COLORS[i])} />
+                  <Typography variant="caption">{p.name}</Typography>
+                  <Chip
+                    label={p.value}
+                    sx={{ bgcolor: COLORS[i], color: "white" }}
+                    size="small"
+                  />
+                </Stack>
+              ))}
+            </Stack>
+          </Box>
 
-          display: "flex",
-          flexDirection: "column",
-
-          overflow: "hidden",
-        }}
-      >
-        <DataGrid
-          rows={data}
-          columns={columns}
-          getRowId={(row) => row.templateId}
-          initialState={{
-            pagination: {
-              paginationModel: {
-                pageSize: 10,
-                page: 0,
-              },
-            },
-          }}
-          pageSizeOptions={[5, 10, 25, 50]}
-          disableRowSelectionOnClick
-          sx={{
-            width: "100%",
-            height: "100%",
-            flex: 1,
-            minHeight: 0,
-
-            border: "none",
-
-            "& .MuiDataGrid-columnHeaders": {
-              backgroundColor: "#f5f5f5 !important",
-              fontWeight: 700,
-              borderBottom:
-                "2px solid rgba(88, 70, 159, 0.2)",
-              position: "sticky",
-              top: 0,
-              zIndex: 1,
-            },
-
-            "& .MuiDataGrid-virtualScroller": {
-              overflowY: "hidden",
-            },
-
-            "& .MuiDataGrid-main": {
-              minHeight: 0,
-            },
-          }}/>
-
-      {selectedTemplate && (
-        <>
-          <TemplateViewDialog
-            open={openView}
-            handleClose={closeAllDialogs}
-            template={selectedTemplate}
-          />
-        </>
+          {/* BAR SECTION */}
+          <Box sx={s.barChartArea}>
+            <ResponsiveContainer>
+              <BarChart data={histogramData}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="rgba(255,255,255,0.3)"
+                />
+                <XAxis
+                  dataKey="date"
+                  stroke="white"
+                  fontSize={10}
+                  tickMargin={4}
+                />
+                <YAxis stroke="white" fontSize={10} />
+                <Tooltip />
+                <Bar
+                  dataKey="count"
+                  fill="url(#gradient-0)"
+                  radius={[6, 6, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </Box>
+        </Box>
+      ) : (
+        <Typography>No data to display</Typography>
       )}
-      </Box>
-    </Paper>
+    </Card>
   );
 };
 
-export default TemplateTable;
+export default RequestAnalytics;import React, { useMemo } from "react";
+import { Box, Typography, Stack, Chip } from "@mui/material";
+
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from "recharts";
+
+const COLORS = {
+  add: "#d87093",
+  modify: "#6a5acd",
+  delete: "#7A0B0D",
+  bar: "#6296cf",
+};
+
+const s = {
+  container: {
+    p: { xs: 2, sm: 3 },
+    width: "100%",
+  },
+  headerTitle: {
+    fontSize: { xs: "1.1rem", sm: "1.15rem" },
+    fontWeight: "bold",
+    textAlign: { xs: "center", md: "left" },
+  },
+  headerSubtitle: {
+    color: "text.secondary",
+    display: "block",
+    textAlign: { xs: "center", md: "left" },
+    mb: { xs: 1.5, md: 2 },
+  },
+  wrapper: {
+    display: "flex",
+    flexDirection: { xs: "column", md: "row" },
+    gap: { xs: 3, md: 2 },
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  pieWrapper: {
+    width: { xs: "100%", md: "40%" },
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+  },
+  pieChartBox: {
+    position: "relative",
+    width: "100%",
+    height: { xs: 180, md: 200 },
+  },
+  pieCenterBox: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    textAlign: "center",
+    pointerEvents: "none",
+  },
+  pieCenterSubtitle: {
+    fontSize: "0.7rem",
+    color: "text.secondary",
+  },
+  pieCenterValue: {
+    fontSize: "1.25rem",
+    fontWeight: "bold",
+  },
+  legendColorDot: (color) => ({
+    width: 10,
+    height: 10,
+    borderRadius: "50%",
+    bgcolor: color,
+  }),
+  // FIX: Wrapper handles width, Box handles height
+  barChartWrapper: {
+    width: { xs: "100%", md: "60%" },
+    display: "flex",
+    flexDirection: "column",
+  },
+  barChartBox: {
+    width: "100%",
+    height: { xs: 180, md: 200 },
+  },
+};
+
+const RequestAnalytics = ({ data = [], showDeleteRequest = false }) => {
+  const { total, pieData } = useMemo(() => {
+    const counts = { add: 0, modify: 0, delete: 0 };
+
+    data.forEach((d) => {
+      if (d.changeType === "ADD") counts.add++;
+      if (d.changeType === "UPDATE") counts.modify++;
+      if (d.changeType === "DELETE") counts.delete++;
+    });
+
+    const basePieData = [
+      { name: "Add Requests", value: counts.add, color: COLORS.add, id: 0 },
+      {
+        name: "Modify Requests",
+        value: counts.modify,
+        color: COLORS.modify,
+        id: 1,
+      },
+    ];
+
+    if (showDeleteRequest) {
+      basePieData.push({
+        name: "Delete Requests",
+        value: counts.delete,
+        color: COLORS.delete,
+        id: 2,
+      });
+    }
+
+    return { total: data.length, pieData: basePieData };
+  }, [data, showDeleteRequest]);
+
+  const histogramData = useMemo(() => {
+    const map = {};
+
+    data.forEach((item) => {
+      console.log(item);
+      if (item.reqDate) {
+        const date = new Date(item.reqDate).toLocaleDateString("en-GB");
+
+        if (!map[date]) {
+          map[date] = {
+            date,
+            pendingRequests: 0,
+            addRequests: 0,
+            updateRequests: 0,
+            deleteRequests: 0,
+            totalRequests: 0,
+          };
+        }
+
+        if (item.reqStatus === "PENDING") {
+          map[date].pendingRequests += 1;
+          if (item.changeType === "ADD") map[date].addRequests += 1;
+          if (item.changeType === "UPDATE") map[date].updateRequests += 1;
+          if (item.changeType === "DELETE") map[date].deleteRequests += 1;
+        }
+
+        map[date].totalRequests += 1;
+      }
+    });
+
+    return Object.values(map).sort((a, b) => {
+      const [d1, m1, y1] = a.date.split("/").map(Number);
+      const [d2, m2, y2] = b.date.split("/").map(Number);
+      return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
+    });
+  }, [data]);
+
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload?.length) {
+      const d = payload[0].payload;
+      return (
+        <Box
+          sx={{
+            bgcolor: "#1e1e2f",
+            p: 1.5,
+            borderRadius: 1,
+            color: "#fff",
+            fontSize: 12,
+            boxShadow: 3,
+          }}
+        >
+          <div>
+            <b>Date:</b> {label}
+          </div>
+          <div>
+            <b>Pending Requests:</b> {d.pendingRequests}
+          </div>
+          <div>
+            <b>Add Requests:</b> {d.addRequests}
+          </div>
+          <div>
+            <b>Modify Requests:</b> {d.updateRequests}
+          </div>
+          {showDeleteRequest && (
+            <div>
+              <b>Delete Requests:</b> {d.deleteRequests}
+            </div>
+          )}
+        </Box>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <Box sx={s.container}>
+      <Typography sx={s.headerTitle}>Request Analytics Overview</Typography>
+      <Typography variant="caption" sx={s.headerSubtitle}>
+        Requests comparison by type and daily frequency
+      </Typography>
+
+      {total > 0 ? (
+        <Box sx={s.wrapper}>
+          {/* PIE SECTION */}
+          <Box sx={s.pieWrapper}>
+            <Box sx={s.pieChartBox}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <defs>
+                    {pieData.map((p) => (
+                      <linearGradient
+                        key={p.id}
+                        id={`gradient-${p.id}`}
+                        x1="0"
+                        y1="0"
+                        x2="1"
+                        y2="1"
+                      >
+                        <stop
+                          stopColor={p.color}
+                          stopOpacity={1}
+                          offset="0%"
+                        />
+                        <stop
+                          stopColor={p.color}
+                          stopOpacity={0.65}
+                          offset="100%"
+                        />
+                      </linearGradient>
+                    ))}
+                    <linearGradient
+                      id="gradient-bar"
+                      x1="0"
+                      y1="0"
+                      x2="1"
+                      y2="1"
+                    >
+                      <stop
+                        stopColor={COLORS.bar}
+                        stopOpacity={1}
+                        offset="0%"
+                      />
+                      <stop
+                        stopColor={COLORS.bar}
+                        stopOpacity={0.65}
+                        offset="100%"
+                      />
+                    </linearGradient>
+                  </defs>
+
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius="60%"
+                    outerRadius="90%"
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {pieData.map((p) => (
+                      <Cell key={p.id} fill={`url(#gradient-${p.id})`} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+
+              <Box sx={s.pieCenterBox}>
+                <Typography variant="caption" sx={s.pieCenterSubtitle}>
+                  Total
+                </Typography>
+                <Typography sx={s.pieCenterValue}>{total}</Typography>
+              </Box>
+            </Box>
+
+            <Stack
+              direction="row"
+              useFlexGap
+              flexWrap="wrap"
+              spacing={2.5}
+              justifyContent="center"
+              sx={{ mt: { xs: 0.5, md: 1 } }}
+            >
+              {pieData.map((p) => (
+                <Stack
+                  key={p.name}
+                  direction="row"
+                  alignItems="center"
+                  spacing={0.5}
+                >
+                  <Box sx={s.legendColorDot(p.color)} />
+                  <Typography variant="caption">{p.name}</Typography>
+                  <Chip
+                    label={p.value}
+                    sx={{
+                      bgcolor: p.color,
+                      color: "white",
+                      ml: 0.5,
+                      height: 20,
+                      fontSize: "0.7rem",
+                      borderRadius:"5px",
+                    }}
+                    size="small"
+                  />
+                </Stack>
+              ))}
+            </Stack>
+          </Box>
+
+          {/* BAR SECTION */}
+          <Box sx={s.barChartWrapper}>
+            <Box sx={s.barChartBox}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={histogramData}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(255,255,255,0.3)"
+                  />
+                  <XAxis
+                    dataKey="date"
+                    stroke="black"
+                    fontSize={10}
+                    tickMargin={4}
+                  />
+                  <YAxis
+                    stroke="black"
+                    fontSize={10}
+                    allowDecimals={false}
+                    label={{
+                      value: "Requests",
+                      angle: -90,
+                      position: "insideLeft",
+                      fill: "gray",
+                      fontSize: 11,
+                    }}
+                  />
+                  <Tooltip
+                    content={<CustomTooltip />}
+                    cursor={{ fill: "rgba(255,255,255,0.1)" }}
+                  />
+                  <Bar
+                    dataKey="pendingRequests"
+                    fill="url(#gradient-bar)"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={30}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </Box>
+
+            <Typography
+              variant="caption"
+              sx={{
+                display: "block",
+                fontStyle: "italic",
+                textAlign: "center",
+                color: "warning.main",
+                mt: 1,
+                fontSize: "1 rem",
+                fontWeight:550,
+              }}
+            >
+              * Represents the number of pending requests for that date and the
+              classification of request type.
+            </Typography>
+          </Box>
+        </Box>
+      ) : (
+        <Typography sx={{ p: 3, textAlign: "center", color: "text.secondary" }}>
+          No data to display
+        </Typography>
+      )}
+    </Box>
+  );
+};
+
+export default RequestAnalytics;
