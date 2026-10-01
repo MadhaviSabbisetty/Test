@@ -111,7 +111,7 @@ const TemplateTable = ({ data }) => {
     },
     {
       field: "actions",
-      headerName: "Actions",
+      headerName: "Actions123",
       width: 180,
       sortable: false,
       headerClassName: "table-header",
@@ -119,7 +119,7 @@ const TemplateTable = ({ data }) => {
         <Stack
           direction="row"
           spacing={1}
-          justifyContent="left"
+          justifyContent="center"
           alignItems="center"
           sx={{ height:"100%" }}
         >
@@ -162,10 +162,16 @@ const TemplateTable = ({ data }) => {
       flexDirection:"column",
       borderRadius:2,
       overflow:"hidden",
-      minHeight:"calc(100vh - 210px)",
+      height:"calc(100vh - 122px)",
       width:"100%",
     }}
-    >
+    > <Box sx={{
+          p:2,
+          flex:1,
+          minHeight:0,
+          display:"flex",
+          flexDirection:"column",
+        }}>
       <DataGrid
         rows={data}
         columns={columns}
@@ -198,6 +204,7 @@ const TemplateTable = ({ data }) => {
           />
         </>
       )}
+      </Box>
     </Paper>
   );
 };
