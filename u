@@ -5,30 +5,15 @@ import {
   Paper,
   IconButton,
   Tooltip,
-  Chip,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
-  Alert,
   Stack,
 } from "@mui/material";
 
-import MoreVertIcon from "@mui/icons-material/MoreVert";
 import VisibilityIcon from "@mui/icons-material/Visibility";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import HistoryIcon from "@mui/icons-material/History";
-import DownloadIcon from "@mui/icons-material/Download";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import PauseCircleIcon from "@mui/icons-material/PauseCircle";
-import DraftsIcon from "@mui/icons-material/Drafts";
 
 import TemplateViewDialog from "../../common/TemplateViewDialog";
 
 const TemplateTable = ({ data }) => {
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-
   const [openView, setOpenView] = useState(false);
 
   const closeAllDialogs = () => {
@@ -45,9 +30,6 @@ const TemplateTable = ({ data }) => {
       renderCell: (params) => (
         <Box
           sx={{
-            // fontFamily: "JetBrains Mono, monospace",
-            // fontSize: "0.875rem",
-            // color: "#6b7280",
             ml: 1,
             fontWeight: 500,
           }}
@@ -56,6 +38,7 @@ const TemplateTable = ({ data }) => {
         </Box>
       ),
     },
+
     {
       field: "reportId",
       headerName: "Report ID",
@@ -71,6 +54,7 @@ const TemplateTable = ({ data }) => {
         </Box>
       ),
     },
+
     {
       field: "templateName",
       headerName: "Report Name",
@@ -81,14 +65,13 @@ const TemplateTable = ({ data }) => {
         <Box
           sx={{
             fontWeight: 600,
-            // color: "#111827",
-            // fontSize: "0.9375rem",
           }}
         >
           {params.value}
         </Box>
       ),
     },
+
     {
       field: "description",
       headerName: "Description",
@@ -98,8 +81,6 @@ const TemplateTable = ({ data }) => {
       renderCell: (params) => (
         <Box
           sx={{
-            // color: "#6b7280",
-            // fontSize: "0.875rem",
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -109,19 +90,23 @@ const TemplateTable = ({ data }) => {
         </Box>
       ),
     },
+
     {
       field: "actions",
       headerName: "Actions123",
       width: 180,
       sortable: false,
       headerClassName: "table-header",
+
       renderCell: (params) => (
         <Stack
           direction="row"
           spacing={1}
           justifyContent="center"
           alignItems="center"
-          sx={{ height:"100%" }}
+          sx={{
+            height: "100%",
+          }}
         >
           <Tooltip title="Quick View">
             <IconButton
@@ -130,23 +115,19 @@ const TemplateTable = ({ data }) => {
                 setSelectedTemplate(params.row);
                 setOpenView(true);
               }}
-              sx={
-                {
-                  width:42,
-                  height:42,
-                  minHeight:42,
-                  minWidth:42,
-                  padding:0,
-                  borderRadius:"50%",
-                  display:"flex",
-                  alignItems:"center",
-                  justifyContent:"center",
-                  // color: "#3b82f6",
-                  // "&:hover": { bgcolor: "#dbeafe" },
-                }
-              }
+              sx={{
+                width: 42,
+                height: 42,
+                minWidth: 42,
+                minHeight: 42,
+                padding: 0,
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              <VisibilityIcon sx={{fontSize:24}} />
+              <VisibilityIcon sx={{ fontSize: 24 }} />
             </IconButton>
           </Tooltip>
         </Stack>
@@ -157,54 +138,85 @@ const TemplateTable = ({ data }) => {
   return (
     <Paper
       elevation={0}
-     sx={{
-      display:"flex",
-      flexDirection:"column",
-      borderRadius:2,
-      overflow:"hidden",
-      minHeight:"calc(100vh - 122px)",
-      width:"100%",
-    }}
-    > <Box 
-    sx={{
-      p:2,
-      flex:1,
-      minHeight:0,
-      display:"flex",
-      flexDirection:"column",
-    }}>
-      <DataGrid
-        rows={data}
-        columns={columns}
-        getRowId={(row) => row.templateId}
-        initialState={{
-          pagination: { paginationModel: { pageSize: 10 } },
-        }}
-        pageSizeOptions={[5, 10, 25, 50]}
-        disableRowSelectionOnClick
-        sx={{
-          minHeight: 760,
-          width: "100%",
-         "& .MuiDataGrid-columnHeaders": {
-          backgroundColor: "#f5f5f5 !important",
-          fontWeight: 700,
-          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
-          position: 'sticky',
-          top: 0,
-          zIndex: 1,
-          },
-          }}
-      />
+      sx={{
+        display: "flex",
+        flexDirection: "column",
 
-      {selectedTemplate && (
-        <>
+        width: "100%",
+        height: "calc(100vh - 140px)",
+        maxHeight: "calc(100vh - 140px)",
+        minHeight: 0,
+
+        p: 2,
+        boxSizing: "border-box",
+
+        borderRadius: 2,
+        overflow: "hidden",
+        bgcolor: "background.paper",
+      }}
+    >
+      <Box
+        sx={{
+          width: "100%",
+          height: "100%",
+          flex: 1,
+          minHeight: 0,
+
+          display: "flex",
+          flexDirection: "column",
+
+          overflow: "hidden",
+        }}
+      >
+        <DataGrid
+          rows={data}
+          columns={columns}
+          getRowId={(row) => row.templateId}
+          initialState={{
+            pagination: {
+              paginationModel: {
+                pageSize: 10,
+                page: 0,
+              },
+            },
+          }}
+          pageSizeOptions={[5, 10, 25, 50]}
+          disableRowSelectionOnClick
+          sx={{
+            width: "100%",
+            height: "100%",
+            flex: 1,
+            minHeight: 0,
+
+            border: "none",
+
+            "& .MuiDataGrid-columnHeaders": {
+              backgroundColor: "#f5f5f5 !important",
+              fontWeight: 700,
+              borderBottom:
+                "2px solid rgba(88, 70, 159, 0.2)",
+              position: "sticky",
+              top: 0,
+              zIndex: 1,
+            },
+
+            "& .MuiDataGrid-virtualScroller": {
+              overflowY: "hidden",
+            },
+
+            "& .MuiDataGrid-main": {
+              minHeight: 0,
+            },
+          }}
+        />
+
+        {selectedTemplate && (
           <TemplateViewDialog
             open={openView}
             handleClose={closeAllDialogs}
             template={selectedTemplate}
           />
-        </>
-      )}
+        )}
       </Box>
     </Paper>
   );
