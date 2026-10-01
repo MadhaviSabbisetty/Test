@@ -1,3 +1,5 @@
+import { minLength } from "zod";
+
 export const analyticsStyles = {
   card: {
     p: 2,
@@ -5,6 +7,8 @@ export const analyticsStyles = {
     boxShadow:"none",
     borderRadius:0,
     bgcolor:"transparent",
+    height:"100%",
+    overflow:"hidden",
   },
 
   headerTitle: {
@@ -28,7 +32,8 @@ export const analyticsStyles = {
   pieWrapper: {
     flex: 1,
     position: "relative",
-    height: 200,
+    height: "100%",
+    minHeight:0,
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
@@ -81,7 +86,8 @@ export const analyticsStyles = {
   barChartArea: {
     flex: 1,
     width: "100%",
-    height: 200,
+    height: "100%",
+    minHeight:0,
   },
 };
 
@@ -151,14 +157,34 @@ export default function TemplateRequestScreen() {
   };
 
   return (
+    <Paper
+        elevation={2}
+        sx={{
+          display:"flex",
+          flexDirection:"column",
+          borderRadius:2,
+          overflow:"hidden",
+          minHeight:"calc(100vh - 210px)",
+          width:"100%",
+        }}>
     <Box sx={{...styles.container,
-      mt: { xs:-2, md: -4}
+      mt: { xs:-2, md: -4},
+      height:"100%",
+      minHeight:0,
+      overflow:"hidden",
     }}>
       {/* <Paper sx={{ mb: 2, borderRadius: 1 }}> */}
       {!editingRequestId &&
-        <Box sx={{
+        <Box 
+        sx={{
           borderBottom: 1,
-          borderColor: "divider", width: "100%"
+          borderColor: "divider", 
+          width: "100%",
+          height:"100%",
+          minHeight:0,
+          display:"flex",
+          flexDirection:"column",
+          overflow:"hidden",
         }}>
           <Tabs
             value={tabIndex}
@@ -173,7 +199,15 @@ export default function TemplateRequestScreen() {
               "& .MuiTabs-flexContainer": {
                 width: "100%",
                 justifyContent: "space-between",
-              }
+              },
+
+              "& .MuiTab-root":{
+                borderRadius:"10px 10px 0 0",
+              },
+
+              "& .MuiTab-root.Mui-selected":{
+                borderRadius:"10px 10px 0 0",
+              },
             }}
           >
             <Tab
@@ -186,10 +220,18 @@ export default function TemplateRequestScreen() {
               label="My Requests" sx={{ fontWeight: 'bold', textTransform: 'none', fontSize: '0.95rem', minHeight: 48, px: 3 }} />
           </Tabs>
           {/* </Paper> */}
-
+            <Box 
+            sx={{
+              flex:1,
+              minHeight:0,
+              width:"100%",
+              pt:1,
+              overflow:"hidden",
+            }}>
           {/* Tab Panels */}
           {tabIndex === 0 && <PendingRequestsTab />}
           {tabIndex === 1 && <MyRequestsTab editHandler={setEditingRequestId} />}
+          </Box>
         </Box>
       }
       {editingRequestId &&
@@ -203,6 +245,7 @@ export default function TemplateRequestScreen() {
         </Box>
       }
     </Box>
+    </Paper>
   );
 }import React, { useMemo } from "react";
 import { Box, Typography, Card, Stack, Chip } from "@mui/material";
@@ -352,11 +395,11 @@ const RequestAnalytics = ({ data = [] }) => {
                 />
                 <XAxis
                   dataKey="date"
-                  stroke="white"
+                  stroke="black"
                   fontSize={10}
                   tickMargin={4}
                 />
-                <YAxis stroke="white" fontSize={10} />
+                <YAxis stroke="black" fontSize={10} />
                 <Tooltip />
                 <Bar
                   dataKey="count"
@@ -585,7 +628,8 @@ export default function PendingRequestsTab() {
   return (
     <Box
       sx={{
-        height: "calc(100vh - 120px)",
+        // height: "calc(100vh - 120px)",
+        height:"100%",
         width: "100%",
         minHeight: 0,
         display: "flex",
@@ -596,17 +640,33 @@ export default function PendingRequestsTab() {
       <Card 
       sx={{
         width: "100%",
-        height: "calc(100vh - 125px)",
+        height: "100%",
         minHeight: 0,
         boxShadow: 3,
-        borderRadius: 2,
+        borderRadius: "12px",
         bgcolor: "background.paper",
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
       }}>
+        <Box 
+        sx={{
+          flex:"0 0 50%",
+          minHeight:0,
+          overflow:"hidden",
+        }}>
         <TemplateRequestAnalytics data={rows} />
+        </Box>
+
         <Divider />
+
+        <Box 
+        sx={{
+          flex:"0 0 50%",
+          minHeight:0,
+          display:"flex",
+          overflow:"hidden",
+        }}>
       <DataGrid
         rows={rows}
         columns={allColumns}
@@ -634,6 +694,7 @@ export default function PendingRequestsTab() {
           ),
         }}
       />
+      </Box>
       </Card>
       <ViewRequestDialog open={viewOpen} handleClose={() => { setViewOpen(false); setViewData(null); }} data={viewData} />
       <CompareTemplateDialog open={compareOpen} requestId={selectedRequestId} onClose={() => { setCompareOpen(false); setSelectedRequestId(null); }} />
