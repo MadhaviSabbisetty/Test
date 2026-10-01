@@ -1,228 +1,34 @@
-export const FabStyle = styled(Fab)(({ theme }) => ({
-  width: 48,
-  height: 48,
-  minWidth: 48,
-  minHeight: 48,
-
-  padding: 0,
-  margin: 0,
-
-  position: "relative",
-
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-
-  flexShrink: 0,
-  boxSizing: "border-box",
-
-  borderRadius: 24,
-  overflow: "hidden",
-
-  backgroundColor: theme.palette.primary.main,
-
-  border: "2px solid transparent",
-  boxShadow: "none",
-
-  /*
-   * IMPORTANT:
-   * Do not move this element with top/right during hover.
-   */
-  transform: "none",
-
-  transition:
-    "width 0.3s ease, border-radius 0.3s ease, background 0.3s ease",
-
-  // -----------------------------------------
-  // PLUS CIRCLE
-  // -----------------------------------------
-  "&::after": {
-    content: '""',
-
-    position: "absolute",
-
-    right: 0,
-    top: "50%",
-
-    width: 44,
-    height: 44,
-
-    borderRadius: "50%",
-
-    backgroundColor: theme.palette.primary.main,
-
-    transform: "translateY(-50%)",
-
-    zIndex: 3,
-
-    pointerEvents: "none",
-  },
-
-  // -----------------------------------------
-  // PLUS ICON
-  // -----------------------------------------
-  "& .MuiSvgIcon-root": {
-    position: "absolute",
-
-    right: 10,
-    top: "50%",
-
-    width: 24,
-    height: 24,
-
-    minWidth: 24,
-    minHeight: 24,
-
-    margin: 0,
-    padding: 0,
-
-    color: "#ffffff",
-
-    transform: "translateY(-50%)",
-
-    zIndex: 4,
-
-    flexShrink: 0,
-
-    pointerEvents: "none",
-  },
-
-  // -----------------------------------------
-  // CREATE SEGMENT TEXT
-  // -----------------------------------------
-  "& .create-circle-text": {
-    position: "absolute",
-
-    left: 16,
-    right: 52,
-
-    top: 0,
-
-    height: 44,
-
-    display: "flex",
-    alignItems: "center",
-
-    opacity: 0,
-
-    margin: 0,
-    padding: 0,
-
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-
-    color: "#ffffff",
-
-    fontSize: "14px",
-    fontWeight: 500,
-
-    lineHeight: 1,
-
-    textAlign: "left",
-
-    zIndex: 2,
-
-    pointerEvents: "none",
-
-    transition: "opacity 0.2s ease",
-  },
-
-  // -----------------------------------------
-  // HOVER
-  // -----------------------------------------
-  "&:hover": {
-    width: 180,
-    minWidth: 180,
-
-    height: 48,
-
-    borderRadius: 24,
-
-    padding: 0,
-    margin: 0,
-
-    /*
-     * The right edge remains fixed.
-     * The button expands only towards the LEFT.
-     */
-    backgroundImage: `linear-gradient(
-      to right,
-      ${theme.palette.primary.main} 0%,
-      ${lighten(theme.palette.primary.main, 0.08)} 30%,
-      ${lighten(theme.palette.primary.main, 0.18)} 60%,
-      ${lighten(theme.palette.primary.main, 0.30)} 100%
-    )`,
-
-    border: `2px solid ${theme.palette.primary.main}`,
-
-    boxShadow: "none",
-
-    transform: "none",
-  },
-
-  "&:hover::after": {
-    right: 0,
-    top: "50%",
-
-    transform: "translateY(-50%)",
-  },
-
-  "&:hover .MuiSvgIcon-root": {
-    right: 10,
-    top: "50%",
-
-    transform: "translateY(-50%)",
-  },
-
-  "&:hover .create-circle-text": {
-    opacity: 1,
-  },
-}));
-
-
-
-
-
-
 <Box
-  sx={{
-    height: 64,
-    flexShrink: 0,
-
-    display: "flex",
-    justifyContent: "flex-end",
-    alignItems: "center",
-
-    px: 1,
-    pb: 1,
-
-    overflow: "visible",
-  }}
->
-  <Box
-    sx={{
-      width: 180,
-      height: 48,
-
-      display: "flex",
-      justifyContent: "flex-end",
-      alignItems: "center",
-
-      flexShrink: 0,
-
-      overflow: "visible",
-    }}
-  >
-    <FabStyle
-      onClick={() => setOpen(true)}
-      color="primary"
+      sx={{
+        height: "calc(100vh - 200px)",
+        width: "100%",
+        minHeight: 0,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
     >
-      <span className="create-circle-text">
-        Create Segment
-      </span>
+        <TemplateRequestAnalytics data={rows} />
+      <DataGrid
+        rows={rows}
+        columns={allColumns}
+        loading={dataGridLoading}
+        disableRowSelectionOnClick
+        pageSizeOptions={[5, 10, 25, 50]}
+        initialState={{
+          pagination: { paginationModel: { pageSize: 5 } },
+          sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] },
+        }}
+        getRowId={(row) => row.id}
+        sx={{
+          ...styles.dataGrid,
+          flex: 1,
+          minHeight: 0,
+        }}
 
-      <AddIconStyle />
-    </FabStyle>
-  </Box>
-</Box>
 
+
+
+<Box sx={{...styles.container,
+      mt: { xs:-2, md: -4}
+    }}>
