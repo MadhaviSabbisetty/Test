@@ -1,684 +1,492 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Box, Typography, Stack, Tooltip, IconButton, Dialog, DialogContent, DialogTitle, DialogActions, Button } from "@mui/material";
-import InfoIcon from "@mui/icons-material/Info";
 import { DataGrid } from "@mui/x-data-grid";
-import { Visibility, PendingActions, CheckCircle, Cancel, CancelRounded, EditSquare, Block } from "@mui/icons-material";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import RestoreIcon from "@mui/icons-material/Restore";
-import ChangeCircleSharpIcon from "@mui/icons-material/ChangeCircleSharp";
-import { useSelector } from "react-redux";
+import {
+  Box,
+  Card,
+  IconButton,
+  Stack,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import InfoIcon from "@mui/icons-material/Info";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import StopIcon from "@mui/icons-material/Stop";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import SummarizeOutlinedIcon from "@mui/icons-material/SummarizeOutlined";
+import TableRowsIcon from "@mui/icons-material/TableRows";
+import MemoryIcon from "@mui/icons-material/Memory";
+import AnalyticsIcon from "@mui/icons-material/Analytics";
+import ApprovalIcon from "@mui/icons-material/Approval";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import AppRegistrationIcon from "@mui/icons-material/AppRegistration";
+import { StageStatus, StageStatusConfig } from "../util/StageStatus";
+import { useEffect, useMemo, useState } from "react";
+import { timeStampFormatter } from "../../../utils/CommonUtilities";
+import CustomChip from "../../../utils/CustomChip";
+import { getIconComponent } from "../../../utils/IconUtils";
 
-import useApi from "../../../../hooks/useApi";
-import useCustomSnackbar from "../../../../utils/useCustomSnackbar";
-import CustomChip from "../../../../utils/CustomChip";
-import { timeStampFormatter } from "../../../../utils/CommonUtilities";
+/* =====================================================
+   MAIN COMPONENT
+===================================================== */
 
-import TemplateRequestAnalytics from "../analytics/TemplateRequestAnalytics";
-import { styles } from "../../TemplateRequestScreenStyles";
-import CompareTemplateDialog from "../dialogs/CompareTemplate/CompareTemplateDialog";
-import ViewRequestDialog from "../dialogs/ViewRequestDialog";
-import RemarksDialog from "../../../reportTemplateManager/pages/RemarksDialog";
-import ReportBuilderComponent from "../../../reportTemplateBuilder/ReportBuilder.component";
+const ProcessStatusTable = ({
+  processes = [],
+  isCurrentDate,
+  actions,
+  loading,
+  permissions = {},
+}) => {
+  const SUMMARY_STAGES = new Set([
+    "cntr_summary_calculated",
+    "intr_summary_calculated",
+    "balance_Compare_generated",
+  ]);
 
-const BASE_URL_CONFIG = "/TC/template-config"
+  const [paginationModel, setPaginationModel] = useState({
+    page: 0,
+    pageSize: 5,
+  });
 
-export default function MyRequestsTab({ editHandler }) {
-  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
-  const requestType = selectedMenuItem?.requestType || "";
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
+  /* =====================================================
+     FIND LATEST RUN FOR EACH PROCESS
+  ===================================================== */
 
-  const [dataGridLoading, setDataGridLoading] = useState(true);
-  const [rows, setRows] = useState([]);
+  const latestRunMap = useMemo(() => {
+    const map = new Map();
 
-  const [viewOpen, setViewOpen] = useState(false);
-  const [viewData, setViewData] = useState(null);
-  const [openRemarks, setOpenRemarks] = useState(false);
-  const [loading, setLoading] = useState(false);
-  // const [edit, setEdit] = useState(false);
-  // const [compareOpen, setCompareOpen] = useState(false);
-  const [selectedRequestId, setSelectedRequestId] = useState(null);
-  // const [selectedTemplateId, setSelectedTemplateId] = useState(null);
+    processes.forEach((p) => {
+      const type = p.processType;
+      const runId = Number(p.runId) || 0;
 
-  const fetchData = useCallback(async () => {
-    if (!requestType) return;
-    try {
-      const response = await callApi(BASE_URL_CONFIG + "/template-requests/my-requests", null, "GET");
-      const result = response?.data || response || [];
-      const data = result.map((row) => {
-        const payloadObj = typeof row.summary == "object" && row.summary !== null ? row.summary : {};
-        //const reportMeta = payloadObj?.template?.reportMeta || {};
+      if (!map.has(type) || runId > map.get(type)) {
+        map.set(type, runId);
+      }
+    });
+
+    return map;
+  }, [processes]);
+
+  /* =====================================================
+     ROWS
+  ===================================================== */
+
+  const rows = useMemo(() => {
+    return processes
+      .map((p) => {
+        const lastStage = p.stages?.at(-1);
+
+        const runId = Number(p.runId) || 1;
+        const latestRunId = latestRunMap.get(p.processType);
+
+        const isLatestRun = runId === latestRunId;
+
+        const hasSummary =
+          p.processId === 3 &&
+          p.stages?.some(
+            (s) =>
+              s.stageStatus === StageStatus.COMPLETED &&
+              SUMMARY_STAGES.has(s.stageId),
+          );
+
         return {
-          ...row,
-          payload: payloadObj,
-          reportId: payloadObj.reportId,
-          reportName: payloadObj.reportName || payloadObj.reportName
+          id: `${p.processType}_${p.processId}_${runId}`, // UNIQUE KEY
+
+          processId: p.processId,
+          processRunId: p.processRunId,
+          processType: p.processType,
+
+          runId,
+          isLatestRun,
+
+          status: p.status,
+
+          stageTitle: lastStage?.stageTitle ?? "Unknown",
+          stageIcon: lastStage?.stageIcon ?? "AccessTime",
+
+          startTime: p.processStartTime,
+          endTime: p.processEndTime,
+
+          hasSummary,
+
+          raw: p,
         };
+      })
+      .sort((a, b) => {
+        // Convert to Date objects to compare (handles ISO strings, timestamps, etc.)
+        const dateA = new Date(a.startTime);
+        const dateB = new Date(b.startTime);
+
+        // Sort Descending (latest date first)
+        return dateB - dateA;
       });
-      setRows(data);
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error fetching my requests", "error");
-    } finally {
-      setDataGridLoading(false);
-    }
-  }, [callApi, showSnackBar, requestType]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processes, latestRunMap]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const statusOptions = Object.entries(StageStatusConfig).map(
+    ([value, details]) => ({
+      value: Number(value),
+      label: details.label,
+    }),
+  );
 
-  const handleViewClick = (data) => {
-    // if (data.changeType === "UPDATE") {
-    //   setSelectedRequestId(data.id);
-    //   setCompareOpen(true);
-    // } else {
-    //   setViewData(data);
-    //   setViewOpen(true);
-    // }
-    setViewData(data);
-    setViewOpen(true);
-  };
+  /* =====================================================
+     COLUMNS
+  ===================================================== */
 
-  const handleCancelClick = useCallback(async (remarks) => {
-    try {
-      setLoading(true);
-      await callApi(BASE_URL_CONFIG + "/template-requests/cancel",
-        {
-          requestId: selectedRequestId,
-          remarks
+  const columns = useMemo(
+    () => [
+      {
+        field: "processType",
+        flex: 1.5,
+        minWidth: 250,
+        renderHeader: () => (
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <MemoryIcon sx={{ mr: 0.5 }} />
+            <Typography variant="subtitle1">Process Name</Typography>
+          </Box>
+        ),
+        renderCell: (params) => {
+          const name = params.row.processType;
+          const runId = params.row.runId;
+
+          /* ordinal helper */
+          const getOrdinal = (n) => {
+            const s = ["th", "st", "nd", "rd"];
+            const v = n % 100;
+            return n + (s[(v - 20) % 10] || s[v] || s[0]);
+          };
+
+          return (
+            <Typography variant="body1" component="span">
+              {runId > 1 ? `${name} (${getOrdinal(runId)} run)` : name}
+            </Typography>
+          );
         },
-        "PATCH"
-      );
-      showSnackBar("Request Cancelled Successfully.", "success");
-      fetchData();
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error while cancelling the request!", "error");
-    } finally {
-      setOpenRemarks(false);
-      setLoading(false);
-    }
-  }, [selectedRequestId, callApi, showSnackBar]);
-
-  // const handleEditClick = (row) => {
-  //   setSelectedRequestId(row?.id)
-  //   setSelectedTemplateId(row?.summary.templateId)
-  //   setEdit(true);
-  // }
-
-  // const handleRequestUpdate = async (requestId, payload) => {
-  //   try {
-  //     setLoading(true);
-  //     await callApi(BASE_URL_CONFIG + "/template-requests/modify",
-  //       {
-  //         requestId: selectedRequestId,
-  //         payload: payload,
-  //       },
-  //       "PATCH"
-  //     );
-  //     showSnackBar("Request modified successfully.", "success");
-  //   } catch (err) {
-  //     console.error(err);
-  //     showSnackBar("Error while modifying the request!", "error");
-  //   } finally {
-  //     setOpenRemarks(false);
-  //     setLoading(false);
-  //   }
-  // }
-
-  const getStatusDetails = (status) => {
-    switch (status) {
-      case "ACCEPTED": return { color: "success", icon: <CheckCircle />, label: "Approved" };
-      case "REJECTED": return { color: "error", icon: <Block />, label: "Rejected" };
-      case "CANCELLED": return { color: "error", icon: <Cancel />, label: "Cancelled" };
-      default: return { color: "warning", icon: <PendingActions />, label: "Pending" };
-    }
-  };
-
-  const generateProps = (value) => {
-    let props = {};
-    switch (value) {
-      case "ADD": {
-        props = {
-          ...props,
-          icon: <AddBoxIcon />,
-          label: "Added",
-          color: "success"
-        }
-        break;
-      };
-      case "DELETE": {
-        props = {
-          ...props,
-          icon: <AutoDeleteIcon />,
-          label: "Deleted",
-          color: "error"
-        }
-        break;
-      }
-      case "STATUS": {
-        props = {
-          ...props,
-          icon: <ChangeCircleSharpIcon />,
-          label: "Status-change",
-          color: "info"
-        }
-        break;
-      }
-      case "UPDATE": {
-        props = {
-          ...props,
-          icon: <EditDocumentIcon />,
-          label: "Modified",
-          color: "warning"
-        }
-        break;
-      }
-
-      case "ROLLBACK": {
-        props = {
-          ...props,
-          icon: <RestoreIcon />,
-          label: "Rollback",
-          color: "success"
-        }
-        break;
-      }
-    }
-    return props;
-  }
-
-  const allColumns = useMemo(() => [
-    { field: "reportId", headerName: "Report Id", flex: 0.5 },
-    { field: "reportName", headerName: "Report Name", flex: 1.2 },
-    {
-      field: "changeType", headerName: "Request Type", flex: 0.6,
-      renderCell: (p) => (
-        <CustomChip
-        sx={{
-              width:105,
-              justifyContent:"flex-start",
-            }}
-          // icon={p.value === "ADD" ? <AddBoxIcon /> : p.value === "DELETE" ? <AutoDeleteIcon /> : <EditDocumentIcon />}
-          // label={p.value === "ADD" ? "Added" : p.value === "DELETE" ? "Deleted" : "Modified"}
-          // color={p.value === "ADD" ? "success" : p.value === "DELETE" ? "error" : "info"}
-          {...generateProps(p.value)}
-          size="small" variant="outlined"
-        />
-      ),
-    },
-    {
-      field: "reqStatus", headerName: "Status", flex: 0.8,
-      renderCell: (p) => {
-        const { color, icon, label } = getStatusDetails(p.value);
-        return <CustomChip icon={icon} size="small" color={color} label={label} variant="outlined" 
-        sx={{
-              width:105,
-              justifyContent:"flex-start",
-            }}/>;
       },
-    },
-    {
-      field: "reqDate", headerName: "Submitted Date", flex: 1,
-      renderCell: (p) => <Typography variant="body2">{timeStampFormatter(p.value)}</Typography>,
-    },
-    {
-      field: "actions", headerName: "Actions", flex: 0.5,
-      renderCell: (p) => (
-        <Stack direction="row" spacing={1} alignItems="center" justifyContent="flex-start">
-          <Tooltip title="View Request Details">
-            <IconButton color="primary" onClick={() => handleViewClick(p.row)}>
-              <Visibility />
-            </IconButton>
-            {/* <IconButton color="primary" onClick={() => handleViewClick(p.row)}>
-              <Visibility />
-            </IconButton> */}
-          </Tooltip>
-          {p.row.reqStatus === "PENDING" &&
-            <Tooltip title="Cancel Request">
-              <IconButton color="primary" onClick={() => { setOpenRemarks(true), setSelectedRequestId(p.row.id) }}>
-                <CancelRounded />
-              </IconButton>
-            </Tooltip>
-          }
-          {((p.row.changeType === "ADD" || p.row.changeType === "UPDATE") && (p.row.reqStatus === "PENDING" || p.row.reqStatus === "REJECTED")) &&
-            <Tooltip title="Modify Request">
-              {/* <IconButton color="primary" onClick={() => handleEditClick(p.row)}> */}
-              <IconButton color="primary" onClick={() => editHandler(p.row.id)}>
-                <EditSquare />
-              </IconButton>
-            </Tooltip>
-          }
-        </Stack>
-      ),
-    },
-  ], []);
+
+      {
+        field: "status",
+        headerName: "Status",
+        flex: 1,
+        minWidth: 200,
+        headerAlign: "center",
+        align: "center",
+        type: "singleSelect",
+        valueOptions: statusOptions,
+
+        // Sort logic: alphabetical by Label
+        sortComparator: (v1, v2) => {
+          const label1 = StageStatusConfig[v1]?.label || "";
+          const label2 = StageStatusConfig[v2]?.label || "";
+          return label1.localeCompare(label2);
+        },
+
+        renderHeader: () => (
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <AnalyticsIcon sx={{ mr: 0.5, fontSize: "1.1rem" }} />
+            <Typography variant="subtitle2" fontWeight="600">
+              Status
+            </Typography>
+          </Box>
+        ),
+
+        // Inline Chip Rendering (No separate component needed)
+        renderCell: (params) => {
+          const config = StageStatusConfig[params.value];
+          if (!config) return null;
+          const Icon = getIconComponent(config.icon);
+          return (
+            <CustomChip
+              icon={<Icon />}
+              label={config.label}
+              color={config.color}
+              variant="contained"
+              sx={{
+                maxWidth: "100%",
+              }}
+            />
+          );
+        },
+      },
+
+      {
+        field: "stageTitle",
+        headerName: "Stage",
+        flex: 1.5,
+        minWidth: 220,
+        headerAlign: "center",
+        align: "center",
+        sortable: false,
+        filterable: false,
+        disableColumnMenu: true,
+        renderHeader: () => (
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <ApprovalIcon sx={{ mr: 0.5 }} />
+            <Typography variant="subtitle1">Stage</Typography>
+          </Box>
+        ),
+        renderCell: (params) => {
+          const Icon = getIconComponent(params.row?.stageIcon);
+
+          return (
+            <CustomChip
+              label={params.row?.stageTitle}
+              icon={<Icon />}
+              variant="outlined"
+              sx={{
+                maxWidth: "100%",
+                overflow: "hidden",
+                textOverFlow: "ellipsis",
+              }}
+            />
+          );
+        },
+      },
+
+      {
+        field: "startTime",
+        headerName: "Started",
+        flex: 1,
+        minWidth: 200,
+        headerAlign: "center",
+        align: "center",
+        sortable: false,
+        filterable: false,
+        disableColumnMenu: true,
+        renderHeader: () => (
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <CalendarMonthIcon sx={{ mr: 0.5 }} />
+            <Typography variant="subtitle1">Started</Typography>
+          </Box>
+        ),
+        renderCell: (p) => (
+          <Typography
+            variant="body1"
+            component="span"
+            sx={{
+              fontSize: "0.9rem",
+            }}
+          >
+            {timeStampFormatter(p.value)}
+          </Typography>
+        ),
+      },
+
+      {
+        field: "endTime",
+        headerName: "Ended",
+        flex: 1,
+        minWidth: 200,
+        headerAlign: "center",
+        align: "center",
+        sortable: false,
+        filterable: false,
+        disableColumnMenu: true,
+        renderHeader: () => (
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <CalendarMonthIcon sx={{ mr: 0.5 }} />
+            <Typography variant="subtitle1">Ended</Typography>
+          </Box>
+        ),
+        renderCell: (p) => (
+          <Typography
+            variant="body1"
+            component="span"
+            sx={{
+              fontSize: "0.9rem",
+            }}
+          >
+            {timeStampFormatter(p.value) || "-"}
+          </Typography>
+        ),
+      },
+
+      {
+        field: "actions",
+        headerName: "Actions",
+        flex: 0.8,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        sortable: false,
+        filterable: false,
+        disableColumnMenu: true,
+        renderHeader: () => (
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <AppRegistrationIcon sx={{ mr: 0.5 }} />
+            <Typography variant="subtitle1">Actions</Typography>
+          </Box>
+        ),
+
+        renderCell: (params) => {
+          const row = params.row.raw;
+          const isLatest = params.row.isLatestRun;
+
+          const showRestart = isLatest && row.status !== StageStatus.STARTED;
+
+          const showStop = isLatest && row.status === StageStatus.STARTED;
+
+          const nonActionableProcess =
+            row.processId == 7 || row.processId == 12;
+
+          return (
+            <Stack
+              direction="row"
+              spacing={0.5}
+              alignItems="center"
+              justifyContent="center"
+              sx={{ height: "100%", width: "100%" }}
+            >
+              {(permissions.restart || permissions.start) &&
+                isCurrentDate &&
+                showRestart &&
+                !nonActionableProcess && (
+                  <Tooltip title="Restart">
+                    <IconButton
+                      size="small"
+                      onClick={() => actions.onStart(row)}
+                    >
+                      <RestartAltIcon />
+                    </IconButton>
+                  </Tooltip>
+                )}
+
+              {permissions.stop &&
+                isCurrentDate &&
+                showStop &&
+                !nonActionableProcess && (
+                  <Tooltip title="Stop">
+                    <IconButton
+                      size="small"
+                      onClick={() => actions.onStop(row)}
+                      sx={{ p: { xs: 0.5, md: 1 } }}
+                    >
+                      <StopIcon />
+                    </IconButton>
+                  </Tooltip>
+                )}
+
+              {permissions.view && (
+                <Tooltip title="View">
+                  <IconButton
+                    size="small"
+                    onClick={() => actions.onView(row)}
+                    sx={{ p: { xs: 0.5, md: 1 } }}
+                  >
+                    <VisibilityIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              {permissions.view && params.row.hasSummary && (
+                <Tooltip title="Summary">
+                  <IconButton
+                    size="small"
+                    onClick={() => actions.onSummary(row)}
+                    sx={{ p: { xs: 0.5, md: 1 } }}
+                  >
+                    <SummarizeOutlinedIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Stack>
+          );
+        },
+      },
+    ],
+    [
+      actions,
+      isCurrentDate,
+      permissions.restart,
+      permissions.start,
+      permissions.stop,
+      permissions.view,
+      statusOptions,
+    ],
+  );
+
+  const filteredColumns = useMemo(() => {
+    if (
+      permissions.start ||
+      permissions.stop ||
+      permissions.restart ||
+      permissions.view
+    ) {
+      return columns;
+    }
+    return columns.filter((c) => c.field !== "actions");
+  }, [columns, permissions]);
+
+  // Reset to page 0 whenever loading changes
+  useEffect(() => {
+    if (loading) {
+      setPaginationModel((prev) => ({
+        ...prev,
+        page: 0,
+      }));
+    }
+  }, [processes, loading]);
+
+  /* =====================================================
+     FINAL RENDER
+  ===================================================== */
 
   return (
-    <>
-      <Box>
-        <TemplateRequestAnalytics data={rows} />
+    <Box>
+      {/* Unified Card Container */}
+      <Card
+        sx={{
+          width: "100%",
+          boxShadow: 3,
+          bgcolor: "background.paper",
+          overflow: "hidden",
+        }}
+      >
         <DataGrid
-          rows={rows} columns={allColumns} loading={dataGridLoading} disableRowSelectionOnClick
+          rows={rows}
+          columns={filteredColumns}
+          loading={loading}
+          disableRowSelectionOnClick
           pageSizeOptions={[5, 10, 25, 50]}
-          initialState={{ pagination: { paginationModel: { pageSize: 5 } }, sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] } }}
-          getRowId={(row) => row.id} sx={styles.dataGrid}
+          paginationModel={paginationModel}
+          onPaginationModelChange={setPaginationModel}
+          initialState={{
+            pagination: { paginationModel: { pageSize: 5, page: 0 } },
+            sorting: { sortModel: [{ field: "startTime", sort: "desc" }] },
+          }}
+          getRowId={(p) => p.id}
+          sx={{
+            border: "none", // Removes outline to blend into card
+            "& .MuiDataGrid-columnHeaders": {
+              borderTop: "none",
+            },
+          }}
           slots={{
             noRowsOverlay: () => (
-              <Stack height="100%" alignItems="center" justifyContent="center">
-                <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-                <Typography variant="h6">No Requests Found</Typography>
-                <Typography variant="body2" color="text.secondary">You have not created any requests yet.</Typography>
+              <Stack
+                height="100%"
+                alignItems="center"
+                justifyContent="center"
+                spacing={1}
+              >
+                <InfoIcon
+                  sx={{
+                    fontSize: 48,
+                    color: "text.secondary",
+                  }}
+                />
+
+                <Typography variant="h6">No processes available</Typography>
+
+                <Typography variant="body2">
+                  Processes not found for the ETL date.
+                </Typography>
               </Stack>
             ),
           }}
         />
-
-        <ViewRequestDialog open={viewOpen} handleClose={() => { setViewOpen(false); setViewData(null); }} data={viewData} />
-        <RemarksDialog
-          open={openRemarks}
-          onClose={() => setOpenRemarks(false)}
-          onConfirm={handleCancelClick}
-          saving={loading}
-          title={"Cancel Request"}
-          submitLabel={"Cancel Request"}
-        />
-        {/* <CompareTemplateDialog open={compareOpen} requestId={selectedRequestId} onClose={() => { setCompareOpen(false); setSelectedRequestId(null); }} /> */}
-      </Box>
-      {/* <Dialog
-        open={edit}
-        onClose={() => { setEdit(false), setSelectedRequestId(null) }}
-        fullWidth
-        maxWidth="xl">
-        <DialogContent>
-          <ReportBuilderComponent
-            templateId={selectedTemplateId}
-            onBack={() => { setEdit(false), setSelectedRequestId(null) }}
-            modify={true}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => { setEdit(false), setSelectedRequestId(null) }}>Cancel</Button>
-        </DialogActions>
-      </Dialog> */}
-    </>
-  );
-}
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Box, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Typography, Button, Stack, Tooltip, IconButton, Divider } from "@mui/material";
-import InfoIcon from "@mui/icons-material/Info";
-import { DataGrid } from "@mui/x-data-grid";
-import { Check, Clear, Visibility } from "@mui/icons-material";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import RestoreIcon from "@mui/icons-material/Restore";
-import AccountCircleIcon from "@mui/icons-material/AccountCircle";
-import ChangeCircleSharpIcon from "@mui/icons-material/ChangeCircleSharp";
-import { useNavigate } from "react-router-dom";
-import { useSelector } from "react-redux";
-
-import useApi from "../../../../hooks/useApi";
-import useCustomSnackbar from "../../../../utils/useCustomSnackbar";
-import CustomChip from "../../../../utils/CustomChip";
-import { timeStampFormatter } from "../../../../utils/CommonUtilities";
-import LoadingOverlay from "../../../../utils/LoadingOverlay";
-
-import TemplateRequestAnalytics from "../analytics/TemplateRequestAnalytics";
-import ViewRequestDialog from "../dialogs/ViewRequestDialog";
-import CompareTemplateDialog from "../dialogs/CompareTemplate/CompareTemplateDialog";
-import { styles } from "../../TemplateRequestScreenStyles";
-
-const BASE_URL_CONFIG = "/TC/template-config"
-
-export default function PendingRequestsTab() {
-  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
-  const requestType = selectedMenuItem?.requestType || "";
-  const navigate = useNavigate();
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
-
-  const [loading, setLoading] = useState(false);
-  const [dataGridLoading, setDataGridLoading] = useState(true);
-  const [rows, setRows] = useState([]);
-  const [remarks, setRemarks] = useState("");
-
-  const [viewOpen, setViewOpen] = useState(false);
-  const [viewData, setViewData] = useState(null);
-  const [compareOpen, setCompareOpen] = useState(false);
-  const [selectedRequestId, setSelectedRequestId] = useState(null);
-
-  const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null, rowId: null });
-
-  const fetchData = useCallback(async () => {
-    if (!requestType) return;
-    try {
-      const response = await callApi(BASE_URL_CONFIG + "/template-requests/pending", null, "GET");
-      const result = response?.data || response || [];
-
-      const data = result.map((row) => ({
-        ...row,
-        ...(typeof row.summary === "object" ? row.summary : {}),
-      }));
-
-      setRows(data);
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error fetching data", "error");
-    } finally {
-      setRemarks("");
-      setDataGridLoading(false);
-      setConfirmDialog({ open: false, type: null, rowId: null });
-    }
-  }, [callApi, showSnackBar, requestType]);
-
-  useEffect(() => {
-    setRows([]);
-    setRemarks("");
-    setConfirmDialog({ open: false, type: null, rowId: null });
-    fetchData();
-  }, [fetchData, navigate]);
-
-  const handleConfirm = async () => {
-    if (confirmDialog.type === "reject" && remarks.trim().length < 5) {
-      showSnackBar("Please provide minimum 5 characters remarks before rejecting", "warning");
-      return;
-    }
-    setLoading(true);
-
-    try {
-      const payload = {
-        requestId: confirmDialog.rowId,
-        status: confirmDialog.type === "reject" ? "REJECTED" : "ACCEPTED",
-        remarks: confirmDialog.type === "reject" ? remarks.trim() : "No Remarks",
-      };
-
-      const res = await callApi(BASE_URL_CONFIG + "/template-requests/process", payload, "PATCH");
-      if (res?.success || res) {
-        showSnackBar(confirmDialog.type === "accept" ? "Request Approved" : "Request Rejected", "success");
-        fetchData();
-      } else {
-        showSnackBar("Failed to process request" + res?.message, "error");
-      }
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error while processing request", "error");
-    } finally {
-      closeConfirmDialog();
-      setLoading(false);
-    }
-  };
-
-  const generateProps = (value) => {
-    let props = {};
-    switch (value) {
-      case "ADD": {
-        props = {
-          ...props,
-          icon: <AddBoxIcon />,
-          label: "Added",
-          color: "success"
-        }
-        break;
-      };
-      case "DELETE": {
-        props = {
-          ...props,
-          icon: <AutoDeleteIcon />,
-          label: "Deleted",
-          color: "error"
-        }
-        break;
-      }
-      case "STATUS": {
-        props = {
-          ...props,
-          icon: <ChangeCircleSharpIcon />,
-          label: "Status-change",
-          color: "info"
-        }
-        break;
-      }
-      case "UPDATE": {
-        props = {
-          ...props,
-          icon: <EditDocumentIcon />,
-          label: "Modified",
-          color: "warning"
-        }
-        break;
-      }
-      case "ROLLBACK": {
-        props = {
-          ...props,
-          icon: <RestoreIcon />,
-          label: "Rollback",
-          color: "success"
-        }
-        break;
-      }
-    }
-    return props;
-  }
-
-  const handleViewClick = (data) => {
-    if (data.changeType === "UPDATE") {
-      setSelectedRequestId(data.id);
-      setCompareOpen(true);
-    } else {
-      setViewData(data);
-      setViewOpen(true);
-    }
-  };
-
-  const openConfirmDialog = (type, id) => setConfirmDialog({ open: true, type, rowId: id });
-  const closeConfirmDialog = () => setConfirmDialog({ open: false, type: null, rowId: null });
-
-  const allColumns = useMemo(() => [
-    { field: "reportId", headerName: "Report Id", flex: 0.5 },
-    { field: "reportName", headerName: "Report Name", flex: 1.2 },
-    {
-      field: "changeType", headerName: "Type", flex: 0.6,
-      renderCell: (p) => (
-        <CustomChip
-        sx={{
-              width:105,
-              justifyContent:"flex-start",
-            }}
-          {...generateProps(p.value)}
-          size="small" variant="outlined"
-        />
-      ),
-    },
-    {
-      field: "creatorId", headerName: "Creator", flex: 0.8,
-      renderCell: (p) => <CustomChip icon={<AccountCircleIcon />} size="small" color="info" label={p.value} variant="outlined" />,
-    },
-    {
-      field: "reqDate", headerName: "Date", flex: 1,
-      renderCell: (p) => <Typography variant="body1" component="span" sx={styles.requestDate}>{timeStampFormatter(p.value)}</Typography>,
-    },
-    {
-      field: "actions", headerName: "Actions", flex: 0.7,
-      renderCell: (p) => (
-        <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" style={styles.StackStyle}>
-          <Tooltip title="Approve">
-            <IconButton color="success" onClick={() => openConfirmDialog("accept", p.row.id)}><Check /></IconButton>
-          </Tooltip>
-          <Tooltip title="Reject">
-            <IconButton color="error" onClick={() => openConfirmDialog("reject", p.row.id)}><Clear /></IconButton>
-          </Tooltip>
-          <Tooltip title="View">
-            <IconButton onClick={() => handleViewClick(p.row)}><Visibility /></IconButton>
-          </Tooltip>
-        </Stack>
-      ),
-    },
-  ], []);
-
-  return (
-    <Box>
-      <TemplateRequestAnalytics data={rows} />
-      <DataGrid
-        rows={rows} columns={allColumns} loading={dataGridLoading} disableRowSelectionOnClick
-        pageSizeOptions={[5, 10, 25, 50]}
-        initialState={{ pagination: { paginationModel: { pageSize: 5 } }, sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] } }}
-        getRowId={(row) => row.id} sx={styles.dataGrid}
-        slots={{
-          noRowsOverlay: () => (
-            <Stack height="100%" alignItems="center" justifyContent="center">
-              <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-              <Typography variant="h6">No Pending Requests Found</Typography>
-              <Typography>All {selectedMenuItem.title} have been processed.</Typography>
-            </Stack>
-          ),
-        }}
-      />
-
-      <ViewRequestDialog open={viewOpen} handleClose={() => { setViewOpen(false); setViewData(null); }} data={viewData} />
-      <CompareTemplateDialog open={compareOpen} requestId={selectedRequestId} onClose={() => { setCompareOpen(false); setSelectedRequestId(null); }} />
-
-      <Dialog maxWidth="sm" fullWidth open={confirmDialog.open} onClose={closeConfirmDialog}>
-        <DialogTitle>{confirmDialog.type === "accept" ? "Confirm Approval" : "Confirm Rejection"}</DialogTitle>
-        <Divider />
-        <DialogContent>
-          <Typography mb={2}>{confirmDialog.type === "accept" ? "Are you sure you want to approve the request?" : "Please provide remarks to reject this request."}</Typography>
-          {confirmDialog.type === "reject" && (
-            <TextField
-              fullWidth label="Remarks" value={remarks} multiline rows={4}
-              onChange={(e) => setRemarks(e.target.value)} margin="dense"
-              slotProps={{ htmlInput: { maxLength: 200 } }}
-              helperText={remarks?.length !== 0 && remarks?.length < 5 ? "Enter at least 5 characters" : "Allowed 5-200 characters"}
-              error={remarks?.length !== 0 && remarks?.length < 5}
-            />
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeConfirmDialog} 
-            sx=
-          {{
-            "&:hover":
-            {
-              color:"#fff",
-            },
-            }}>Cancel</Button>
-          <Button variant="contained" onClick={handleConfirm} color={confirmDialog.type === "accept" ? "success" : "error"}>
-            {confirmDialog.type === "accept" ? "Approve" : "Reject"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-      <LoadingOverlay loading={loading} />
+      </Card>
     </Box>
   );
-}import React, { useState } from "react";
-import { Box, Tabs, Tab, Paper } from "@mui/material";
-import PendingRequestsTab from "./components/tabs/PendingRequestsTab";
-import MyRequestsTab from "./components/tabs/MyRequestsTab";
-import { styles } from "./TemplateRequestScreenStyles";
-import PendingActionsIcon from '@mui/icons-material/PendingActions';
-import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
-import PendingIcon from '@mui/icons-material/Pending';
-import { useOutletContext } from "react-router-dom";
-import ReportBuilderComponent from "../reportTemplateBuilder/ReportBuilder.component";
+};
 
-export default function TemplateRequestScreen() {
-  const [tabIndex, setTabIndex] = useState(0);
-  const [editingRequestId, setEditingRequestId] = useState(null);
-  const outletContext = useOutletContext();
-  const { setShowComponentTitle } = outletContext || {};
-  const handleTabChange = (event, newValue) => {
-    setTabIndex(newValue);
-  };
-
-  return (
-    // <Box sx={styles.container}>
-    <Paper
-        elevation={2}
-        sx={{
-          display:"flex",
-          flexDirection:"column",
-          borderRadius:2,
-          overflow:"hidden",
-          minHeight:"calc(100vh - 150px)",
-          width:"100%",
-        }}>
-    <Box sx={{...styles.container,
-      height: "calc(100vh - 120px)",
-      minHeight: 0,
-      boxSizing: "border-box",
-      overflow: "hidden",
-      display: "flex",
-      flexDirection: "column",
-    }}>
-      {/* <Paper sx={{ mb: 2, borderRadius: 1 }}> */}
-      {!editingRequestId &&
-        <Box sx={{
-          borderBottom: 1,
-          borderColor: "divider", 
-          // flexShrink: 0,
-          width: "100%",
-        }}>
-          <Tabs
-            value={tabIndex}
-            onChange={handleTabChange}
-            indicatorColor="primary"
-            textColor="primary"
-            variant="fullWidth"
-            sx={{
-              // px: 2,
-              pt: 0,
-              width: "100%",
-              // minHeight:48,
-              "& .MuiTab-root":{
-                // minHeight:48,
-                // fontWeight:"bold",
-                // textTransform:"none",
-                // fontSize:"0.95rem",
-                flex:1,
-                maxWidth: "none",
-              },
-
-              "& .MuiRab-indicator":{
-                height:2,
-              },
-
-              "& .MuiTabs-flexContainer": {
-                width: "100%",
-                // justifyContent: "space-between",
-
-              }
-            }}
-          >
-            <Tab
-              icon={<PendingActionsIcon />}
-              iconPosition="start"
-              label="Pending Requests" sx={{ fontWeight: 'bold', textTransform: 'none', fontSize: '0.95rem', minHeight: 48, px: 3 }} />
-            <Tab
-              icon={<AssignmentIndIcon />}
-              iconPosition="start"
-              label="My Requests" sx={{ fontWeight: 'bold', textTransform: 'none', fontSize: '0.95rem', minHeight: 48, px: 3 }} />
-          </Tabs>
-          {/* </Paper> */}
-
-          {/* Tab Panels */}
-          {tabIndex === 0 && <PendingRequestsTab />}
-          {tabIndex === 1 && <MyRequestsTab editHandler={setEditingRequestId} />}
-        </Box>
-      }
-      {editingRequestId &&
-        <Box sx={{ height: "100vh", bgcolor: "background.default" }}>
-          <ReportBuilderComponent
-            setShowComponentTitle={setShowComponentTitle}
-            id={editingRequestId}
-            onBack={() => setEditingRequestId(null)}
-            forModify={true}
-          />
-        </Box>
-      }
-    </Box>
-    </Paper>
-  );
-}
+export default ProcessStatusTable;
