@@ -1,203 +1,834 @@
-import AddIcon from "@mui/icons-material/Add";
+import React, { useState, useRef, useEffect } from "react";
+import dayjs from "dayjs";
 import {
   Box,
-  Chip,
-  DialogTitle,
-  Fab,
-  IconButton,
-  Stack,
-  Tabs,
+  Typography,
+  Paper,
   TextField,
+  Button,
+  CircularProgress,
+  Chip,
+  Alert,
+  Stack,
+  Stepper,
+  Step,
+  StepLabel,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
+  IconButton,
+  Tooltip,
+  Collapse,
+  Grid
 } from "@mui/material";
-import { styled } from "@mui/material/styles";
-import { DataGrid } from "@mui/x-data-grid";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-
-//branchmaster
-export const BoxStyle = styled(Box)(() => ({
-  borderBottom: 1,
-  borderColor: "divider",
-}));
-
-export const Box2Style = styled(Box)(() => ({
-  py: 2,
-}));
-
-export const TabsStyle = styled(Tabs)(() => ({
-  width: "100%",
-}));
-
-//branchmastertab
-
-export const Box1Style = styled(Box)(() => ({
-  display: "flex",
-  justifyContent: "center",
-  width: "100%",
-  height: "100%",
-}));
-
-export const ChipStyle = styled(Chip)(({ theme, row }) => ({
-  p: 0.5,
-  mt: 0.8,
-  width: "90%",
-  alignSelf: "center",
-  color: row.status ? theme.palette.success.main : theme.palette.error.main,
-  "& .MuiChip-icon": {
-    color: row.status ? theme.palette.success.main : theme.palette.error.main,
-  },
-}));
-
-export const StackStyle = styled(Stack)(() => ({
-  mt: 1.5,
-}));
-
-export const FabStyle = styled(Fab)(({ theme }) => ({
-  position: "fixed",
-  borderRadius: "8px",
-  fontSize: "15px",
-  bottom: theme.spacing(4),
-  right: theme.spacing(4),
-  zIndex: 1000,
-}));
-
-export const AddIconStyle = styled(AddIcon)(() => ({
-  mr: 1,
-}));
-
-export const DialogTitleStyle = styled(DialogTitle)(() => ({
-  m: 0,
-  p: 2,
-}));
-
-export const IconButtonStyle = styled(IconButton)(({ theme }) => ({
-  position: "absolute",
-  right: 8,
-  top: 8,
-  color: theme.palette.grey[500],
-}));
-
-export const DatePickerStyle = styled(DatePicker)(() => ({
-  width: 300,
-}));
-
-export const DatePicker1Style = styled(DatePicker)(() => ({
-  width: 400,
-}));
-
-export const TextFieldStyle = styled(TextField)(() => ({
-  width: 400,
-}));
-
-export const TextField1Style = styled(TextField)(() => ({
-  width: 550,
-}));
-
-//mybranchrequesttab
-
-export const Chip1Style = styled(Chip)(() => ({
-  p: 0.5,
-  m: 0,
-  width: "90%",
-}));
-
-export const DataGridStyle = styled(DataGrid)(() => ({}));
-import * as React from "react";
-import PropTypes from "prop-types";
-import Tab from "@mui/material/Tab";
-import Box from "@mui/material/Box";
-import BranchMasterTab1 from "./BranchMasterTab";
-import BranchMasterTab2 from "./MyBranchRequestsTab";
-import ConnectWithoutContactIcon from "@mui/icons-material/ConnectWithoutContact";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-
-import { Paper } from "@mui/material";
-
 import {
-  BoxStyle,
-  Box2Style,
-  TabsStyle
-} from "./BranchMasterStyle";
+  CloudUpload as CloudUploadIcon,
+  RestartAlt as RestartAltIcon,
+  Description as DescriptionIcon,
+  Send as SendIcon,
+  FileDownload as FileDownloadIcon,
+  ArrowBack as ArrowBackIcon,
+  Close as CloseIcon,
+  TaskAlt as TaskAltIcon,
+  KeyboardArrowUp,
+  KeyboardArrowDown
+} from "@mui/icons-material";
+import { alpha } from "@mui/material/styles";
 
-function CustomTabPanel(props) {
-  const { children, value, index, ...other } = props;
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
 
+import { jbuStyles } from "./VoucherBulkStyle";
+import { useSelector } from "react-redux";
+
+// --- STYLES ---
+const mainContainerStyle = { padding: 3, height: "100%", width: "100%" };
+const ALLOWED_FILE_TYPES = [".xlsx"];
+
+const mainSteps = ["Upload & Validate", "Preview & Submit"];
+const validationSteps = [
+  "Format Validation",
+  "Database Validation",
+  "Balance Validation",
+];
+
+const VoucherBulkUpload = ({ selectedVoucher, onBack, onReset, onSuccessSubmit }) => {
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  
+  const user = useSelector((state) => state.auth?.user || null);
+
+  const [activeStep, setActiveStep] = useState(0);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [file, setFile] = useState(null);
+  const fileInputRef = useRef(null);
+  const [requestId, setRequestId] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isDebouncing, setIsDebouncing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const [validationStage, setValidationStage] = useState(0);
+  const [resultStatus, setResultStatus] = useState(null);
+  const [resultMsg, setResultMsg] = useState("");
+  const [autoDlTriggered, setAutoDlTriggered] = useState(false);
+  const [downloadMsg, setDownloadMsg] = useState("Downloading error report...");
+  const [isErrorDownloaded, setIsErrorDownloaded] = useState(false);
+  const [previewRows, setPreviewRows] = useState([]);
+  const [totalRows, setTotalRows] = useState(0);
+
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
+  const [isCreatingBatch, setIsCreatingBatch] = useState(false);
+  const [batchCreated, setBatchCreated] = useState(false);
+  const [isDescExpanded, setIsDescExpanded] = useState(false);
+  const [isPageLoading, setIsPageLoading] = useState(true);
+  const [isEodRunning, setIsEodRunning] = useState(false);
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        setIsPageLoading(true);
+
+        // 1. Check EOD Status First
+        const eodResponse = await callApi("/JS/voucher/eod_status", null, "GET");
+        if (eodResponse && Array.isArray(eodResponse) && eodResponse.length > 0) {
+          if (eodResponse[0].eodStatus === 1) {
+            setIsEodRunning(true);
+            return; // Stop loading anything else, block the screen
+          }
+        }
+
+        // 2. Fetch the Official Posting Date
+        const dateResponse = await callApi("/JS/voucher/current-posting-date", null, "GET");
+        if (dateResponse) {
+          // Parse the YYYY-MM-DD date perfectly into DayJS for the calendar
+          const parsedDate = dayjs(dateResponse, "YYYY-MM-DD");
+          if (parsedDate.isValid()) {
+            setSelectedDate(parsedDate);
+          } else {
+            showSnackBar("Failed to parse official posting date.", "error");
+          }
+        } else {
+          showSnackBar("Failed to load official posting date.", "error");
+        }
+
+      } catch (error) {
+        console.error("Failed to fetch initial data:", error);
+      } finally {
+        setIsPageLoading(false);
+      }
+    };
+
+    fetchInitialData();
+  }, [callApi, showSnackBar]);
+
+
+  useEffect(() => {
+    const checkEodStatus = async () => {
+      try {
+        setIsPageLoading(true);
+        const eodResponse = await callApi("/JS/voucher/eod_status", null, "GET");
+
+        // The API returns an array: [{ "eodStatus": 0 }]
+        if (eodResponse && Array.isArray(eodResponse) && eodResponse.length > 0) {
+          if (eodResponse[0].eodStatus === 1) {
+            setIsEodRunning(true);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to check EOD status:", error);
+      } finally {
+        setIsPageLoading(false);
+      }
+    };
+
+    checkEodStatus();
+  }, [callApi]);
+
+  const triggerDebounce = () => {
+    setIsDebouncing(true);
+    setTimeout(() => {
+      setIsDebouncing(false);
+    }, 3000);
+  };
+
+  const validateAndSetFile = (selected) => {
+    if (!selected) return;
+    const fileName = selected.name.toLowerCase();
+    const fileSize = selected.size;
+
+    const isValidExt = ALLOWED_FILE_TYPES.some((ext) => fileName.endsWith(ext));
+
+    if (fileName.length > 100) {
+      showSnackBar(`File name is too long! Please rename it to be under 100 characters.`, "error");
+      clearInput();
+      return;
+    }
+
+    const MAX_SIZE_MB = 50;
+    if (fileSize > MAX_SIZE_MB * 1024 * 1024) {
+      showSnackBar(`File too large! Maximum allowed size is ${MAX_SIZE_MB}MB.`, "error");
+      clearInput();
+      return;
+    }
+
+    if (fileSize === 0) {
+      showSnackBar("The selected file is empty. Please upload a valid file.", "error");
+      clearInput();
+      return;
+    }
+
+
+
+    setFile(selected);
+    setResultStatus(null);
+    setResultMsg("");
+    setValidationStage(0);
+    setPreviewRows([]);
+    setTotalRows(0);
+    setRequestId(null);
+    setAutoDlTriggered(false);
+    setIsProcessing(false);
+    setIsErrorDownloaded(false);
+    setDownloadMsg("Downloading error report...");
+  };
+
+  const handleFileSelect = (e) => {
+    if (e.target.files[0]) {
+      validateAndSetFile(e.target.files[0]);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      validateAndSetFile(e.dataTransfer.files[0]);
+      e.dataTransfer.clearData();
+    }
+  };
+
+  const clearInput = () => {
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleClearFile = (e) => {
+    if (e) e.stopPropagation();
+    setFile(null);
+    clearInput();
+    setResultStatus(null);
+    setResultMsg("");
+    setValidationStage(0);
+    setIsProcessing(false);
+    setIsErrorDownloaded(false);
+    setBatchCreated(false);
+  };
+  const resetAll = () => {
+    setRequestId(null);
+    setResultStatus(null);
+    setValidationStage(0);
+    setResultMsg("");
+    setPreviewRows([]);
+    setTotalRows(0);
+    setIsProcessing(false);
+    setAutoDlTriggered(false);
+    setIsErrorDownloaded(false);
+    setBatchCreated(false);
+    setFile(null);
+    setPage(0);
+    setDownloadMsg("Downloading error report...");
+    clearInput();
+    if (onReset) onReset(); // Tells JournalPosting.jsx to go back to Step 0
+  };
+  const handleBackNavigation = () => {
+    if (onBack) onBack(); // Tells JournalPosting.jsx to go back to Step 1
+  };
+
+  const handleBack = () => {
+    setActiveStep(0);
+    setResultStatus(null);
+    setValidationStage(0);
+    setResultMsg("");
+    setIsProcessing(false);
+    setAutoDlTriggered(false);
+    setDownloadMsg("Downloading error report...");
+  };
+
+  const downloadFileHelper = async (url, filename) => {
+    try {
+      const response = await callApi(url, null, "GET", "blob", null, {}, false);
+      const blobData = response.data || response;
+      if (!blobData) throw new Error("Empty response data");
+
+      const blob = new Blob([blobData], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const link = document.createElement("a");
+      const objectUrl = window.URL.createObjectURL(blob);
+      link.href = objectUrl;
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+      return true;
+    } catch (e) {
+      showSnackBar("File download failed.", "error");
+      return false;
+    }
+  };
+
+  const handleDownloadTemplate = (e) => {
+    if (e) e.stopPropagation();
+    downloadFileHelper("/JS/voucher/download-template", "Voucher_Upload_Template.xlsx");
+  };
+
+ const handleDownloadFile = async (type, reqId = requestId) => {
+    if (type === "ERROR") showSnackBar("Downloading error report...", "info");
+    
+    const cleanTimestamp = dayjs().format("DD_MM_YYYY_HH_mm");
+    const targetFilename = type === "ERROR" ? `Error_Report_${cleanTimestamp}.xlsx` : "";
+
+    const success = await downloadFileHelper(
+      `/JS/voucher/download-bulk-file/${reqId}?type=${type}`,
+      targetFilename
+    );
+    
+    if (success && type === "SUCCESS") showSnackBar("Downloaded successfully.", "success");
+    if (success && type === "ERROR") {
+      setDownloadMsg("Error report downloaded.");
+      setIsErrorDownloaded(true);
+    }
+  };
+  const handleStartValidation = async () => {
+    if (!selectedDate || !selectedDate.isValid() || !file) {
+      showSnackBar("Please select a valid date and file.", "warning");
+      return;
+    }
+    triggerDebounce();
+    setResultStatus(null);
+    setResultMsg("");
+    setValidationStage(0);
+    setRequestId(null);     // FIX: Prevent the useEffect from polling the old ID
+    setIsProcessing(true);
+    setAutoDlTriggered(false);
+    setDownloadMsg("");
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("postingDate", selectedDate.format("DD/MM/YYYY"));
+
+
+    // Automatically appends the globally selected VID to your upload request payload context
+    if (selectedVoucher) {
+      formData.append("vid", selectedVoucher.VID || selectedVoucher.vid);
+    }
+
+    try {
+      const data = await callApi("/JS/voucher/bulk-validate-init", formData, "POST", "json", "multipart/form-data");
+      if (data && data.requestId) {
+        setRequestId(data.requestId);
+      } else {
+        throw new Error("Invalid response from server.");
+      }
+    } catch (error) {
+      setIsProcessing(false);
+      setResultStatus("ERROR");
+
+      // ROBUST EXTRACTION: Checks standard message, default Spring Boot 'error' field, raw strings, and Axios messages
+      const serverMsg = error?.response?.data?.message
+        || error?.response?.data?.error
+        || (typeof error?.response?.data === 'string' ? error.response.data : null)
+        || error?.message;
+
+      const errMsg = serverMsg || "Unable to initialize file validation. Please check your connection.";
+      setResultMsg(errMsg);
+    }
+  };
+
+  useEffect(() => {
+    let interval;
+    if (isProcessing && requestId) {
+      interval = setInterval(async () => {
+        try {
+          const res = await callApi(`/JS/voucher/bulk-status/${requestId}`, null, "GET");
+          if (!res) return;
+          if (res.totalRows) setTotalRows(res.totalRows);
+          if (res.status === "ERROR") {
+            setIsProcessing(false);
+            setResultStatus("ERROR");
+            setResultMsg(res.message);
+            setValidationStage(res.currentStage || 1);
+            clearInterval(interval);
+            showSnackBar(res.message, "error", 5000);
+            if (res.hasErrorFile && !autoDlTriggered) {
+              setAutoDlTriggered(true);
+              handleDownloadFile("ERROR", res.requestId);
+            }
+          } else if (res.status === "SUCCESS") {
+            setResultStatus("SUCCESS");
+            setValidationStage(4);
+            setTotalRows(res.totalRows);
+            clearInterval(interval);
+            setIsProcessing(false);
+
+            // ONLY advance to Step 3. Do not auto-submit to the backend yet!
+            if (onSuccessSubmit) {
+              onSuccessSubmit(res.requestId);
+            }
+          } else {
+            setValidationStage(res.currentStage);
+
+          }
+        } catch (e) { }
+      }, 800);
+    }
+    return () => clearInterval(interval);
+  }, [isProcessing, requestId, autoDlTriggered, callApi, showSnackBar]);
+
+  const handleChangePage = (event, newPage) => setPage(newPage);
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const visibleRows = previewRows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const isValidationStepFailed = (index) => {
+    return resultStatus === "ERROR" && index === validationStage - 1;
+  };
+  if (isPageLoading) {
+    return (
+      <Box sx={jbuStyles.loadingBox}>
+        <CircularProgress size={60} />
+      </Box>
+    );
+  }
+  const desc = selectedVoucher?.DESCRIPTION || selectedVoucher?.description || "No description provided.";
+  const isLongDesc = desc.length > 100 || desc.split(/\r?\n/).length > 2;
+
+
+
+  if (isEodRunning) {
+    return (
+      <Box sx={jbuStyles.eodBox}>
+        <Paper elevation={4} sx={jbuStyles.eodPaper}>
+          <Typography variant="h4" color="error" fontWeight="bold" gutterBottom>
+            EOD is Currently Running
+          </Typography>
+          <Typography variant="h6" color="text.secondary" sx={jbuStyles.eodSubtitle}>
+            Bulk Upload is temporarily disabled.
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={jbuStyles.eodText}>
+            Please wait until the End of Day process completes to upload new transactions.
+          </Typography>
+        </Paper>
+      </Box>
+    );
+  }
+
+  // --- ORIGINAL UI RENDER (Cleaned up without activeSteps) ---
   return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`simple-tabpanel-${index}`}
-      aria-labelledby={`simple-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box2Style>{children}</Box2Style>}
-    </div>
-  );
-}
+    <Box sx={mainContainerStyle}>
 
-CustomTabPanel.propTypes = {
-  children: PropTypes.node,
-  index: PropTypes.number.isRequired,
-  value: PropTypes.number.isRequired,
+
+      {/* 1. SCREEN TITLE ADDED HERE (Outside both cards) */}
+      <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.main" sx={{ mb: 2 }}>
+        Voucher Entry (Excel Upload)
+      </Typography>
+      {/* --- STANDARDIZED HORIZONTAL SELECTION HEADER --- */}
+      {selectedVoucher && (
+        <Paper elevation={0} sx={jbuStyles.svPaper}>
+          <Box sx={jbuStyles.svHeaderBox}>
+            <Typography variant="subtitle1" fontWeight="bold" color="text.primary">
+              Voucher Request Details
+            </Typography>
+          </Box>
+
+          <Grid container>
+            <Grid item sx={jbuStyles.svGridItem} size={12}>
+              <Stack direction="row" spacing={10}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>VID</Typography>
+                  <Typography variant="body1" fontWeight="bold" color="primary">{selectedVoucher.VID || selectedVoucher.vid}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Category</Typography>
+                  <Typography variant="body1" fontWeight="500">{selectedVoucher.categoryName || "General"}</Typography>
+                </Box>                <Box>
+                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Issue Categories</Typography>
+                  <Box>
+                    {selectedVoucher.issueCategories ? selectedVoucher.issueCategories.split(",").map((cat, index) => (
+                      <Chip key={index} label={cat.trim()} size="small" sx={jbuStyles.issueCategoryChip} />
+                    )) : <Typography variant="body2" color="text.secondary">N/A</Typography>}
+                  </Box>
+                </Box>
+              </Stack>
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                Description
+              </Typography>
+
+              <Box sx={{ position: "relative" }}>
+                {/* collapsedSize={44} perfectly frames about 2 lines of body2 text */}
+                <Collapse in={!isLongDesc || isDescExpanded} collapsedSize={20}>
+                  <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "break-word", lineHeight: 1.6, fontWeight: 400, color: "text.primary" }}>
+                    {desc}
+                  </Typography>
+                </Collapse>
+
+                {isLongDesc && (
+                  <Box sx={{ display: "flex", justifyContent: "flex-start", mt: 0.5 }}>
+                    <Button
+                      size="small"
+                      disableRipple
+                      onClick={() => setIsDescExpanded(!isDescExpanded)}
+                      endIcon={isDescExpanded ? <KeyboardArrowUp /> : <KeyboardArrowDown />}
+                      sx={{
+                        p: 0,
+                        minWidth: "auto",
+                        textTransform: "none",
+                        fontWeight: 600,
+                        color: "primary.main",
+                        "&:hover": { background: "transparent", textDecoration: "underline" }
+                      }}
+                    >
+                      {isDescExpanded ? "Read Less" : "Read More"}
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
+      )}
+
+      <Paper elevation={1} sx={jbuStyles.controlPanel}>
+        <Box sx={jbuStyles.dynamicWrapper(resultStatus === "ERROR", isProcessing || isCreatingBatch)}>
+          <Box sx={jbuStyles.uploadBox(isDragging, resultStatus === "ERROR")} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+            <Box sx={jbuStyles.templateSection} onClick={(e) => e.stopPropagation()}>
+              <Typography variant="caption" sx={jbuStyles.templateCaption}>
+                Need assistance? Download the template (.xlsx)
+              </Typography>
+              <Button variant="outlined" size="small" startIcon={<FileDownloadIcon />} onClick={handleDownloadTemplate} sx={jbuStyles.templateBtn}>
+                Download Template
+              </Button>
+            </Box>
+            <Box sx={jbuStyles.boxCenter}>
+              <Box sx={{ position: "relative", textAlign: "center" }}>
+                <CloudUploadIcon sx={jbuStyles.uploadIcon} />
+                <Typography sx={jbuStyles.headerText}>
+                  {file ? file.name : (isDragging ? "Drop file now" : "Drag or Browse the File")}
+                </Typography>
+                {!file && (
+                  <Typography sx={jbuStyles.subText}>
+                    Supported file formats: {ALLOWED_FILE_TYPES.join(", ")} (Maximum Size: 50MB)
+                  </Typography>
+                )}
+
+                {/* 1. RESTORED: The "Remove File" (X) button is back! */}
+                {file && (
+                  <Tooltip title="Remove File">
+                    <IconButton size="small" onClick={handleClearFile} sx={jbuStyles.clearFileBtn}>
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
+            </Box>
+
+
+            <Box sx={jbuStyles.browseBtnWrapper} onClick={(e) => e.stopPropagation()}>
+
+              {/* Browse File Button Column */}
+
+              {!file && (
+                <Box>
+                  <input
+                    type="file"
+                    hidden
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    onClick={(e) => (e.target.value = null)}
+                    accept={ALLOWED_FILE_TYPES.join(",")}
+                  />
+                  <Button sx={jbuStyles.customBtn} variant="contained" onClick={() => fileInputRef.current.click()} disabled={isProcessing || isCreatingBatch}>
+                    Browse File
+                  </Button>
+                </Box>
+              )}
+            </Box>
+
+          </Box>
+
+          {(isProcessing || resultStatus) && (
+            <Box sx={jbuStyles.stepperBox}>
+              <Stepper activeStep={validationStage - 1} alternativeLabel>
+                {validationSteps.map((label, index) => {
+                  const labelProps = {};
+                  if (isValidationStepFailed(index)) {
+                    labelProps.optional = <Typography variant="caption" color="error">Failed</Typography>;
+                    labelProps.error = true;
+                  }
+                  return (
+                    <Step key={label}>
+                      <StepLabel {...labelProps}>{label}</StepLabel>
+                    </Step>
+                  );
+                })}
+              </Stepper>    
+            </Box>
+          )}
+
+          {resultStatus === "ERROR" && (
+            <Alert severity="error" sx={jbuStyles.errorAlert}>
+              <Typography variant="body1" fontWeight="500">
+                {resultMsg} {downloadMsg ? `— ${downloadMsg}` : ""}
+              </Typography>
+            </Alert>
+          )}
+
+          {batchCreated && (
+            <Alert severity="success" sx={jbuStyles.successAlert}>
+              <Typography variant="body1" fontWeight="bold">Batch Successfully Validated and Prepared!</Typography>
+              <Typography variant="body2">Total valid records processed: <strong>{totalRows.toLocaleString()}</strong>.</Typography>
+            </Alert>
+          )}
+
+          <Grid container sx={jbuStyles.bottomGrid}>
+            <Grid item size={2}>
+              <Button startIcon={<ArrowBackIcon />} onClick={handleBackNavigation} variant="outlined" size="small">
+                Previous
+              </Button>
+            </Grid>
+            {/* <Stack direction="row" sx={{ ...actionButtonsContainer, alignItems: "center" }}> */}
+            <Grid item sx={jbuStyles.bottomBtnBox} size={8}>
+
+
+              {!batchCreated && (
+                <Button
+                  variant="contained"
+                  size="large"
+                  onClick={handleStartValidation}
+                  disabled={!file || !selectedDate || isDebouncing || isProcessing || isCreatingBatch || isErrorDownloaded}
+                  startIcon={(isProcessing || isCreatingBatch) ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
+                >
+                  {isProcessing ? "Validating..." : isCreatingBatch ? "Preparing Batch..." : "Validate"}
+                </Button>
+              )}
+
+              {batchCreated && (
+                <Tooltip title="Clear and Upload New File" placement="top">
+                  <IconButton onClick={resetAll} color="primary" size="large" sx={jbuStyles.restartBtn}>
+                    <RestartAltIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {/* </Stack> */}
+            </Grid>
+          </Grid>
+        </Box>
+      </Paper>
+    </Box>
+  );
 };
 
-function a11yProps(index) {
-  return {
-    id: `simple-tab-${index}`,
-    "aria-controls": `simple-tabpanel-${index}`,
-  };
-}
+export default VoucherBulkUpload;import { Margin } from "@mui/icons-material";
+import { alpha } from "@mui/material/styles";
+import { size } from "zod";
 
-export default function BranchMaster() {
-  const [value, setValue] = React.useState(0);
+// --- Main Containers ---
+export const mainContainerStyle = {
+  padding: 3,
+  height: "100%",
+  width: "100%",
+};
 
-  const handleChange = (event, newValue) => {
-    setValue(newValue);
-  };
+export const loadingContainerStyle = {
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  height: "60vh",
+  width: "100%",
+};
 
-  return (
-     <Paper
-    elevation={2}
-    sx={{
-      display:"flex",
-      flexDirection:"column",
-      borderRadius:2,
-      overflow:"hidden",
-      minHeight:"calc(100vh - 210px)",
-      width:"100%",
-    }}>
-    <Box>
-     
-      <BoxStyle
-        
-      >
-        <TabsStyle
-          value={value}
-          onChange={handleChange}
-          aria-label="basic tabs example"
-          variant="fullWidth"
-        >
-          <Tab
-            label="Branches"
-            icon={<ConnectWithoutContactIcon />}
-            iconPosition="start"
-            {...a11yProps(0)}
-          />
-          <Tab
-            icon={<PendingActionsIcon />}
-            iconPosition="start"
-            label="My Requests"
-            {...a11yProps(1)}
-          />
-        </TabsStyle>
-      </BoxStyle>
-      <CustomTabPanel value={value} index={0}>
-        <BranchMasterTab1 />
-      </CustomTabPanel>
-      <CustomTabPanel value={value} index={1}>
-        <BranchMasterTab2 />
-      </CustomTabPanel>
+export const stickyBoxStyle = {
+  position: "sticky",
+  top: 0,
+  zIndex: 2,
+  backgroundColor: "background.paper",
+  paddingBottom: 1,
+  marginBottom: 2,
+};
 
-    </Box>
-          </Paper>
-  );
-}
+// --- DataGrid Styles ---
+export const dataGridContainerStyle = {
+ 
+};
+
+// --- Table Styles ---
+export const tableContainerStyle = {
+  marginTop: 2,
+  borderRadius: 2,
+  border: "1px solid",
+  borderColor: "divider",
+  overflow: "auto",
+  maxHeight: 440, // often useful for sticky headers
+};
+
+export const stickyColumnCell = {
+  position: "sticky",
+  right: 0,
+  backgroundColor: "background.paper",
+  zIndex: 1,
+  boxShadow: "-2px 0px 5px rgba(0,0,0,0.05)",
+};
+
+export const dialogTitleStyle = {
+  m: 0,
+  p: 2,
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+};
+
+export const dialogActionsStyle = {
+  padding: 2,
+  display: "flex",
+  gap: 1,
+  justifyContent: "flex-end",
+};
+
+export const dialogContentStyle = {
+  paddingTop: "20px !important",
+};
+
+export const filterContainerStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 2,
+  flexWrap: "wrap",
+  gap: 2,
+};
+
+export const searchFieldStyle = {
+  minWidth: "250px",
+  "& .MuiOutlinedInput-root": {
+    borderRadius: "8px",
+  },
+};
+
+
+export const controlPanelStyle = {
+  padding: "2%",
+};
+
+export const uploadBoxStyle = {
+  // border: "soild",
+  display: "grid",
+  justifyContent: "center",
+  border: "2px dashed #9b78c7",
+  padding: "3% 0% 5% 0%",
+};
+
+export const headerTextStyle = {
+  textAlign: "center",
+};
+
+export const iconStyle = {
+  fontSize: "6rem",
+  margin: "1% 0% 1% 30% ",
+};
+
+export const dateinputfield = {
+  display: "flex",
+  justifyContent: "center",
+};
+export const subTextStyle = {
+  display: "flex",
+  justifyContent: "center",
+};
+
+
+
+
+export const jbuStyles = {
+  // 1. Loading & EOD Screen
+  loadingBox: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' },
+  eodBox: { display: 'flex', justifyContent: 'center', alignItems: 'top', height: '25vh', p: 3 },
+  eodPaper: { p: 6, textAlign: 'center', borderRadius: 4 },
+  eodSubtitle: { mt: 2 },
+  eodText: { mt: 1 },
+
+  // 2. Selected Voucher Details Card
+  svPaper: { p: 3, mb: 4, borderRadius: 1, border: "1px solid", borderColor: "divider" },
+  svHeaderBox: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: "1px solid", borderColor: "divider", pb: 1, mb: 2 },
+  svGridItem: { mb: 2 },
+  svDescription: { whiteSpace: "pre-wrap", lineHeight: 1.6, fontWeight: 300 },
+
+  // 3. Main Control Panel
+  controlPanel: { padding: "30px", marginBottom: "20px", borderRadius: "12px", backgroundColor: "background.paper", boxShadow: 2 },
+  dynamicWrapper: (isError, isProcessing) => ({
+    borderColor: isError ? "error.main" : "primary.main",
+    opacity: isProcessing ? 0.6 : 1,
+  }),
+
+  // 4. Drag & Drop Upload Box
+  uploadBox: (isDragging, isError) => ({
+    position: "relative", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center",
+    border: 2, borderStyle: "dashed", borderRadius: "12px", padding: "60px 40px 40px 40px", cursor: "default",
+    minHeight: "250px", transition: "all 0.3s ease",
+    borderColor: isDragging ? "secondary.main" : (isError ? "error.main" : "primary.main"),
+    backgroundColor: (theme) => isDragging ? alpha(theme.palette.primary.main, 0.12) : alpha(theme.palette.primary.main, 0.02),
+    transform: isDragging ? "scale(1.01)" : "scale(1)",
+    "&:hover": { backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.08), borderColor: "primary.dark" }
+  }),
+  
+  // 5. Upload Box Inner Elements
+  templateSection: { position: "absolute", top: 15, right: 20, textAlign: "right", zIndex: 10 },
+  templateCaption: { display: "block", color: "text.secondary", fontWeight: 500, mb: 0.5 },
+  templateBtn: { borderRadius: "8px", textTransform: "none" },
+  boxCenter: { display: "flex", justifyContent: "center", alignItems: "center", flexDirection: "column", width: "100%" },
+  uploadInnerBox: { position: "relative", textAlign: "center" },
+  uploadIcon: { fontSize: "6rem", color: "primary.main", mb: 1 },
+  headerText: { fontWeight: 600, fontSize: "1.2rem", textAlign: "center", color: "text.primary", mb: 1 },
+  subText: { color: "text.secondary", fontSize: "0.85rem", textAlign: "center", marginBottom: "25px" },
+  clearFileBtn: { position: "absolute", top: -10, right: -40, bgcolor: "background.paper", "&:hover": { bgcolor: "error.light", color: "white" } },
+
+  // 6. Action Buttons
+  browseBtnWrapper: { display: "flex", justifyContent: "center", alignItems: "center", width: "100%", flexDirection: "row", mt: 2 },
+  customBtn: { background: (theme) => alpha(theme.palette.primary.main, 0.8), boxShadow: "none", color: (theme) => theme.palette.primary.contrastText || "#fff", padding: "8px 40px", "&:hover": { background: (theme) => alpha(theme.palette.primary.main, 1) } },
+
+  // 7. Validation Stepper & Alerts
+  stepperBox: { mt: 4, mb: 2 },
+  errorAlert: { mt: 3, mx: "auto", maxWidth: "100%", backgroundColor: "#fff5f5", alignItems: "center" },
+  successAlert: { mt: 3, mx: "auto", maxWidth: "100%", backgroundColor: "transparent", '& .MuiAlert-message': { width: '100%' } },
+
+  // 8. Bottom Navigation
+  bottomGrid: { mt: 1, mb: 1 },
+  bottomBtnBox: { display: 'flex', justifyContent: 'center' },
+  restartBtn: { ml: 1, border: '1px solid', borderColor: 'primary.main', bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05), '&:hover': { bgcolor: (theme) => alpha(theme.palette.primary.main, 0.15) } },
+  issueCategoryChip: {
+    backgroundColor: "primary.light",
+    size: "small",
+    mr: "8px", mb: "5px"
+  },
+};
