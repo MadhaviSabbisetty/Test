@@ -1,492 +1,453 @@
-import { DataGrid } from "@mui/x-data-grid";
 import {
   Box,
-  Card,
-  IconButton,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Stack,
-  Tooltip,
   Typography,
+  Tooltip,
+  IconButton,
+  Paper,
 } from "@mui/material";
-import InfoIcon from "@mui/icons-material/Info";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
-import StopIcon from "@mui/icons-material/Stop";
+import { DataGrid } from "@mui/x-data-grid";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import useApi from "../../hooks/useApi";
+import CancelIcon from "@mui/icons-material/Cancel";
 import VisibilityIcon from "@mui/icons-material/Visibility";
-import SummarizeOutlinedIcon from "@mui/icons-material/SummarizeOutlined";
-import TableRowsIcon from "@mui/icons-material/TableRows";
-import MemoryIcon from "@mui/icons-material/Memory";
-import AnalyticsIcon from "@mui/icons-material/Analytics";
-import ApprovalIcon from "@mui/icons-material/Approval";
-import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
-import AppRegistrationIcon from "@mui/icons-material/AppRegistration";
-import { StageStatus, StageStatusConfig } from "../util/StageStatus";
-import { useEffect, useMemo, useState } from "react";
-import { timeStampFormatter } from "../../../utils/CommonUtilities";
-import CustomChip from "../../../utils/CustomChip";
-import { getIconComponent } from "../../../utils/IconUtils";
+import AddBoxIcon from "@mui/icons-material/AddBox";
+import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
+import EditDocumentIcon from "@mui/icons-material/EditDocument";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import GppBadIcon from "@mui/icons-material/GppBad";
+import SecurityIcon from "@mui/icons-material/Security";
+import {
+  timeStampFormatter,
+  toPascalKebabCase,
+} from "../../utils/CommonUtilities";
+import CustomChip from "../../utils/CustomChip";
+import InfoIcon from "@mui/icons-material/Info";
+import RoleRequestView from "./components/RoleRequestView";
 
-/* =====================================================
-   MAIN COMPONENT
-===================================================== */
-
-const ProcessStatusTable = ({
-  processes = [],
-  isCurrentDate,
-  actions,
-  loading,
-  permissions = {},
-}) => {
-  const SUMMARY_STAGES = new Set([
-    "cntr_summary_calculated",
-    "intr_summary_calculated",
-    "balance_Compare_generated",
-  ]);
-
-  const [paginationModel, setPaginationModel] = useState({
-    page: 0,
-    pageSize: 5,
-  });
-
-  /* =====================================================
-     FIND LATEST RUN FOR EACH PROCESS
-  ===================================================== */
-
-  const latestRunMap = useMemo(() => {
-    const map = new Map();
-
-    processes.forEach((p) => {
-      const type = p.processType;
-      const runId = Number(p.runId) || 0;
-
-      if (!map.has(type) || runId > map.get(type)) {
-        map.set(type, runId);
-      }
-    });
-
-    return map;
-  }, [processes]);
-
-  /* =====================================================
-     ROWS
-  ===================================================== */
-
-  const rows = useMemo(() => {
-    return processes
-      .map((p) => {
-        const lastStage = p.stages?.at(-1);
-
-        const runId = Number(p.runId) || 1;
-        const latestRunId = latestRunMap.get(p.processType);
-
-        const isLatestRun = runId === latestRunId;
-
-        const hasSummary =
-          p.processId === 3 &&
-          p.stages?.some(
-            (s) =>
-              s.stageStatus === StageStatus.COMPLETED &&
-              SUMMARY_STAGES.has(s.stageId),
-          );
-
-        return {
-          id: `${p.processType}_${p.processId}_${runId}`, // UNIQUE KEY
-
-          processId: p.processId,
-          processRunId: p.processRunId,
-          processType: p.processType,
-
-          runId,
-          isLatestRun,
-
-          status: p.status,
-
-          stageTitle: lastStage?.stageTitle ?? "Unknown",
-          stageIcon: lastStage?.stageIcon ?? "AccessTime",
-
-          startTime: p.processStartTime,
-          endTime: p.processEndTime,
-
-          hasSummary,
-
-          raw: p,
-        };
-      })
-      .sort((a, b) => {
-        // Convert to Date objects to compare (handles ISO strings, timestamps, etc.)
-        const dateA = new Date(a.startTime);
-        const dateB = new Date(b.startTime);
-
-        // Sort Descending (latest date first)
-        return dateB - dateA;
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [processes, latestRunMap]);
-
-  const statusOptions = Object.entries(StageStatusConfig).map(
-    ([value, details]) => ({
-      value: Number(value),
-      label: details.label,
-    }),
+function CustomNoRowsOverlay() {
+  return (
+    <Stack height="100%" alignItems="center" justifyContent="center">
+      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+      <Typography variant="h6">No Role Requests Found</Typography>
+      <Typography>You have not created any Role requests.</Typography>
+    </Stack>
   );
+}
 
-  /* =====================================================
-     COLUMNS
-  ===================================================== */
+export default function RoleManagementTab2({ permissions = {} }) {
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  const [isLoading, setIsLoading] = useState(true);
+  const [rows, setRows] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState(false);
+  const [requestId, setRequestId] = useState(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewData, setViewData] = useState(null);
+  const [roleAccessList, setRoleAccessList] = useState([]);
+
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await callApi("/UM/role/my-role-requests", null, "GET");
+      if (response?.result) {
+        const result = response?.result?.myRequests || [];
+
+        const processedResult = result.map((row, index) => {
+          let parsed = {};
+          try {
+            if (row.requestPayload) {
+              parsed = JSON.parse(row.requestPayload);
+            }
+          } catch (e) {
+            console.error("Failed to parse requestPayload", e);
+          }
+
+          return {
+            ...row,
+            ...parsed,
+            gridRowId: row.requestId || `fallback-id-${Date.now()}-${index}`,
+          };
+        });
+        setRows(processedResult);
+      } else {
+        showSnackBar("No requests found", "warning");
+        setRows([]);
+      }
+    } catch (error) {
+      console.error("Something went wrong", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [callApi, showSnackBar]);
+
+  const fetchRoleAccessList = useCallback(async () => {
+    try {
+      const response = await callApi(
+        "/UM/role/get-role-access-list",
+        {},
+        "GET",
+      );
+      const list = response?.result?.roleAccessList ?? [];
+      setRoleAccessList(list);
+    } catch (error) {
+      console.error("Something went wrong", error);
+      setRoleAccessList([]);
+    }
+  }, [callApi]);
+
+  useEffect(() => {
+    fetchData();
+    fetchRoleAccessList();
+  }, [fetchData, fetchRoleAccessList]);
+
+  const handleCancelRequest = async () => {
+    try {
+      const payload = {
+        requestId,
+        actionFlag: "CANCEL",
+        remarks: "User canceled this Request",
+      };
+      const response = await callApi(
+        "/UM/role/cancel-role-request",
+        payload,
+        "POST",
+      );
+      if (response?.result?.status) {
+        showSnackBar(
+          `Request Id ${requestId} Cancelled Successfully.`,
+          "success",
+        );
+      } else {
+        showSnackBar(
+          response?.message
+            ? response?.message
+            : "Failed to process your cancel request, Kindly try again",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      fetchData();
+      setConfirmDialog(false);
+    }
+  };
+
+  const handleViewClick = useCallback(
+    (data) => {
+      // Fix: robust string match
+      const access = roleAccessList?.find(
+        (item) =>
+          String(item.accessFlag).trim() === String(data.roleAccess).trim(),
+      );
+      const newData = { ...data, ...access };
+      setViewData(newData);
+      setViewOpen(true);
+    },
+    [roleAccessList],
+  );
 
   const columns = useMemo(
     () => [
       {
-        field: "processType",
-        flex: 1.5,
-        minWidth: 250,
-        renderHeader: () => (
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <MemoryIcon sx={{ mr: 0.5 }} />
-            <Typography variant="subtitle1">Process Name</Typography>
-          </Box>
-        ),
-        renderCell: (params) => {
-          const name = params.row.processType;
-          const runId = params.row.runId;
-
-          /* ordinal helper */
-          const getOrdinal = (n) => {
-            const s = ["th", "st", "nd", "rd"];
-            const v = n % 100;
-            return n + (s[(v - 20) % 10] || s[v] || s[0]);
-          };
-
-          return (
-            <Typography variant="body1" component="span">
-              {runId > 1 ? `${name} (${getOrdinal(runId)} run)` : name}
-            </Typography>
-          );
-        },
-      },
-
-      {
-        field: "status",
-        headerName: "Status",
-        flex: 1,
-        minWidth: 200,
-        headerAlign: "center",
-        align: "center",
-        type: "singleSelect",
-        valueOptions: statusOptions,
-
-        // Sort logic: alphabetical by Label
-        sortComparator: (v1, v2) => {
-          const label1 = StageStatusConfig[v1]?.label || "";
-          const label2 = StageStatusConfig[v2]?.label || "";
-          return label1.localeCompare(label2);
-        },
-
-        renderHeader: () => (
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <AnalyticsIcon sx={{ mr: 0.5, fontSize: "1.1rem" }} />
-            <Typography variant="subtitle2" fontWeight="600">
-              Status
-            </Typography>
-          </Box>
-        ),
-
-        // Inline Chip Rendering (No separate component needed)
-        renderCell: (params) => {
-          const config = StageStatusConfig[params.value];
-          if (!config) return null;
-          const Icon = getIconComponent(config.icon);
-          return (
-            <CustomChip
-              icon={<Icon />}
-              label={config.label}
-              color={config.color}
-              variant="contained"
-              sx={{
-                maxWidth: "100%",
-              }}
-            />
-          );
-        },
-      },
-
-      {
-        field: "stageTitle",
-        headerName: "Stage",
-        flex: 1.5,
-        minWidth: 220,
-        headerAlign: "center",
-        align: "center",
-        sortable: false,
-        filterable: false,
-        disableColumnMenu: true,
-        renderHeader: () => (
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <ApprovalIcon sx={{ mr: 0.5 }} />
-            <Typography variant="subtitle1">Stage</Typography>
-          </Box>
-        ),
-        renderCell: (params) => {
-          const Icon = getIconComponent(params.row?.stageIcon);
-
-          return (
-            <CustomChip
-              label={params.row?.stageTitle}
-              icon={<Icon />}
-              variant="outlined"
-              sx={{
-                maxWidth: "100%",
-                overflow: "hidden",
-                textOverFlow: "ellipsis",
-              }}
-            />
-          );
-        },
-      },
-
-      {
-        field: "startTime",
-        headerName: "Started",
-        flex: 1,
-        minWidth: 200,
-        headerAlign: "center",
-        align: "center",
-        sortable: false,
-        filterable: false,
-        disableColumnMenu: true,
-        renderHeader: () => (
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <CalendarMonthIcon sx={{ mr: 0.5 }} />
-            <Typography variant="subtitle1">Started</Typography>
-          </Box>
-        ),
-        renderCell: (p) => (
-          <Typography
-            variant="body1"
-            component="span"
-            sx={{
-              fontSize: "0.9rem",
-            }}
-          >
-            {timeStampFormatter(p.value)}
-          </Typography>
-        ),
-      },
-
-      {
-        field: "endTime",
-        headerName: "Ended",
-        flex: 1,
-        minWidth: 200,
-        headerAlign: "center",
-        align: "center",
-        sortable: false,
-        filterable: false,
-        disableColumnMenu: true,
-        renderHeader: () => (
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <CalendarMonthIcon sx={{ mr: 0.5 }} />
-            <Typography variant="subtitle1">Ended</Typography>
-          </Box>
-        ),
-        renderCell: (p) => (
-          <Typography
-            variant="body1"
-            component="span"
-            sx={{
-              fontSize: "0.9rem",
-            }}
-          >
-            {timeStampFormatter(p.value) || "-"}
-          </Typography>
-        ),
-      },
-
-      {
-        field: "actions",
-        headerName: "Actions",
-        flex: 0.8,
+        field: "requestId",
+        headerName: "Request Id",
+        flex: 0.5,
         minWidth: 150,
+      },
+      { field: "roleName", headerName: "Role Name", flex: 0.7, minWidth: 150 },
+      {
+        field: "description",
+        headerName: "Role Description",
+        flex: 1.5,
+        minWidth: 200,
+      },
+      {
+        field: "roleAccess",
+        headerName: "Access Level",
+        flex: 0.7,
         headerAlign: "center",
         align: "center",
-        sortable: false,
+        sortable: true,
         filterable: false,
         disableColumnMenu: true,
-        renderHeader: () => (
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <AppRegistrationIcon sx={{ mr: 0.5 }} />
-            <Typography variant="subtitle1">Actions</Typography>
-          </Box>
-        ),
-
         renderCell: (params) => {
-          const row = params.row.raw;
-          const isLatest = params.row.isLatestRun;
-
-          const showRestart = isLatest && row.status !== StageStatus.STARTED;
-
-          const showStop = isLatest && row.status === StageStatus.STARTED;
-
-          const nonActionableProcess =
-            row.processId == 7 || row.processId == 12;
+          // Fix: robust string match
+          const access = roleAccessList?.find(
+            (item) =>
+              String(item.accessFlag).trim() ===
+              String(params.row.roleAccess).trim(),
+          );
 
           return (
-            <Stack
-              direction="row"
-              spacing={0.5}
-              alignItems="center"
-              justifyContent="center"
-              sx={{ height: "100%", width: "100%" }}
-            >
-              {(permissions.restart || permissions.start) &&
-                isCurrentDate &&
-                showRestart &&
-                !nonActionableProcess && (
-                  <Tooltip title="Restart">
-                    <IconButton
-                      size="small"
-                      onClick={() => actions.onStart(row)}
-                    >
-                      <RestartAltIcon />
-                    </IconButton>
-                  </Tooltip>
-                )}
-
-              {permissions.stop &&
-                isCurrentDate &&
-                showStop &&
-                !nonActionableProcess && (
-                  <Tooltip title="Stop">
-                    <IconButton
-                      size="small"
-                      onClick={() => actions.onStop(row)}
-                      sx={{ p: { xs: 0.5, md: 1 } }}
-                    >
-                      <StopIcon />
-                    </IconButton>
-                  </Tooltip>
-                )}
-
-              {permissions.view && (
-                <Tooltip title="View">
-                  <IconButton
-                    size="small"
-                    onClick={() => actions.onView(row)}
-                    sx={{ p: { xs: 0.5, md: 1 } }}
-                  >
-                    <VisibilityIcon />
-                  </IconButton>
-                </Tooltip>
-              )}
-
-              {permissions.view && params.row.hasSummary && (
-                <Tooltip title="Summary">
-                  <IconButton
-                    size="small"
-                    onClick={() => actions.onSummary(row)}
-                    sx={{ p: { xs: 0.5, md: 1 } }}
-                  >
-                    <SummarizeOutlinedIcon />
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Stack>
+            <Tooltip title={access?.accessDescription || ""} placement="top">
+              {/* Fix: span prevents tooltip ref errors */}
+              <span>
+                <CustomChip
+                // sx={{
+                //     width:115,
+                //     justifyContent:"flex-start",
+                //   }}
+                  variant="outlined"
+                  size="sm"
+                  icon={<SecurityIcon sx={{ width: 15, height: 15 }} />}
+                  label={access?.accessName || params.row.roleAccess || "NA"}
+                />
+              </span>
+            </Tooltip>
           );
         },
       },
+      {
+        field: "requestType",
+        headerName: "Request Type",
+        flex: 0.5,
+        minWidth: 150,
+        align: "center",
+        headerAlign: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          const val = params.value;
+          const color =
+            val === "CREATE"
+              ? "success"
+              : val === "DELETE"
+                ? "error"
+                : "warning";
+          const icon =
+            val === "CREATE" ? (
+              <AddBoxIcon />
+            ) : val === "DELETE" ? (
+              <AutoDeleteIcon />
+            ) : (
+              <EditDocumentIcon />
+            );
+          return (
+            <CustomChip
+            sx={{
+              width:105,
+              justifyContent:"flex-start",
+            }}
+              variant="outlined"
+              icon={icon}
+              label={
+                val === "CREATE"
+                  ? "Added"
+                  : val === "DELETE"
+                    ? "Deleted"
+                    : "Modified"
+              }
+              color={color}
+            />
+          );
+        },
+      },
+      {
+        field: "requestDate",
+        headerName: "Requested Date",
+        flex: 1,
+        minWidth: 200,
+        renderCell: (params) => (
+          <Typography
+            variant="body1"
+            component="span"
+            sx={{ fontSize: "0.9rem" }}
+          >
+            {timeStampFormatter(params.value)}
+          </Typography>
+        ),
+      },
+      {
+        field: "requestStatus",
+        headerName: "Status",
+        minWidth: 150,
+        flex: 0.6,
+        align: "center",
+        headerAlign: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Box>
+            <CustomChip
+              icon={
+                params.value === "ACCEPTED" ? (
+                  <CheckCircleIcon />
+                ) : params.value === "REJECTED" ? (
+                  <BlockFlippedIcon />
+                ) : params.value === "CANCELED" ? (
+                  <GppBadIcon />
+                ) : (
+                  <PendingActionsIcon />
+                )
+              }
+              variant="outlined"
+              label={toPascalKebabCase(params.value)}
+              sx={{
+                width:120,
+                justifyContent:"flex-start",
+                color:
+                  params.value === "REJECTED"
+                    ? "error.dark"
+                    : params.value === "ACCEPTED"
+                      ? "success.dark"
+                      : params.value === "CANCELLED"
+                        ? "primary.dark"
+                        : "warning.dark",
+                "& .MuiChip-icon": {
+                  color:
+                    params.value === "REJECTED"
+                      ? "error.dark"
+                      : params.value === "ACCEPTED"
+                        ? "success.dark"
+                        : params.value === "CANCELLED"
+                          ? "primary.dark"
+                          : "warning.dark",
+                },
+              }}
+            />
+          </Box>
+        ),
+      },
+      {
+        field: "action",
+        headerName: "Actions",
+        flex: 0.6,
+        minWidth: 120,
+        align: "center",
+        headerAlign: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => (
+          <Stack
+            direction="row"
+            spacing={1}
+            justifyContent="center"
+            alignItems="center"
+            sx={{ height: "100%" }}
+          >
+            {permissions.view && (
+              <Tooltip title="View">
+                <IconButton onClick={() => handleViewClick(params.row)}>
+                  <VisibilityIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+            {params.row.requestStatus === "PENDING" && permissions.cancel && (
+              <Tooltip title={"Cancel Request"}>
+                <IconButton
+                  onClick={() => {
+                    setConfirmDialog(true);
+                    setRequestId(params.row.requestId);
+                  }}
+                >
+                  <CancelIcon fontSize="inherit" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Stack>
+        ),
+      },
     ],
-    [
-      actions,
-      isCurrentDate,
-      permissions.restart,
-      permissions.start,
-      permissions.stop,
-      permissions.view,
-      statusOptions,
-    ],
+    [handleViewClick, permissions.cancel, permissions.view, roleAccessList],
   );
 
   const filteredColumns = useMemo(() => {
-    if (
-      permissions.start ||
-      permissions.stop ||
-      permissions.restart ||
-      permissions.view
-    ) {
+    if (permissions.view || permissions.cancel) {
       return columns;
     }
-    return columns.filter((c) => c.field !== "actions");
+    return columns.filter((column) => column.field !== "action");
   }, [columns, permissions]);
 
-  // Reset to page 0 whenever loading changes
-  useEffect(() => {
-    if (loading) {
-      setPaginationModel((prev) => ({
-        ...prev,
-        page: 0,
-      }));
-    }
-  }, [processes, loading]);
-
-  /* =====================================================
-     FINAL RENDER
-  ===================================================== */
-
   return (
-    <Box>
-      {/* Unified Card Container */}
-      <Card
-        sx={{
-          width: "100%",
-          boxShadow: 3,
-          bgcolor: "background.paper",
-          overflow: "hidden",
-        }}
-      >
+    <>
         <DataGrid
           rows={rows}
+          loading={isLoading}
           columns={filteredColumns}
-          loading={loading}
           disableRowSelectionOnClick
           pageSizeOptions={[5, 10, 25, 50]}
-          paginationModel={paginationModel}
-          onPaginationModelChange={setPaginationModel}
           initialState={{
-            pagination: { paginationModel: { pageSize: 5, page: 0 } },
-            sorting: { sortModel: [{ field: "startTime", sort: "desc" }] },
+            pagination: { paginationModel: { pageSize: 10, page: 0 } },
+            sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] },
           }}
-          getRowId={(p) => p.id}
-          sx={{
-            border: "none", // Removes outline to blend into card
-            "& .MuiDataGrid-columnHeaders": {
-              borderTop: "none",
-            },
-          }}
+          getRowId={(row) => row.gridRowId}
           slots={{
-            noRowsOverlay: () => (
-              <Stack
-                height="100%"
-                alignItems="center"
-                justifyContent="center"
-                spacing={1}
-              >
-                <InfoIcon
-                  sx={{
-                    fontSize: 48,
-                    color: "text.secondary",
-                  }}
-                />
-
-                <Typography variant="h6">No processes available</Typography>
-
-                <Typography variant="body2">
-                  Processes not found for the ETL date.
-                </Typography>
-              </Stack>
-            ),
+            noRowsOverlay: CustomNoRowsOverlay,
+          }}
+          sx={{
+          minHeight: 760,
+          width: "100%",
+         "& .MuiDataGrid-columnHeaders": {
+          backgroundColor: "#f5f5f5 !important",
+          fontWeight: 700,
+          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+          },
           }}
         />
-      </Card>
-    </Box>
-  );
-};
 
-export default ProcessStatusTable;
+      <RoleRequestView
+        open={viewOpen}
+        handleClose={() => setViewOpen(false)}
+        data={viewData}
+      />
+
+      <Dialog
+        open={confirmDialog}
+        onClose={() => {
+          setConfirmDialog(false);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>
+          Cancel Request ID: {requestId}
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ p: 1 }}>
+            Are you sure you want to cancel this request? Please confirm.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setConfirmDialog(false);
+            }}
+            variant="outlined"
+            sx=
+          {{
+            "&:hover":
+            {
+              color:"#fff",
+            },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCancelRequest}
+            color="error"
+            variant="contained"
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+}
