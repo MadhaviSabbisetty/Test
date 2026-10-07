@@ -1,579 +1,993 @@
-import React, { useEffect, useState, useCallback } from "react";
-import useApi from "../../hooks/useApi";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import dayjs from "dayjs";
-import { Box, Paper, Typography, Stack, LinearProgress ,Chip} from "@mui/material";
-import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
-import ManageSearchOutlinedIcon from "@mui/icons-material/ManageSearchOutlined";
-import { useSelector } from "react-redux";
-import { getPermissions } from "../../utils/CommonUtilities";
-import BalanceDifferenceFilters from "./Components/BalanceDifferenceFilters";
-import BalanceDifferenceTable from "./Components/BalanceDifferenceTable";
-import { StyledButton } from "./Components/BalanceDifferenceStyles";
-import downloadFile from "../../utils/DownloadUtils";
 
-export default function BalanceRengeSearchScreen() {
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
-  const user = useSelector((state) => state.auth.user);
-  const selectedMenu = useSelector((state) => state.menus.selectedMenuItem);
-  const permissions = getPermissions(selectedMenu);
-  const chipSx = {
-  height: 28,
-  borderRadius: 1.5,
-  fontSize: "11px",
-  fontWeight: 600,
-  color: "#58469f",
-  borderColor: "rgba(88,70,159,.28)",
-  bgcolor: "rgba(88,70,159,.035)",
+  const columns = useMemo(() => {
+    const cols = [
+      { field: "vid", headerName: "VID", flex: 1 },
+      {
+        field: "categoryName",
+        headerName: "Category",
+        flex: 1,
+      },
+      {
+        field: "allowedRoleName",
+        headerName: "Role",
+        flex: 1,
+      },
+
+      {
+        field: "status",
+        headerName: "Status",
+        flex: 1,
+      },
+
+      {
+        field: "createdAt",
+        headerName: "Created At",
+        flex: 1.5,
+        renderCell: (params) =>
+          params.value
+            ? new Date(
+              params.value
+            ).toLocaleString()
+            : "",
+      },
+
+      {
+        field: "description",
+        headerName: "Details",
+        flex: 1,
+        renderCell: (params) => (
+          <Button
+            variant="text"
+            onClick={() =>
+              handleViewDescription(
+                params.row.description,
+                params.row.issueCategories
+              )
+            }
+          >
+            View
+          </Button>
+        ),
+      },
+    ];
+
+    if (searchedStatus === "TERMINATED") {
+      cols.push({
+        field: "remarks",
+        headerName: "Remark",
+        flex: 1,
+
+        renderCell: (params) => (
+          <Button
+            variant="text"
+            onClick={() =>
+              handleViewRemark(
+                params.row.remarks
+              )
+            }
+          >
+            View
+          </Button>
+        ),
+      });
+    }
+
+
+    if (
+      searchedStatus === "ACTIVE"
+
+    ) {
+      cols.push({
+        field: "action",
+        headerName: "Action",
+        flex: 1,
+
+        renderCell: (params) =>
+          params.row.status ===
+            "ACTIVE" ? (
+            <Button
+              color="error"
+              variant="contained"
+              startIcon={<BlockIcon />}
+              onClick={() =>
+                handleDeleteClick(
+                  params.row
+                )
+              }
+            >
+              Terminate
+            </Button>
+          ) : null,
+      });
+    }
+    return cols;
+  }, [searchedStatus]);
+
+  return (
+    <Box
+      sx={{
+        p: 3,
+        height: "calc(100vh - 88px)",
+        minHeight: 0,
+        maxHeight: "calc(100vh - 88px)",
+        overflow: "hidden",
+        boxSizing: "border-box",
+      }}
+    >
+      <Paper
+        sx={{
+          p: 3,
+          height: "100%",
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        <Typography variant="h5" mb={2}>
+          View Voucher Requests
+        </Typography>
+
+        <Accordion expanded={expanded} onChange={() => setExpanded(!expanded)}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography>Search Filters</Typography>
+          </AccordionSummary>
+
+          <AccordionDetails>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "1.2fr 1.2fr 1.1fr 1.1fr auto auto",
+                gap: 2,
+              }}
+            >
+              <TextField
+                label="VID"
+                size="small"
+                value={searchVID}
+                error={Boolean(vidError)}
+                helperText={
+                  vidError
+                    ? vidError
+                    : "Format: VID followed by numbers (VID-2606-00102). Leave blank to search all Active vouchers."
+                }
+                onChange={handleVIDChange}
+              />
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <DatePicker
+                  disableFuture
+                  label="Date"
+                  value={searchDate}
+                  minDate={dayjs("2026-04-01")}
+                  onChange={(newValue) => setSearchDate(newValue)}
+                  slotProps={{
+                    textField: {
+                      size: "small",
+                      fullWidth: true,
+                      helperText: "Select a date for search",
+                      onKeyDown: (e) => e.preventDefault(),
+                      inputProps: {
+                        readOnly: true,
+                      },
+                    },
+                  }}
+                />
+              </LocalizationProvider>
+
+              <FormControl size="small">
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={searchStatus}
+                  label="Status"
+                  sx={{
+                    border: "none",
+                  }}
+                  onChange={(e) => setSearchStatus(e.target.value)}
+                >
+                  {voucherStatuses.map((item, index) => (
+                    <MenuItem key={index} value={item.value}>
+                      {item.value}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>
+                  Select the voucher status to filter the records.
+                </FormHelperText>
+              </FormControl>
+
+              <FormControl size="small">
+                <InputLabel>Category</InputLabel>
+                <Select
+                  value={searchCategory}
+                  label="Category"
+                  onChange={(e) => setSearchCategory(e.target.value)}
+                >
+                  {voucherCategories.map((item) => (
+                    <MenuItem key={item.id} value={item.id}>
+                      {item.categoryName}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>
+                  Select a voucher category or leave blank to search all
+                  categories.
+                </FormHelperText>
+              </FormControl>
+
+              <Button
+                size="small"
+                variant="contained"
+                onClick={fetchVouchers}
+                disabled={Boolean(vidError)}
+                sx={{ height: 40, minWidth: 90, textTransform: "none" }}
+              >
+                Search
+              </Button>
+
+              <Button
+                size="small"
+                sx={{ height: 40, minWidth: 90, textTransform: "none",  
+                  "&:hover":
+                  {
+                    color:"#fff",
+                  },
+                }}
+                variant="outlined"
+                onClick={handleReset}
+              >
+                Reset
+              </Button>
+            </Box>
+          </AccordionDetails>
+        </Accordion>
+
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "flex-end",
+            mt: 2,
+            mb: 1,
+            flexShrink: 0,
+          }}
+        >
+          <Button
+            variant="contained"
+            startIcon={<FileDownloadIcon />}
+            onClick={handleExport}
+            sx={{ textTransform: "none" }}
+          >
+            Export
+          </Button>
+        </Box>
+
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            width: "100%",
+          }}
+        >
+          <DataGrid
+            disableRowSelectionOnClick
+            hideFooterSelectedRowCount
+            rows={rows}
+            columns={columns}
+            sx={styles.dataGridContainer}
+            getRowId={(row) => row.id}
+            loading={loading}
+            pageSizeOptions={[25, 50, 100]}
+            initialState={{
+              pagination: {
+                paginationModel: {
+                  page: 0,
+                  pageSize: 25,
+                },
+              },
+            }}
+          />
+        </Box>
+      </Paper>
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Terminate Voucher</DialogTitle>
+
+        <DialogContent>
+          <InputLabel>Remark*</InputLabel>
+
+          <TextField
+            fullWidth
+            multiline
+            rows={5}
+            value={deleteRemark}
+            onChange={(e) => {
+              const value = e.target.value;
+
+              setRemarkTouched(true);
+
+              if (value.startsWith(" ")) {
+                setRemarkError(
+                  "Remark should not start with a space or contain consecutive spaces...",
+                );
+                return;
+              }
+
+              if (value.includes("  ")) {
+                setRemarkError("Consecutive spaces are not allowed.");
+                return;
+              }
+
+              setDeleteRemark(value);
+
+              if (value.length > 200) {
+                setRemarkError("Maximum 200 characters allowed.");
+              } else {
+                setRemarkError("");
+              }
+            }}
+            inputProps={{ maxLength: 200 }}
+            error={Boolean(remarkError)}
+            helperText={
+              remarkError
+                ? remarkError
+                : `All characters, numbers and special characters are allowed. (${deleteRemark.length}/200)`
+            }
+          />
+
+          {/* <TextField
+            fullWidth
+            multiline
+            rows={5}
+            value={deleteRemark}
+            // onChange={(e) => {
+            //   const value = e.target.value;
+             
+            //   if (value.startsWith(" ")) {
+
+            //     setRemarkError("remark should not start with a space or contain consecutive spaces..",
+            //     );
+            //     return;
+            //   }
+
+            //   setDeleteRemark(value);
+
+            //   if (value.length > 200) {
+
+            //     setRemarkError("Maximum 200 characters allowed");
+
+            //     setTimeout(() => {
+            //       setRemarkError("")
+            //     }, 1500)
+            //   } else {
+            //     setRemarkError("")
+            //   }
+
+            // }
+            // }
+
+            onChange={(e) => {
+  const value = e.target.value;
+
+  // First space not allowed
+  if (value.startsWith(" ")) {
+    setDeleteRemark(""); // state update
+    setRemarkError("Remark should not start with a space.");
+    return;
+  }
+
+  // Consecutive spaces
+  if (value.includes("  ")) {
+    setDeleteRemark(value);
+    setRemarkError("Consecutive spaces are not allowed.");
+    return;
+  }
+
+  // Max length
+  if (value.length > 200) {
+    setRemarkError("Maximum 200 characters allowed.");
+    return;
+  }
+
+  setDeleteRemark(value);
+  setRemarkError("");
+}}
+             inputProps={{ maxLength: 200 }}
+           
+           error={!!remarkError}
+helperText={
+  remarkError
+    ? `${remarkError} (${deleteRemark.length}/200)`
+    : `All characters, numbers and special characters are allowed. (${deleteRemark.length}/200)`
+}
+
+          /> */}
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+
+          <Button
+            color="error"
+            variant="contained"
+            disabled={!deleteRemark.trim()}
+            onClick={handleTerminate}
+          >
+            Terminate
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={descriptionPopupOpen}
+        onClose={() => setDescriptionPopupOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle
+          sx={{
+            borderBottom: "1px solid #e0e0e0",
+            fontWeight: 600,
+          }}
+        >
+          Details
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 0 }}>
+          {/* Description Section */}
+
+          <Box
+            sx={{
+              px: 3,
+              py: 2,
+              borderBottom: "1px solid #e0e0e0",
+            }}
+          >
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontWeight: 700,
+                mb: 1,
+              }}
+            >
+              Description
+            </Typography>
+
+            <Typography
+              variant="body1"
+              sx={{
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                overflowWrap: "break-word",
+                lineHeight: 1.8,
+                color: "text.primary",
+                textAlign: "justify",
+              }}
+            >
+              {selectedDescription || "-"}
+            </Typography>
+          </Box>
+
+          {/* Issues Section */}
+
+          <Box
+            sx={{
+              px: 3,
+              py: 2,
+            }}
+          >
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontWeight: 700,
+                mb: 1.5,
+              }}
+            >
+              Issues
+            </Typography>
+
+            {selectedIssues.length > 0 ? (
+              <Box
+                component="ul"
+                sx={{
+                  pl: 3,
+                  m: 0,
+                }}
+              >
+                {selectedIssues.map((issue, index) => (
+                  <li key={index}>
+                    <Typography>{issue}</Typography>
+                  </li>
+                ))}
+              </Box>
+            ) : (
+              <Typography color="text.secondary">
+                No Issues Available
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            borderTop: "1px solid #e0e0e0",
+            px: 3,
+            py: 2,
+          }}
+        >
+          <Button
+            variant="contained"
+            onClick={() => setDescriptionPopupOpen(false)}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={remarkPopupOpen}
+        onClose={() => setRemarkPopupOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Termination Remark</DialogTitle>
+
+        <DialogContent>
+          <Typography>{selectedRemark}</Typography>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setRemarkPopupOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() =>
+          setSnackbar({
+            ...snackbar,
+            open: false,
+          })
+        }
+        anchorOrigin={{
+          vertical: "top",
+          horizontal: "center",
+        }}
+      >
+        <Alert severity={snackbar.severity} variant="filled">
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
 };
 
-  const [data, setData] = useState(null);
-  const [branches, setBranches] = useState([]);
-  const [cgls, setCgls] = useState([]);
-  const [currencies, setCurrencies] = useState([]);
-  const [start, setStart] = useState(null);
-  const [end, setEnd] = useState(null);
-  const [currency, setCurrency] = useState("");
-  const [cgl, setCgl] = useState(null);
-   const [exportLoading,setExportLoading] =useState(false);
-  const branchCodeStr = String(user?.branch || "").padStart(5, "0");
-  const [branch, setBranch] = useState(
-    user?.isCircle === false ? `${branchCodeStr}-${user?.branchName || ""}` : ""
-  );
-  const [etlDate, setEtlDate] = useState(null);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [glcc, setGlcc] = useState("");
-  const [glccValidated, setGlccValidated] = useState(false);
-  const [glccLoading, setGlccLoading] = useState(false);
-  const [loading, setLoading] = useState({
-    branch: false,
-    cgl: false,
-    currency: false,
-    balance: false,
-  });
-  const [rowCount, setRowCount] = useState(0);
-  const [req] = useState({ branch: true, cgl: true });
-  const [filtersExpanded, setFiltersExpanded] = useState(true);
-  const [paginationModel, setPaginationModel] = useState({
-    page: 0,
-    pageSize: 25,
-  });
+export default ViewVoucherRequestsScreen;
 
-  const isNumeric = (value) => (value ? /^\d+$/.test(value) : false);
+import React, { useEffect, useState } from "react";
+import { useSelector } from "react-redux";
+import {
+  Alert,
+  Box,
+  Paper,
+  Button,
+  Card,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  FormHelperText,
+  IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
+  Snackbar,
+  TextField,
+  Typography,
+  Checkbox,
+  Autocomplete,
+  Chip
+} from "@mui/material";
+import { findMenuById } from "../../utils/CommonUtilities";
 
-  const fetchDifferences = useCallback(async () => {
-    try {
-      setLoading((prev) => ({ ...prev, balance: true }));
 
-      const matched = branch?.match(/^(\d{5})-/);
-      if (!matched || !start || !end) return;
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import AddIcon from "@mui/icons-material/Add";
 
-      const payload = {
-        fromDate: start.format("YYYY-MM-DD"),
-        toDate: end.format("YYYY-MM-DD"),
-        branchCode: matched[1],
-        currency: currency || null,
-        cgl: cgl?.split(" - ")[0] || null,
-      };
+import useApi from "../../hooks/useApi";
 
-      const response = await callApi(
-        `/ES/differences/search?page=${paginationModel.page}&size=${paginationModel.pageSize}`,
-        payload,
-        "POST"
-      );
+import ViewVoucherRequestScreen from "./ViewVoucherRequestScreen";
+import { useNavigate } from "react-router-dom";
 
-      const content = response?.data?.content ?? response?.content ?? [];
-      const totalElements =
-        response?.data?.page?.totalElements || 0;
+const RequestVoucherScreen = () => {
+  const navigate = useNavigate();
 
-      if (!Array.isArray(content)) {
-        throw new Error("Unexpected response format");
-      }
+  const menus = useSelector((state) => state.menus);
+  const menuItems = menus.menus;
+  console.log("menu bnmnmnmkn", menuItems)
+  const selectedMenuItem = menus.selectedMenuItem;
+  console.log("selected", selectedMenuItem)
 
-      const mappedData = content.map((item, index) => ({
-        id: item.id ?? `difference-${paginationModel.page}-${index}`,
-        errorDate: item.FIRST_ERROR_DATE || "-",
-        reconDate: item.reconRunDate || "-",
-        branch: item.branchCode || "-",
-        branchName: item.branchName || "NA",
-        currency: item.currency || "-",
-        currencyName: item.currencyName || "NA",
-        cgl: item.cgl || "-",
-        cglDescription: item.cglDescription || item.description || "NA",
-        cbsBalance: item.cbsBalance ?? 0,
-        glBalance: item.glBalance ?? 0,
-        differenceAmount: item.differenceAmount ?? 0,
-        diffYesterday: item.diffBwYesterday ?? item.diffYesterday ?? 0,
-        type: item.type || "-",
-        head: item.head || "-",
-      }));
+  const [customIssueError, setCustomIssueError] =
+    useState("");
 
-      setData(mappedData);
-      setRowCount(totalElements);
-      setFiltersExpanded(false);
+  const [showCustomIssue, setShowCustomIssue] =
+    useState(false);
 
-      if (mappedData.length === 0) {
-        showSnackBar("No records found", "info");
-      }
-    } catch (error) {
-      console.error("Balance Difference API Error:", error);
-      setData([]);
-      setRowCount(0);
-      showSnackBar(
-        error?.message || "Failed to fetch balance difference records.",
-        "error"
-      );
-    } finally {
-      setLoading((prev) => ({ ...prev, balance: false }));
-      setSearchLoading(false);
-    }
-  }, [
-    callApi,
-    branch,
-    currency,
-    cgl,
-    start,
-    end,
-    paginationModel,
-    showSnackBar,
-  ]);
+  const [customIssueInput, setCustomIssueInput] =
+    useState("");
 
-  const validateGlcc = async (value) => {
-    try {
-      setGlccLoading(true);
+  const [customIssues, setCustomIssues] =
+    useState([]);
 
-      const response = await callApi(
-        "/CM/common-master/validate-glcc",
-        { glcc: value },
-        "POST"
-      );
+  const [issueList, setIssueList] =
+    useState([]);
+  const [selectedIssues, setSelectedIssues] =
+    useState([]);
 
-      const glccData = response?.data;
+  const [issueOpen, setIssueOpen] =
+    useState(false);
 
-      if (glccData?.valid) {
-        setBranch(
-          `${glccData.branchCode}-${glccData.branchName?.trim() || ""}`
+
+  const { user } = useSelector((state) => state.auth);
+
+  const { callApi } = useApi();
+const [voucherCategories, setVoucherCategories] =
+    useState([]);
+
+  const [roles, setRoles] =
+    useState([]);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [roleLoading, setRoleLoading] =
+    useState(false);
+
+  const [openDialog, setOpenDialog] =
+    useState(false);
+
+  const [createdVID, setCreatedVID] =
+    useState("");
+
+  const [errors, setErrors] =
+    useState({});
+
+  const [snackbar, setSnackbar] =
+    useState({
+      open: false,
+      message: "",
+      severity: "success",
+    });
+
+  const [formData, setFormData] =
+    useState({
+      categoryId: "",
+      otherCategory: "",
+      description: "",
+      roleId: "",
+      sdRequestNumber: "",
+    });
+
+  useEffect(() => {
+    fetchRoles();
+    fetchVoucherCategories();
+  }, []);
+
+  const fetchVoucherCategories =
+    async () => {
+      try {
+        const response = await callApi(
+          "/VE/voucher-transactions/voucher-categories",
+          null,
+          "GET"
         );
-        setCurrency(glccData.currencyCode);
-        setCgl(`${glccData.cglNumber} - ${glccData.cglDescription}`);
-        setGlccValidated(true);
-      } else {
-        setGlccValidated(false);
-        setBranch("");
-        setCurrency("");
-        setCgl("");
-        showSnackBar(
-          glccData?.errors?.join(", ") || "Invalid GLCC",
-          "error"
+
+        console.log(
+          "Voucher Categories Response =>",
+          response
         );
+
+        const categories =
+          Array.isArray(response)
+            ? response
+            : response?.data || [];
+
+        const sortedCategories = [...categories].sort((a, b) => {
+          if (a.categoryName === "Other") return 1;
+          if (b.categoryName === "Other") return -1;
+          return 0;
+        });
+
+        setVoucherCategories(sortedCategories);
+      } catch (error) {
+        console.error(
+          "Category API Error =>",
+          error
+        );
+
+        setVoucherCategories([]);
       }
-    } catch (error) {
-      setGlccValidated(false);
-      setBranch("");
-      setCurrency("");
-      setCgl("");
+    };
 
-      const errors =
-        error?.response?.data?.data?.errors ||
-        error?.response?.data?.errors;
-
-      showSnackBar(errors?.join(", ") || "Invalid GLCC", "error");
-    } finally {
-      setGlccLoading(false);
-    }
-  };
-
-  const fetchCurrencies = async () => {
-    setLoading((prev) => ({ ...prev, currency: true }));
+  const fetchRoles = async () => {
+    setRoleLoading(true);
 
     try {
       const response = await callApi(
-        "/CM/common-master/currency-code-name-only",
+        "/VE/voucher-transactions/allowed-roles?menuId=30",
         null,
         "GET"
       );
 
-      const sortedData = (response?.data || []).sort((a, b) => {
-        if (a.currencyCode === "INR") return -1;
-        if (b.currencyCode === "INR") return 1;
-        return a.currencyName.localeCompare(b.currencyName);
-      });
-
-      setCurrencies(sortedData);
-    } catch {
-      showSnackBar("Currency data not available", "error");
-    } finally {
-      setLoading((prev) => ({ ...prev, currency: false }));
-    }
-  };
-
-  const fetchSearchData = useCallback(
-    async (type, term) => {
-      try {
-        setLoading((prev) => ({ ...prev, [type]: true }));
-
-        let circleValue = "";
-
-        if (permissions?.wholebank === true) {
-          circleValue = "null";
-        } else if (user?.isCircle === true || permissions?.circle) {
-          circleValue = user?.circleCode;
-        }
-
-        const url =
-          type === "branch"
-            ? `/CM/common-master/branches-code-name-only?q=${encodeURIComponent(
-                term
-              )}&circleCode=${circleValue || ""}`
-            : `/CM/common-master/cgl-code-description-only?q=${encodeURIComponent(
-                term
-              )}`;
-
-        const response = await callApi(url, null, "GET");
-
-        if (response?.data?.length > 0) {
-          if (type === "branch") {
-            setBranches(
-              response.data.map((item) => `${item.code}-${item.name}`)
-            );
-          } else {
-            setCgls(
-              response.data.map(
-                (item) => `${item.cglNumber} - ${item.description}`
-              )
-            );
-          }
-        } else {
-          showSnackBar("Data not available", "error");
-        }
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading((prev) => ({ ...prev, [type]: false }));
-      }
-    },
-    [callApi, permissions, user, showSnackBar]
-  );
-
-  const handleSearchChange = (value, reason, type) => {
-    if (reason === "input" && value?.length >= 3) {
-      fetchSearchData(type, value);
-    } else if (reason === "clear" || reason === "blur") {
-      if (type === "branch") setBranches([]);
-      if (type === "cgl") setCgls([]);
-    }
-  };
-
-  const handleSubmit = () => {
-    setSearchLoading(true);
-
-    if (paginationModel.page === 0) {
-      fetchDifferences();
-    } else {
-      setPaginationModel((prev) => ({ ...prev, page: 0 }));
-    }
-  };
-
-  const handleExport = async () => {
-    try {
-      setExportLoading(true);
-  
-      const payload = {
-        fromDate: start.format("YYYY-MM-DD"),
-        toDate: end.format("YYYY-MM-DD"),
-        branchCode: branch?.split("-")[0],
-        currency:currency,
-        cgl: cgl?.split(" - ")[0],
-      };
-  
-      const downloadResponse = await callApi(
-        "/ES/differences/export",
-        payload,
-        "POST",
-        "arraybuffer",
+      console.log(
+        "Allowed Roles Response =>",
+        response
       );
-  
-      const fileName = `Balance_Difference_${payload.reconRunDate}`;
-  
-      if (downloadResponse && downloadResponse?.byteLength > 0) {
-        downloadFile(downloadResponse, "excel", fileName);
+
+      setRoles(
+        Array.isArray(response.data)
+          ? response.data
+          : []
+      );
+    } catch (error) {
+      console.error(
+        "Failed to fetch roles",
+        error
+      );
+
+      setSnackbar({
+        open: true,
+        message: "Failed to load roles",
+        severity: "error",
+      });
+    } finally {
+      setRoleLoading(false);
+    }
+  };
+
+
+  const handleChange = (e) => {
+    const { name, value } =
+      e.target;
+
+    if (
+      name === "description" &&
+      value.length > 500
+    ) {
+      return;
+    }
+
+    if (name === "otherCategory") {
+      const regex =
+        /^(?!.*\s{2,})[A-Za-z0-9 -]*$/;
+
+      if (!regex.test(value)) {
+        setErrors((prev) => ({
+          ...prev,
+          otherCategory: "Special Character and spaces not allowed",
+        }));
         return;
       }
-    } catch (error) {
-      console.error("Something Went Wrong!!", error);
-      showSnackBar("Download Failed", "error");
-    } finally {
-      setExportLoading(false);
-    }
-  };
 
-  const resetState = () => {
-    setData(null);
-    setCgl(null);
-    setCgls([]);
-    setBranch(
-      user?.isCircle === false
-        ? `${branchCodeStr}-${user?.branchName || ""}`
-        : ""
-    );
-    setCurrency("");
-    setStart(null);
-    setEnd(null);
-    setBranches([]);
-    setGlcc("");
-    setGlccValidated(false);
-    setFiltersExpanded(true);
-    setPaginationModel({ page: 0, pageSize: 25 });
-  };
+      if (value.length >= 21) {
+        setErrors((prev) => ({
+          ...prev,
+          otherCategory: "Maximum 20 characters allowed",
+        }));
+         setTimeout(() => {
+          setErrors((prev) => ({
+            ...prev,
+            otherCategory: "",
 
-  useEffect(() => {
-    if (data) {
-      fetchDifferences();
-    }
-  }, [paginationModel.page, paginationModel.pageSize]);
-
-  useEffect(() => {
-    fetchCurrencies();
-  }, []);
-
-  useEffect(() => {
-    const fetchSystemDate = async () => {
-      try {
-        const response = await callApi(
-          "/PS/file/fincore-date",
-          {},
-          "GET"
-        );
-        const etlRaw = response?.data?.userDate;
-        setEtlDate(
-          etlRaw ? dayjs(etlRaw.split("T")[0]) : dayjs()
-        );
-      } catch {
-        setEtlDate(dayjs());
+          }))
+        }, 1000)
+        return;
       }
-    };
 
-    fetchSystemDate();
-  }, [callApi]);
 
-  return (
-    <Box sx={{ p: 1 }}>
-      <Paper
-        elevation={0}
-        sx={{
-          p: { xs: 1.5, sm: 2, md: 2.5 },
-          mt: { xs: -1, sm: -2 },
-          mb: 3,
-          bgcolor: "rgba(255,255,255,0.4)",
-          backdropFilter: "blur(4px)",
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: { xs: 2, sm: 3 },
-          overflow: "hidden",
-        }}
-      >
-       <Box
-  sx={{
-    mb: filtersExpanded ? 1 : 0.5,
-    p: { xs: 1.5, sm: 2 },
-    borderRadius: 2,
-    bgcolor: "background.paper",
-    boxShadow: 2,
-    border: "1px solid",
-    borderColor: "divider",
-  }}
->
-  <Stack
-    direction={{ xs: "column", sm: "row" }}
-    alignItems={{ xs: "flex-start", sm: "center" }}
-    justifyContent="space-between"
-    spacing={2}
-  >
-    <Stack direction="row" spacing={2} alignItems="center">
-      <Box
-        sx={{
-          width: 44,
-          height: 44,
-          borderRadius: 2,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          bgcolor: "rgba(88, 70, 159, 0.1)",
-          border: "1px solid rgba(88, 70, 159, 0.2)",
-          flexShrink: 0,
-        }}
-      >
-        <CompareArrowsIcon
-          sx={{
-            fontSize: 30,
-            color: "#58469f",
-          }}
-        />
-      </Box>
+    }
 
-      <Box>
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-          <Typography
-            variant="subtitle1"
-            fontWeight={700}
-            lineHeight={1.2}
-            sx={{
-              fontSize: { xs: "0.95rem", sm: "1rem", md: "1.05rem" },
-            }}
-          >
-            Balance Comparison
-          </Typography>
 
-          <Chip
-            label="CBS ↔ GL"
-            size="small"
-            sx={{
-              height: 22,
-              fontSize: "0.68rem",
-              fontWeight: 700,
-              color: "#58469f",
-              bgcolor: "rgba(88, 70, 159, 0.08)",
-              border: "1px solid rgba(88, 70, 159, 0.2)",
-            }}
-          />
-        </Stack>
+    if (name === "sdRequestNumber") {
+      const regex =
+        /^[0-9,]*$/;
 
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{
-            mt: 0.3,
-            fontSize: { xs: "0.75rem", sm: "0.82rem" },
-          }}
-        >
-          Compare CBS and GL balances to identify differences and discrepancies.
-        </Typography>
-      </Box>
-    </Stack>
+      if (!regex.test(value)) {
+        setErrors((prev) => ({
+          ...prev,
+          sdRequestNumber: "Character, Special Characters and space not allowed",
+        }));
+        setTimeout(() => {
+          setErrors((prev) => ({
+            ...prev,
+            sdRequestNumber: "",
 
-    
-{data && (
-  <StyledButton
-    variant="contained"
-    startIcon={<ManageSearchOutlinedIcon />}
-    onClick={() => setFiltersExpanded(true)}
-    sx={{
-      textTransform: "none",
-      borderRadius: "8px",
-      fontWeight: 600,
-      minWidth: { xs: "100%", sm: 140 },
-      width: { xs: "100%", sm: "auto" },
-      height: { xs: 38, sm: 32 },
-      px: 1.5,
-      fontSize: { xs: "0.8rem", sm: "0.82rem" },
-    }}
-  >
-    Edit Filters
-  </StyledButton>
-)}
-  </Stack>
-</Box>
+          }))
+        }, 1000)
+        return;
+      }
 
-{data && (
-  <Stack
-    direction="row"
-    spacing={0.8}
-    flexWrap="wrap"
-    useFlexGap
-    sx={{
-      mt: 1.5,
-      px: 0.5,
-    }}
-  >
-    <Chip
-      label={`Branch: ${branch || "-"}`}
-      variant="outlined"
-      size="small"
-      sx={chipSx}
-    />
+      if (value.length >= 51) {
+        setErrors((prev) => ({
+          ...prev,
+          sdRequestNumber: "Maximum 50 number allowed",
+        }));
+        setTimeout(() => {
+          setErrors((prev) => ({
+            ...prev,
+            sdRequestNumber: "",
 
-    <Chip
-      label={`Currency: ${currency || "-"}`}
-      variant="outlined"
-      size="small"
-      sx={chipSx}
-    />
+          }))
+        }, 1000)
+        return;
+      }
 
-    <Chip
-      label={`CGL: ${cgl || "-"}`}
-      variant="outlined"
-      size="small"
-      sx={chipSx}
-    />
+    }
 
-    <Chip
-      label={`Date: ${start?.format("DD MMM YYYY") || "-"} - ${
-        end?.format("DD MMM YYYY") || "-"
-      }`}
-      variant="outlined"
-      size="small"
-      sx={chipSx}
-    />
-  </Stack>
-)}
+    if (name === "categoryId") {
 
-{filtersExpanded && searchLoading && !data?.length && (
-          <LinearProgress
-            sx={{
-              height: 3,
-              borderRadius: 999,
-              mb: 2,
-            }}
-          />
-        )}
+      const selectedCategory =
+        voucherCategories.find(
+          (item) => item.id == value
+        );
+      console.log(
+        "Selected Category =>",
+        selectedCategory
+      );
 
-        {filtersExpanded && (
-          <BalanceDifferenceFilters
-            branch={branch}
-            setBranch={setBranch}
-            currency={currency}
-            setCurrency={setCurrency}
-            cgl={cgl}
-            setCgl={setCgl}
-            start={start}
-            setStart={setStart}
-            end={end}
-            setEnd={setEnd}
-            currencies={currencies}
-            branches={branches}
-            cgls={cgls}
-            loading={loading}
-            req={req}
-            handleSearchChange={handleSearchChange}
-            fetchCurrencies={fetchCurrencies}
-            handleSubmit={handleSubmit}
-            resetState={resetState}
-            isNumeric={isNumeric}
-            user={user}
-            permissions={permissions}
-            etlDate={etlDate}
-            glcc={glcc}
-            setGlcc={setGlcc}
-            glccValidated={glccValidated}
-            setGlccValidated={setGlccValidated}
-            validateGlcc={validateGlcc}
-            glccLoading={glccLoading}
-          />
-        )}
-      </Paper>
+      console.log(
+        "Issues =>",
+        selectedCategory?.issueCategories
+      );
 
-      {data && (
-        <BalanceDifferenceTable
-          data={data}
-          loading={loading.balance}
-          rowCount={rowCount}
-          paginationModel={paginationModel}
-          setPaginationModel={setPaginationModel}
-          exportLoading={exportLoading}
-          handleDownloadExcel={handleExport}
-        />
-      )}
-    </Box>
-  );
-}
+      setIssueList(
+        selectedCategory?.issueCategories || []
+      );
+
+      setSelectedIssues([]);
+      setCustomIssues([]);
+      setCustomIssueInput("");
+      setShowCustomIssue(false);
+    }
+
+if (name === "description") {
+    if (value.startsWith(" ")) {
+      setErrors((prev) => ({
+        ...prev,
+        description: "description should not start with a space or contain consecutive spaces..",
+      }));
+      return;
+    } else {
+      setErrors((prev) => ({
+        ...prev,
+        description: "",
+      }));
+    }
+  }
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      [name]: "",
+    }));
+  };
+
+
+  const validateForm = () => {
+    let newErrors = {};
+
+    if (!formData.categoryId) {
+      newErrors.categoryId =
+        "Voucher Category is required";
+    }
+
+    const selectedCategory =
+      voucherCategories.find(
+        (item) =>
+          String(item.id) ===
+          String(formData.categoryId)
+      );
+
+    console.log(
+      "Selected Category =>",
+      selectedCategory
+    );
+
+    console.log(
+      "Form Category Id =>",
+      formData.categoryId
+    );
+
+    console.log(
+      "Entered Other Category =>",
+      formData.otherCategory
+    );
+
+    if (
+      selectedCategory?.categoryName
+        ?.trim()
+        .toLowerCase() === "other" &&
+      !formData.otherCategory.trim()
+    ) {
+      newErrors.otherCategory =
+        "Please enter other category";
+    }
+
+    if (
+      selectedCategory?.categoryName
+        ?.trim()
+        .toLowerCase() === "other" &&
+      formData.otherCategory.trim()
+    ) {
+      const enteredCategory =
+        formData.otherCategory
+          .trim()
+          .toLowerCase();
+
+      const categoryExists =
+        voucherCategories.some(
+          (item) => {
+            const match =
+              item.categoryName
+                ?.trim()
+                .toLowerCase() ===
+              enteredCategory;
+
+            console.log(
+              "Comparing =>",
+              item.categoryName,
+              enteredCategory,
+              match
+            );
+
+            return match;
+          }
+        );
+
+      console.log(
+        "Category Exists =>",
+        categoryExists
+      );
+
+      if (categoryExists) {
+        newErrors.otherCategory =
+          "Category already exists";
+      }
+    }
+
+    if (
+      !formData.description.trim()
+    ) {
+      newErrors.description =
+        "Description is required";
+    }
+
+    if (
+      formData.description.length >
+      500
+    ) {
+      newErrors.description =
+        "Maximum 500 Characters Allowed";
+    }
+
+    if (!formData.roleId) {
+      newErrors.roleId =
+        "Allowed Role is required";
+    }
+
+    if (
+      selectedIssues.length === 0 &&
+      customIssues.filter(
+        (item) => item?.trim()
+      ).length === 0
+    ) {
+      newErrors.issues =
+        "At least one issue is required";
+    }
