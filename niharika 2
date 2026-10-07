@@ -1,231 +1,1354 @@
-import React,{useState,useEffect,useCallback, useMemo}from"react";
-import{Box,Paper,Typography,Stack,Autocomplete,TextField,Chip}from"@mui/material";
-import{DatePicker,LocalizationProvider}from"@mui/x-date-pickers";
-import{AdapterDayjs}from"@mui/x-date-pickers/AdapterDayjs";
-import CalendarMonthIcon from"@mui/icons-material/CalendarMonth";
-import ManageSearchOutlinedIcon from"@mui/icons-material/ManageSearchOutlined";
-import SearchIcon from"@mui/icons-material/Search";
-import RestartAltIcon from"@mui/icons-material/RestartAlt";
-import {useSelector}from"react-redux";
-import dayjs from"dayjs";
-import useApi from"../../hooks/useApi";
-import useCustomSnackbar from"../../utils/useCustomSnackbar";
-import{getPermissions}from"../../utils/CommonUtilities";
-import BalanceDateWiseTable from"./Components/BalanceDateWiseTable";
-import{StyledButton}from"./Components/BalanceDifferenceStyles";
-import downloadFile from "../../utils/DownloadUtils";
 
-export default function BalanceParticularSearchScreen(){
- const{callApi}=useApi(),showSnackBar=useCustomSnackbar();
- const user=useSelector(s=>s.auth.user),selectedMenu=useSelector(s=>s.menus.selectedMenuItem),permissions=getPermissions(selectedMenu);
- const[rows,setRows]=useState([]),[rowCount,setRowCount]=useState(0),[loading,setLoading]=useState(false),[searched,setSearched]=useState(false),[filtersExpanded,setFiltersExpanded]=useState(true);
- const [exportLoading,setExportLoading] =useState(false);
- const[etlDate,setEtlDate]=useState(null),[glcc,setGlcc]=useState(""),[glccValidated,setGlccValidated]=useState(false),[glccLoading,setGlccLoading]=useState(false);
- const[branch,setBranch]=useState(""),[branchInput,setBranchInput]=useState(""),[branches,setBranches]=useState([]);
- const[currency,setCurrency]=useState(""),[currencyInput,setCurrencyInput]=useState(""),[currencies,setCurrencies]=useState([]);
- const[cgl,setCgl]=useState(""),[cglInput,setCglInput]=useState(""),[cgls,setCgls]=useState([]);
- const[paginationModel,setPaginationModel]=useState({page:0,pageSize:25});
-const MIN_ALLOWED_DATE = useMemo(() => dayjs("2026-03-31"), []);
+import React, { useEffect, useState } from "react";
+import { useSelector } from "react-redux";
+import {
+  Alert,
+  Box,
+  Paper,
+  Button,
+  Card,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  FormHelperText,
+  IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
+  Snackbar,
+  TextField,
+  Typography,
+  Checkbox,
+  Autocomplete,
+  Chip
+} from "@mui/material";
+import { findMenuById } from "../../utils/CommonUtilities";
 
 
- const fetchCurrencies=useCallback(async()=>{
-  try{
-   const res=await callApi("/CM/common-master/currency-code-name-only",null,"GET");
-   setCurrencies((res?.data||[]).sort((a,b)=>a.currencyCode==="INR"?-1:b.currencyCode==="INR"?1:a.currencyName.localeCompare(b.currencyName)));
-  }catch{showSnackBar("Currency data not available","error")}
- },[callApi,showSnackBar]);
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import AddIcon from "@mui/icons-material/Add";
 
- const fetchSearchData=useCallback(async(type,term)=>{
-  if(!term||term.length<3)return;
-  try{
-   let circleValue="";
-   if(permissions?.wholebank===true)circleValue="null";
-   else if(user?.isCircle===true||permissions?.circle)circleValue=user?.circleCode;
-   const url=type==="branch"
-    ?`/CM/common-master/branches-code-name-only?q=${encodeURIComponent(term)}&circleCode=${circleValue||""}`
-    :`/CM/common-master/cgl-code-description-only?q=${encodeURIComponent(term)}`;
-   const res=await callApi(url,null,"GET");
-   if(type==="branch")setBranches((res?.data||[]).map(i=>`${i.code}-${i.name}`));
-   else setCgls((res?.data||[]).map(i=>`${i.cglNumber} - ${i.description}`));
-  }catch(e){console.error(e)}
- },[callApi,permissions,user]);
+import useApi from "../../hooks/useApi";
 
- const validateGlcc=async(value)=>{
-  try{
-   setGlccLoading(true);
-   const response=await callApi("/CM/common-master/validate-glcc",{glcc:value},"POST");
-   const data=response?.data;
-   if(data?.valid){
-    setBranch(`${data.branchCode}-${data.branchName?.trim()||""}`);
-    setBranchInput(`${data.branchCode}-${data.branchName?.trim()||""}`);
-    setCurrency(data.currencyCode);
-    setCurrencyInput(data.currencyCode);
-    setCgl(`${data.cglNumber} - ${data.cglDescription}`);
-    setCglInput(`${data.cglNumber} - ${data.cglDescription}`);
-    setGlccValidated(true);
-   }else{
-    setGlccValidated(false);setBranch("");setBranchInput("");setCurrency("");setCurrencyInput("");setCgl("");setCglInput("");
-    showSnackBar(data?.errors?.join(", ")||"Invalid GLCC","error");
-   }
-  }catch(error){
-   setGlccValidated(false);setBranch("");setBranchInput("");setCurrency("");setCurrencyInput("");setCgl("");setCglInput("");
-   const errors=error?.response?.data?.data?.errors||error?.response?.data?.errors;
-   showSnackBar(errors?.join(", ")||"Invalid GLCC","error");
-  }finally{setGlccLoading(false)}
- };
+import ViewVoucherRequestScreen from "./ViewVoucherRequestScreen";
+import { useNavigate } from "react-router-dom";
 
- useEffect(()=>{fetchCurrencies()},[fetchCurrencies]);
+const RequestVoucherScreen = () => {
+  const navigate = useNavigate();
 
- useEffect(()=>{
-  (async()=>{
-   try{
-    const res=await callApi("/PS/file/fincore-date",{},"GET");
-    const raw=res?.data?.userDate||res?.data?.etlDate||res?.date||"";
-    if(raw)setEtlDate(dayjs(raw.split("T")[0]));
-   }catch(e){console.error("ETL Date Error:",e)}
-  })();
- },[callApi]);
+  const menus = useSelector((state) => state.menus);
+  const menuItems = menus.menus;
+  console.log("menu bnmnmnmkn", menuItems)
+  const selectedMenuItem = menus.selectedMenuItem;
+  console.log("selected", selectedMenuItem)
 
- const fetchData=useCallback(async(page=0,size=25)=>{
-  if(!etlDate)return;
-  try{
-   setLoading(true);
-   const payload={fromDate:etlDate.format("YYYY-MM-DD"),toDate:etlDate.format("YYYY-MM-DD"),branchCode:branch?.split("-")[0]||null,currency:currency||null,cgl:cgl?.split(" - ")[0]||null};
-   const res=await callApi(`/ES/differences/search?page=${page}&size=${size}`,payload,"POST");
-   const content=res?.data?.content||res?.content||[];
-   setRows(content.map((item,index)=>({...item,id:item.id||`row-${page}-${index}`,GLCC_VAL:`${item.branchCode||""} ${item.currency||""} ${item.cgl||""}`})));
-   setRowCount(res?.data?.page?.totalElements||0);
-  }catch(e){
-   setRows([]);setRowCount(0);showSnackBar("No records found","error");
-  }finally{setLoading(false)}
- },[callApi,etlDate,branch,currency,cgl,showSnackBar]);
+  const [customIssueError, setCustomIssueError] =
+    useState("");
 
- const handleExport = async () => {
-  try {
-    setExportLoading(true);
+  const [showCustomIssue, setShowCustomIssue] =
+    useState(false);
 
-    const payload = {
-      reconRunDate: etlDate.format("YYYY-MM-DD"),
-      branchCode: branch?.split("-")[0],
-      currency: currency,
-      cgl: cgl?.split(" - ")[0],
+  const [customIssueInput, setCustomIssueInput] =
+    useState("");
+
+  const [customIssues, setCustomIssues] =
+    useState([]);
+
+  const [issueList, setIssueList] =
+    useState([]);
+  const [selectedIssues, setSelectedIssues] =
+    useState([]);
+
+  const [issueOpen, setIssueOpen] =
+    useState(false);
+
+
+  const { user } = useSelector((state) => state.auth);
+
+  const { callApi } = useApi();
+const [voucherCategories, setVoucherCategories] =
+    useState([]);
+
+  const [roles, setRoles] =
+    useState([]);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [roleLoading, setRoleLoading] =
+    useState(false);
+
+  const [openDialog, setOpenDialog] =
+    useState(false);
+
+  const [createdVID, setCreatedVID] =
+    useState("");
+
+  const [errors, setErrors] =
+    useState({});
+
+  const [snackbar, setSnackbar] =
+    useState({
+      open: false,
+      message: "",
+      severity: "success",
+    });
+
+  const [formData, setFormData] =
+    useState({
+      categoryId: "",
+      otherCategory: "",
+      description: "",
+      roleId: "",
+      sdRequestNumber: "",
+    });
+
+  useEffect(() => {
+    fetchRoles();
+    fetchVoucherCategories();
+  }, []);
+
+  const fetchVoucherCategories =
+    async () => {
+      try {
+        const response = await callApi(
+          "/VE/voucher-transactions/voucher-categories",
+          null,
+          "GET"
+        );
+
+        console.log(
+          "Voucher Categories Response =>",
+          response
+        );
+
+        const categories =
+          Array.isArray(response)
+            ? response
+            : response?.data || [];
+
+        const sortedCategories = [...categories].sort((a, b) => {
+          if (a.categoryName === "Other") return 1;
+          if (b.categoryName === "Other") return -1;
+          return 0;
+        });
+
+        setVoucherCategories(sortedCategories);
+      } catch (error) {
+        console.error(
+          "Category API Error =>",
+          error
+        );
+
+        setVoucherCategories([]);
+      }
     };
 
-    const downloadResponse = await callApi(
-      "/ES/differences/export",
-      payload,
-      "POST",
-      "arraybuffer",
-    );
+  const fetchRoles = async () => {
+    setRoleLoading(true);
 
-    const fileName = `Balance_Difference_${payload.reconRunDate}`;
+    try {
+      const response = await callApi(
+        "/VE/voucher-transactions/allowed-roles?menuId=30",
+        null,
+        "GET"
+      );
 
-    if (downloadResponse && downloadResponse?.byteLength > 0) {
-      downloadFile(downloadResponse, "excel", fileName);
+      console.log(
+        "Allowed Roles Response =>",
+        response
+      );
+
+      setRoles(
+        Array.isArray(response.data)
+          ? response.data
+          : []
+      );
+    } catch (error) {
+      console.error(
+        "Failed to fetch roles",
+        error
+      );
+
+      setSnackbar({
+        open: true,
+        message: "Failed to load roles",
+        severity: "error",
+      });
+    } finally {
+      setRoleLoading(false);
+    }
+  };
+
+
+  const handleChange = (e) => {
+    const { name, value } =
+      e.target;
+
+    if (
+      name === "description" &&
+      value.length > 500
+    ) {
       return;
     }
-  } catch (error) {
-    console.error("Something Went Wrong!!", error);
-    showSnackBar("Download Failed", "error");
-  } finally {
-    setExportLoading(false);
+
+    if (name === "otherCategory") {
+      const regex =
+        /^(?!.*\s{2,})[A-Za-z0-9 -]*$/;
+
+      if (!regex.test(value)) {
+        setErrors((prev) => ({
+          ...prev,
+          otherCategory: "Special Character and spaces not allowed",
+        }));
+        return;
+      }
+
+      if (value.length >= 21) {
+        setErrors((prev) => ({
+          ...prev,
+          otherCategory: "Maximum 20 characters allowed",
+        }));
+         setTimeout(() => {
+          setErrors((prev) => ({
+            ...prev,
+            otherCategory: "",
+
+          }))
+        }, 1000)
+        return;
+      }
+
+
+    }
+
+
+    if (name === "sdRequestNumber") {
+      const regex =
+        /^[0-9,]*$/;
+
+      if (!regex.test(value)) {
+        setErrors((prev) => ({
+          ...prev,
+          sdRequestNumber: "Character, Special Characters and space not allowed",
+        }));
+        setTimeout(() => {
+          setErrors((prev) => ({
+            ...prev,
+            sdRequestNumber: "",
+
+          }))
+        }, 1000)
+        return;
+      }
+
+      if (value.length >= 51) {
+        setErrors((prev) => ({
+          ...prev,
+          sdRequestNumber: "Maximum 50 number allowed",
+        }));
+        setTimeout(() => {
+          setErrors((prev) => ({
+            ...prev,
+            sdRequestNumber: "",
+
+          }))
+        }, 1000)
+        return;
+      }
+
+    }
+
+    if (name === "categoryId") {
+
+      const selectedCategory =
+        voucherCategories.find(
+          (item) => item.id == value
+        );
+      console.log(
+        "Selected Category =>",
+        selectedCategory
+      );
+
+      console.log(
+        "Issues =>",
+        selectedCategory?.issueCategories
+      );
+
+      setIssueList(
+        selectedCategory?.issueCategories || []
+      );
+
+      setSelectedIssues([]);
+      setCustomIssues([]);
+      setCustomIssueInput("");
+      setShowCustomIssue(false);
+    }
+
+if (name === "description") {
+    if (value.startsWith(" ")) {
+      setErrors((prev) => ({
+        ...prev,
+        description: "description should not start with a space or contain consecutive spaces..",
+      }));
+      return;
+    } else {
+      setErrors((prev) => ({
+        ...prev,
+        description: "",
+      }));
+    }
   }
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      [name]: "",
+    }));
+  };
+
+
+  const validateForm = () => {
+    let newErrors = {};
+
+    if (!formData.categoryId) {
+      newErrors.categoryId =
+        "Voucher Category is required";
+    }
+
+    const selectedCategory =
+      voucherCategories.find(
+        (item) =>
+          String(item.id) ===
+          String(formData.categoryId)
+      );
+
+    console.log(
+      "Selected Category =>",
+      selectedCategory
+    );
+
+    console.log(
+      "Form Category Id =>",
+      formData.categoryId
+    );
+
+    console.log(
+      "Entered Other Category =>",
+      formData.otherCategory
+    );
+
+    if (
+      selectedCategory?.categoryName
+        ?.trim()
+        .toLowerCase() === "other" &&
+      !formData.otherCategory.trim()
+    ) {
+      newErrors.otherCategory =
+        "Please enter other category";
+    }
+
+    if (
+      selectedCategory?.categoryName
+        ?.trim()
+        .toLowerCase() === "other" &&
+      formData.otherCategory.trim()
+    ) {
+      const enteredCategory =
+        formData.otherCategory
+          .trim()
+          .toLowerCase();
+
+      const categoryExists =
+        voucherCategories.some(
+          (item) => {
+            const match =
+              item.categoryName
+                ?.trim()
+                .toLowerCase() ===
+              enteredCategory;
+
+            console.log(
+              "Comparing =>",
+              item.categoryName,
+              enteredCategory,
+              match
+            );
+
+            return match;
+          }
+        );
+
+      console.log(
+        "Category Exists =>",
+        categoryExists
+      );
+
+      if (categoryExists) {
+        newErrors.otherCategory =
+          "Category already exists";
+      }
+    }
+
+    if (
+      !formData.description.trim()
+    ) {
+      newErrors.description =
+        "Description is required";
+    }
+
+    if (
+      formData.description.length >
+      500
+    ) {
+      newErrors.description =
+        "Maximum 500 Characters Allowed";
+    }
+
+    if (!formData.roleId) {
+      newErrors.roleId =
+        "Allowed Role is required";
+    }
+
+    if (
+      selectedIssues.length === 0 &&
+      customIssues.filter(
+        (item) => item?.trim()
+      ).length === 0
+    ) {
+      newErrors.issues =
+        "At least one issue is required";
+    }
+
+    if (
+      selectedIssues.length === 0 &&
+      customIssues.length === 0
+    ) {
+      if (showCustomIssue) {
+        newErrors.customIssue =
+          "Please add the issue first";
+      } else {
+        newErrors.issues =
+          "Please select at least one issue";
+      }
+    }
+
+    if (
+      showCustomIssue &&
+      customIssueInput.trim() &&
+      customIssues.length === 0
+    ) {
+      newErrors.customIssue =
+        "Please add this issue first";
+    }
+
+    console.log(
+      "Validation Errors =>",
+      newErrors
+    );
+
+    setErrors(newErrors);
+
+    return (
+      Object.keys(newErrors)
+        .length === 0
+    );
+  };
+  const handleCreate =
+    async () => {
+      if (!validateForm()) {
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const selectedCategory =
+          voucherCategories.find(
+            (item) =>
+              item.id ===
+              formData.categoryId
+          );
+
+        const payload = {
+          categoryId:
+            formData.categoryId,
+
+          customCategory:
+            selectedCategory?.categoryName ===
+              "Other"
+              ? formData.otherCategory
+              : "",
+
+          description:
+            formData.description,
+
+          allowedRole:
+            formData.roleId,
+
+          sdReqNo:
+            formData.sdRequestNumber,
+
+          createdBy: user.userId,
+
+          issueCategoryIds: selectedIssues.map(
+            (item) => item.id
+          ),
+
+
+          customIssueCategories:
+            customIssues.filter(
+              (item) => item?.trim()
+            ),
+
+
+        };
+
+        console.log(
+          "Create Payload =>",
+          JSON.stringify(payload, null, 2)
+        );
+
+        const response =
+          await callApi(
+            "/VE/voucher-transactions/create-vid",
+            payload,
+            "POST"
+          );
+
+        console.log(
+          "Create Response =>",
+          response
+        );
+
+        await fetchVoucherCategories();
+
+        const createdVid =
+          response?.vid ||
+          response?.data?.vid ||
+          "";
+
+        setCreatedVID(
+          createdVid
+        );
+
+        setOpenDialog(true);
+
+        setSnackbar({
+          open: true,
+          message:
+            "Voucher Request Created Successfully",
+          severity:
+            "success",
+        });
+
+        setFormData({
+          categoryId: "",
+          otherCategory: "",
+          description: "",
+          roleId: "",
+          sdRequestNumber: "",
+
+        });
+        setSelectedIssues([]);
+        setIssueList([]);
+        setCustomIssues([]);
+        setCustomIssueInput("");
+        setShowCustomIssue(false);
+        setIssueOpen(false);
+
+        setErrors({});
+      } catch (error) {
+        console.error(
+          "Create Voucher Error =>",
+          error
+        );
+
+        setSnackbar({
+          open: true,
+          message:
+            "Failed To Create Voucher",
+          severity: "error",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  const handleReset = () => {
+    setFormData({
+      categoryId: "",
+      otherCategory: "",
+      description: "",
+      roleId: "",
+      sdRequestNumber: "",
+    });
+    setIssueList([]);
+    setSelectedIssues([]);
+    setCustomIssues([]);
+    setCustomIssueInput("");
+    setShowCustomIssue(false);
+    setIssueOpen(false);
+    setErrors({});
+  };
+
+  return (
+    <Paper
+      elevation={2}
+      sx={{
+        p: 2,
+        mb: 4,
+
+        minHeight: 760
+      }}
+    >
+      <Box p={4}>
+        <Typography variant="h4" mb={6}>
+          Request Voucher
+        </Typography>
+        <Card
+          elevation={3}
+          sx={{
+            maxWidth: "1100px",
+            margin: "40px auto",
+            padding: 4,
+            borderRadius: 3,
+          }}
+        >
+
+
+          <Box
+            sx={{
+              width: "100%",
+              display: "flex",
+              flexDirection:
+                "column",
+              gap: 3,
+            }}
+          >
+            {/* Voucher Category + Other */}
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns:
+                  voucherCategories.find(
+                    (item) =>
+                      item.id ===
+                      formData.categoryId &&
+                      item.categoryName ===
+                      "Other"
+                  )
+                    ? "1fr 1fr"
+                    : "1fr",
+
+                gap: 3,
+
+                "@media (max-width:900px)":
+                {
+                  gridTemplateColumns:
+                    "1fr",
+                },
+              }}
+            >
+              {/* Voucher Category */}
+              <FormControl
+                fullWidth
+                error={
+                  !!errors.categoryId
+                }
+              >
+                <InputLabel>
+                  Voucher Category*
+                </InputLabel>
+
+                <Select
+                  disabled={loading}
+                  name="categoryId"
+                  value={
+                    formData.categoryId
+                  }
+                  onChange={
+                    handleChange
+                  }
+                  label="Voucher Category"
+                  MenuProps={{
+                    PaperProps: {
+                      sx: {
+                        maxHeight: 400,
+                        overflow: "auto",
+                      }
+                    }
+                  }}
+                >
+                  <MenuItem value="">
+                    <em>
+                      Select Category
+                    </em>
+                  </MenuItem>
+
+                  {voucherCategories?.map(
+                    (item) => (
+
+                      <MenuItem
+                        key={item.id}
+                        value={item.id}
+                      >
+                        {item.categoryName === "Other"
+                          ? "+ Other"
+                          : item.categoryName}
+                      </MenuItem>
+                    )
+                  )}
+                </Select>
+
+                <FormHelperText>
+                  {errors.categoryId
+                    ? errors.categoryId
+                    : "Select the voucher category to create the voucher request."}
+                </FormHelperText>
+              </FormControl>
+
+              {/* Other Category */}
+              {voucherCategories.find(
+                (item) =>
+                  item.id ===
+                  formData.categoryId &&
+                  item.categoryName ===
+                  "Other"
+              ) && (
+                  <TextField
+                    disabled={loading}
+                    fullWidth
+                    label="New Category *"
+                    name="otherCategory"
+                    value={
+                      formData.otherCategory
+                    }
+                    onChange={
+                      handleChange
+                    }
+                    error={
+                      !!errors.otherCategory
+                    }
+                    inputProps={{
+                      maxLength: 21,
+                    }}
+                    helperText={
+                      errors.otherCategory
+                        ? errors.otherCategory
+                        : `Only character, numbers, hyphen and single space allowed.  (${formData.otherCategory.length}/20)`
+
+                    }
+                  />
+                )}
+            </Box>
+
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns:
+                  showCustomIssue
+                    ? "0.90fr 0.90fr"
+                    : "1fr",
+                gap: 3,
+
+                "@media (max-width:900px)": {
+                  gridTemplateColumns: "1fr",
+                },
+              }}
+            >
+              <Autocomplete
+                multiple
+                disableCloseOnSelect
+
+                open={issueOpen}
+
+                onOpen={() => {
+
+                  if (!formData.categoryId) {
+
+                    setErrors((prev) => ({
+                      ...prev,
+                      issues:
+                        "Please select Voucher Category first",
+                    }));
+
+                    return;
+                  }
+
+
+                  setIssueOpen(true);
+                }}
+                onClose={() => setIssueOpen(false)}
+
+                options={[
+                  ...issueList,
+
+                  ...(formData.categoryId
+                    ? [
+                      {
+                        id: "ADD_NEW",
+                        issueCategoryName:
+                          "+ Add Issue",
+                      },
+                    ]
+                    : []),
+                ]}
+                value={selectedIssues}
+
+                onChange={(
+                  event,
+                  newValue
+                ) => {
+                  const addIssueClicked =
+                    newValue.find(
+                      (item) =>
+                        item.id ===
+                        "ADD_NEW"
+                    );
+
+
+                  if (addIssueClicked) {
+                    setShowCustomIssue(true);
+                    setIssueOpen(false);
+
+                    setSelectedIssues(
+                      newValue.filter(
+                        (item) => item.id !== "ADD_NEW"
+                      )
+                    );
+
+                    return;
+                  }
+                  setSelectedIssues(
+                    newValue
+                  );
+                  if (newValue.length > 0) {
+                    setErrors((prev) => ({
+                      ...prev,
+                      issues: "",
+                    }))
+                  }
+                }}
+                getOptionLabel={(
+                  option
+                ) =>
+                  option.issueCategoryName ||
+                  ""
+                }
+                renderOption={(
+                  props,
+                  option,
+                  { selected }
+                ) => (
+                  <li {...props}>
+                    {option.id !==
+                      "ADD_NEW" && (
+                        <Checkbox
+                          checked={
+                            selected
+                          }
+                          size="small"
+                        />
+                      )}
+
+                    {
+                      option.issueCategoryName
+                    }
+                  </li>
+                )}
+                slotProps={{
+                  listbox: {
+                    sx: {
+                      maxHeight: 300,
+                      overflowY: "auto"
+                    }
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Search Issues*"
+                    placeholder="Search Issues"
+                    error={!!errors.issues}
+                    helperText={
+                      errors.issues
+                        ? errors.issues
+                        : "Select one or more issues. If not available, choose Add New Issues."
+                    }
+
+
+
+                  />
+                )}
+              />
+
+
+              {showCustomIssue && (
+                <Box >
+
+
+
+                  <Box
+                    sx={{
+                      display: "flex",
+                      gap: 1,
+
+                    }}
+                  >
+                    <TextField
+                      fullWidth
+                      label="Enter New Issue"
+                      value={customIssueInput}
+
+                      onChange={(e) => {
+                        setCustomIssueInput(
+                          e.target.value
+                        );
+
+                        setErrors((prev) => ({
+                          ...prev,
+                          customIssue: "",
+                        }));
+                      }}
+                      error={!!errors.customIssue}
+                      inputProps={{
+                        maxLength: 100,
+                      }}
+                      helperText={
+                        errors.customIssue
+                          ? errors.customIssue
+                          : `Enter a new issue if it is not available in the list. All characters are allowed (${customIssueInput.length}/100)`
+                      }
+
+
+
+                    />
+
+                    <Button size="small" sx={{
+                      minWidth: "80px", height: "50px", mt: "4px"
+                    }}
+                      variant="contained"
+                      startIcon={<AddIcon />}
+                      onClick={() => {
+                        const newIssue =
+                          customIssueInput.trim();
+
+                        if (!newIssue) return;
+
+                        const alreadyExistsInMaster =
+                          issueList.some(
+                            (item) =>
+                              item.issueCategoryName
+                                ?.trim()
+                                .toLowerCase() ===
+                              newIssue.toLowerCase()
+                          );
+
+                        const alreadyExistsInCustom =
+                          customIssues.some(
+                            (item) =>
+                              item.trim().toLowerCase() ===
+                              newIssue.toLowerCase()
+                          );
+
+                        if (
+                          alreadyExistsInMaster ||
+                          alreadyExistsInCustom
+                        ) {
+                          setErrors((prev) => ({
+                            ...prev,
+                            customIssue:
+                              "Issue already exists",
+                          }));
+
+                          return;
+                        }
+
+                        setCustomIssues((prev) => [
+                          ...prev,
+                          newIssue,
+                        ]);
+
+                        setErrors((prev) => ({
+                          ...prev,
+                          issues: "",
+                          customIssue: "",
+                        }));
+
+                        setCustomIssueInput("");
+                      }}
+
+                    >
+                      Add
+                    </Button>
+
+
+
+                  </Box>
+
+
+
+                  {customIssues.length >
+                    0 && (
+                      <Box
+                        sx={{
+                          mt: 2,
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 1,
+                        }}
+                      >
+                        {customIssues.map(
+                          (
+                            issue,
+                            index
+                          ) => (
+                            <Chip
+                              key={index}
+                              label={issue}
+                              onDelete={() =>
+                                setCustomIssues(
+                                  customIssues.filter(
+                                    (
+                                      _,
+                                      i
+                                    ) =>
+                                      i !==
+                                      index
+                                  )
+                                )
+                              }
+                            />
+                          )
+                        )}
+                      </Box>
+                    )}
+                </Box>
+              )}
+            </Box>
+
+
+            {/* Allowed Role + SD */}
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns:
+                  "1fr 1fr",
+                gap: 3,
+
+                "@media (max-width:900px)":
+                {
+                  gridTemplateColumns:
+                    "1fr",
+                },
+              }}
+            >
+              {/* Role */}
+              <FormControl
+                fullWidth
+                error={
+                  !!errors.roleId
+                }
+              >
+                <InputLabel>
+                  Allowed Role*
+                </InputLabel>
+                <Select
+                  disabled={loading || roleLoading}
+                  name="roleId"
+                  value={formData.roleId}
+                  label="Allowed Role"
+                  onChange={handleChange}
+                  MenuProps={{
+                    PaperProps: {
+                      sx: {
+                        maxHeight: 250,
+                        overflow: "auto",
+                      }
+                    }
+                  }}
+
+                >
+
+                  <MenuItem value="">
+                    <em>Select Role</em>
+                  </MenuItem>
+
+                  {roles?.map((role) => (
+                    <MenuItem
+                      key={role.roleId}
+                      value={role.roleId}
+                    >
+                      {role.roleName}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>
+                  {errors.roleId
+                    ? errors.roleId
+                    : "Select the role that will be allowed to process this request."}
+                </FormHelperText>
+
+              </FormControl>
+
+              {/* SD */}
+              <TextField
+                disabled={loading}
+                fullWidth
+                label="SD Request Number"
+                name="sdRequestNumber"
+                value={
+                  formData.sdRequestNumber
+                }
+               
+                onChange={
+                  handleChange
+                }
+                error={
+                  !!errors.sdRequestNumber
+                }
+                inputProps={{
+                  maxLength: 51,
+                }}
+                helperText={
+                  errors.sdRequestNumber
+                    ? errors.sdRequestNumber
+                    : `Only numbers and commas allowed.  (${formData.sdRequestNumber.length}/50)`
+
+                }
+              />
+            </Box>
+
+            {/* Description */}
+            <TextField
+              disabled={loading}
+              fullWidth
+              multiline
+              rows={5}
+              label="Description*"
+              name="description"
+              value={
+                formData.description
+              }
+              onChange={
+                handleChange
+              }
+              error={
+                !!errors.description
+              }
+              inputProps={{
+                maxLength: 500,
+              }}
+              helperText={
+                errors.description
+                  ? errors.description
+                  : ` All characters are allowed .(${formData.description.length}/500)`
+              }
+            />
+
+
+
+
+            {/* Buttons */}
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent:
+                  "flex-end",
+                gap: 2,
+              }}
+            >
+              <Button
+                variant="outlined"
+                onClick={
+                  handleReset
+                }
+                disabled={loading}
+                sx={{
+                  minWidth:
+                    "120px",
+                  textTransform:
+                    "none",
+                  borderRadius:
+                    "8px",
+                  "&:hover":
+                  {
+                    color:"#fff",
+                  },
+                }}
+              >
+                Reset
+              </Button>
+
+              <Button
+                variant="contained"
+                onClick={
+                  handleCreate
+                }
+                disabled={loading}
+                sx={{
+                  minWidth:
+                    "120px",
+                  textTransform:
+                    "none",
+                  borderRadius:
+                    "8px",
+                }}
+              >
+                {loading
+                  ? "Creating..."
+                  : "Create"}
+              </Button>
+            </Box>
+          </Box>
+        </Card>
+
+        {/* Success Dialog */}
+        <Dialog
+
+          open={openDialog}
+          disableEscapeKeyDown
+          hideBackdrop=
+          {false}
+          BackdropProps={{
+            sx:{pointerEvents:"auto",},
+          }}
+          onClose={(event, reason) => {
+            if(reason === "backdropClick") {return;}
+             
+               setOpenDialog(false)
+          }
+            
+          }
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle>
+            Voucher Request Created
+          </DialogTitle>
+
+          <DialogContent>
+            <Typography mb={2}>
+              Voucher ID
+            </Typography>
+
+            <Box
+              sx={{
+                display: "flex",
+                alignItems:
+                  "center",
+                justifyContent:
+                  "space-between",
+                border:
+                  "1px solid #ccc",
+                borderRadius: 2,
+                px: 2,
+                py: 1.5,
+                background:
+                  "#f8f9fa",
+              }}
+            >
+              <Typography
+                fontWeight={700}
+                color="primary"
+              >
+                {createdVID}
+              </Typography>
+
+              <IconButton
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    createdVID
+                  );
+
+                  setSnackbar({
+                    open: true,
+                    message:
+                      "Voucher ID copied",
+                    severity:
+                      "success",
+                  });
+                }}
+              >
+                <ContentCopyIcon />
+              </IconButton>
+            </Box>
+          </DialogContent>
+
+          <DialogActions
+            sx={{
+              p: 3,
+              pt: 1,
+            }}
+          >
+            <Button
+              variant="outlined"
+              onClick={() => {
+                handleReset();
+                setOpenDialog(false);
+              }}
+            >
+              Create New Voucher
+            </Button>
+
+
+            <Button
+              variant="contained"
+              onClick={() => {
+                setOpenDialog(false);
+
+                const viewMenu = findMenuById(menuItems, 262);
+
+                navigate(viewMenu?.route || selectedMenuItem?.route);
+              }}
+            >
+              View Requests
+            </Button>
+
+
+
+
+          </DialogActions>
+        </Dialog>
+
+        {/* Snackbar */}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={
+            4000
+          }
+          onClose={() =>
+            setSnackbar(
+              (prev) => ({
+                ...prev,
+                open: false,
+              })
+            )
+          }
+          anchorOrigin={{
+            vertical: "top",
+            horizontal:
+              "center",
+          }}
+        >
+          <Alert
+            severity={
+              snackbar.severity
+            }
+            variant="filled"
+          >
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+      </Box>
+    </Paper>
+  );
 };
- const handleSearch=()=>{
-  setSearched(true);setFiltersExpanded(false);
-  setPaginationModel(p=>({...p,page:0}));
- };
 
- useEffect(()=>{
-  if(searched&&!filtersExpanded)fetchData(paginationModel.page,paginationModel.pageSize);
- },[searched,filtersExpanded,paginationModel.page,paginationModel.pageSize,fetchData]);
-
- const handleReset=()=>{
-  setRows([]);setRowCount(0);setGlcc("");setGlccValidated(false);setGlccLoading(false);
-  setBranch("");setBranchInput("");setCurrency("");setCurrencyInput("");setCgl("");setCglInput("");
-  setBranches([]);setCgls([]);setSearched(false);setFiltersExpanded(true);setPaginationModel({page:0,pageSize:25});
- };
-
- const chipSx={height:28,borderRadius:1.5,fontSize:"11px",fontWeight:600,color:"#58469f",borderColor:"rgba(88,70,159,.28)",bgcolor:"rgba(88,70,159,.035)"};
-
- return(
-  <Box sx={{p:{xs:1,sm:2}}}>
-   <Paper elevation={0} sx={{p:{xs:1.5,sm:2.5},mt:{xs:-1,sm:-2},mb:3,bgcolor:"rgba(255,255,255,.4)",backdropFilter:"blur(4px)",border:"1px solid",borderColor:"divider",borderRadius:{xs:2,sm:3},overflow:"hidden"}}>
-    <Box sx={{p:{xs:1.5,sm:2},borderRadius:2,bgcolor:"background.paper",boxShadow:2,border:"1px solid",borderColor:"divider",borderLeft:"6px solid",borderLeftColor:"primary.main"}}>
-     <Stack direction={{xs:"column",sm:"row"}} alignItems={{xs:"flex-start",sm:"center"}} justifyContent="space-between" spacing={2}>
-      <Stack direction="row" spacing={2} alignItems="center">
-       <CalendarMonthIcon color="primary" sx={{fontSize:{xs:30,sm:36},flexShrink:0}}/>
-       <Box sx={{minWidth:0}}>
-        <Stack direction="row" spacing={1} alignItems="center">
-         <Typography variant="subtitle1" fontWeight={700} sx={{fontSize:{xs:".95rem",sm:"1rem",md:"1.05rem"}}}>Date Wise Balance Search</Typography>
-         <Typography sx={{px:1,py:.25,borderRadius:1.5,bgcolor:"rgba(88,70,159,.08)",color:"primary.main",fontSize:".7rem",fontWeight:700}}>Date Wise</Typography>
-        </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{mt:.3,fontSize:{xs:".75rem",sm:".82rem"}}}>View balance differences for a selected date and track reconciliation history.</Typography>
-       </Box>
-      </Stack>
-
-      {searched&&<StyledButton variant="contained" startIcon={<ManageSearchOutlinedIcon/>} onClick={()=>setFiltersExpanded(true)} sx={{textTransform:"none",borderRadius:"8px",fontWeight:600,minWidth:{xs:"100%",sm:140},width:{xs:"100%",sm:"auto"},height:{xs:38,sm:32}}}>Edit Filters</StyledButton>}
-     </Stack>
-    </Box>
-
-    {searched&&
-     <Stack direction="row" spacing={.8} flexWrap="wrap" useFlexGap sx={{mt:1.5,px:.5}}>
-      <Chip label={`Date: ${etlDate?.format("DD-MM-YYYY")||"-"}`} variant="outlined" size="small" sx={chipSx}/>
-      {glcc&&<Chip label={`GLCC: ${glcc}`} variant="outlined" size="small" sx={chipSx}/>}
-      <Chip label={`Branch: ${branch||"-"}`} variant="outlined" size="small" sx={chipSx}/>
-      <Chip label={`Currency: ${currency||"-"}`} variant="outlined" size="small" sx={chipSx}/>
-      <Chip label={`CGL: ${cgl||"-"}`} variant="outlined" size="small" sx={chipSx}/>
-     </Stack>
-    }
-
-    {filtersExpanded&&
-     <Box sx={{mt:3}}>
-      <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,1fr)",md:"repeat(4,1fr)"},gap:2}}>
-
-       {(permissions?.wholebank||user?.isCircle===true)&&
-        <TextField label="GLCC (Optional)" fullWidth value={glcc} placeholder="Enter 18 Characters GLCC" InputLabelProps={{shrink:true}} inputProps={{maxLength:18}} disabled={glccLoading} onChange={e=>{
-         const value=e.target.value.toUpperCase();
-         if(!/^[A-Z0-9]*$/.test(value)){showSnackBar("Invalid GLCC format. Only letters and numbers are allowed.","warning");return}
-         if(value.length<=5&&!/^\d*$/.test(value)){showSnackBar("Invalid GLCC format. Enter 5 digits, followed by 3 letters, and then 10 digits.","warning");return}
-         if(value.length>5&&value.length<=8&&!/^\d{5}[A-Z]*$/.test(value)){showSnackBar("Invalid GLCC format. Enter 5 digits, followed by 3 letters, and then 10 digits.","warning");return}
-         if(value.length>8&&!/^\d{5}[A-Z]{3}\d*$/.test(value)){showSnackBar("Invalid GLCC format. Enter 5 digits, followed by 3 letters, and then 10 digits.","warning");return}
-         setGlcc(value);setGlccValidated(false);setBranch("");setBranchInput("");setCurrency("");setCurrencyInput("");setCgl("");setCglInput("");
-         if(value.length===18)validateGlcc(value);
-        }}/>
-       }
-
-       <Autocomplete autoHighlight forcePopupIcon={false} disabled={glccValidated||(!permissions?.wholebank&&(user?.isCircle===false||permissions?.branch))} value={branch} inputValue={branchInput} options={branches} noOptionsText={branchInput.length<3?"Please enter at least 3 characters":"No Options"} onInputChange={(e,value,reason)=>{setBranchInput(value);if(reason==="input"&&value.length>=3)fetchSearchData("branch",value)}} onChange={(e,value)=>setBranch(value||"")} renderInput={params=><TextField {...params} label="Branch Code or Name*" placeholder="eg. 12345 or ABC" fullWidth InputLabelProps={{shrink:true}}/>}/>
-
-       <Autocomplete autoHighlight disabled={glccValidated} options={currencies} value={currencies.find(c=>c.currencyCode===currency)||null} inputValue={currencyInput} getOptionLabel={o=>o?`${o.currencyCode} (${o.currencyName})`:""} onInputChange={(e,value)=>setCurrencyInput(value)} onChange={(e,value)=>{setCurrency(value?.currencyCode||"");setCurrencyInput(value?`${value.currencyCode} - ${value.currencyName}`:"")}} onOpen={fetchCurrencies} renderInput={params=><TextField {...params} label="Currency*" placeholder="Please select Currency" fullWidth InputLabelProps={{shrink:true}}/>}/>
-
-       <Autocomplete autoHighlight forcePopupIcon={false} disabled={glccValidated} value={cgl} inputValue={cglInput} options={cgls} noOptionsText={cglInput.length<3?"Please enter at least 3 characters":"No Options"} onInputChange={(e,value,reason)=>{setCglInput(value);if(reason==="input"&&value.length>=3)fetchSearchData("cgl",value)}} onChange={(e,value)=>{setCgl(value||"");setCglInput(value||"")}} renderInput={params=><TextField {...params} label="CGL*" placeholder="eg. 9999999999" fullWidth InputLabelProps={{shrink:true}}/>}/>
-
-       <LocalizationProvider dateAdapter={AdapterDayjs}>
-        <DatePicker value={etlDate} format="DD-MM-YYYY" minDate={MIN_ALLOWED_DATE} maxDate={etlDate} onChange={setEtlDate} slotProps={{textField:{label:"ETL Date*",fullWidth:true,InputLabelProps:{shrink:true},placeholder:"DD-MM-YYYY"}}}/>
-       </LocalizationProvider>
-       
-      </Box>
-
-      <Box sx={{display:"flex",justifyContent:{xs:"stretch",sm:"flex-end"},gap:1.5,mt:-5}}>
-       <StyledButton variant="contained" startIcon={<RestartAltIcon/>} onClick={handleReset} sx={{flex:{xs:1,sm:"unset"},textTransform:"none"}}>Reset</StyledButton>
-       <StyledButton variant="contained" startIcon={<SearchIcon/>} disabled={!etlDate||!branch||!currency||!cgl} onClick={handleSearch} sx={{flex:{xs:1,sm:"unset"},textTransform:"none"}}>Search</StyledButton>
-      </Box>
-     </Box>
-    }
-   </Paper>
-
-   {searched&&
-    <BalanceDateWiseTable
-     rows={rows}
-     loading={loading}
-     totalElements={rowCount}
-     paginationModel={paginationModel}
-     setPaginationModel={setPaginationModel}
-     onHistory={()=>{}}
-     onExport={handleExport}
-     exportLoading={exportLoading}
-    />
-   }
-  </Box>
- );
-}
+export default RequestVoucherScreen;
