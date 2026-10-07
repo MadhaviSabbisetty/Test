@@ -1,267 +1,905 @@
-import React from "react";
-import { Box, Typography } from "@mui/material";
-import CustomChip from "../../../utils/CustomChip";
-import dayjs from "dayjs";
 
-const formatAmount = (value) =>
-  value != null && value !== ""
-    ? Number(value).toLocaleString("en-IN", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-    : "-";
+  const handleProceed = () => {
+    setIsActionMode(true); // Open the universal action screen
 
-const formatDate = (value) => {
-  if (!value) return "-";
+    if (viewingBatch?.isFinalApproval === "Y") {
+      // --- THE FIX: Only set defaults if the user hasn't touched the scheduling preferences yet ---
+      if (scheduleOverrideType === "KEEP" && !finalScheduleTime) {
+        const isLapsed = vidDetails?.SCHEDULED_TIME && new Date(vidDetails.SCHEDULED_TIME) < new Date();
 
-  const date = dayjs(value);
+        if (isLapsed) {
+          setScheduleOverrideType(null);
+          setFinalScheduleTime("");
+        } else {
+          setScheduleOverrideType("KEEP");
+          if (vidDetails?.SCHEDULED_TIME) {
+            setFinalScheduleTime(dayjs(vidDetails.SCHEDULED_TIME).format("YYYY-MM-DDTHH:mm"));
+          } else {
+            setFinalScheduleTime("");
+          }
+        }
+      }
+      // If scheduleOverrideType is already "OVERRIDE" or has values changed by user, we do NOTHING.
+      // This leaves their choices completely untouched when they come back!
+    }
+  };
 
-  return date.isValid()
-    ? date.format("DD-MM-YYYY")
-    : "-";
-};
 
-export const balanceDifferenceColumns = [
-  {
-    field: "reconDate",
-    headerName: "Date",
-    flex: 0.8,
-    minWidth: 125,
-    sortable: true,
-    filterable: true,
+  const handleOpenModal = (batch, mode) => {
+    setSelectedBatch(batch);
+    setModalMode(mode);
+    setExecutorRemarks("");
+    setIsModalOpen(true);
+  };
 
-    renderCell: (params) =>
-      formatDate(params.value),
-  },
+  const handleCloseModal = () => {
+    if (isSubmitting) return;
+    setIsModalOpen(false);
+    setSelectedBatch(null);
+  };
 
-  {
-    field: "cbsBalance",
-    headerName: "CBS Balance",
-    flex: 1,
-    minWidth: 180,
-    headerAlign: "right",
-    align: "right",
-    sortable: false,
-    filterable: true,
+  const handleInitiateAccept = () => {
+    // Check if the current user is the final approver from our updated API
+    if (viewingBatch?.isFinalApproval === "Y") {
+      setIsSchedulingMode(true);
 
-    renderCell: (params) => {
-      const value = Number(params.value);
-      const negative = value < 0;
+      if (vidDetails?.SCHEDULED_TIME) {
+        const dateObj = new Date(vidDetails.SCHEDULED_TIME);
+        dateObj.setMinutes(dateObj.getMinutes() - dateObj.getTimezoneOffset());
+        setFinalScheduleTime(dateObj.toISOString().slice(0, 16));
+      } else {
+        setFinalScheduleTime("");
+      }
+    } else {
+      // Normal checker, skip the scheduling screen and just submit
+      handleSubmitAction("ACCEPTED");
+    }
+  };
+  const handleSubmitAction = async (actionStatus, overrideLapse = false) => {
+    const statusToSubmit =
+      typeof actionStatus === "string" ? actionStatus : modalMode;
 
-      return (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            width: "100%",
-            height: "100%",
-            fontSize: "0.8rem",
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              color: negative
-                ? "#d32f2f"
-                : "#2e7d32",
-              mr: 1,
-            }}
-          >
-            {formatAmount(value)}
-          </Typography>
+    if (!isRemarksValid(executorRemarks)) {
+      showSnackBar("Remarks are compulsory (2-30 chars).", "warning");
+      return;
+    }
+    setSubmittingAction(statusToSubmit);
+    setIsSubmitting(true);
+    setModalMode(statusToSubmit);
 
-          <CustomChip
-            label={negative ? "Dr" : "Cr"}
-            size="small"
-            sx={{
-              height: 20,
-              fontSize: "0.68rem",
-              fontWeight: 700,
-              bgcolor: negative
-                ? "rgba(211,47,47,.08)"
-                : "rgba(46,125,50,.08)",
-              color: negative
-                ? "#d32f2f"
-                : "#2e7d32",
-              border: `1px solid ${
-                negative
-                  ? "rgba(211,47,47,.2)"
-                  : "rgba(46,125,50,.2)"
-              }`,
-            }}
-          />
-        </Box>
+    let formattedNewSchedule = null;
+    const targetTime = isActionMode ? finalScheduleTime : newScheduleTime;
+
+    if (overrideLapse && targetTime) {
+      const today = dayjs();
+      const scheduledDayjs = dayjs(targetTime);
+      const finalSchedule = scheduledDayjs
+        .year(today.year())
+        .month(today.month())
+        .date(today.date());
+
+      const minAllowed = dayjs();
+      const maxAllowed = dayjs().endOf('day');
+
+      if (finalSchedule.isBefore(minAllowed)) {
+        showSnackBar("Schedule time cannot be in the past.", "warning");
+        setIsSubmitting(false);
+        return;
+      }
+      if (finalSchedule.isAfter(maxAllowed)) {
+        showSnackBar("Schedule time cannot exceed today's end of day (11:59 PM).", "warning");
+        setIsSubmitting(false);
+        return;
+      }
+      formattedNewSchedule = finalSchedule.format("YYYY-MM-DD HH:mm:ss");
+    }
+
+    try {
+      const response = await callApi(
+        "/JS/voucher/workflow/action",
+        {
+          batchId: viewingBatchId,
+          status: statusToSubmit,
+          remarks: executorRemarks.trim(),
+          overrideScheduleLapse: overrideLapse,
+          newScheduledTime: formattedNewSchedule,
+        },
+        "POST"
       );
-    },
-  },
 
-  {
-    field: "glBalance",
-    headerName: "GL Balance",
-    flex: 1,
-    minWidth: 180,
-    headerAlign: "right",
-    align: "right",
-    sortable: false,
-    filterable: true,
-
-    renderCell: (params) => {
-      const value = Number(params.value);
-      const negative = value < 0;
-
-      return (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            width: "100%",
-            height: "100%",
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              color: negative
-                ? "#d32f2f"
-                : "#2e7d32",
-              mr: 1,
-            }}
-          >
-            {formatAmount(value)}
-          </Typography>
-
-          <CustomChip
-            label={negative ? "Dr" : "Cr"}
-            size="small"
-            sx={{
-              height: 20,
-              fontSize: "0.68rem",
-              fontWeight: 700,
-              bgcolor: negative
-                ? "rgba(211,47,47,.08)"
-                : "rgba(46,125,50,.08)",
-              color: negative
-                ? "#d32f2f"
-                : "#2e7d32",
-              border: `1px solid ${
-                negative
-                  ? "rgba(211,47,47,.2)"
-                  : "rgba(46,125,50,.2)"
-              }`,
-            }}
-          />
-        </Box>
+      // --- FIX: Dynamic Success Message with Batch ID ---
+      const actionName = statusToSubmit === "ACCEPTED" ? "approved" : "rejected";
+      showSnackBar(
+        `Batch ID ${viewingBatchId} has been successfully ${actionName}.`,
+        "success"
       );
+
+      setIsScheduleLapseModalOpen(false);
+      setIsViewModalOpen(false);
+      setIsActionMode(false);
+      setActionSelection(null);
+      setScheduleOverrideType("KEEP");
+      setFinalScheduleTime("");
+      setNewScheduleTime("");
+      setExecutorRemarks("");
+      fetchPendingBatches();
+    } catch (e) {
+      if (e.response && e.response.status === 409) {
+        setIsScheduleLapseModalOpen(true);
+        setIsSubmitting(false);
+        return;
+      }
+
+      const serverMsg = e?.response?.data?.message
+        || e?.response?.data?.error
+        || (typeof e?.response?.data === 'string' ? e.response.data : null)
+        || e?.message;
+
+      // --- FIX: Dynamic Error Message with Batch ID ---
+      const errorMsg = serverMsg
+        ? `${serverMsg} (Batch ID: ${viewingBatchId})`
+        : `Failed to process Batch ID ${viewingBatchId}. Please try again.`;
+
+      showSnackBar(errorMsg, "error");
+    } finally {
+      setIsSubmitting(false);
+      setSubmittingAction(null);
+    }
+  };
+  const columns = [
+    {
+      field: "batchId",
+      headerName: "Batch ID",
+      width: 110,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: false, // <--- ENABLED
+      filterable: true,         // <--- ENABLED
+      sortable: false,
     },
-  },
-
-  {
-    field: "differenceAmount",
-    headerName: "Difference Amount",
-    flex: 1,
-    minWidth: 190,
-    headerAlign: "right",
-    align: "right",
-    sortable: false,
-    filterable: true,
-
-    renderCell: (params) => {
-      const value = Number(params.value);
-
-      return (
+    {
+      field: "vid",
+      headerName: "VID",
+      width: 170,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: false, // <--- ENABLED
+      filterable: true,         // <--- ENABLED
+      sortable: false,
+      renderCell: (p) => (
         <Typography
+          variant="body2"
+          fontWeight="bold"
           sx={{
             width: "100%",
             height: "100%",
             display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            textAlign: "right",
-            fontWeight: 600,
-            fontSize: "0.8rem",
-            color:
-              value < 0
-                ? "#d32f2f"
-                : value > 0
-                ? "#2e7d32"
-                : "text.secondary",
+            alignItems: "center", // Vertically centers text
+            justifyContent: "center", // Horizontally centers text (redundant if align: "center" works, but safe)
           }}
         >
-          {formatAmount(value)}
+          {p.value || "N/A"}
         </Typography>
-      );
+      ),
     },
-  },
+    {
+      field: "workflowState",
+      headerName: "Workflow Progress",
+      width: 360,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: true,
+      sortable: false,
+      renderCell: (params) => {
+        const state = params.value || "";
+        const workflow = params.row.approvalWorkflow;
+        const isRejected = state === "REJECTED" || params.row.batchStatus === "R";
 
-  {
-    field: "diffYesterday",
-    headerName: "Diff. Yesterday",
-    flex: 1,
-    minWidth: 170,
-    headerAlign: "right",
-    align: "right",
-    sortable: false,
-    filterable: true,
+        const steps = workflowStepsMap[workflow] || [];
+        let activeStep = params.row.currentOrder ? params.row.currentOrder - 1 : 0;
 
-    renderCell: (params) => {
-      const value = Number(params.value);
+        // NEW FIX: Force the UI to push the active step to the final Execution step if it failed!
+        if (params.row.isExecutionFailed) {
+          activeStep = steps.length - 1;
+        } else if (state === "POSTED" || state === "SCHEDULED" || state === "C" || state === "S") {
+          activeStep = steps.length;
+        }
 
-      return (
-        <Typography
-          sx={{
-            width: "100%",
-            height: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            textAlign: "right",
-            fontWeight: 600,
-            fontSize: "0.8rem",
-            color:
-              value < 0
-                ? "#d32f2f"
-                : value > 0
-                ? "#2e7d32"
-                : "text.secondary",
+        if (activeStep === -1) activeStep = 0;
+
+        const escalationHours = params.row.escalationTime || 24;
+        const hoursPending = Math.abs(new Date() - new Date(params.row.requestDate)) / 36e5;
+        const isEscalated = !isRejected && activeStep < steps.length && hoursPending > escalationHours;
+
+        return (
+          <Box sx={jaStyles.miniStepperBox}>
+            <Stepper activeStep={activeStep} alternativeLabel connector={<CustomConnector />} sx={jaStyles.miniStepper}>
+              {steps.map((step, index) => {
+                const isCompleted = index < activeStep;
+                const isCurrent = index === activeStep;
+
+                let statusFlag = "PENDING";
+                if (isCompleted) statusFlag = "COMPLETED";
+                if (isCurrent && isRejected) statusFlag = "REJECTED";
+                // NEW FIX: Turn the Execution stage RED with an X if it failed!
+                else if (isCurrent && params.row.isExecutionFailed) statusFlag = "REJECTED";
+                else if (isCurrent && isEscalated) statusFlag = "ESCALATED";
+                else if (isCurrent) statusFlag = "ACTIVE";
+
+                const label = step?.designation || step?.state || "Unknown";
+
+                return (
+                  <Tooltip title={statusFlag === "ESCALATED" ? "Escalation Time Breached - Attention Required" : label} key={`${label}-${index}`} arrow>
+                    {/* Passed params.row.isExecutionFailed to turn the line red */}
+                    <Step completed={isCompleted} active={isCurrent} sx={jaStyles.miniStep(isRejected || params.row.isExecutionFailed, index, activeStep)}>
+                      <StepLabel
+                        StepIconComponent={() => (
+                          <CustomWorkflowIcon
+                            statusFlag={statusFlag}
+                            iconLetter={label.charAt(0).toUpperCase()}
+                            label={label}
+                            isMini={true}
+                          />
+                        )}
+                        sx={jaStyles.miniStepLabel}
+                      />
+                    </Step>
+                  </Tooltip>
+                );
+              })}
+            </Stepper>
+          </Box>
+        );
+      },
+    },
+
+    {
+      field: "creatorName",
+      headerName: "Creator",
+      width: 320,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: true,
+      sortable: false,
+      renderCell: (p) => {
+        const name = p.row.creatorName || p.row.creatorId;
+        const id = p.row.creatorId;
+        return (
+          <Chip
+            icon={<AccountCircleIcon />}
+            label={`${name} (${id})`}
+            size="small"
+            variant="outlined"
+          />
+        );
+      },
+    },
+    {
+      field: "requestDate",
+      headerName: "Submitted On",
+      width: 230,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: true,
+      sortable: false,
+      renderCell: (p) => formatDateTime(p.value),
+    },
+
+    {
+      field: "requestCount",
+      headerName: "No. of Entries",
+      width: 220,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: true,
+      sortable: false,
+    },
+
+     {
+      field: "actions",
+      headerName: "Action",
+      width: 140,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: true,
+      sortable: false,
+      renderCell: (params) => {
+        
+        // 1. PSO RETRY MODE: If it failed, the backend guarantees this is the PSO user. Just show Retry!
+        if (params.row.isExecutionFailed) {
+          return (
+            <Tooltip title="Execution failed. PSO Retry Authorization." arrow>
+               <Button
+                 variant="contained"
+                 size="small"
+                 color="warning"
+                 onClick={() => handleDirectRetry(params.row)}
+                 sx={{ textTransform: "none", borderRadius: 2, boxShadow: 0, fontWeight: "bold" }}
+                 startIcon={<ReplayIcon />}
+               >
+                 Retry
+               </Button>
+            </Tooltip>
+          );
+        }
+
+        // 2. NORMAL MODE: Only return View & Action!
+        return (
+          <Button
+            variant="contained"
+            size="small"
+            onClick={() => handleOpenViewModal(params.row)}
+            sx={{ textTransform: "none", borderRadius: 2, boxShadow: 0 }}
+          >
+            View & Action
+          </Button>
+        );
+      },
+    },
+
+
+
+  ];
+
+  return (
+    <Paper elevation={0} sx={jaStyles.mainPaper}>
+      <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.main" sx={{ ml: 6, mt: 2 }}>
+        Voucher Authorization
+      </Typography>
+      <Box sx={styles.mainContainer}>
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          loading={loading}
+          getRowId={(row) => row.batchId}
+          disableRowSelectionOnClick
+
+          // --- Pagination & Filtering Server-Side ---
+          paginationMode="server"
+          rowCount={totalRowCount}
+          paginationModel={paginationModel}
+          onPaginationModelChange={setPaginationModel}
+
+          filterMode="server"
+          filterModel={filterModel}
+          onFilterModelChange={setFilterModel}
+
+          pageSizeOptions={[5, 10, 25]}
+          disableColumnResize
+          rowHeight={52}
+          slots={{
+            noRowsOverlay: CustomNoRowsOverlay,
+            toolbar: GridToolbar
           }}
+          sx={styles.dataGridContainer}
+        />
+
+
+        {/* --- Main Grid Approve/Reject Dialog --- */}
+
+        <Dialog
+          open={isModalOpen}
+          onClose={handleCloseModal}
+          fullWidth
+          maxWidth="sm"
         >
-          {formatAmount(value)}
-        </Typography>
-      );
-    },
-  },
+          <DialogTitle>
+            {modalMode === "ACCEPTED" ? "Accept" : "Reject"} Batch ID
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Please provide the remarks to{" "}
+              {modalMode === "ACCEPTED" ? "Accept" : "Reject"} Batch ID{" "}
+              <strong>{selectedBatch?.batchId}</strong>
+            </DialogContentText>
+            <TextField
+              autoFocus
+              required
+              margin="dense"
+              label="Remarks"
+              fullWidth
+              variant="standard"
+              value={executorRemarks}
+              onChange={(e) => handleRemarksChange(e, setExecutorRemarks)}
+              disabled={isSubmitting}
+              inputProps={{ maxLength: 30 }}
+              error={
+                executorRemarks.length > 0 && !isRemarksValid(executorRemarks)
+              }
+            />
+            <Typography sx={styles.helperText}>
+              Allowed 2-30 chars (alphabets, numbers)
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={styles.dialogActions}>
+            <Button onClick={handleCloseModal} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => handleSubmitAction(false)}
+              variant="contained"
+              color={modalMode === "ACCEPTED" ? "success" : "error"}
+              disabled={isSubmitting || !isRemarksValid(executorRemarks)}
+            >
+              {isSubmitting ? (
+                <CircularProgress size={24} />
+              ) : modalMode === "ACCEPTED" ? (
+                "Accept"
+              ) : (
+                "Reject"
+              )}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-  {
-    field: "type",
-    headerName: "Type",
-    flex: 0.7,
-    minWidth: 100,
-    sortable: false,
-    filterable: true,
-  },
+        {/* --- Schedule Lapsed Edge Case Modal --- */}
+        <Dialog
+          open={isScheduleLapseModalOpen}
+          onClose={() => setIsScheduleLapseModalOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle sx={jaStyles.lapseTitle}>
+            {" "}
+            Schedule Lapsed{" "}
+          </DialogTitle>
+          <DialogContent>
+            <Alert severity="warning" sx={jaStyles.lapseAlert}>
+              The originally scheduled execution time{" "}
+              <strong>
+                {vidDetails?.SCHEDULED_TIME ? formatDateTime(vidDetails.SCHEDULED_TIME) : "N/A"}
+              </strong>{" "}
+              for Batch ID <strong>{viewingBatchId}</strong> (Created by{" "}
+              <strong>
+                {viewingBatch?.creatorName || viewingBatchCreatorId}
+              </strong>
+              ) has already passed.
+            </Alert>
+            <Typography variant="body1" gutterBottom>
+              Would you like to reschedule this batch for a future time, or
+              would you prefer to post it immediately?
+            </Typography>
 
-  {
-    field: "head",
-    headerName: "Head",
-    flex: 0.8,
-    minWidth: 120,
-    sortable: false,
-    filterable: true,
-  },
+            <Paper elevation={0} sx={jaStyles.lapsePaper}>
+              <Typography variant="subtitle2" gutterBottom>
+                Optional: Set New Schedule
+              </Typography>
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <TimePicker
+                  label="New Execution Time (Today)"
+                  value={newScheduleTime ? dayjs(newScheduleTime) : null} 
+                  onChange={(newValue) => {
+                    setNewScheduleTime(newValue ? newValue.format("YYYY-MM-DDTHH:mm") : "");
+                  }}
+                  disablePast
+                  minTime={dayjs()} // Removed the 31-minute block
+                  maxTime={dayjs().endOf('day')}
+                  timeSteps={{ minutes: 1 }}
+                  slotProps={{
+                    popper: { placement: "top" },
+                    textField: {
+                      size: 'small',
+                      fullWidth: true,
+                      required: true,
+                      sx: {
+                        caretColor: 'transparent',
+                        '& .MuiFormHelperText-root': { whiteSpace: 'normal', wordBreak: 'break-word', marginInline: 0, mt: 1 }
+                      },
+                      helperText: "Execution must be scheduled for a future time before 11:59 PM today.",
+                      onKeyDown: (e) => e.preventDefault(),
+                      onPaste: (e) => e.preventDefault(),
+                      inputProps: { readOnly: true }
+                    }
+                  }}
+                />
+              </LocalizationProvider>
+              <FormHelperText>
+                Leave blank to post immediately upon acceptance.
+              </FormHelperText>
+            </Paper>
+          </DialogContent>
+          <DialogActions sx={jaStyles.lapseActions}>
+            <Button
+              onClick={() => setIsScheduleLapseModalOpen(false)}
+              color="inherit"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => handleSubmitAction(true)}
+              variant="contained"
+              color="primary"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <CircularProgress size={20} color="inherit" />
+              ) : (
+                "Confirm & Proceed"
+              )}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-  {
-    field: "errorDate",
-    headerName: "Error Date",
-    flex: 0.8,
-    minWidth: 125,
-    sortable: true,
-    filterable: true,
+        {/* --- View Details Modal --- */}
+        <Dialog
+          open={isViewModalOpen}
+          onClose={handleCloseViewModal}
+          fullWidth
+          maxWidth="lg"
+          disableAutoFocus={true}      // Prevents jumping to the first button on open
+          disableEnforceFocus={true}   // Prevents forcing focus when clicking dead space
+          disableRestoreFocus={true}   // Prevents ghost highlights when clicking outside
+        >
+          <DialogTitle sx={styles.dialogTitle}>
+            <Typography variant="h6" fontWeight="bold">
+              Batch Details: {viewingBatchId}
+            </Typography>
+            <IconButton onClick={handleCloseViewModal}>
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
+          {/* ADDED: height: '75vh' explicitly locks the modal size so it NEVER jumps */}
+          <DialogContent dividers sx={jaStyles.viewModalContent}>
+            {/* --- STATE 1: STANDARD DETAILS (Hidden if Final Approver is scheduling) --- */}
+            <Box sx={jaStyles.viewModalScrollBox(isActionMode)}>
+              {/* ---  HEADER CARDS --- */}
+              <Box
+                sx={{
+                  p: 4,
+                  backgroundColor: "white",
+                  borderBottom: "1px solid",
+                  borderColor: "divider",
+                }}
+              >
+                {/* --- DYNAMIC DETAILS GRIDS --- */}
+                {isFetchingVid ? (
+                  /* LAYOUT SHIFT FIX: Added minHeight: 300px so it holds space for the incoming cards */
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px', p: 4 }}>
+                    <CircularProgress size={32} />
+                  </Box>
+                ) : vidDetails && vidDetails.VID ? (
+                  <Stack spacing={3} sx={jaStyles.stackFullWidth}>
+                    {/* SECTION 1: VOUCHER DETAILS + EMBEDDED DESCRIPTION */}
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 3,
+                        borderRadius: 2,
+                        width: "100%",
+                        border: "1px solid",
+                        borderColor: "divider",
+                        display: "flex",
+                        flexDirection: "column",
+                      }}
+                    >
+                      <Typography
+                        variant="subtitle1"
+                        fontWeight="bold"
+                        color="text.primary"
+                        gutterBottom
+                        sx={{
+                          borderBottom: "1px solid",
+                          borderColor: "divider",
+                          pb: 1,
+                          mb: 2,
+                        }}
+                      >
+                        Voucher Request ID : {vidDetails.VID}
+                      </Typography>
 
-    renderCell: (params) =>
-      formatDate(params.value),
-  },
-];
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        display="block"
+                        gutterBottom
+                      >
+                        Voucher Description
+                      </Typography>
+
+
+                      <Box
+                        sx={{
+                          maxHeight: isDescExpanded ? 200 : 90,
+                          mb: "24px",
+                          overflowY: "auto",
+                          pr: 1,
+                          transition: "max-height 0.3s ease"
+                        }}
+                      >
+                        <Typography
+                          variant="body2"
+                          color="text.primary"
+                          sx={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}
+                        >
+                          {(vidDetails.DESCRIPTION || "").length > 100 && !isDescExpanded
+                            ? `${vidDetails.DESCRIPTION.substring(0, 100)}...`
+                            : (vidDetails.DESCRIPTION || "No description provided.")}
+
+                          {(vidDetails.DESCRIPTION || "").length > 100 && (
+                            <Typography
+                              component="span"
+                              color="primary"
+                              onClick={() => setIsDescExpanded(!isDescExpanded)}
+                              sx={{ cursor: "pointer", ml: 1, fontWeight: "bold", '&:hover': { textDecoration: 'underline' } }}
+                            >
+                              {isDescExpanded ? "Read Less" : "Read More"}
+                            </Typography>
+                          )}
+                        </Typography>
+                      </Box>
+                      {/* NEW: Issue Categories Column */}
+                      <Grid item xs={12} sm={3} sx={{ mb: "24px" }}>
+                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                          Issue Categories
+                        </Typography>
+                        <Typography variant="body1" fontWeight="600" color="primary.main">
+                          {vidDetails.ISSUE_CATEGORIES || "N/A"}
+                        </Typography>
+                      </Grid>
+
+                      <Grid container spacing={3}>
+                        <Grid item xs={12} sm={3}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                            Category
+                          </Typography>
+                          <Typography variant="body1" fontWeight="500">
+                            {vidDetails.CATEGORY_NAME || "N/A"}
+                          </Typography>
+                        </Grid>
+
+
+                        <Grid item xs={12} sm={3}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                            Created By
+                          </Typography>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <AccountCircleIcon sx={{ fontSize: 20, color: "text.secondary" }} />
+                            <Typography variant="body1" fontWeight="500">
+                              {vidDetails.VID_CREATED_BY_NAME}{" "}
+                              <Typography component="span" variant="caption" color="text.secondary">
+                                ({vidDetails.VID_CREATOR_ID})
+                              </Typography>
+                            </Typography>
+                          </Stack>
+                        </Grid>
+
+                        <Grid item xs={12} sm={3}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                            Created At
+                          </Typography>
+                          <Typography variant="body1" fontWeight="500">
+                            {vidDetails.VID_CREATED_AT
+                              ? formatDateTime(vidDetails.VID_CREATED_AT)
+                              : "N/A"}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </Paper>
+
+                    {/* SECTION 2: BATCH EXECUTION DETAILS + DOWNLOAD BUTTON */}
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 3,
+                        borderRadius: 2,
+                        width: "100%",
+                        border: "1px solid",
+                        borderColor: "divider",
+                        display: "flex",
+                        flexDirection: "column",
+                      }}
+                    >
+                      <Typography
+                        variant="subtitle1"
+                        fontWeight="bold"
+                        color="text.primary"
+                        gutterBottom
+                        sx={{
+                          borderBottom: "1px solid",
+                          borderColor: "divider",
+                          pb: 1,
+                          mb: 2,
+                        }}
+                      >
+                        Voucher Details
+                      </Typography>
+
+                      <Grid container spacing={3} alignItems="center">
+                        <Grid item xs={12} sm={3}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            display="block"
+                            gutterBottom
+                          >
+                            Created By
+                          </Typography>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                          >
+                            <AccountCircleIcon
+                              sx={{ fontSize: 20, color: "text.secondary" }}
+                            />
+                            <Typography variant="body1" fontWeight="500">
+                              {vidDetails.BATCH_CREATED_BY_NAME}{" "}
+                              <Typography
+                                component="span"
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                ({vidDetails.BATCH_CREATOR_ID})
+                              </Typography>
+                            </Typography>
+                          </Stack>
+                        </Grid>
+
+                        <Grid item xs={12} sm={2}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            display="block"
+                            gutterBottom
+                          >
+                            Created At
+                          </Typography>
+                          <Typography variant="body1" fontWeight="500">
+                            {formatDateTime(vidDetails.BATCH_CREATED_AT)}
+                          </Typography>
+
+                        </Grid>
+
+                        <Grid item xs={12} sm={2}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            display="block"
+                            gutterBottom
+                          >
+                            No. of Entries
+                          </Typography>
+                          <Typography
+                            variant="body1"
+                            fontWeight="600"
+                            color="primary.main"
+                          >
+                            {viewingBatch?.requestCount || 0}
+                          </Typography>
+                        </Grid>
+
+                        <Grid item xs={12} sm={3}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            display="block"
+                            gutterBottom
+                          >
+                            Is Execution Scheduled?
+                          </Typography>
+                          <Typography
+                            variant="body1"
+                            fontWeight="500"
+                            color={vidDetails.SCHEDULED_TIME ? "info.main" : "text.primary"}
+                          >
+                            {vidDetails.SCHEDULED_TIME ? (
+                              <>
+                                Yes ({formatDateTime(vidDetails.SCHEDULED_TIME)})
+                                {new Date(vidDetails.SCHEDULED_TIME) < new Date() && !["POSTED", "SCHEDULED", "APPROVED", "REJECTED", "C", "S"].includes(viewingBatchState) && (
+                                  <Typography component="span" color="error.main" fontWeight="bold" sx={{ ml: 1, fontSize: "0.75rem" }}>
+                                    (Execution time lapsed)
+                                  </Typography>
+                                )}
+                              </>
+                            ) : "No"}
+                          </Typography>
+
+                        </Grid>
+
+                        <Grid item xs={12} sm={2}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            display="block"
+                            gutterBottom
+                          >
+                            Download Voucher Batch
+                          </Typography>
+                          <Button variant="outlined" size="small" startIcon={<FileDownloadIcon />} onClick={handleDownloadExcel} disabled={!viewingBatchId} disableFocusRipple={true} sx={jaStyles.downloadBtn}>
+
+                            Download Batch
+                          </Button>
+                        </Grid>
+                      </Grid>
+                    </Paper>
+                  </Stack>
+                ) : null}
+              </Box>
+              {/* --- HORIZONTAL TIMELINE --- */}
+              <Box sx={jaStyles.timelineWrapper}>
+                <Typography variant="subtitle1" fontWeight="bold" color="text.primary" sx={jaStyles.timelineHeader}>
+                  Workflow Progress
+                </Typography>
+
+                {viewingBatchState === "REJECTED" && !viewingBatch?.isExecutionFailed ? (
+                  <Alert severity="error" variant="filled" sx={jaStyles.timelineErrorAlert}>
+                    This batch was REJECTED and the workflow has been
+                    terminated.
+                  </Alert>
+                ) : isFetchingSteps ? (
+                  /* LAYOUT SHIFT FIX: Added minHeight: 120px */
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '120px', p: 3 }}>
+                    <CircularProgress size={32} />
+                  </Box>
+                ) : dynamicSteps.length > 0 ? (
+                  <Stepper
+                    activeStep={
+                      viewingBatch?.isExecutionFailed
+                        ? dynamicSteps.length - 1 // Force to final Execution step if failed
+                        : (viewingBatchState === "POSTED" || viewingBatchState === "SCHEDULED" || viewingBatchState === "APPROVED" || viewingBatchState === "C" || viewingBatchState === "S")
+                          ? dynamicSteps.length
+                          : viewingBatchOrder - 1
+                    }
+                    alternativeLabel
+                    connector={<BigConnector />}
+                  >
+                    {dynamicSteps.map((step, index) => {
+                      const isFullyDone = viewingBatchState === "POSTED" || viewingBatchState === "SCHEDULED" || viewingBatchState === "APPROVED" || viewingBatchState === "C" || viewingBatchState === "S";
+
+                      let activeStepIndex = isFullyDone ? dynamicSteps.length : viewingBatchOrder - 1;
+                      if (viewingBatch?.isExecutionFailed) {
+                        activeStepIndex = dynamicSteps.length - 1;
+                      }
+
+                      const isCompleted = index < activeStepIndex;
+                      const isCurrent = index === activeStepIndex;
+
+                      let statusFlag = "PENDING";
+                      if (isCompleted) statusFlag = "COMPLETED";
+                      if (isCurrent && viewingBatchState === "REJECTED") statusFlag = "REJECTED";
+                      // NEW FIX: Make big stepper Red with X for Execution Failure
+                      else if (isCurrent && viewingBatch?.isExecutionFailed) statusFlag = "REJECTED";
+                      else if (isCurrent) statusFlag = "ACTIVE";
+
+                      const historyItem = workflowHistory[index];
+                      const executorStr = historyItem ? `${historyItem.ACTION_USER_NAME} (${historyItem.LAST_ACTION_BY})` : null;
+
+                      return (
+                        <Step key={step.state} completed={isCompleted} active={isCurrent} sx={jaStyles.miniStep(viewingBatchState === "REJECTED" || viewingBatch?.isExecutionFailed, index, activeStepIndex)}>
+                          <StepLabel StepIconComponent={() => (<BigWorkflowIcon statusFlag={statusFlag} label={step.designation} />)}>
+                            <Chip
+                              label={getRoleDisplayName(step.role)}
+                              size="small"
+                              variant="outlined"
+                              color={isCurrent && statusFlag !== 'REJECTED' ? "primary" : "default"}
+                              sx={jaStyles.timelineChip}
+                            />
+                            {(isCompleted || (isCurrent && viewingBatchState === "REJECTED") || (isCurrent && viewingBatch?.isExecutionFailed)) && historyItem && (
+                              <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+                                <Typography variant="caption" display="block" color="success.main" sx={{ fontWeight: "bold" }}>
+                                  {executorStr}
+                                </Typography>
+                                {historyItem.stageDuration && (
+                                  <Typography variant="caption" display="block" color="text.secondary" sx={{ fontStyle: 'italic', fontSize: '0.65rem' }}>
+                                    Pending Duration: {historyItem.stageDuration}
+                                  </Typography>
+                                )}
+                              </Stack>
+                            )}
+                            {isCurrent && viewingBatchState !== "REJECTED" && !viewingBatch?.isExecutionFailed && (
+                              <Typography variant="caption" display="block" color="text.secondary" fontWeight="bold" sx={{ mt: 0.5 }}>
+                                Pending Since: {viewingBatch?.timeSinceLastAction || "0h 0m"}
+                              </Typography>
+                            )}
+                          </StepLabel>
+                        </Step>
+                      );
+                    })}
+                  </Stepper>
+                ) : (
+                  <Alert severity="info" sx={jaStyles.timelineInfoAlert}>
+                    Workflow configuration not found.
+                  </Alert>
+                )}
+              </Box>
+
