@@ -1,453 +1,1810 @@
+import { alpha } from "@mui/material/styles";
+
+// --- Main Containers ---
+export const mainContainerStyle = {
+  padding: 3,
+  height: "100%",
+  width: "100%",
+};
+
+export const loadingContainerStyle = {
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  minHeight: "500px",
+  width: "100%",
+};
+
+
+export const uploadBoxStyle = {
+  border: "2px dashed",
+  borderColor: "primary.main",
+  borderRadius: 2,
+  p: 4,
+  textAlign: "center",
+  cursor: "pointer",
+  bgcolor: "background.default",
+  "&:hover": {
+    bgcolor: "action.hover",
+  },
+};
+
+export const controlPanelStyle = {
+  p: 3,
+  mb: 3,
+  borderRadius: 2,
+};
+
+export const iconStyle = {
+  fontSize: 60,
+  color: "primary.main",
+  mb: 1,
+};
+
+export const headerTextStyle = {
+  fontWeight: 600,
+};
+
+export const subTextStyle = {
+  color: "text.secondary",
+  mt: 1,
+};
+
+// --- DataGrid Styles ---
+export const dataGridContainerStyle = {
+
+};
+
+// --- Table Styles ---
+export const tableContainerStyle = {
+  marginTop: 2,
+  borderRadius: 2,
+  border: "1px solid",
+  borderColor: "divider",
+  overflow: "hidden",
+  maxHeight: "60vh",
+};
+
+export const cellBorderStyle = {
+  border: (theme) => `1px solid ${theme.palette.divider}`,
+};
+
+export const tableHeaderCellStyle = {
+  ...cellBorderStyle,
+  bgcolor: "#bcabebff",
+  fontWeight: "bold",
+  textAlign: "center",
+};
+
+// --- Sticky/Fixed Column Styles ---
+export const stickyColumnCell = {
+  position: "sticky",
+  right: 0,
+  backgroundColor: "background.paper", 
+  zIndex: 1,
+  boxShadow: "-2px 0px 5px rgba(0,0,0,0.05)",
+  verticalAlign: "top",
+  ...cellBorderStyle,
+};
+
+export const stickyBoxStyle = {
+  position: "sticky",
+  top: 0,
+  zIndex: 2,
+  backgroundColor: "background.paper",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  paddingTop: "8px",
+  paddingBottom: "8px",
+  width: "100%",
+};
+
+// --- Dialog Styles ---
+export const dialogTitleStyle = {
+  m: 0,
+  p: 2,
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  fontWeight: "bold",
+};
+
+export const dialogActionsStyle = {
+  padding: 2,
+  display: "flex",
+  gap: 1,
+  justifyContent: "flex-end",
+};
+
+export const dialogContentStyle = {
+  paddingTop: "20px !important",
+};
+
+// --- Filter/Search Box Styles ---
+export const filterContainerStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 2,
+  flexWrap: "wrap",
+  gap: 2,
+};
+
+export const searchFieldStyle = {
+  minWidth: "250px",
+  "& .MuiOutlinedInput-root": {
+    borderRadius: "8px",
+  },
+};
+
+
+export const jpStyles = {
+// 1. Loading & EOD
+loadingBox: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' },
+eodBox: { display: 'flex', justifyContent: 'center', alignItems: 'top', height: '25vh', p: 2, marginBottom: '500px' },
+eodPaper: { p: 6, textAlign: 'center', borderRadius: 4 },
+
+// 2. Main Wrapper
+mainPaper: { p: { xs: 1, md: 3 }, width: "100%" },
+
+// 3. Step 0 (Table)
+stepHeader: { ml: 1, mb: 2 },
+tablePaper: { width: '100%', mb: 2, borderRadius: 2, overflow: 'hidden' },
+tableContainer: { overflowX: "hidden" },
+table: { tableLayout: "fixed" },
+tableHead: { backgroundColor: "action.hover" },
+ellipsisCell: { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+collapseBox: { margin: 2, p: 2, borderRadius: 2 },
+buttonRightAlign: { display: 'flex', justifyContent: 'flex-end', mt: 3 },
+tableRow: (isSelected, isExpanded) => ({
+  cursor: 'pointer',
+  backgroundColor: isSelected ? "action.selected" : "inherit",
+  '& > *': { borderBottom: isExpanded ? 'none' : '1px solid rgba(224, 224, 224, 1)' }
+}),
+
+// 4. Step 1 (Entry Method)
+methodContainer: { display: "flex", flexDirection: "column" },
+cardsWrapper: { display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center", alignItems: "center" },
+methodCard: { width: 320, height: 260, borderRadius: 3, transition: "0.3s", "&:hover": { transform: "translateY(-5px)", boxShadow: 6 } },
+methodCardArea: { height: "100%", p: 4, textAlign: "center", display: "flex", flexDirection: "column", justifyContent: "center" },
+excelIcon: { fontSize: 60, mb: 2, color: "#217346" },
+manualIcon: { fontSize: 60, mb: 2 },
+backButtonBox: { display: 'flex', justifyContent: 'flex-start', mt: 6 },
+   collapseGrid: {
+  margin: 2, p: 2, borderRadius: 2, alignItems: "center", rowGap: 1.2
+},
+issueCategoryChip: {
+  backgroundColor: "primary.light",
+  size: "small",
+  mr: "8px", mb: "5px"
+},
+
+
+
+// 5. Selected Voucher Component
+svPaper: { p: 3, mb: 4, borderRadius: 1, border: "1px solid", borderColor: "divider" },
+svHeaderBox: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: "1px solid", borderColor: "divider", pb: 1, mb: 2 },
+svDescription: { whiteSpace: "pre-wrap", lineHeight: 1.6, fontWeight: 300 },
+
+// 6. Step 2 (Data Entry Grid)
+dataEntryPaper: { p: 2 },
+gridContainer: { mt: 3, width: "100%" },
+commonRemarksHelper: { color: "text.secondary", textAlign: "left", ml: 1.5 },
+checkboxBox: { display: "flex", alignItems: "center", mt: 2 },
+fullWidthSlot: { minWidth: "100%" },
+captionText: { fontSize: "0.65rem", color: "text.secondary", mt: 0.5, ml: 1.2, display: "block", textAlign: "left" },
+memoChipBox: { marginLeft: "2%", display: "flex", alignItems: "center" },
+memoChip: { height: 20, fontSize: "0.7rem" },
+deleteIconButton: { color: "inherit", "&:hover": { color: "error.main", backgroundColor: "action.hover" } },
+rowDivider: { borderBottom: 1, borderColor: "divider", my: 2 },
+actionButtonsWrapper: { mt: 4, display: "flex", justifyContent: "space-between", alignItems: "center" },
+
+// 7. Step 3 (Success)
+successBox: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' },
+successPaper: { p: 5, maxWidth: 600, textAlign: 'center', borderRadius: 3 },
+successIconProps: { fontSize: 80, color: 'success.main', mb: 2 },
+scheduleContainer: { mt: 2, p: 3, backgroundColor: 'action.hover', borderRadius: 2, border: '1px dashed', borderColor: 'divider' },
+
+//last one cansel
+LocalizationProvider:{ display: 'flex', gap: 2, justifyContent: 'center' }
+};
+
+
+
+export const jaStyles = {
+// 1. DataGrid & Layout Layouts
+mainPaper: { bgcolor: "background.default" },
+mainContainer: { padding: 3, height: "100%", width: "100%" },
+dataGridContainer: {
+  height: 600, width: "100%", backgroundColor: "background.paper", boxShadow: 2, borderRadius: 2, border: 1, borderColor: "divider",
+  "& .MuiDataGrid-columnHeaders": { backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.08), fontWeight: "bold", fontSize: "0.95rem" },
+  "& .MuiDataGrid-row:hover": { backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04) },
+},
+noRowsStack: { height: "100%", alignItems: "center", justifyContent: "center" },
+noRowsIcon: { fontSize: 48, color: "text.secondary", mb: 2 },
+
+// 2. Dialog & Modals Common
+dialogTitle: { display: "flex", justifyContent: "space-between", alignItems: "center", pb: 1 },
+dialogActions: { p: 2, borderTop: 1, borderColor: "divider" },
+helperText: { fontSize: "0.75rem", color: "text.secondary", marginTop: "4px" },
+
+// 3. View Modal Specifics
+viewModalContent: { p: 0, backgroundColor: "#f8fafc", height: "75vh", display: "flex", flexDirection: "column" },
+viewModalScrollBox: (isActionMode) => ({ display: isActionMode ? "none" : "flex", flexDirection: "column", flexGrow: 1, overflowY: "auto" }),
+viewModalHeaderCard: { p: 4, backgroundColor: "white", borderBottom: "1px solid", borderColor: "divider" },
+detailCard: { p: 3, borderRadius: 2, width: "100%", border: "1px solid", borderColor: "divider", display: "flex", flexDirection: "column" },
+detailCardTitle: { borderBottom: "1px solid", borderColor: "divider", pb: 1, mb: 2 },
+descScrollBox: { maxHeight: 90, mb: "24px", overflowY: "auto", pr: 1 },
+descText: { whiteSpace: "pre-wrap", lineHeight: 1.6 },
+
+// 4. Workflow History
+historySection: { p: 4, borderTop: "1px solid", borderColor: "divider" },
+historyCard: { flexGrow: 1, backgroundColor: "white", p: 2.5, borderRadius: 2, border: "1px solid", borderColor: "#e2e8f0", boxShadow: "0 1px 2px 0 rgb(0 0 0 / 0.05)" },
+historyAvatar: { bgcolor: "primary.main", width: 40, height: 40, fontWeight: "bold", fontSize: "1rem" },
+
+// 5. Action Screen
+actionScreenBox: { 
+  p: { xs: 2, sm: 3, md: 4 }, // Scaled down padding to give internal components breathing room
+  flexGrow: 1, 
+  display: "flex", 
+  flexDirection: "column", 
+  alignItems: "center", 
+  justifyContent: "flex-start", // Changed to flex-start to prevent strange vertical jumping
+  animation: "fadeIn 0.3s ease-in-out", 
+  backgroundColor: "#f8fafc", 
+  overflowY: "auto",
+  width: "100%"
+},
+actionCard: { 
+  p: { xs: 2, sm: 3 }, // Controlled interior component padding
+  width: "100%", 
+  maxWidth: 650, 
+  border: "1px solid", 
+  borderColor: "divider", 
+  borderRadius: 3, 
+  backgroundColor: "white", 
+  boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+  boxSizing: "border-box" // Guarantees padding stays structural
+},
+toggleGroup: { mb: 4, height: 48 },
+
+// Dynamic Toggle Button Styles
+toggleBtn: (actionSelection, targetValue) => {
+  const isAccepted = targetValue === "ACCEPTED";
+  const isSelected = actionSelection === targetValue;
+  const mainColor = isAccepted ? "success.main" : "error.main";
+  const darkColor = isAccepted ? "success.dark" : "error.dark";
+  const hoverBg = isAccepted ? "#e8f5e9" : "#ffebee";
+
+  return {
+    fontWeight: "bold",
+    color: isSelected ? "white !important" : mainColor,
+    backgroundColor: isSelected ? `${mainColor} !important` : "transparent",
+    borderColor: mainColor,
+    "&:hover": { backgroundColor: isSelected ? `${darkColor} !important` : hoverBg },
+  };
+},
+
+// 6. Routing / Scheduling override
+overrideCardBox: { p: 2, mb: 3, backgroundColor: "#f8fafc", borderRadius: 2, borderLeft: "4px solid", borderColor: "primary.main" },
+
+overrideOption: (isActive, isOverride) => {
+  const mainColor = isOverride ? "warning.main" : "success.main";
+  const bgColor = isOverride ? "#fffbeb" : "#f0fdf4";
+  return {
+    width: "100%",
+    height: "100%", // Forces both grid items to match up perfectly
+    p: 2, 
+    borderRadius: 3, 
+    border: "2px solid", 
+    borderColor: isActive ? mainColor : "#e2e8f0",
+    backgroundColor: isActive ? bgColor : "#ffffff", 
+    cursor: "pointer", 
+    display: "flex", 
+    alignItems: "flex-start", 
+    gap: 1.5, 
+    boxSizing: "border-box",
+    transition: "all 0.2s ease-in-out",
+    boxShadow: isActive 
+      ? `0 4px 12px ${isOverride ? "rgba(245, 158, 11, 0.12)" : "rgba(16, 185, 129, 0.12)"}` 
+      : "0 1px 2px rgba(0,0,0,0.02)",
+    "& *": { userSelect: "none" }, // Clean desktop tracking
+    "&:hover": { 
+      backgroundColor: isActive ? bgColor : "#f8fafc", 
+      borderColor: isActive ? mainColor : "#cbd5e1"
+    }
+  };
+},
+overrideRadioBtn: (isActive, isOverride) => {
+   const mainColor = isOverride ? "warning.main" : "success.main";
+   return { 
+     width: 18, 
+     height: 18, 
+     minWidth: 18, // Hard structural lock preventing compression
+     maxWidth: 18,
+     mt: 0.25, 
+     borderRadius: "50%", 
+     border: isActive ? "5px solid" : "2px solid", 
+     borderColor: isActive ? mainColor : "#cbd5e1", 
+     backgroundColor: "white",
+     transition: "all 0.15s ease-in-out",
+     boxSizing: "border-box"
+   };
+},
+// 7. Sticky Bottom Bar
+stickyBottomBar: { p: 3, borderTop: "1px solid", borderColor: "divider", backgroundColor: "white", display: "flex", justifyContent: "space-between", alignItems: "center" },
+
+
+ // 1. BigWorkflowIcon Styles
+infoBadge: { position: "absolute", top: -4, right: -4, width: 18, height: 18, borderRadius: "50%", backgroundColor: "warning.main", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: "bold", border: "2px solid white" },
+bwfCompleted: (baseStyle) => ({ ...baseStyle, border: "2px solid", borderColor: "success.main", backgroundColor: "#e8f5e9", color: "success.main" }),
+bwfRejected: (baseStyle) => ({ ...baseStyle, border: "2px solid", borderColor: "error.main", backgroundColor: "#ffebee", color: "error.main" }),
+bwfEscalated: (baseStyle) => ({ ...baseStyle, border: "2px solid", borderColor: "warning.main", color: "text.primary" }),
+bwfPending: (baseStyle) => ({ ...baseStyle, border: "2px solid #e2e8f0", color: "text.disabled" }),
+
+// 2. DataGrid Mini Stepper
+miniStepperBox: { width: "100%", display: "flex", alignItems: "center", justifyContent: "flex-start", pl: 2, height: "100%" },
+miniStepper: { width: "100%", mt: 0.5 },
+miniStep: (isRejected, index, activeStep) => ({ px: 0, opacity: isRejected && index > activeStep ? 0.3 : 1 }),
+miniStepLabel: { p: 0, m: 0 },
+
+// 3. Modals & Loaders
+centerProgress: { display: "flex", justifyContent: "center", p: 4 },
+stackFullWidth: { width: "100%" },
+lapseTitle: { color: "error.main", fontWeight: "bold" },
+lapseAlert: { mb: 3 },
+lapsePaper: { p: 2, mt: 3, backgroundColor: "action.hover", border: "1px dashed", borderColor: "divider" },
+lapseActions: { p: 2 },
+
+// 4. Details Section (Icons & Buttons)
+accountIcon: { fontSize: 20, color: "text.secondary" },
+downloadBtn: { 
+  borderColor: "#217346", 
+  color: "#217346", 
+  outline: "none !important", // Force remove browser outlines
+  "&:hover": { 
+    backgroundColor: "#e8f5e9", 
+    borderColor: "#1e6b40" 
+  },
+  // Nuke all ghost focus states MUI tries to apply
+  "&:focus": { 
+    outline: "none", 
+    backgroundColor: "transparent" 
+  },
+  "&.Mui-focusVisible": { 
+    outline: "none", 
+    backgroundColor: "transparent", 
+    boxShadow: "none" 
+  },
+  "&:active": {
+    outline: "none"
+  }
+},
+
+// 5. Timeline Section
+timelineWrapper: { p: 4, flexGrow: 1, display: "flex", flexDirection: "column", justifyContent: "center" },
+timelineHeader: { mb: 3 },
+timelineErrorAlert: { mt: 2, fontWeight: "bold" },
+timelineProgressBox: { display: "flex", justifyContent: "center", p: 3 },
+timelineChip: { mt: 1, height: 22, fontSize: "0.65rem", fontWeight: "bold" },
+timelinePendingText: { mt: 1 },
+timelineInfoAlert: { mt: 2 },
+
+// 6. History Section
+historyProgressBox: { display: "flex", justifyContent: "center", p: 2 },
+historyRowBox: { display: "flex", gap: 2 },
+historyHeaderBox: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mb: 1 },
+historyActionStack: { mb: 1.5, flexWrap: "wrap", gap: 1 },
+historyActionChip: (isReject) => ({
+  height: 22, fontSize: "0.7rem", fontWeight: "bold",
+  backgroundColor: isReject ? "#fee2e2" : "#e0e7ff",
+  color: isReject ? "#991b1b" : "#3730a3",
+}),
+historySchedChip: { height: 22, fontSize: "0.7rem", fontWeight: "bold" },
+
+// 7. Action Screen additions
+actionSubtitle: { mb: 4, maxWidth: 500 },
+actionTextField: { mb: 2 },
+routingBoxWrapper: { },
+routingAlert: { mt: 1, py: 0 },
+routingInnerBox: { mt: 2 },
+
+// 8. Sticky Bottom Action Buttons
+flexGrowBox: { flexGrow: 1 },
+proceedBtn: { minWidth: 160, fontWeight: "bold", py: 1  },
+backBtn: { fontWeight: "bold", color: "text.secondary" },
+};import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Box,
-  Button,
+  Typography,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
+  DialogContentText,
   DialogTitle,
-  Stack,
-  Typography,
+  Button,
+  CircularProgress,
   Tooltip,
   IconButton,
+  Stack,
+  Grid,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Paper,
+  Checkbox,
+  TablePagination,
+  Stepper,
+  Step,
+  StepLabel,
+  StepConnector,
+  stepConnectorClasses,
+  styled,
+  Avatar,
+  Alert,
 } from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import useApi from "../../hooks/useApi";
-import CancelIcon from "@mui/icons-material/Cancel";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import GppBadIcon from "@mui/icons-material/GppBad";
-import SecurityIcon from "@mui/icons-material/Security";
+import { DataGrid, GridToolbar } from "@mui/x-data-grid";
 import {
-  timeStampFormatter,
-  toPascalKebabCase,
-} from "../../utils/CommonUtilities";
-import CustomChip from "../../utils/CustomChip";
+  DeleteSweep as DeleteSweepIcon,
+  Visibility as VisibilityIcon,
+  FileDownload as FileDownloadIcon,
+  Close as CloseIcon,
+} from "@mui/icons-material";
+import CheckIcon from "@mui/icons-material/Check";
+import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import InfoIcon from "@mui/icons-material/Info";
-import RoleRequestView from "./components/RoleRequestView";
+import DeleteIcon from "@mui/icons-material/Delete";
+import { alpha } from "@mui/material/styles";
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import dayjs from "dayjs";
+import { useSelector } from "react-redux";
+
+const styles = {
+  mainContainer: {
+    padding: 3,
+    height: "100%",
+    width: "100%",
+  },
+  dataGridContainer: {
+    height: 600,
+    width: "100%",
+    backgroundColor: "background.paper",
+    boxShadow: 2,
+    borderRadius: 2,
+    border: 1,
+    borderColor: "divider",
+    "& .MuiDataGrid-columnHeaders": {
+      backgroundColor: "#f5f5f5 !important",
+      fontWeight: 700,
+      borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+      position: 'sticky',
+      top: 0,
+      zIndex: 1,
+    },
+    "& .MuiDataGrid-row:hover": {
+      backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04),
+    },
+    // --- ADD THESE TWO BLOCKS TO KEEP THE 3 DOTS ALWAYS VISIBLE ---
+    "& .MuiDataGrid-menuIcon": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
+    "& .MuiDataGrid-iconButtonContainer": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
+  },
+  tableContainer: {
+    maxHeight: 450,
+    overflowY: "auto",
+    border: 1,
+    borderColor: "divider",
+    mt: 1,
+  },
+  fixedContentBox: {
+    minHeight: 400,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  tableHeaderCell: {
+    fontWeight: "bold",
+    backgroundColor: "#f5f6f8",
+    color: "text.primary",
+    whiteSpace: "nowrap",
+    zIndex: 10,
+  },
+  stickyHeaderColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    top: 0,
+    zIndex: 20,
+    backgroundColor: "background.paper",
+    borderBottom: 1,
+    borderRight: 1,
+    borderColor: "divider",
+    fontWeight: "bold",
+  }),
+  stickyBodyColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    zIndex: 5,
+    backgroundColor: "background.paper",
+    borderRight: 1,
+    borderColor: "divider",
+  }),
+  dialogTitle: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    pb: 1,
+  },
+  dialogActions: { p: 2, borderTop: 1, borderColor: "divider" },
+  loadingContainer: {
+    height: "100%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+};
+const formatCurrency = (val) => {
+  if (val === null || val === undefined || val === "") return "0.0000";
+  const strVal = String(val).trim();
+  const parts = strVal.split(".");
+  let intPart = parts[0];
+  let decPart = (parts[1] || "").padEnd(4, "0").substring(0, 4);
+  intPart = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${intPart}.${decPart}`;
+};
+const getStatusChipColor = (status) => {
+  switch (status) {
+    case "ACCEPTED":
+      return "success";
+    case "REJECTED":
+      return "error";
+    default:
+      return "warning";
+  }
+};
+const getTxnTypeColor = (txnType) =>
+  txnType === "Credit" ? "error" : "success";
+
+const CustomConnector = styled(StepConnector)(({ theme }) => ({
+  [`&.${stepConnectorClasses.alternativeLabel}`]: {
+    top: 12,
+    left: 'calc(-50% + 12px)',
+    right: 'calc(50% + 12px)',
+  },
+  [`&.${stepConnectorClasses.active}`]: {
+    [`& .${stepConnectorClasses.line}`]: { borderColor: theme.palette.success.main },
+  },
+  [`&.${stepConnectorClasses.completed}`]: {
+    [`& .${stepConnectorClasses.line}`]: { borderColor: theme.palette.success.main },
+  },
+  [`& .${stepConnectorClasses.line}`]: {
+    borderColor: theme.palette.divider,
+    borderTopWidth: 2,
+    borderRadius: 1,
+  },
+}));
+
+
+const BigConnector = styled(StepConnector)(({ theme }) => ({
+  [`&.${stepConnectorClasses.alternativeLabel}`]: {
+    top: 20,
+    left: 'calc(-50% + 80px)',
+    right: 'calc(50% + 80px)',
+  },
+  [`&.${stepConnectorClasses.active}`]: {
+    [`& .${stepConnectorClasses.line}`]: { borderColor: theme.palette.success.main },
+  },
+  [`&.${stepConnectorClasses.completed}`]: {
+    [`& .${stepConnectorClasses.line}`]: { borderColor: theme.palette.success.main },
+  },
+  [`& .${stepConnectorClasses.line}`]: {
+    borderColor: theme.palette.divider,
+    borderTopWidth: 3,
+    borderRadius: 1,
+  },
+}));
+
+const CustomWorkflowIcon = (props) => {
+  const { statusFlag, iconLetter, label, isMini } = props;
+  const showTextInside = isMini && (statusFlag === "ACTIVE" || statusFlag === "ESCALATED");
+
+  const baseStyle = {
+    height: 24, // Smaller, consistent size
+    borderRadius: 12,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2,
+    position: "relative",
+    fontWeight: "bold",
+    fontSize: "0.7rem",
+    px: showTextInside ? 1.2 : 0,
+    minWidth: showTextInside ? "auto" : 24,
+    width: showTextInside ? "max-content" : 24,
+    whiteSpace: "nowrap",
+    boxSizing: "border-box", // Strictly ensures borders don't bloat the circle making them unequal
+  };
+
+  if (statusFlag === "COMPLETED") {
+    return (
+      <Box sx={{ ...baseStyle, backgroundColor: "success.main", border: "2px solid", borderColor: "success.main", color: "#fff" }}>
+        <CheckIcon sx={{ fontSize: 16 }} />
+      </Box>
+    );
+  }
+  if (statusFlag === "REJECTED") {
+    return (
+      <Box sx={{ ...baseStyle, backgroundColor: "error.main", border: "2px solid", borderColor: "error.main", color: "#fff" }}>
+        <CloseIcon sx={{ fontSize: 16 }} />
+      </Box>
+    );
+  }
+  if (statusFlag === "ESCALATED") {
+    return (
+      <Box sx={{ ...baseStyle, backgroundColor: "white", border: "2px solid", borderColor: "warning.main", color: "warning.main" }}>
+        {showTextInside ? `${label} !` : "!"}
+      </Box>
+    );
+  }
+  if (statusFlag === "ACTIVE") {
+    return (
+      <Box sx={{ ...baseStyle, backgroundColor: "white", border: "2px solid", borderColor: "warning.main", color: "warning.main" }}>
+        {showTextInside ? label : iconLetter}
+      </Box>
+    );
+  }
+
+  // PENDING / FUTURE STEPS
+  return (
+    <Box sx={{ ...baseStyle, backgroundColor: "white", border: "2px solid #e2e8f0", color: "text.disabled" }}>
+      {iconLetter}
+    </Box>
+  );
+};
+
+
+const BigWorkflowIcon = (props) => {
+  const { statusFlag, label } = props;
+  const baseStyle = {
+    height: 40,
+    minWidth: 160,
+    borderRadius: 20,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 1,
+    px: 2,
+    position: "relative",
+    zIndex: 2,
+    backgroundColor: "white",
+  };
+  const InfoBadge = () => (
+    <Box
+      sx={{
+        position: "absolute",
+        top: -4,
+        right: -4,
+        width: 18,
+        height: 18,
+        borderRadius: "50%",
+        backgroundColor: "warning.main",
+        color: "white",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "11px",
+        fontWeight: "bold",
+        border: "2px solid white",
+      }}
+    >
+      !
+    </Box>
+  );
+
+  if (statusFlag === "COMPLETED")
+    return (
+      <Box
+        sx={{
+          ...baseStyle,
+          border: "2px solid",
+          borderColor: "success.main",
+          backgroundColor: "#e8f5e9",
+          color: "success.main",
+        }}
+      >
+        <CheckIcon sx={{ fontSize: 18 }} />
+        <Typography variant="body2" fontWeight="bold">
+          {label}
+        </Typography>
+      </Box>
+    );
+  if (statusFlag === "REJECTED")
+    return (
+      <Box
+        sx={{
+          ...baseStyle,
+          border: "2px solid",
+          borderColor: "error.main",
+          backgroundColor: "#ffebee",
+          color: "error.main",
+        }}
+      >
+        <CloseIcon sx={{ fontSize: 18 }} />
+        <Typography variant="body2" fontWeight="bold">
+          {label}
+        </Typography>
+      </Box>
+    );
+  if (statusFlag === "ESCALATED" || statusFlag === "ACTIVE")
+    return (
+      <Box
+        sx={{
+          ...baseStyle,
+          border: "2px solid",
+          borderColor: "warning.main",
+          color: "text.primary",
+        }}
+      >
+        <Typography variant="body2" fontWeight="bold">
+          {label}
+        </Typography>
+        <InfoBadge />
+      </Box>
+    );
+  return (
+    <Box
+      sx={{ ...baseStyle, border: "2px solid #e2e8f0", color: "text.disabled" }}
+    >
+      <Typography variant="body2" fontWeight="bold">
+        {label}
+      </Typography>
+    </Box>
+  );
+};
+
+const calculateTimeElapsed = (startDateString) => {
+  if (!startDateString) return "N/A";
+  const diffMins = Math.floor(
+    Math.abs(new Date() - new Date(startDateString)) / 60000
+  );
+  if (diffMins === 0) return "Just now";
+  if (diffMins < 60) return `${diffMins} min`;
+  const hours = Math.floor(diffMins / 60);
+  return diffMins % 60 > 0 ? `${hours} hr ${diffMins % 60} min` : `${hours} hr`;
+};
 
 function CustomNoRowsOverlay() {
   return (
     <Stack height="100%" alignItems="center" justifyContent="center">
-      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-      <Typography variant="h6">No Role Requests Found</Typography>
-      <Typography>You have not created any Role requests.</Typography>
+      {" "}
+      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />{" "}
+      <Typography variant="h6">No Requests Found</Typography>{" "}
     </Stack>
   );
 }
 
-export default function RoleManagementTab2({ permissions = {} }) {
+const formatDateTime = (dateVal) => {
+  if (!dateVal) return "N/A";
+  // Removing .toLowerCase() keeps DayJS's native capitalized months (e.g. 'Jun')
+  return dayjs(dateVal).format("DD MMM YYYY, hh:mm a");
+};
+
+const handleBlurAll = () => {
+  // This finds any element currently holding focus and forces it to lose focus
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur();
+  }
+};
+
+export default function VoucherPostingStatus() {
   const { callApi } = useApi();
   const showSnackBar = useCustomSnackbar();
-  const [isLoading, setIsLoading] = useState(true);
+  const isMounted = useRef(true);
+  const user = useSelector((state) => state.auth?.user || null);
+
+  const [currentUserId, setCurrentUserId] = useState(null);
+
+  const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
-  const [confirmDialog, setConfirmDialog] = useState(false);
-  const [requestId, setRequestId] = useState(null);
-  const [viewOpen, setViewOpen] = useState(false);
-  const [viewData, setViewData] = useState(null);
-  const [roleAccessList, setRoleAccessList] = useState([]);
-
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const response = await callApi("/UM/role/my-role-requests", null, "GET");
-      if (response?.result) {
-        const result = response?.result?.myRequests || [];
-
-        const processedResult = result.map((row, index) => {
-          let parsed = {};
-          try {
-            if (row.requestPayload) {
-              parsed = JSON.parse(row.requestPayload);
-            }
-          } catch (e) {
-            console.error("Failed to parse requestPayload", e);
-          }
-
-          return {
-            ...row,
-            ...parsed,
-            gridRowId: row.requestId || `fallback-id-${Date.now()}-${index}`,
-          };
-        });
-        setRows(processedResult);
-      } else {
-        showSnackBar("No requests found", "warning");
-        setRows([]);
-      }
-    } catch (error) {
-      console.error("Something went wrong", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [callApi, showSnackBar]);
-
-  const fetchRoleAccessList = useCallback(async () => {
-    try {
-      const response = await callApi(
-        "/UM/role/get-role-access-list",
-        {},
-        "GET",
-      );
-      const list = response?.result?.roleAccessList ?? [];
-      setRoleAccessList(list);
-    } catch (error) {
-      console.error("Something went wrong", error);
-      setRoleAccessList([]);
-    }
-  }, [callApi]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedBatch, setSelectedBatch] = useState(null);
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
+  const [totalRowCount, setTotalRowCount] = useState(0);
+  const [filterModel, setFilterModel] = useState({ items: [] });
+  // View/Paginate States
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [viewingBatchId, setViewingBatchId] = useState(null);
+  const [viewingBatch, setViewingBatch] = useState(null);
+  const [viewingBatchState, setViewingBatchState] = useState("");
+  const [viewingBatchCreatorId, setViewingBatchCreatorId] = useState(null);
+  const [viewingBatchRequestDate, setViewingBatchRequestDate] = useState(null);
+  const [viewingBatchRequestCount, setViewingBatchRequestCount] = useState(0);
+  const [viewingBatchTimeSinceLastAction, setViewingBatchTimeSinceLastAction] = useState("");
+  const [workflowStepsMap, setWorkflowStepsMap] = useState({});
+  const [vidDetails, setVidDetails] = useState(null);
+  const [dynamicSteps, setDynamicSteps] = useState([]);
+  const [workflowHistory, setWorkflowHistory] = useState([]);
+  const [isFetchingVid, setIsFetchingVid] = useState(false);
+  const [isFetchingSteps, setIsFetchingSteps] = useState(false);
+  const [isDescExpanded, setIsDescExpanded] = useState(false);
+  const [dbRoleMap, setDbRoleMap] = useState({});
+  const [viewingBatchOrder, setViewingBatchOrder] = useState(1);
+  const [viewingBatchRawStatus, setViewingBatchRawStatus] = useState("");
 
   useEffect(() => {
-    fetchData();
-    fetchRoleAccessList();
-  }, [fetchData, fetchRoleAccessList]);
+    const fetchRoles = async () => {
+      try {
+        const rolesData = await callApi(
+          "/JS/voucher/active-roles",
+          null,
+          "GET"
+        );
+        if (rolesData && isMounted.current) setDbRoleMap(rolesData);
+      } catch (err) { }
+    };
+    fetchRoles();
+  }, [callApi]);
 
-  const handleCancelRequest = async () => {
+  const getRoleDisplayName = (roleValue) => {
+    if (!roleValue || roleValue === "null" || roleValue === "System")
+      return "System";
+    return dbRoleMap[String(roleValue)] || roleValue;
+  };
+
+  const handleDownloadExcel = async () => {
+    if (!viewingBatchId) return;
+
     try {
-      const payload = {
-        requestId,
-        actionFlag: "CANCEL",
-        remarks: "User canceled this Request",
-      };
+      showSnackBar("Downloading Excel...", "info");
+
       const response = await callApi(
-        "/UM/role/cancel-role-request",
-        payload,
-        "POST",
+        `/JS/voucher/download-batch/${viewingBatchId}`,
+        null,
+        "GET",
+        "blob",
+        null,
+        {},
+        false
       );
-      if (response?.result?.status) {
-        showSnackBar(
-          `Request Id ${requestId} Cancelled Successfully.`,
-          "success",
-        );
-      } else {
-        showSnackBar(
-          response?.message
-            ? response?.message
-            : "Failed to process your cancel request, Kindly try again",
-          "error",
-        );
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      fetchData();
-      setConfirmDialog(false);
+
+      const blobData = response.data || response;
+      if (!blobData) throw new Error("No data received");
+
+      const blob = new Blob([blobData], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Batch_${viewingBatchId}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showSnackBar("Download complete.", "success");
+    } catch (e) {
+      console.error("Download failed:", e);
+      showSnackBar("Failed to download Excel file.", "error");
     }
   };
 
-  const handleViewClick = useCallback(
-    (data) => {
-      // Fix: robust string match
-      const access = roleAccessList?.find(
-        (item) =>
-          String(item.accessFlag).trim() === String(data.roleAccess).trim(),
-      );
-      const newData = { ...data, ...access };
-      setViewData(newData);
-      setViewOpen(true);
-    },
-    [roleAccessList],
-  );
+// --- SAFE AUTH CHECK (Redux) ---
+  useEffect(() => {
+    isMounted.current = true;
+    
+    // Use the Redux 'user' object directly
+    if (user && user.userId) {
+      setCurrentUserId(String(user.userId));
+    }
+    
+    return () => {
+      isMounted.current = false;
+    };
+  }, [user]); // Add 'user' to dependency array
 
-  const columns = useMemo(
-    () => [
-      {
-        field: "requestId",
-        headerName: "Request Id",
-        flex: 0.5,
-        minWidth: 150,
-      },
-      { field: "roleName", headerName: "Role Name", flex: 0.7, minWidth: 150 },
-      {
-        field: "description",
-        headerName: "Role Description",
-        flex: 1.5,
-        minWidth: 200,
-      },
-      {
-        field: "roleAccess",
-        headerName: "Access Level",
-        flex: 0.7,
-        headerAlign: "center",
-        align: "center",
-        sortable: true,
-        filterable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => {
-          // Fix: robust string match
-          const access = roleAccessList?.find(
-            (item) =>
-              String(item.accessFlag).trim() ===
-              String(params.row.roleAccess).trim(),
-          );
+  const fetchMyBatches = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
+   try {
+      // Synchronously grab the role directly from the Redux user object
+      const actualRoleId = user?.roleId || user?.role || user?.ROLE_ID || null;
 
-          return (
-            <Tooltip title={access?.accessDescription || ""} placement="top">
-              {/* Fix: span prevents tooltip ref errors */}
-              <span>
-                <CustomChip
-                // sx={{
-                //     width:115,
-                //     justifyContent:"flex-start",
-                //   }}
-                  variant="outlined"
-                  size="sm"
-                  icon={<SecurityIcon sx={{ width: 15, height: 15 }} />}
-                  label={access?.accessName || params.row.roleAccess || "NA"}
-                />
-              </span>
-            </Tooltip>
-          );
-        },
-      },
-      {
-        field: "requestType",
-        headerName: "Request Type",
-        flex: 0.5,
-        minWidth: 150,
-        align: "center",
-        headerAlign: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => {
-          const val = params.value;
-          const color =
-            val === "CREATE"
-              ? "success"
-              : val === "DELETE"
-                ? "error"
-                : "warning";
-          const icon =
-            val === "CREATE" ? (
-              <AddBoxIcon />
-            ) : val === "DELETE" ? (
-              <AutoDeleteIcon />
-            ) : (
-              <EditDocumentIcon />
+      // --- EXTRACT SEARCH FILTERS CORRECTLY ---
+      let batchIdSearch = "";
+      let vidSearch = "";
+
+      if (filterModel && filterModel.items) {
+        filterModel.items.forEach(item => {
+          if (item.field === 'batchId' && item.value) batchIdSearch = item.value;
+          if (item.field === 'vid' && item.value) vidSearch = item.value;
+        });
+      }
+
+      // --- THE FIX: We must pass batchId and vid in the API call! ---
+      const apiUrl = `/JS/voucher/all-requests-summary?roleId=${actualRoleId}&page=${paginationModel.page}&size=${paginationModel.pageSize}&batchId=${encodeURIComponent(batchIdSearch)}&vid=${encodeURIComponent(vidSearch)}`;
+
+      const response = await callApi(apiUrl, null, "GET");
+
+      console.log("2. Raw API Response:", response);
+
+      let fetchedRows = [];
+      if (response && response.content) {
+        fetchedRows = response.content;
+        setTotalRowCount(response.totalElements);
+      } else if (Array.isArray(response)) {
+        fetchedRows = response;
+        setTotalRowCount(response.length);
+      }
+
+      console.log("3. Extracted Rows:", fetchedRows);
+
+      const uniqueWorkflows = [
+        ...new Set(
+          fetchedRows.map((row) => row?.approvalWorkflow).filter(Boolean)
+        ),
+      ];
+      console.log("4. Unique Workflows to fetch steps for:", uniqueWorkflows);
+
+      const stepsMap = {};
+      await Promise.all(
+        uniqueWorkflows.map(async (wfCode) => {
+          try {
+            const stepsResponse = await callApi(
+              `/JS/voucher/workflow/steps/${wfCode}`,
+              null,
+              "GET"
             );
+            const steps = Array.isArray(stepsResponse)
+              ? stepsResponse
+              : stepsResponse?.data || [];
+
+            stepsMap[wfCode] = steps;
+          } catch (e) {
+            console.warn(`Failed to fetch steps for ${wfCode}`, e);
+            stepsMap[wfCode] = [
+              { state: "P", designation: "Creator" },
+              { state: "APPROVED", designation: "Approver" }
+            ];
+          }
+        })
+      );
+
+      console.log("5. Final Steps Map:", stepsMap);
+
+      if (isMounted.current) {
+        setWorkflowStepsMap(stepsMap);
+        setRows(fetchedRows);
+      }
+    } catch (err) {
+      console.error("CATCH BLOCK TRIGGERED. Full Error Object:", err);
+      console.error("Error Message:", err.message);
+
+      if (isMounted.current && err.name !== "CanceledError") {
+        showSnackBar(
+          `Failed to load: ${err.message}`,
+          "error"
+        );
+      }
+    } finally {
+      if (isMounted.current) setLoading(false);
+    }
+    // --- THE FIX: Must add filterModel to dependencies so React re-runs this when you type ---
+  }, [callApi, showSnackBar, paginationModel.page, paginationModel.pageSize, filterModel]);
+
+  useEffect(() => {
+    fetchMyBatches();
+  }, [fetchMyBatches]);
+
+  const hasProcessingBatches = rows.some((row) => row.batchStatus === 'S');
+
+  useEffect(() => {
+    let interval;
+    if (hasProcessingBatches) {
+      interval = setInterval(() => {
+        fetchMyBatches(true); // true = silent mode
+      }, 5000); // Ping server every 5 seconds
+    }
+    return () => clearInterval(interval);
+  }, [hasProcessingBatches, fetchMyBatches]);
+
+  const handleOpenModal = (batch) => {
+    setSelectedBatch(batch);
+    setIsModalOpen(true);
+  };
+  const handleCloseModal = () => {
+    if (isSubmitting) return;
+    setIsModalOpen(false);
+    setSelectedBatch(null);
+  };
+
+  const handleSubmitBatchCancel = async () => {
+    setIsSubmitting(true);
+    const targetBatchId = selectedBatch.batchId; // Store it before modal closes
+
+    try {
+      await callApi(
+        `/JS/voucher/my-requests/by-batch/${targetBatchId}`,
+        null,
+        "DELETE"
+      );
+      showSnackBar(
+        `Batch ${targetBatchId} deletion process started.`,
+        "success"
+      );
+
+      setRows((prevRows) =>
+        prevRows.filter((row) => row.batchId !== targetBatchId)
+      );
+
+      handleCloseModal();
+
+      setTimeout(() => {
+        fetchMyBatches();
+      }, 1500);
+    } catch (error) {
+      const serverMsg = error?.response?.data?.message
+        || error?.response?.data?.error
+        || (typeof error?.response?.data === 'string' ? error.response.data : null)
+        || error?.message;
+
+      showSnackBar(serverMsg || "Failed to delete batch. It may have already been processed.", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenViewModal = async (row) => {
+    // 1. CLEAN SLATE FIX: Wipe all old data BEFORE opening the modal so nothing flashes!
+    setVidDetails(null);
+    setDynamicSteps([]);
+    setWorkflowHistory([]);
+    setIsDescExpanded(false);
+    setViewingBatchId(row.batchId);
+    setViewingBatchCreatorId(row.creatorId);
+    setViewingBatch(row);
+    setViewingBatchState(row.currentStatus || "");
+    setViewingBatchRawStatus(row.batchStatus || "");
+    setViewingBatchRequestDate(row.requestDate);
+    setViewingBatchRequestCount(row.requestCount || 0);
+    setViewingBatchOrder(row.currentOrder);
+    setViewingBatchTimeSinceLastAction(row.timeSinceLastAction || "");
+
+    setIsViewModalOpen(true); // Open modal immediately
+    setIsFetchingSteps(true);
+    setIsFetchingVid(true);
+
+    try {
+      const workflowCode = row.approvalWorkflow || "Workflow_3";
+      const [stepsData, summaryData, historyData] = await Promise.all([
+        callApi(`/JS/voucher/workflow/steps/${workflowCode}`, null, "GET"),
+        callApi(`/JS/voucher/batch-summary/${row.batchId}`, null, "GET"),
+        callApi(`/JS/voucher/workflow-history/${row.batchId}`, null, "GET"),
+      ]);
+
+      setDynamicSteps(Array.isArray(stepsData) ? stepsData : []);
+      setVidDetails(summaryData);
+      setWorkflowHistory(Array.isArray(historyData) ? historyData : []);
+    } catch (err) {
+      showSnackBar("Failed to load details.", "error");
+    } finally {
+      setIsFetchingSteps(false);
+      setIsFetchingVid(false);
+    }
+  };
+
+  const handleCloseViewModal = () => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    document.body.focus();
+
+    // 2. SMOOTH CLOSE FIX: Set the modal to false IMMEDIATELY to trigger the MUI fade-out animation.
+    setIsViewModalOpen(false);
+
+    // 3. Wait for the 300ms fade-out animation to finish, THEN wipe the memory.
+    setTimeout(() => {
+      setViewingBatchId(null);
+      setViewingBatch(null);
+      setIsDescExpanded(false);
+      setVidDetails(null);
+      setDynamicSteps([]);
+      setWorkflowHistory([]);
+    }, 300);
+  };
+
+
+  const handleDetailPageChange = (event, newPage) => {
+    setDetailPage(newPage);
+    fetchDetailRows(viewingBatchId, newPage, detailRowsPerPage);
+  };
+  const handleDetailRowsPerPageChange = (event) => {
+    const newSize = parseInt(event.target.value, 10);
+    setDetailRowsPerPage(newSize);
+    setDetailPage(0);
+    fetchDetailRows(viewingBatchId, 0, newSize);
+  };
+
+  const handleCancelSelectedJournals = async () => {
+    if (selectedJournalPrefixes.length === 0) {
+      showSnackBar("Select at least one entry.", "warning");
+      return;
+    }
+    setIsPartialSubmitting(true);
+    try {
+      await callApi(
+        "/JS/voucher/my-requests/by-journal-list",
+        selectedJournalPrefixes,
+        "DELETE"
+      );
+      showSnackBar("Selected entries deleted successfully.", "success");
+      handleCloseViewModal();
+    } catch (error) {
+      showSnackBar("Failed to delete selection", "error");
+      setIsPartialSubmitting(false);
+    }
+  };
+
+  // Standardized normalization for matching user contexts safely
+  const isViewingSelfCreated =
+    currentUserId &&
+    viewingBatchCreatorId &&
+    String(currentUserId).trim().toUpperCase() === String(viewingBatchCreatorId).trim().toUpperCase();
+
+  // batch delete
+  const isBatchDeletable =
+    viewingBatchRawStatus === "P" &&
+    Number(viewingBatchOrder) === 2 &&
+    !isFetchingSteps &&
+    workflowHistory.length <= 1;
+
+  const columns = [
+    {
+      field: "batchId",
+      headerName: "Batch ID",
+      width: 120,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: false, // <--- ENABLED
+      filterable: true,         // <--- ENABLED
+      sortable: false,
+    },
+    {
+      field: "vid",
+      headerName: "VID",
+      width: 150,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: false, // <--- ENABLED
+      filterable: true,         // <--- ENABLED
+      sortable: false,
+    },
+    {
+      field: "currentStatus",
+      headerName: "Workflow Progress",
+      width: 440,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: true,
+      sortable: false,
+      renderCell: (params) => {
+        if (params.row.batchStatus === 'S') {
           return (
-            <CustomChip
-            sx={{
-              width:105,
-              justifyContent:"flex-start",
-            }}
-              variant="outlined"
-              icon={icon}
-              label={
-                val === "CREATE"
-                  ? "Added"
-                  : val === "DELETE"
-                    ? "Deleted"
-                    : "Modified"
-              }
-              color={color}
-            />
+            <Box sx={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "flex-start", pl: 2, height: "100%" }}>
+              <Chip icon={<CircularProgress size={16} sx={{ color: 'primary.main' }} />} label="Creating Batch..." variant="outlined" color="primary" sx={{ fontWeight: 'bold', borderStyle: 'dashed' }} />
+            </Box>
           );
-        },
-      },
-      {
-        field: "requestDate",
-        headerName: "Requested Date",
-        flex: 1,
-        minWidth: 200,
-        renderCell: (params) => (
-          <Typography
-            variant="body1"
-            component="span"
-            sx={{ fontSize: "0.9rem" }}
-          >
-            {timeStampFormatter(params.value)}
-          </Typography>
-        ),
-      },
-      {
-        field: "requestStatus",
-        headerName: "Status",
-        minWidth: 150,
-        flex: 0.6,
-        align: "center",
-        headerAlign: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <Box>
-            <CustomChip
-              icon={
-                params.value === "ACCEPTED" ? (
-                  <CheckCircleIcon />
-                ) : params.value === "REJECTED" ? (
-                  <BlockFlippedIcon />
-                ) : params.value === "CANCELED" ? (
-                  <GppBadIcon />
-                ) : (
-                  <PendingActionsIcon />
-                )
-              }
-              variant="outlined"
-              label={toPascalKebabCase(params.value)}
-              sx={{
-                width:120,
-                justifyContent:"flex-start",
-                color:
-                  params.value === "REJECTED"
-                    ? "error.dark"
-                    : params.value === "ACCEPTED"
-                      ? "success.dark"
-                      : params.value === "CANCELLED"
-                        ? "primary.dark"
-                        : "warning.dark",
-                "& .MuiChip-icon": {
-                  color:
-                    params.value === "REJECTED"
-                      ? "error.dark"
-                      : params.value === "ACCEPTED"
-                        ? "success.dark"
-                        : params.value === "CANCELLED"
-                          ? "primary.dark"
-                          : "warning.dark",
-                },
-              }}
-            />
+        }
+
+        const state = params.value || "";
+        const workflow = params.row.approvalWorkflow;
+        const isRejected = params.row.currentStatus === "REJECTED" || params.row.batchStatus === "R";
+        const steps = workflowStepsMap[workflow] || [];
+
+        let activeStep = params.row.currentOrder ? params.row.currentOrder - 1 : 0;
+
+        // PERFECTED STEPPER LOGIC:
+        if (params.row.isExecutionFailed) {
+          activeStep = steps.length - 1;
+        } else if (!isRejected && (state === "POSTED" || state === "C" || params.row.currentStatus === "POSTED")) {
+          // 1. ONLY push past the end (All Green) if it is fully completed and posted
+          activeStep = steps.length;
+        } else if (!isRejected && (state === "SCHEDULED" || state === "WAITING FOR EXECUTION" || state === "APPROVED")) {
+          // 2. If it is waiting for the scheduler, PAUSE on the final Execution step!
+          activeStep = steps.length - 1;
+        }
+
+        if (activeStep === -1) activeStep = 0;
+
+
+        const escalationHours = params.row.escalationTime || 24;
+        const hoursPending = Math.abs(new Date() - new Date(params.row.requestDate)) / 36e5;
+        const isEscalated = !isRejected && activeStep < steps.length && hoursPending > escalationHours;
+
+        return (
+          <Box sx={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "flex-start", pl: 2, height: "100%" }}>
+            <Stepper activeStep={activeStep} alternativeLabel connector={<CustomConnector />} sx={{ width: "100%", mt: 0.5 }}>
+              {steps.map((step, index) => {
+                const isCompleted = index < activeStep;
+                const isCurrent = index === activeStep;
+
+                let statusFlag = "PENDING";
+                if (isCompleted) statusFlag = "COMPLETED";
+                if (isCurrent && isRejected) statusFlag = "REJECTED";
+                // NEW FIX: Turn the Execution stage RED with an X if it failed!
+                else if (isCurrent && params.row.isExecutionFailed) statusFlag = "REJECTED";
+                else if (isCurrent && isEscalated) statusFlag = "ESCALATED";
+                else if (isCurrent) statusFlag = "ACTIVE";
+
+                const label = step?.designation || step?.state || "Unknown";
+
+                return (
+                  <Tooltip title={statusFlag === "ESCALATED" ? "Escalation Time lapsed - Attention Required" : label} key={`${label}-${index}`} arrow>
+                    <Step completed={isCompleted} active={isCurrent} sx={{ px: 0, opacity: (isRejected || params.row.isExecutionFailed) && index > activeStep ? 0.3 : 1 }}>
+                      <StepLabel
+                        StepIconComponent={() => (
+                          <CustomWorkflowIcon statusFlag={statusFlag} iconLetter={label.charAt(0).toUpperCase()} label={label} isMini={true} />
+                        )}
+                        sx={{ p: 0, m: 0 }}
+                      />
+                    </Step>
+                  </Tooltip>
+                );
+              })}
+            </Stepper>
           </Box>
-        ),
+        );
       },
-      {
-        field: "action",
-        headerName: "Actions",
-        flex: 0.6,
-        minWidth: 120,
-        align: "center",
-        headerAlign: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
+    },
+    {
+      field: "creatorId",
+      headerName: "Creator",
+      width: 300,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: true,
+      sortable: false,
+
+      cellClassName: "creator-cell",
+
+      renderCell: (p) => {
+        const name = p.row.creatorName || p.value;
+        const id = p.value;
+
+        return (
           <Stack
             direction="row"
-            spacing={1}
-            justifyContent="center"
             alignItems="center"
-            sx={{ height: "100%" }}
+            justifyContent="center"
+            spacing={1}
+            sx={{
+              width: "100%",
+              height: "100%",
+              overflow: "visible !important",
+              px: 1,
+            }}
           >
-            {permissions.view && (
-              <Tooltip title="View">
-                <IconButton onClick={() => handleViewClick(params.row)}>
-                  <VisibilityIcon />
-                </IconButton>
-              </Tooltip>
-            )}
-            {params.row.requestStatus === "PENDING" && permissions.cancel && (
-              <Tooltip title={"Cancel Request"}>
-                <IconButton
-                  onClick={() => {
-                    setConfirmDialog(true);
-                    setRequestId(params.row.requestId);
-                  }}
-                >
-                  <CancelIcon fontSize="inherit" />
-                </IconButton>
-              </Tooltip>
-            )}
+            <AccountCircleIcon sx={{ color: "text.secondary", fontSize: 20 }} />
+            <Typography
+              variant="body2"
+              sx={{
+                whiteSpace: "nowrap",
+                overflow: "visible !important",
+                textOverflow: "clip",
+                textAlign: "center",
+              }}
+            >
+              {name} <strong>({id})</strong>
+            </Typography>
           </Stack>
-        ),
+        );
       },
-    ],
-    [handleViewClick, permissions.cancel, permissions.view, roleAccessList],
-  );
+    },
+    {
+      field: "requestDate",
+      headerName: "Submitted On",
+      width: 200,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: true,
+      sortable: false,
+      renderCell: (p) => formatDateTime(p.value),
+    },
 
-  const filteredColumns = useMemo(() => {
-    if (permissions.view || permissions.cancel) {
-      return columns;
-    }
-    return columns.filter((column) => column.field !== "action");
-  }, [columns, permissions]);
+    {
+      field: "requestCount",
+      headerName: "No. of Entries",
+      width: 150,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: true,
+      sortable: false,
+    },
+    {
+      field: "actions",
+      headerName: "Action",
+      width: 140,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: true,
+      sortable: false,
+      renderCell: (params) => {
+        const isDraft = params.row.batchStatus === 'S'; // NEW: Check if still compiling
+
+        return (
+          <Tooltip title={isDraft ? "Data is currently being compiled. Please wait." : "View & Actions"} arrow>
+            <span> {/* Required span to allow Tooltip to show over a disabled button */}
+              <Button
+                variant="contained"
+                size="small"
+                disabled={isDraft} // NEW: Locks the button
+                onClick={() => handleOpenViewModal(params.row)}
+                sx={{ textTransform: "none", borderRadius: 2, boxShadow: 0 }}
+              >
+                View & Action
+              </Button>
+            </span>
+          </Tooltip>
+        );
+      },
+    },
+  ];
 
   return (
-    <>
+    <Paper elevation={0}>
+      <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.main" sx={{ ml: 6, mt: 2 }}>
+        Voucher Posting Status
+      </Typography>
+      <Box sx={styles.mainContainer}>
+
+
         <DataGrid
           rows={rows}
-          loading={isLoading}
-          columns={filteredColumns}
+          columns={columns}
+          loading={loading}
+          getRowId={(row) => row.batchId}
           disableRowSelectionOnClick
-          pageSizeOptions={[5, 10, 25, 50]}
-          initialState={{
-            pagination: { paginationModel: { pageSize: 10, page: 0 } },
-            sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] },
-          }}
-          getRowId={(row) => row.gridRowId}
+          pageSizeOptions={[5, 10, 25, 50]} // <--- Added 50 here
+          disableColumnResize
+          rowHeight={52}
+          // --- NEW: SERVER SIDE PAGINATION PROPS ---
+          paginationMode="server"
+          rowCount={totalRowCount}
+          paginationModel={paginationModel}
+          onPaginationModelChange={setPaginationModel}
+          // -----------------------------------------
+
+          filterMode="server"
+          filterModel={filterModel}
+          onFilterModelChange={setFilterModel}
+
           slots={{
             noRowsOverlay: CustomNoRowsOverlay,
+            toolbar: GridToolbar
           }}
-          sx={{
-          minHeight: 760,
-          width: "100%",
-         "& .MuiDataGrid-columnHeaders": {
-          backgroundColor: "#f5f5f5 !important",
-          fontWeight: 700,
-          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
-          position: 'sticky',
-          top: 0,
-          zIndex: 1,
-          },
-          }}
+
+
+          sx={styles.dataGridContainer}
         />
+        <Dialog
+          open={isModalOpen}
+          onClose={handleCloseModal}
+          fullWidth
+          maxWidth="sm"
+        >
+          <DialogTitle sx={{ display: "flex", alignItems: "center" }}>
+            <DeleteSweepIcon sx={{ mr: 1, color: "error.main" }} /> Confirm Deletion
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Are you sure you want to delete batch <strong>{selectedBatch?.batchId}</strong>? This item will be permanently deleted
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions sx={{ p: 3, borderTop: "1px solid", borderColor: "divider" }}>
+            <Button onClick={handleCloseModal} disabled={isSubmitting}>Cancel</Button>
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : <DeleteIcon />}
+              onClick={handleSubmitBatchCancel}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Deleting..." : "Confirm Delete"}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-      <RoleRequestView
-        open={viewOpen}
-        handleClose={() => setViewOpen(false)}
-        data={viewData}
-      />
 
-      <Dialog
-        open={confirmDialog}
-        onClose={() => {
-          setConfirmDialog(false);
-        }}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ fontWeight: 600 }}>
-          Cancel Request ID: {requestId}
-        </DialogTitle>
-        <DialogContent>
-          <Typography sx={{ p: 1 }}>
-            Are you sure you want to cancel this request? Please confirm.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setConfirmDialog(false);
-            }}
-            variant="outlined"
-            sx=
-          {{
-            "&:hover":
-            {
-              color:"#fff",
-            },
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleCancelRequest}
-            color="error"
-            variant="contained"
-          >
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </>
+        {/* --- WORKFLOW DETAILS MODAL --- */}
+        <Dialog
+          open={isViewModalOpen}
+          onClose={() => {
+            handleBlurAll(); // <--- KILL FOCUS WHEN CLICKING BACKDROP
+            handleCloseViewModal();
+          }}
+          fullWidth
+          maxWidth="lg"
+        >
+          <DialogTitle sx={styles.dialogTitle}>
+            <Typography variant="h6" fontWeight="bold">
+              Batch Workflow Details: {viewingBatchId}
+            </Typography>
+            <IconButton onClick={handleCloseViewModal}>
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
+
+          <DialogContent dividers sx={{ p: 0, backgroundColor: "#f8fafc", height: '75vh', display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, overflowY: "auto" }}>
+
+              {/* ---  HEADER CARDS --- */}
+              <Box sx={{ p: 4, backgroundColor: "white", borderBottom: "1px solid", borderColor: "divider" }}>
+                {isFetchingVid ? (
+                  /* LAYOUT SHIFT FIX: Added minHeight: 300px so it holds space for the incoming cards */
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px', p: 4 }}>
+                    <CircularProgress size={32} />
+                  </Box>
+                ) : vidDetails && vidDetails.VID ? (
+                  <Stack spacing={3} sx={{ width: '100%' }}>
+                    {/* SECTION 1: VOUCHER DETAILS */}
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: 2, width: '100%', border: "1px solid", borderColor: "divider", display: 'flex', flexDirection: 'column' }}>
+                      <Typography variant="subtitle1" fontWeight="bold" color="text.primary" gutterBottom sx={{ borderBottom: "1px solid", borderColor: "divider", pb: 1, mb: 2 }}>
+                        Voucher Request ID : {vidDetails.VID}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Voucher Description</Typography>
+                      <Box sx={{ maxHeight: isDescExpanded ? 200 : 90, mb: "24px", overflowY: "auto", pr: 1, transition: "max-height 0.3s ease" }}>
+                        <Typography variant="body2" color="text.primary" sx={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                          {(vidDetails.DESCRIPTION || "").length > 100 && !isDescExpanded
+                            ? `${vidDetails.DESCRIPTION.substring(0, 100)}...`
+                            : (vidDetails.DESCRIPTION || "No description provided.")}
+
+                          {(vidDetails.DESCRIPTION || "").length > 100 && (
+                            <Typography
+                              component="span"
+                              color="primary"
+                              onClick={() => setIsDescExpanded(!isDescExpanded)}
+                              sx={{ cursor: "pointer", ml: 1, fontWeight: "bold", '&:hover': { textDecoration: 'underline' } }}
+                            >
+                              {isDescExpanded ? "Read Less" : "Read More"}
+                            </Typography>
+                          )}
+                        </Typography>
+                      </Box>
+                      <Grid item xs={12} sm={3} sx={{ mb: "24px" }}>
+                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                          Issue Categories
+                        </Typography>
+                        <Typography variant="body1" fontWeight="600" color="primary.main">
+                          {vidDetails.ISSUE_CATEGORIES || "N/A"}
+                        </Typography>
+                      </Grid>
+                      <Grid container spacing={3}>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Category</Typography>
+                          <Typography variant="body1" fontWeight="500">{vidDetails.CATEGORY_NAME}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Created By</Typography>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <AccountCircleIcon sx={{ fontSize: 20, color: "text.secondary" }} />
+                            <Typography variant="body1" fontWeight="500">
+                              {vidDetails.VID_CREATED_BY_NAME} <Typography component="span" variant="caption" color="text.secondary">({vidDetails.VID_CREATOR_ID})</Typography>
+                            </Typography>
+                          </Stack>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Created At</Typography>
+                          <Typography variant="body1" fontWeight="500">
+                            {formatDateTime(vidDetails.VID_CREATED_AT)}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </Paper>
+
+                    {/* SECTION 2: BATCH DETAILS */}
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: 2, width: '100%', border: "1px solid", borderColor: "divider", display: 'flex', flexDirection: 'column' }}>
+                      <Typography variant="subtitle1" fontWeight="bold" color="text.primary" gutterBottom sx={{ borderBottom: "1px solid", borderColor: "divider", pb: 1, mb: 2 }}>
+                        Voucher Details
+                      </Typography>
+                      <Grid container spacing={3} alignItems="center">
+                        <Grid item xs={12} sm={3}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Created By</Typography>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <AccountCircleIcon sx={{ fontSize: 20, color: "text.secondary" }} />
+                            <Typography variant="body1" fontWeight="500">
+                              {vidDetails.BATCH_CREATED_BY_NAME} <Typography component="span" variant="caption" color="text.secondary">({vidDetails.BATCH_CREATOR_ID})</Typography>
+                            </Typography>
+                          </Stack>
+                        </Grid>
+                        <Grid item xs={12} sm={2}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Created At</Typography>
+                          <Typography variant="body1" fontWeight="500">
+                            {formatDateTime(vidDetails.BATCH_CREATED_AT)}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={2}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>No. of Entries</Typography>
+                          <Typography variant="body1" fontWeight="600" color="primary.main">
+                            {viewingBatchRequestCount}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Is Execution Scheduled?</Typography>
+                          <Typography variant="body1" fontWeight="500" color={vidDetails.SCHEDULED_TIME ? "info.main" : "text.primary"}>
+                            {vidDetails.SCHEDULED_TIME ? (
+                              <>
+                                Yes ({formatDateTime(vidDetails.SCHEDULED_TIME)})
+                                {new Date(vidDetails.SCHEDULED_TIME) < new Date() && !["POSTED", "SCHEDULED", "APPROVED", "REJECTED", "C", "S"].includes(viewingBatchState) && (
+                                  <Typography component="span" color="error.main" fontWeight="bold" sx={{ ml: 1, fontSize: "0.75rem" }}>
+                                    (Execution time lapsed)
+                                  </Typography>
+                                )}
+                              </>
+                            ) : "No"}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={2}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Download Voucher Batch</Typography>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<FileDownloadIcon />}
+                            onClick={handleDownloadExcel}
+                            disabled={!viewingBatchId}
+                            tabIndex={-1} // <--- ADD THIS
+                            onMouseDown={(e) => e.preventDefault()} // <--- ADD THIS: Prevents focus on click
+                            sx={{
+                              borderColor: "#217346",
+                              color: "#217346",
+                              "&:hover": { backgroundColor: "#e8f5e9", borderColor: "#1e6b40" },
+                              // Completely nuke all focus states
+                              "&:focus, &.Mui-focusVisible, &:active": {
+                                outline: "none !important",
+                                boxShadow: "none !important",
+                                backgroundColor: "transparent !important",
+                                border: "1px solid #217346 !important"
+                              }
+                            }}
+                          >
+                            Download Batch
+                          </Button>
+                        </Grid>
+                      </Grid>
+                    </Paper>
+                  </Stack>
+                ) : null}
+              </Box>
+
+              {/* --- HORIZONTAL TIMELINE --- */}
+              <Box sx={{ p: 4, flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <Typography variant="subtitle1" fontWeight="bold" color="text.primary" sx={{ mb: 3 }}>
+                  Workflow Progress
+                </Typography>
+
+
+                {isFetchingSteps ? (
+                  /* LAYOUT SHIFT FIX: Added minHeight: 120px so it holds space for the incoming timeline */
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '120px', p: 3 }}>
+                    <CircularProgress size={32} />
+                  </Box>
+                ) : dynamicSteps.length > 0 ? (
+                  <Stepper
+                    activeStep={(() => {
+                      if (viewingBatch?.isExecutionFailed) return dynamicSteps.length - 1;
+                      if (viewingBatchState === "POSTED" || viewingBatchState === "C") return dynamicSteps.length;
+                      if (viewingBatchState === "SCHEDULED" || viewingBatchState === "WAITING FOR EXECUTION" || viewingBatchState === "APPROVED") return dynamicSteps.length - 1;
+                      return viewingBatchOrder - 1;
+                    })()}
+                    alternativeLabel
+                    connector={<BigConnector />}
+                  >
+                    {dynamicSteps.map((step, index) => {
+                      // 1. ONLY mark as fully done if physically posted to the ledger
+                      const isFullyDone = viewingBatchState === "POSTED" || viewingBatchState === "C";
+
+                      let activeStepIndex = isFullyDone ? dynamicSteps.length : viewingBatchOrder - 1;
+
+                      // 2. Pause on the final step if Scheduled/Waiting
+                      if (viewingBatchState === "SCHEDULED" || viewingBatchState === "WAITING FOR EXECUTION" || viewingBatchState === "APPROVED") {
+                        activeStepIndex = dynamicSteps.length - 1;
+                      } else if (viewingBatch?.isExecutionFailed) {
+                        activeStepIndex = dynamicSteps.length - 1;
+                      }
+
+                      const isCompleted = index < activeStepIndex;
+                      const isCurrent = index === activeStepIndex;
+
+                      let statusFlag = 'PENDING';
+                      if (isCompleted) statusFlag = 'COMPLETED';
+                      if (isCurrent && viewingBatchState === "REJECTED") statusFlag = 'REJECTED';
+
+                      else if (isCurrent && viewingBatch?.isExecutionFailed) statusFlag = 'REJECTED';
+                      else if (isCurrent) statusFlag = 'ACTIVE';
+
+                      const historyItem = workflowHistory[index];
+                      const executorStr = historyItem ? `${historyItem.ACTION_USER_NAME || 'System'} (${historyItem.LAST_ACTION_BY})` : null;
+
+                      return (
+                        <Step key={step.state} completed={isCompleted} active={isCurrent} sx={{ opacity: viewingBatchState === "REJECTED" && index > activeStepIndex ? 0.3 : 1 }}>
+                          <StepLabel StepIconComponent={() => <BigWorkflowIcon statusFlag={statusFlag} label={step.designation} />}>
+
+                            <Chip
+                              label={getRoleDisplayName(step.role)}
+                              size="small"
+                              variant="outlined"
+                              color={isCurrent && statusFlag !== 'REJECTED' ? "primary" : "default"}
+                              sx={{ mt: 1, height: 22, fontSize: "0.65rem", fontWeight: "bold" }}
+                            />
+
+                            {(isCompleted || (isCurrent && viewingBatchState === "REJECTED") || (isCurrent && viewingBatch?.isExecutionFailed)) && (
+                              <Box>
+                                {historyItem && (
+                                  <Typography variant="caption" display="block" color="success.main" sx={{ mt: 0.5, fontWeight: "bold" }}>
+                                    {executorStr}
+                                  </Typography>
+                                )}
+
+                                {historyItem && historyItem.stageDuration && historyItem.LAST_ACTION_BY !== "SYSTEM" && (
+                                  <Typography variant="caption" display="block" color="text.secondary" sx={{ fontStyle: 'italic', fontSize: '0.65rem' }}>
+                                    Pending Duration: {historyItem.stageDuration}
+                                  </Typography>
+                                )}
+                              </Box>
+                            )}
+
+                            {isCurrent && viewingBatchState !== "REJECTED" && !viewingBatch?.isExecutionFailed && step.role !== "System" && (
+                              <Typography variant="caption" display="block" color="text.secondary" fontWeight="bold" sx={{ mt: 0.5 }}>
+                                Pending Since: {viewingBatchTimeSinceLastAction || "0h 0m"}
+                              </Typography>
+                            )}
+
+                          </StepLabel>
+                        </Step>
+                      );
+                    })}
+                  </Stepper>
+                ) : (
+                  <Alert severity="info" sx={{ mt: 2 }}>Workflow configuration not found.</Alert>
+                )}
+              </Box>
+
+              {/* --- WORKFLOW HISTORY --- */}
+              <Box sx={{ p: 4, borderTop: "1px solid", borderColor: "divider" }}>
+                {isFetchingSteps ? (
+                  /* LAYOUT SHIFT FIX: Added minHeight: 200px so it holds space for the incoming history list */
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px', p: 2 }}>
+                    <CircularProgress size={32} />
+                  </Box>
+                ) : (
+                  <>
+                    <Typography variant="subtitle1" fontWeight="bold" color="text.primary" sx={{ mb: 3 }}>
+                      Workflow History ({workflowHistory.length})
+                    </Typography>
+                    <Stack spacing={2.5}>
+                      {workflowHistory.map((history, idx) => {
+
+                        const isSystem = history.LAST_ACTION_BY === "SYSTEM";
+                        const userName = history.ACTION_USER_NAME || (isSystem ? "Automated System" : "User");
+                        const initial = isSystem ? "S" : userName.charAt(0).toUpperCase();
+
+                        const isExecutionFail = history.LAST_ACTION?.toUpperCase().includes("FAILED");
+
+                        // 1. Clean the action label
+                        const rawAction = history.LAST_ACTION || "System Action";
+                        const cleanAction = rawAction.replace(/\s*\(.*?\)\s*/g, '').trim();
+
+                        // 2. Identify action types
+                        const isSubmission = rawAction.toUpperCase().includes("SUBMIT");
+                        const isFinalApproval = rawAction.toUpperCase().includes("FINAL") || rawAction.toUpperCase().includes("ACCEPT");
+
+                        const isSchOverride = rawAction.toUpperCase().includes("SCH. OVERRIDE");
+                        const isImmOverride = rawAction.toUpperCase().includes("IMM. OVERRIDE");
+                        const isKeptSchedule = rawAction.toUpperCase().includes("(SCHEDULED)");
+
+                        // 3. STRICT HISTORICAL SNAPSHOT: ONLY read from this specific history row!
+                        // We NO LONGER check vidDetails here. This prevents the "overwriting" bug.
+                        const historyRowTime = history.SCHEDULED_TIME;
+
+                        return (
+                          <Box key={idx} sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                            <Box>
+                              <Avatar sx={{ bgcolor: isSystem ? 'secondary.main' : 'primary.main', width: 40, height: 40, fontWeight: 'bold', fontSize: '1rem' }}>
+                                {initial}
+                              </Avatar>
+                            </Box>
+                            <Box sx={{ flexGrow: 1, backgroundColor: "white", p: 2.5, borderRadius: 2, border: "1px solid", borderColor: isExecutionFail ? "#d32f2f" : isSystem ? "#9c27b0" : "#e2e8f0", borderLeftWidth: isExecutionFail || isSystem ? "4px" : "1px", boxShadow: "0 1px 2px 0 rgb(0 0 0 / 0.05)" }}>
+
+                              <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                                <Typography variant="subtitle2" fontWeight="bold" color="text.primary">
+                                  {userName} {isSystem ? "" : `(${history.LAST_ACTION_BY})`}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">• {formatDateTime(history.LAST_ACTION_AT)}</Typography>
+                              </Box>
+
+                              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5, flexWrap: "wrap", gap: 1 }}>
+                                <Chip
+                                  label={cleanAction}
+                                  size="small"
+                                  sx={{ height: 22, fontSize: "0.7rem", fontWeight: "bold", backgroundColor: isExecutionFail || rawAction.includes("Reject") ? "#fee2e2" : isSystem ? "#f3e8ff" : "#e0e7ff", color: isExecutionFail || rawAction.includes("Reject") ? "#991b1b" : isSystem ? "#7e22ce" : "#3730a3" }}
+                                />
+
+                                {/* --- STRICT ISOLATED CHIP LOGIC --- */}
+
+                                {/* A. Logic exclusively for the Maker / Creator */}
+                                {isSubmission ? (
+                                  historyRowTime ? (
+                                    <Chip label={`Scheduled for: ${formatDateTime(historyRowTime)}`} size="small" color="info" variant="outlined" sx={{ height: 22, fontSize: "0.7rem", fontWeight: "bold" }} />
+                                  ) : (
+                                    <Chip label="Immediate Execution" size="small" color="default" variant="outlined" sx={{ height: 22, fontSize: "0.7rem", fontWeight: "bold", backgroundColor: "#f1f5f9" }} />
+                                  )
+                                )
+
+                                  // {/* B. Logic exclusively for the Final Approver */}
+                                  : isFinalApproval && !isSystem ? (
+                                    isSchOverride && historyRowTime ? (
+                                      <Chip label={`Schedule Overridden to: ${formatDateTime(historyRowTime)}`} size="small" color="warning" variant="outlined" sx={{ height: 22, fontSize: "0.7rem", fontWeight: "bold" }} />
+                                    ) : isImmOverride ? (
+                                      <Chip label="Overridden to Immediate Execution" size="small" color="warning" variant="outlined" sx={{ height: 22, fontSize: "0.7rem", fontWeight: "bold" }} />
+                                    ) : isKeptSchedule && historyRowTime ? (
+                                      <Chip label={`Original Schedule Kept: ${formatDateTime(historyRowTime)}`} size="small" color="info" variant="outlined" sx={{ height: 22, fontSize: "0.7rem", fontWeight: "bold" }} />
+                                    ) : (
+                                      <Chip label="Immediate Execution" size="small" color="default" variant="outlined" sx={{ height: 22, fontSize: "0.7rem", fontWeight: "bold", backgroundColor: "#f1f5f9" }} />
+                                    )
+                                  ) : null}
+
+                              </Stack>
+                              <Typography variant="body2" color="text.primary" sx={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                                {history.REMARKS || "Voucher Batch Created."}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        );
+                      })}
+
+                    </Stack>
+                  </>
+                )}
+              </Box>
+            </Box>
+          </DialogContent>
+
+          {/* --- STICKY BOTTOM ACTION BAR (Where Delete lives now) --- */}
+          <DialogActions sx={{ p: 3, borderTop: "1px solid", borderColor: "divider", backgroundColor: "white", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Box sx={{ flexGrow: 1 }}>
+              {/* Left aligned spacing element anchor */}
+            </Box>
+            <Stack direction="row" spacing={2} alignItems="center">
+
+              {isViewingSelfCreated && isBatchDeletable && (
+                <Button
+                  variant="contained"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  onClick={() => {
+                    setIsViewModalOpen(false); // Dismount detail modal view
+                    handleOpenModal({ batchId: viewingBatchId }); // Initialize confirmation dialog box stages
+                  }}
+                  sx={{ minWidth: 160, fontWeight: 'bold', py: 1 }}
+                >
+                  Cancel Voucher Batch
+                </Button>
+              )}
+
+            </Stack>
+          </DialogActions>
+        </Dialog>
+      </Box>
+    </Paper>
   );
 }
