@@ -1,437 +1,1408 @@
-import React, {
-  useEffect,
-  useState,
-  useCallback,
-  useMemo,
-  useRef,
-} from "react";
-import { Box, Fab, IconButton, Tooltip, Typography } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
+import React, { useMemo, useState } from "react";
+import {
+  Box,
+  Paper,
+  Grid,
+  Button,
+  Typography,
+  TextField,
+  MenuItem,
+  FormControl,
+  InputLabel ,
+  Select 
+} from "@mui/material";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+
 import { DataGrid } from "@mui/x-data-grid";
-import OnlinePredictionIcon from "@mui/icons-material/OnlinePrediction";
-import EditIcon from "@mui/icons-material/Edit";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import dayjs from "dayjs";
 import useApi from "../../hooks/useApi";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import CustomChip from "../../utils/CustomChip";
-import CGLDialog from "./CGLDialog";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import TrendingDownIcon from "@mui/icons-material/TrendingDown";
-import BookmarkAddedIcon from "@mui/icons-material/BookmarkAdded";
-import BookmarkRemoveIcon from "@mui/icons-material/BookmarkRemove";
-import DatasetIcon from "@mui/icons-material/Dataset";
-import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
-import GppGoodIcon from "@mui/icons-material/GppGood";
-import GppBadIcon from "@mui/icons-material/GppBad";
-import NoteIcon from "@mui/icons-material/Note";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import CancelIcon from "@mui/icons-material/Cancel";
-import { useSelector } from "react-redux";
-import { getPermissions } from "../../utils/CommonUtilities";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
-import styled from "@emotion/styled";
+import FormHelperText from "@mui/material/FormHelperText";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import { alpha } from "@mui/material/styles";
 
-/* ================= CONSTANTS ================= */
-
-const ACCOUNT_CLASSIFICATIONS = [
-  {
-    value: "A",
-    label: "Asset",
-    icon: <DatasetIcon fontSize="small" />,
+const styles = {
+  mainContainer: {
+    padding: 3,
+    height: "100%",
+    width: "100%",
   },
-  {
-    value: "L",
-    label: "Liability",
-    icon: <AccountBalanceWalletIcon fontSize="small" />,
+ dataGridContainer: {
+    height: 600,
+    width: "100%",
+    backgroundColor: "background.paper",
+    boxShadow: 2,
+    borderRadius: 2,
+    border: 1,
+    borderColor: "divider",
+    "& .MuiDataGrid-columnHeaders": {
+      backgroundColor: "#f5f5f5 !important",
+      fontWeight: 700,
+      borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+      position: 'sticky',
+      top: 0,
+      zIndex: 1,
+    },
+    "& .MuiDataGrid-row:hover": {
+      backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04),
+    },
+   
+    "& .MuiDataGrid-menuIcon": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
+    "& .MuiDataGrid-iconButtonContainer": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
   },
-  { value: "I", label: "Income", icon: <TrendingUpIcon fontSize="small" /> },
-  { value: "E", label: "Expense", icon: <TrendingDownIcon fontSize="small" /> },
-  { value: "M", label: "Memo A/c", icon: <NoteIcon fontSize="small" /> },
-];
+  tableContainer: {
+    maxHeight: 450,
+    overflowY: "auto",
+    border: 1,
+    borderColor: "divider",
+    mt: 1
+  },
+  fixedContentBox: {
+    minHeight: 400,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  tableHeaderCell: {
+    fontWeight: "bold",
+    backgroundColor: "#f5f6f8",
+    color: "text.primary",
+    whiteSpace: "nowrap",
+    zIndex: 10,
+  },
+  stickyHeaderColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    top: 0,
+    zIndex: 20,
+    backgroundColor: "background.paper",
+    borderBottom: 1,
+    borderRight: 1,
+    borderColor: "divider",
+    fontWeight: "bold",
+  }),
+  stickyBodyColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    zIndex: 5,
+    backgroundColor: "background.paper",
+    borderRight: 1,
+    borderColor: "divider",
+  }),
+  dialogTitle: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    pb: 1,
+  },
+  dialogActions: { p: 2, borderTop: 1, borderColor: "divider" },
+  loadingContainer: {
+    height: "100%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  helperText: {
+    fontSize: "0.75rem",
+    color: "text.secondary",
+    marginTop: "4px",
+  }
+};
 
-const OverlayBox = styled(Box)(() => ({
-  display: "flex",
-  flexDirection: "column",
-  height: "100%",
-  justifyContent: "center",
-  alignItems: "center",
-}));
 
-const CustomNoRowsOverlay = () => (
-  <OverlayBox>
-    <ErrorOutlineIcon fontSize="large" />
-    <Typography fontSize="1.1rem">Data is not available</Typography>
-  </OverlayBox>
-);
-
-/* ================= COMPONENT ================= */
-
-export default function CGLMasterTab() {
-  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
-  const requestType = selectedMenuItem?.requestType || "";
-  const permissions = getPermissions(selectedMenuItem);
-
+const DateWiseSearch = () => {
   const { callApi } = useApi();
-  const snackbar = useCustomSnackbar();
+const [showTable, setShowTable] = useState(false);
+ const [isSearched, setIsSearched] = useState(false);
+  const [assetClassification, setAssetClassification] = useState("");
+  const [fromDate, setFromDate] = useState(null);
+  const [toDate, setToDate] = useState(null);
 
   const [rows, setRows] = useState([]);
-  const [rowCount, setRowCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [rowCount, setRowCount] = useState(0);
 
-  const [openDialog, setOpenDialog] = useState(false);
-  const [editRow, setEditRow] = useState(null);
-
-  /* ===== SERVER GRID STATE ===== */
+  const [errors, setErrors] = useState({});
 
   const [paginationModel, setPaginationModel] = useState({
     page: 0,
-    pageSize: 20,
+    pageSize: 25,
   });
 
-  const [sortModel, setSortModel] = useState([]);
-  const [filterModel, setFilterModel] = useState({ items: [] });
+  const assetClassificationOptions = [
+    { value: "A", label: "Asset" },
+    { value: "L", label: "Liability" },
+    { value: "I", label: "Income" },
+    { value: "E", label: "Expense" },
+    { value: "M", label: "Memo A/c" },
+  ];
+ const validate = () => {
+  const temp = {};
 
-  /* ===== REFS TO PREVENT DOUBLE CALLS ===== */
+  if (!fromDate) {
+    temp.fromDate = "From Date is required";
+  }
 
-  const lastFilterRef = useRef("");
-  const lastQueryRef = useRef("");
+  if (!toDate) {
+    temp.toDate = "To Date is required";
+  }
 
-  /* ================= FETCH DATA ================= */
+  if (
+    fromDate &&
+    dayjs(fromDate).isAfter(
+      dayjs(),
+      "day"
+    )
+  ) {
+    temp.fromDate =
+      "Future date is not allowed";
+  }
 
-  const fetchRows = useCallback(async () => {
-    if (!requestType) return;
+  if (
+    toDate &&
+    dayjs(toDate).isAfter(
+      dayjs(),
+      "day"
+    )
+  ) {
+    temp.toDate =
+      "Future date is not allowed";
+  }
 
-    const sortField = sortModel[0]?.field;
-    const sortOrder = sortModel[0]?.sort;
+  setErrors(temp);
 
-    const filters = filterModel.items
-      .filter(
-        (f) =>
-          f.operator &&
-          f.value !== undefined &&
-          f.value !== null &&
-          f.value !== "",
-      )
-      .map((f) => ({
-        field: f.field,
-        operator: f.operator,
-        value: f.value,
-      }));
+  return (
+    Object.keys(temp).length === 0
+  );
+};
 
-    const querySignature = JSON.stringify({
-      page: paginationModel.page,
-      size: paginationModel.pageSize,
-      sortField,
-      sortOrder,
-      filters,
+  const handleExportPdfButton = async () => {
+  if (!isSearched) {
+    alert("Please search records first.");
+    return;
+  }
+
+  try {
+    const payload = {
+      acClassification: assetClassification,
+      fromDate: dayjs(fromDate).format("DD-MM-YYYY"),
+      toDate: dayjs(toDate).format("DD-MM-YYYY"),
+    };
+
+    console.log("PDF Export Payload =>", payload);
+
+    const response = await callApi(
+      "/VE/voucher-transactions/export-pdf",
+      payload,
+      "POST",
+      "blob",
+      "application/json",
+      {},
+      false
+    );
+
+    const blob = new Blob([response.data], {
+      type: "application/pdf",
     });
 
-    // PREVENT DUPLICATE API CALL
-    if (lastQueryRef.current === querySignature) return;
-    lastQueryRef.current = querySignature;
+    const url = window.URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "MIS_REPORTS.pdf";
+
+    document.body.appendChild(link);
+    link.click();
+
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("PDF Export Error =>", err);
+  }
+};
+//pdf export
+const handleExportButton = async () => {
+  if (!isSearched) {
+    alert("Please search records first.");
+    return;
+  }
+
+  try {
+    const payload = {
+      acClassification: assetClassification,
+      fromDate: dayjs(fromDate).format("DD-MM-YYYY"),
+      toDate: dayjs(toDate).format("DD-MM-YYYY"),
+    };
+
+    console.log("Export Payload =>", payload);
+
+    const response = await callApi(
+      "/VE/voucher-transactions/export",
+      payload,
+      "POST",
+      "blob",
+      "application/json",
+      {},
+      false
+    );
+
+    const blob = new Blob([response.data], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    const url = window.URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "MIS_REPORTS.xlsx";
+
+    document.body.appendChild(link);
+    link.click();
+
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("Export Error =>", err);
+  }
+};
+  const handleReset = () => {
+  setAssetClassification("");
+  setFromDate(null);
+  setToDate(null);
+
+  setRows([]);
+  setRowCount(0);
+
+  setPaginationModel({
+    page: 0,
+    pageSize: 25,
+  });
+
+  setErrors({});
+
+  setShowTable(false);
+  setIsSearched(false);
+};
+
+
+  const handleSearch = async (
+    page = paginationModel.page,
+    pageSize = paginationModel.pageSize
+  ) => {
+    if (!validate()) {
+      return;
+    }
+
+    setLoading(true);
 
     try {
-      setLoading(true);
       const payload = {
-        // requestType,
-        page: paginationModel.page,
-        size: paginationModel.pageSize,
-        sortField: sortField || "cglNumber",
-        sortOrder: sortOrder || "asc",
-        filters,
+        acClassification: assetClassification,
+        fromDate: dayjs(fromDate).format("DD-MM-YYYY"),
+        toDate: dayjs(toDate).format("DD-MM-YYYY"),
+        pageNumber: page,
+        pageSize: pageSize,
       };
-      const resp = await callApi("/CM/common-master/cgls", payload, "POST");
 
-      setRows(resp?.data?.data || []);
-      setRowCount(resp?.data?.totalElements || 0);
-    } catch (err) {
-      snackbar(err?.message || "Failed to load CGLs", "error");
-      setRows([]);
-      setRowCount(0);
+      console.log("Search Payload =>", payload);
+
+      const response = await callApi(
+        "/VE/voucher-transactions/search",
+        payload,
+        "POST"
+      );
+
+      console.log(
+        "Search Response =>",
+        response
+      );
+
+      const result = response?.data || {};
+
+      console.log(
+        "Content =>",
+        result?.content
+      );
+
+      setRows(
+        (result?.content || []).map(
+          (item, index) => ({
+            id: `${item.transactionId}-${index}`,
+             transactionId:
+              item.transactionId,
+            batchId: item.batchId,
+            journalId: item.journalId,
+            transactionDate:
+              item.transactionDate,
+            postDate: item.postDate,
+            cgl: item.cgl,
+            currency: item.currency,
+            branchCode:
+              item.branchCode,
+             debitAmount:
+              item.debitAmount,
+              creditAmount:
+              item.creditAmount,  
+              narration:
+              item.narration, 
+          })
+        )
+      );
+
+      setRowCount(
+        result?.totalElements || 0
+      );
+      setShowTable(true);
+      setIsSearched(true);
+    } catch (error) {
+      console.error(
+        "Date Wise Search Error =>",
+        error
+      );
     } finally {
       setLoading(false);
     }
-  }, [callApi, requestType, snackbar, paginationModel, sortModel, filterModel]);
+  };
+  const handlePaginationChange = (model) => {
+    setPaginationModel(model);
 
-  /* ================= EFFECTS ================= */
-
-  // Main fetch
-  useEffect(() => {
-    fetchRows();
-  }, [fetchRows]);
-
-  // Reset page ONLY when filter meaningfully changes
-  useEffect(() => {
-    const current = JSON.stringify(filterModel.items || []);
-    if (current === lastFilterRef.current) return;
-
-    lastFilterRef.current = current;
-
-    setPaginationModel((p) => (p.page === 0 ? p : { ...p, page: 0 }));
-  }, [filterModel]);
-
-  /* ================= DIALOG ================= */
-
-  const handleOpenCreate = () => {
-    setEditRow(null);
-    setOpenDialog(true);
+    handleSearch(
+      model.page,
+      model.pageSize
+    );
   };
 
-  const handleOpenEdit = (row) => {
-    setEditRow(row);
-    setOpenDialog(true);
-  };
 
-  const handleSaved = () => {
-    setOpenDialog(false);
-    setEditRow(null);
-    lastQueryRef.current = ""; // force reload
-    fetchRows();
-  };
-
-  /* ================= COLUMNS ================= */
 
   const columns = useMemo(
     () => [
-      // { field: "cglNumber", headerName: "CGL Code", flex: 1 },
-      {
-        field: "cglNumber",
-        headerName: "CGL Code",
+       {
+        field: "batchId",
+        headerName: "Batch ID",
         flex: 1,
-        minWidth: 150,
-        renderCell: (params) => (
-          <Box
-            // sx={{
-            //   fontFamily: "Monospace",
-            //   letterSpacing: "0.08em",
-            //   fontWeight: 700,
-            // }}
-          >
-            {params.value}
-          </Box>
-        ),
+        minWidth: 140,
       },
-
       {
-        field: "description",
-        headerName: "Description",
-        flex: 2,
-        minWidth: 300,
+        field: "journalId",
+        headerName: "Journal ID",
+        flex: 1,
+        minWidth: 160,
       },
-
       {
-        field: "acClassification",
-        headerName: "Account Classification",
+        field: "transactionDate",
+        headerName: "Transaction Date",
         flex: 1.2,
-        minWidth: 210,
-        type: "singleSelect",
-        valueOptions: ACCOUNT_CLASSIFICATIONS.map((a) => ({
-          value: a.value, // A, L, I, E, M
-          label: a.label,
-        })),
-        renderCell: (params) => {
-          const found = ACCOUNT_CLASSIFICATIONS.find(
-            (x) => x.value === params.value,
-          );
-          return (
-            <CustomChip
-              label={found?.label}
-              icon={found?.icon}
-              variant="outlined"
-            />
-          );
-        },
+        minWidth: 150,
       },
-
-      {
-        field: "balCompare",
-        headerName: "Balance Compare",
+       {
+        field: "branchCode",
+        headerName: "Branch Code",
+        flex: 1,
+        minWidth: 130,
+      },
+       {
+        field: "currency",
+        headerName: "Currency",
+        flex: 0.8,
+        minWidth: 100,
+      },
+       {
+        field: "cgl",
+        headerName: "CGL",
         flex: 1,
         minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <CustomChip
-            size="small"
-            variant="outlined"
-            icon={
-              params.row.balCompare ? (
-                <BookmarkAddedIcon />
-              ) : (
-                <BookmarkRemoveIcon />
-              )
-            }
-            label={params.row.balCompare ? "Include" : "Exclude"}
-            row={params.row}
-          />
-        ),
       },
-
+      
       {
-        field: "manualPosting",
-        headerName: "Manual Posting",
-        flex: 1,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <CustomChip
-            size="small"
-            variant="outlined"
-            icon={params.row.manualPosting ? <GppGoodIcon /> : <GppBadIcon />}
-            label={params.row.manualPosting ? "Allowed" : "Not Allowed"}
-            row={params.row}
-          />
-        ),
+        field: "debitAmount",
+        headerName: "Debit Amount",
+        flex: 1.3,
+        minWidth: 180,
       },
-      {
-        field: "balFwd",
-        headerName: "Balance Forward",
-        flex: 1,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <CustomChip
-            size="small"
-            variant="outlined"
-            icon={params.row.balFwd ? <CheckCircleIcon /> : <CancelIcon />}
-            label={params.row.balFwd ? "Yes" : "No"}
-            row={params.row}
-          />
-        ),
+         {
+        field: "creditAmount",
+        headerName: "Credit Amount",
+        flex: 1.3,
+        minWidth: 180,
       },
-
-      {
-        field: "status",
-        headerName: "Status",
-        flex: 0.7,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        type: "singleSelect",
-        // sortable: false,
-        valueOptions: [
-          { value: 1, label: "Active" },
-          { value: 0, label: "In Active" },
-        ],
-
-        renderCell: (params) => (
-          <CustomChip
-            icon={<OnlinePredictionIcon />}
-            label={params.value === 1 ? "Active" : "In Active"}
-            color={params.value === 1 ? "success" : "error"}
-            variant="outlined"
-          />
-        ),
+         {
+        field: "narration",
+        headerName: "Narration",
+        flex: 1.3,
+        minWidth: 180,
       },
-
-      {
-        field: "actions",
-        headerName: "Actions",
-        flex: 0.6,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-
-        renderCell: (params) => (
-          <Tooltip title="Edit">
-            <IconButton
-              onClick={() => handleOpenEdit(params.row)}
-              color="primary"
-            >
-              <EditIcon />
-            </IconButton>
-          </Tooltip>
-        ),
-      },
+      
     ],
-    [],
+    []
   );
-
-  const filteredColumns = useMemo(() => {
-    if (permissions.modify || permissions.block || permissions.unblock) {
-      return columns;
-    }
-    return columns.filter((c) => c.field !== "actions");
-  }, [columns, permissions]);
-
-  /* ================= RENDER ================= */
 
   return (
-    <Box>
-      <DataGrid
-        rows={rows}
-        columns={filteredColumns}
-        getRowId={(row) => row.cglNumber}
-        loading={loading}
-        paginationMode="server"
-        sortingMode="server"
-        filterMode="server"
-        rowCount={rowCount}
-        paginationModel={paginationModel}
-        onPaginationModelChange={setPaginationModel}
-        sortModel={sortModel}
-        onSortModelChange={setSortModel}
-        filterModel={filterModel}
-        onFilterModelChange={setFilterModel}
-        pageSizeOptions={[10, 20, 50, 100]}
-        disableRowSelectionOnClick
-        slots={{
-          noRowsOverlay: CustomNoRowsOverlay,
-        }}
-         sx={{
-          minHeight: 520,
+    <Paper
+      elevation={2}
+      sx={{
+        p: 2,
+        mb: 2,
+      
+        overflow: "auto",
+        height:750
+       
+       
+      }}
+    > 
+
+    <LocalizationProvider
+      dateAdapter={AdapterDayjs}
+    >
+      <Box sx={{ p: 3 }}>
+
+  <Typography
+      variant="h6"
+      sx={{ mb: 2, fontWeight: 500 }}
+    >
+      Date Wise Search
+    </Typography>
+   
+
+ <Box
+  sx={{
+    display: "grid",
+    gridTemplateColumns: "1.2fr 1fr 1fr auto",
+    gap: 2,
+    alignItems: "start",
+    mb: 2,
+  }}
+>
+
+<DatePicker
+  label="From Date *"
+  value={fromDate}
+  minDate={dayjs("2026-04-01")}
+  maxDate={dayjs()}
+  disableFuture
+  format="DD-MM-YYYY"
+  onChange={(value) => {
+    setFromDate(value);
+    setErrors((prev) => ({
+      ...prev,
+      fromDate: "",
+    }));
+  }}
+  slotProps={{
+    field: {
+      readOnly: true,
+    },
+    textField: {
+      fullWidth: true,
+      size: "small",
+      error: !!errors.fromDate,
+      helperText:
+        errors.fromDate || "Select From Date",
+      onKeyDown: (e) => e.preventDefault(),
+      onPaste: (e) => e.preventDefault(),
+    },
+  }}
+/>
+
+<DatePicker
+  label="To Date *"
+  value={toDate}
+  minDate={dayjs("2026-04-01")}
+  maxDate={dayjs()}
+  disableFuture
+  format="DD-MM-YYYY"
+  onChange={(value) => {
+    setToDate(value);
+    setErrors((prev) => ({
+      ...prev,
+      toDate: "",
+    }));
+  }}
+  slotProps={{
+    field: {
+      readOnly: true,
+    },
+    textField: {
+      fullWidth: true,
+      size: "small",
+      error: !!errors.toDate,
+      helperText:
+        errors.toDate || "Select To Date",
+      onKeyDown: (e) => e.preventDefault(),
+      onPaste: (e) => e.preventDefault(),
+    },
+  }}
+/>
+
+  <FormControl size="small"
+    fullWidth
+    error={!!errors.assetClassification}
+  >
+    <InputLabel>
+      Classification
+    </InputLabel>
+  <Select
+    value={assetClassification}
+    label="Classification *"
+    onChange={(e) => {
+      setAssetClassification(e.target.value);
+      setErrors((prev) => ({
+        ...prev,
+        assetClassification: "",
+      }));
+    }}
+  >
+    {assetClassificationOptions.map((option) => (
+      <MenuItem key={option.value} value={option.value}>
+        {option.label}
+      </MenuItem>
+    ))}
+  </Select>
+    <FormHelperText>
+    {errors.assetClassification ||
+      "Select the asset classification to filter the records."}
+  </FormHelperText>
+  </FormControl>
+
+
+
+
+ <Box
+  sx={{
+    display: "flex",
+    gap: 1,
+    alignItems: "flex-start",
+    pt: "2px",
+  }}
+>
+  <Button
+    variant="contained"
+    onClick={() =>
+      handleSearch(
+        paginationModel.page,
+        paginationModel.pageSize
+      )
+    }
+    sx={{
+      minWidth: 90,
+      height: 40,
+    }}
+  >
+    Search
+  </Button>
+
+  <Button
+    variant="outlined"
+    onClick={handleReset}
+    sx={{
+      minWidth: 90,
+      height: 40,
+      "&:hover":
+      {
+        color:"#fff",
+      },
+    }}
+  >
+    Reset
+  </Button>
+</Box>
+</Box>
+
+
+{showTable && (
+  <>
+      <Box
+  sx={{
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 1,
+    mb: 1,
+  }}
+>
+  {/* Excel Export */}
+  <Button
+    variant="contained"
+    startIcon={<FileDownloadIcon />}
+    size="small"
+    onClick={handleExportButton}
+    disabled={loading}
+    sx={{
+      textTransform: "none",
+      minWidth: 120,
+      height: 43,
+    }}
+  >
+    MIS Excel Export
+  </Button>
+
+  {/* PDF Export */}
+  <Button
+    variant="contained"
+    startIcon={<FileDownloadIcon />}
+    size="small"
+    onClick={handleExportPdfButton}
+    disabled={loading}
+    sx={{
+      textTransform: "none",
+      minWidth: 120,
+      height: 43,
+    }}
+  >
+    MIS PDF Export
+  </Button>
+</Box>
+
+    <Paper elevation={2}>
+      <Box
+        sx={{
           width: "100%",
-         "& .MuiDataGrid-columnHeaders": {
-          backgroundColor: "#f5f5f5 !important",
-          fontWeight: 700,
-          borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
-          position: 'sticky',
-          top: 0,
-          zIndex: 1,
-        },
         }}
-      />
-
-      {permissions?.create && !loading && (
-        <Fab
-          color="primary"
-          variant="extended"
-          onClick={handleOpenCreate}
-          sx={{
-             position: "fixed",
-             borderRadius: "8px",
-             fontSize: "15px",
-             bottom: 15,
-             right: 30,
-             zIndex: 1000,
-          }}
-        >
-          <AddIcon />
-          Create
-        </Fab>
-      )}
-
-      <CGLDialog
-        open={openDialog}
-        onClose={() => setOpenDialog(false)}
-        onSaved={handleSaved}
-        editInitialData={editRow}
-        accountClassifications={ACCOUNT_CLASSIFICATIONS}
-        permissions={permissions}
-      />
-    </Box>
+      >
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          loading={loading}
+          rowCount={rowCount}
+          paginationMode="server"
+          paginationModel={paginationModel}
+          onPaginationModelChange={handlePaginationChange}
+          pageSizeOptions={[25, 50, 100]}
+          disableRowSelectionOnClick
+          sx={styles.dataGridContainer}
+        />
+      </Box>
+    </Paper>
+  </>
+)}
+      </Box>
+    </LocalizationProvider>
+    </Paper>
   );
-}
+};
+
+export default DateWiseSearch;import React, { useMemo, useState } from "react";
+import {
+  Box,
+  Paper,
+  Button,
+  Typography,
+  TextField,
+  MenuItem,
+  FormControl,
+  InputLabel ,
+  Select, 
+  paperClasses
+} from "@mui/material";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+
+import { DataGrid } from "@mui/x-data-grid";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import dayjs from "dayjs";
+import useApi from "../../hooks/useApi";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
+ import { alpha } from "@mui/material/styles";
+const styles = {
+  mainContainer: {
+    padding: 3,
+    height: "100%",
+    width: "100%",
+  },
+ dataGridContainer: {
+    height: 600,
+    width: "100%",
+    backgroundColor: "background.paper",
+    boxShadow: 2,
+    borderRadius: 2,
+    border: 1,
+    borderColor: "divider",
+    "& .MuiDataGrid-columnHeaders": {
+      backgroundColor: "#f5f5f5 !important",
+      fontWeight: 700,
+      borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+      position: 'sticky',
+      top: 0,
+      zIndex: 1,
+    },
+    "& .MuiDataGrid-row:hover": {
+      backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04),
+    },
+   
+    "& .MuiDataGrid-menuIcon": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
+    "& .MuiDataGrid-iconButtonContainer": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
+  },
+  tableContainer: {
+    maxHeight: 450,
+    overflowY: "auto",
+    border: 1,
+    borderColor: "divider",
+    mt: 1
+  },
+  fixedContentBox: {
+    minHeight: 400,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  tableHeaderCell: {
+    fontWeight: "bold",
+    backgroundColor: "#f5f6f8",
+    color: "text.primary",
+    whiteSpace: "nowrap",
+    zIndex: 10,
+  },
+  stickyHeaderColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    top: 0,
+    zIndex: 20,
+    backgroundColor: "background.paper",
+    borderBottom: 1,
+    borderRight: 1,
+    borderColor: "divider",
+    fontWeight: "bold",
+  }),
+  stickyBodyColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    zIndex: 5,
+    backgroundColor: "background.paper",
+    borderRight: 1,
+    borderColor: "divider",
+  }),
+  dialogTitle: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    pb: 1,
+  },
+  dialogActions: { p: 2, borderTop: 1, borderColor: "divider" },
+  loadingContainer: {
+    height: "100%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  helperText: {
+    fontSize: "0.75rem",
+    color: "text.secondary",
+    marginTop: "4px",
+  }
+};
+
+const CGLSearch = () => {
+  const { callApi } = useApi();
+const [showTable, setShowTable] = useState(false);
+
+ const [isSearched, setIsSearched] = useState(false);
+
+  const [cgl, setcgl] = useState("");
+  const [branchCode, setbranchCode] = useState("");   
+  const [branchCodeError, setbranchCodeError] = useState("");
+  const [transactionDate, setTransactionDate] = useState(null); 
+
+  
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [rowCount, setRowCount] = useState(0);
+
+  const [errors, setErrors] = useState({});
+  const [cglError, setcglError] = useState("");
+  
+
+  const [paginationModel, setPaginationModel] = useState({
+    page: 0,
+    pageSize: 25,
+  });
+
+
+ 
+
+  const handleReset = () => { 
+    setcgl("");
+    setbranchCode(""); 
+    setTransactionDate(null);
+    setRows([]);
+    setRowCount(0);
+    setPaginationModel({
+    page: 0,
+    pageSize: 25,
+  });
+   setbranchCodeError("");
+ setcglError("");
+  setErrors({});
+  setShowTable(false);
+  
+setIsSearched(false);
+  
+};
+const handleExportPdfButton = async () => {
+  if (!isSearched) {
+    alert("Please search records first.");
+    return;
+  }
+
+  try {
+    const payload = {
+      cgl,
+      branchCode,
+      transactionDate: transactionDate
+        ? dayjs(transactionDate).format("DD-MM-YYYY")
+        : null,
+    };
+
+    console.log("PDF Export Payload =>", payload);
+
+    const response = await callApi(
+      "/VE/voucher-transactions/export-pdf",
+      payload,
+      "POST",
+      "blob",
+      "application/json",
+      {},
+      false
+    );
+
+    const blob = new Blob([response.data], {
+      type: "application/pdf",
+    });
+
+    const url = window.URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "MIS_REPORTS.pdf";
+
+    document.body.appendChild(link);
+    link.click();
+
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+  } catch (err) {
+    console.error("PDF Export Error =>", err);
+  }
+};
+
+const handleExportButton = async () => {
+  if (!isSearched) {
+    alert("Please search records first.");
+    return;
+  }
+
+  try {
+    const payload = {
+      cgl,
+      branchCode,
+      transactionDate: transactionDate
+        ? dayjs(transactionDate).format("DD-MM-YYYY")
+        : null,
+    };
+
+    console.log("Export Payload =>", payload);
+
+    const response = await callApi(
+      "/VE/voucher-transactions/export",
+      payload,
+      "POST",
+      "blob",
+      "application/json",
+      {},
+      false
+    );
+
+    const blob = new Blob([response.data], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    const url = window.URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "MIS_REPORTS.xlsx";
+
+    document.body.appendChild(link);
+    link.click();
+
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("Export Error =>", err);
+  }
+};
+
+
+
+ const validate = () => {
+  const temp = {};
+
+  if (!transactionDate) {
+    temp.fromDate = " Date is required";
+  }
+
+  
+  if (
+    transactionDate &&
+    dayjs(transactionDate).isAfter(
+      dayjs(),
+      "day"
+    )
+  ) {
+    temp.transactionDate =
+      "Future date is not allowed";
+  }
+
+
+  setErrors(temp);
+
+  return (
+    Object.keys(temp).length === 0
+  );
+};
+
+
+ 
+ 
+const handleCLGChange = (e) => {
+  const value = e.target.value; 
+
+  if (value.length > 10) {
+    setcglError("Maximum 10 numbers allowed");
+      setTimeout(()=>{
+         setcglError("")
+        },1500)
+    return;
+  }  
+  if (    
+    !/^[0-9-]*$/.test(value)
+  ) {
+    setcglError(
+      "Only numbers!"
+    );
+
+   setTimeout(()=>{
+         setcglError("")
+        },1500)
+    return;
+  }
+  setErrors({});
+  setcglError("");
+  setcgl(value);
+};
+
+    
+
+
+const handlebranchCodeChange = (e) => {
+  const value = e.target.value; 
+ 
+  if (value.length > 5) {
+    setbranchCodeError("Maximum 5 numbers allowed");
+    setTimeout(()=>{
+         setbranchCodeError("")
+        },1500)
+    return;
+  }  
+  if (    
+    !/^[0-9-]*$/.test(value)
+  ) {
+    setbranchCodeError(
+      "Only numbers!"
+    );
+      setTimeout(()=>{
+         setbranchCodeError("")
+        },1500)
+    return;
+  }
+  setErrors({});
+  setbranchCodeError("");
+  setbranchCode(value);
+}; 
+
+  const handleSearch = async (
+    page = paginationModel.page,
+    pageSize = paginationModel.pageSize
+  ) => {  
+    if (!validate()) {
+      return;
+    }
+    
+    setLoading(true);
+
+    try {
+      const payload = {
+     
+        cgl:cgl,
+        branchCode:branchCode,
+        transactionDate: dayjs(transactionDate).format("DD-MM-YYYY"),
+        pageNumber: page,
+        pageSize: pageSize,
+      };
+
+      console.log("Search Payload =>", payload);
+
+      const response = await callApi(
+        "/VE/voucher-transactions/search",
+        payload,
+        "POST"
+      );
+
+      console.log(
+        "Search Response =>",
+        response
+      );
+
+      const result = response?.data || {};
+
+      console.log(
+        "Content =>",
+        result?.content
+      );
+
+      setRows(
+        (result?.content || []).map(
+          (item, index) => ({
+            id: `${item.transactionId}-${index}`,
+            transactionId:
+              item.transactionId,
+            batchId: item.batchId,
+            journalId: item.journalId,
+            transactionDate:
+              item.transactionDate,
+            postDate: item.postDate,
+            cgl: item.cgl,
+            currency:
+              item.currency,
+            branchCode:
+              item.branchCode,
+                 debitAmount:
+              item.debitAmount,
+              creditAmount:
+              item.creditAmount,  
+              narration:
+              item.narration, 
+          })
+        )
+      );
+
+      setRowCount(
+        result?.totalElements || 0
+      );
+    setShowTable(true);
+setIsSearched(true);
+    } catch (error) {
+      console.error(
+        "  Search  Error =>",
+        error
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+  const handlePaginationChange = (model) => {
+    setPaginationModel(model);
+
+    handleSearch(
+      model.page,
+      model.pageSize
+    );
+  };
+
+
+
+  const columns = useMemo(
+    () => [
+      
+      {
+        field: "batchId",
+        headerName: "Batch ID",
+        flex: 1,
+        minWidth: 140,
+      },
+      {
+        field: "journalId",
+        headerName: "Journal ID",
+        flex: 1,
+        minWidth: 160,
+      },
+      {
+        field: "transactionDate",
+        headerName: "Transaction Date",
+        flex: 1.2,
+        minWidth: 150,
+      },
+       {
+        field: "branchCode",
+        headerName: "Branch Code",
+        flex: 1,
+        minWidth: 130,
+      },
+       {
+        field: "currency",
+        headerName: "Currency",
+        flex: 0.8,
+        minWidth: 100,
+      },
+       {
+        field: "cgl",
+        headerName: "CGL",
+        flex: 1,
+        minWidth: 150,
+      },
+      
+      {
+        field: "debitAmount",
+        headerName: "Debit Amount",
+        flex: 1.3,
+        minWidth: 180,
+      },
+         {
+        field: "creditAmount",
+        headerName: "Credit Amount",
+        flex: 1.3,
+        minWidth: 180,
+      },
+         {
+        field: "narration",
+        headerName: "Narration",
+        flex: 1.3,
+        minWidth: 180,
+      },
+      
+      
+    ],
+    []
+  );
+
+  return (
+  <Paper
+  elevation={2}
+  sx={{
+    p: 2,
+    mb: 4,   
+    overflow: "auto",
+    height:760  
+  }}
+>
+          <LocalizationProvider
+            dateAdapter={AdapterDayjs}
+          > 
+    <Box sx={{ p: 3 }}>
+       
+        <Typography variant="h5" mb={2}>
+         CGLwise Search
+        </Typography>     
+
+
+  <Box
+  sx={{
+    display: "grid",
+    gridTemplateColumns:
+      "1fr 1fr 1fr auto auto",
+    gap: 2,
+    alignItems: "baseline",
+   
+        mb:3,   
+        
+  }}
+>
+
+  <DatePicker
+  label="Date *"
+  value={transactionDate}
+  minDate={dayjs("2026-04-01")}
+  maxDate={dayjs()}
+  disableFuture
+  format="DD-MM-YYYY"
+  onChange={(value) => {
+    setTransactionDate(value);
+    setErrors((prev) => ({
+      ...prev,
+      transactionDate: "",
+    }));
+  }}
+  slotProps={{
+    field: {
+      readOnly: true,
+    },
+    textField: {
+      fullWidth: true,
+      size: "small",
+      error: !!errors.transactionDate,
+      helperText:
+        errors.transactionDate || "Select Date",
+      onKeyDown: (e) => e.preventDefault(),
+      onPaste: (e) => e.preventDefault(),
+    },
+  }}
+/>
+  <FormControl size="small"
+    fullWidth
+     >
+    <InputLabel>
+ 
+    </InputLabel>
+   
+
+<TextField
+  label="CGL"
+  size="small"
+  value={cgl}
+  error={Boolean(cglError)}
+  helperText={cglError || "Enter CGL number. (Maximum 10 digits)."}
+  
+  onChange={handleCLGChange}
+  fullWidth
+/>
+  </FormControl>
+ 
+  <FormControl size="small"
+    fullWidth
+     >
+    <InputLabel>
+     
+    </InputLabel>
+    <TextField
+  label="Branch Code"
+  size="small"
+  value={branchCode}
+  error={Boolean(branchCodeError)}
+  helperText={
+    branchCodeError ||
+    "Enter Branch Code (Maximum 5 digits)."
+  }
+  onChange={handlebranchCodeChange}
+  fullWidth
+/>
+       
+  </FormControl>
+
+ 
+
+
+ 
+
+  <Button
+  variant="contained"
+  onClick={() =>
+    handleSearch(
+      paginationModel.page,
+      paginationModel.pageSize
+    )
+  }
+   sx={{
+      minWidth: 90,
+      height: 45,
+      
+    }}
+>
+  Search
+</Button>
+
+  <Button
+    variant="outlined"
+    onClick={handleReset}
+    sx={{
+      minWidth: 90,
+      height: 45,
+      "&:hover":
+      {
+        color:"#fff",
+      },
+    }}
+  >
+    Reset
+  </Button>
+
+
+
+</Box>
+
+
+{showTable && (
+  <>
+    <Box
+  sx={{
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 1,
+    mb: 1,
+  }}
+>
+  {/* Excel Export */}
+  <Button
+    variant="contained"
+    startIcon={<FileDownloadIcon />}
+    size="small"
+    onClick={handleExportButton}
+    disabled={loading}
+    sx={{
+      textTransform: "none",
+      minWidth: 120,
+      height: 43,
+    }}
+  >
+   MIS Excel Export
+  </Button>
+
+  {/* PDF Export */}
+  <Button
+    variant="contained"
+    startIcon={<FileDownloadIcon />}
+    size="small"
+    onClick={handleExportPdfButton}
+    disabled={loading}
+    sx={{
+      textTransform: "none",
+      minWidth: 120,
+      height: 43,
+    }}
+  >
+      MIS PDF Export 
+  </Button>
+</Box>
+
+    <Paper elevation={2}>
+      <Box
+        sx={{
+          width: "100%",
+        }}
+      >
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          loading={loading}
+          rowCount={rowCount}
+          paginationMode="server"
+          paginationModel={paginationModel}
+          onPaginationModelChange={handlePaginationChange}
+          pageSizeOptions={[25, 50, 100]}
+          disableRowSelectionOnClick
+          sx={styles.dataGridContainer}
+        />
+      </Box>
+    </Paper>
+  </>
+)}
+      </Box>
+     </LocalizationProvider>
+     </Paper>
+  );
+};
+
+
+
+export default CGLSearch;
+
