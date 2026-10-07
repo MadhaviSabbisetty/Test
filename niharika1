@@ -1,553 +1,1075 @@
-import { Check, Clear, Visibility } from "@mui/icons-material";
-import AccountCircleIcon from "@mui/icons-material/AccountCircle";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import HourglassBottomIcon from "@mui/icons-material/HourglassBottom";
-import InfoIcon from "@mui/icons-material/Info";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import React, { useEffect, useState, useMemo } from "react";
+
 import {
-  Box,
-  Button,
-  Card, // Imported Card
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  IconButton,
-  Stack,
-  TextField,
-  Tooltip,
-  Typography,
+  Box, Paper, Typography, Button, TextField, Dialog,
+  DialogTitle, DialogContent, DialogActions, Snackbar,
+  Alert, Accordion, AccordionSummary, AccordionDetails,
+  FormControl, InputLabel, Select, MenuItem, FormHelperText
 } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import BlockIcon from "@mui/icons-material/Block";
 import { DataGrid } from "@mui/x-data-grid";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
-
 import useApi from "../../hooks/useApi";
-import { timeStampFormatter } from "../../utils/CommonUtilities";
-import CustomChip from "../../utils/CustomChip";
-import downloadFile from "../../utils/DownloadUtils";
-import LoadingOverlay from "../../utils/LoadingOverlay";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import { COMMON_REQ_SCREEN_CONFIGS } from "../common/CommonConstants";
-import { styles } from "./CommonRequestScreenStyles";
-import RequestAnalytics from "./RequestAnalytics";
-import ViewRequestDialog from "./ViewRequestDailog";
 
-const REMARKS_REGEX = /^(?!.* {2})[a-zA-Z0-9\s/&(),.-]*$/;
-const PENDING_REQUESTS_URL = "/CR/pending-requests";
-const PATCH_URL = "/CR/update-request";
-const DOWNLOAD_URL = "/RS/reports/generate/base64";
-const ACTIVE_DOWNLOAD_URL = "/CR/active-requests";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import dayjs from "dayjs";
+import Tooltip from "@mui/material/Tooltip";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import { alpha } from "@mui/material/styles";
 
-export default function CommonRequestScreen() {
-  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
-  const requestType = selectedMenuItem?.requestType || "";
-  const navigate = useNavigate();
+const styles = {
+  mainContainer: {
+    padding: 3,
+    height: "100%",
+    width: "100%",
+  },
+  dataGridContainer: {
+    height: "100%",
+    minHeight: 0,
+    width: "100%",
+    backgroundColor: "background.paper",
+    boxShadow: 2,
+    borderRadius: 2,
+    border: 1,
+    borderColor: "divider",
+    "& .MuiDataGrid-columnHeaders": {
+      backgroundColor: "#f5f5f5 !important",
+      fontWeight: 700,
+      borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+      position: "sticky",
+      top: 0,
+      zIndex: 1,
+    },
+    "& .MuiDataGrid-row:hover": {
+      backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04),
+    },
+
+    "& .MuiDataGrid-menuIcon": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
+    "& .MuiDataGrid-iconButtonContainer": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
+  },
+  // tableContainer: {
+  //   maxHeight: 450,
+  //   overflowY: "auto",
+  //   border: 1,
+  //   borderColor: "divider",
+  //   mt: 1,
+  // },
+  fixedContentBox: {
+    minHeight: 400,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  tableHeaderCell: {
+    fontWeight: "bold",
+    backgroundColor: "#f5f6f8",
+    color: "text.primary",
+    whiteSpace: "nowrap",
+    zIndex: 10,
+  },
+  stickyHeaderColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    top: 0,
+    zIndex: 20,
+    backgroundColor: "background.paper",
+    borderBottom: 1,
+    borderRight: 1,
+    borderColor: "divider",
+    fontWeight: "bold",
+  }),
+  stickyBodyColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    zIndex: 5,
+    backgroundColor: "background.paper",
+    borderRight: 1,
+    borderColor: "divider",
+  }),
+  dialogTitle: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    pb: 1,
+  },
+  dialogActions: { p: 2, borderTop: 1, borderColor: "divider" },
+  loadingContainer: {
+    height: "100%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  helperText: {
+    fontSize: "0.75rem",
+    color: "text.secondary",
+    marginTop: "4px",
+  },
+};
+
+
+const ViewVoucherRequestsScreen = () => {
   const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
 
-  const screenConfig = COMMON_REQ_SCREEN_CONFIGS[selectedMenuItem?.id];
-  const {
-    columns,
-    transformData,
-    processViewData,
-    requestsUrl,
-    patchUrl,
-    downloadUrl,
-    showDeleteRequest = false,
-  } = screenConfig || {};
-
-  const [loading, setLoading] = useState(false);
-  const [dataGridLoading, setDataGridLoading] = useState(true);
   const [rows, setRows] = useState([]);
-  const [remarks, setRemarks] = useState("");
-  const [viewOpen, setViewOpen] = useState(false);
-  const [viewData, setViewData] = useState(null);
-  const [confirmDialog, setConfirmDialog] = useState(false);
-  const [selectedType, setSelectedType] = useState(null);
-  const [selectedRequestId, setSelectedRequestId] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const exemptions = ["YEAR_END_PROFIT_TRANSFER"];
+  const [searchVID, setSearchVID] = useState("");
 
-  const fetchData = useCallback(async () => {
-    if (!requestType) return;
-    try {
-      let url = requestsUrl ? requestsUrl : PENDING_REQUESTS_URL;
-      const payload = { requestType };
+  const [searchStatus, setSearchStatus] = useState("");
+  const [searchedStatus, setSearchedStatus] = useState("ACTIVE");
+  const [searchCategory, setSearchCategory] = useState("");
+  const [expanded, setExpanded] = useState(false);
 
-      if (exemptions.includes(requestType)) {
-        url = ACTIVE_DOWNLOAD_URL;
-      }
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedRow, setSelectedRow] = useState(null);
+  const [deleteRemark, setDeleteRemark] = useState("");
+  const [isUsed, setIsused] = useState(true);
+  const [remarkTouched, setRemarkTouched] = useState(false);
 
-      const response = await callApi(url, payload, "POST");
-      const result = response?.data || [];
 
-      const data = result.map((row) => ({
-        ...row,
-        ...(typeof row.payload === "object" ? row.payload : {}),
-      }));
+  const [descriptionPopupOpen, setDescriptionPopupOpen] =
 
-      setRows(transformData ? transformData(data) : data);
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error fetching data", "error");
-    } finally {
-      setRemarks("");
-      setDataGridLoading(false);
-      setConfirmDialog(false);
-    }
-  }, [requestType, requestsUrl, callApi, transformData, showSnackBar]);
+    useState(false);
+
+  const [selectedDescription, setSelectedDescription] =
+    useState("");
+
+  const [selectedIssues, setSelectedIssues] =
+    useState("");
+
+  const [searchDate, setSearchDate] =
+    useState(null);
+
+
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+  const [remarkPopupOpen, setRemarkPopupOpen] =
+    useState(false);
+
+  const [selectedRemark, setSelectedRemark] =
+    useState("");
+
+
+
+
+  const [voucherCategories, setVoucherCategories] = useState([]);
+  const [voucherStatuses, setVoucherStatuses] = useState([]);
+  const [vidError, setVidError] = useState("");
+  const [remarkError, setRemarkError] = useState("");
+
 
   useEffect(() => {
-    if (!screenConfig || !requestType) {
-      return;
-    }
-    setRows([]);
-    setRemarks("");
-    setConfirmDialog(false);
-    fetchData();
-  }, [selectedMenuItem?.id, fetchData, screenConfig, requestType, navigate]);
-
-  const closeConfirmDialog = useCallback(() => {
-    setRemarks("");
-    setConfirmDialog(false);
+    fetchVoucherCategories();
+    fetchVoucherStatuses();
+    fetchVouchers();
   }, []);
 
-  const handleConfirm = async () => {
-    if (selectedType === "reject" && remarks.trim().length < 5) {
-      showSnackBar(
-        "Please provide minimum 5 characters remarks before rejecting",
-        "warning",
-      );
-      return;
-    }
-    setLoading(true);
+
+  const handleViewDescription = (
+    description,
+    issueCategories
+  ) => {
+    setSelectedDescription(
+      description || "-"
+    );
+    setSelectedIssues(
+      issueCategories ? issueCategories.split(",").map(item => item.trim()) : []
+    );
+
+    setDescriptionPopupOpen(
+      true
+    );
+  };
+
+
+  const handleViewRemark = (
+    remark
+  ) => {
+    setSelectedRemark(
+      remark || "-"
+    );
+
+    setRemarkPopupOpen(
+      true
+    );
+  };
+
+
+  const fetchVoucherCategories = async () => {
 
     try {
-      const payload = {
-        requestId: selectedRequestId,
-        status: selectedType === "reject" ? "REJECTED" : "ACCEPTED",
-        remarks: selectedType === "reject" ? remarks : "No Remarks",
-      };
-      const url = patchUrl ? patchUrl : PATCH_URL;
-      const res = await callApi(url, payload, "PATCH");
+      const response = await callApi(
+        "/VE/voucher-transactions/voucher-categories",
+        null,
+        "GET"
+      );
 
-      if (res?.success || res) {
-        showSnackBar(
-          selectedType === "accept"
-            ? `Request Id ${selectedRequestId} Approved Successfully`
-            : `Request Id ${selectedRequestId} Rejected Successfully`,
-          "success",
-        );
-        fetchData();
-      } else {
-        showSnackBar("Failed to process request: " + res?.message, "error");
-      }
-    } catch (err) {
-      console.error(err);
-      showSnackBar(err.message || "Error while processing request", "error");
-    } finally {
-      closeConfirmDialog();
-      setLoading(false);
+      const data = Array.isArray(response)
+        ? response
+        : response?.data || [];
+
+      setVoucherCategories(data);
+
+    } catch (error) {
+      console.error(error);
+      setVoucherCategories([]);
     }
   };
 
-  const handleViewClick = useCallback(
-    (data) => {
-      const view = processViewData ? processViewData(data) : data;
-      setViewData(view);
-      setViewOpen(true);
-    },
-    [processViewData],
-  );
-
-  const openConfirmDialog = useCallback((type, id) => {
-    setConfirmDialog(true);
-    setSelectedType(type);
-    setSelectedRequestId(id);
-  }, []);
-
-  const handleRemarksChange = useCallback(
-    (e) => {
-      const value = e.target.value;
-
-      if (value && !/^[A-Za-z0-9]$/.test(value[0])) {
-        showSnackBar("Should not start with a special character", "error");
-        return;
-      }
-
-      const error = REMARKS_REGEX.test(value)
-        ? ""
-        : "Invalid Format. Only alphabets, numbers, spaces (single spaces between words), and ,()&/-. are allowed!";
-
-      if (error) {
-        showSnackBar(error, "warning");
-        return;
-      }
-
-      setRemarks(value);
-    },
-    [showSnackBar],
-  );
-
-  const handleDownload = async () => {
-    setLoading(true);
+  const fetchVoucherStatuses = async () => {
     try {
-      const url = downloadUrl ? downloadUrl : DOWNLOAD_URL;
-      const date = viewData.payload.date || viewData.reportDate;
-      let reportType = viewData.reportType;
+      const response = await callApi(
+        "/VE/voucher-transactions/voucher-statuses",
+        null,
+        "GET"
+      );
 
-      if (requestType === "YEAR_END_PROFIT_TRANSFER") {
-        if (
-          viewData.reqStatus === "PENDING" ||
-          viewData.reqStatus === "QUEUED"
-        ) {
-          reportType = "profit_transfer_report";
-        }
-      }
+      const data = Array.isArray(response)
+        ? response
+        : response?.data || [];
 
-      const payload = { requestType, reportType, date };
-      const responseData = await callApi(url, payload, "POST");
-      const { reportName, reportDate, pdfBase64, excelBase64 } = responseData;
+      setVoucherStatuses(data);
 
-      let fileName = `${reportName}_${reportDate}`;
+    } catch (error) {
+      console.error(error);
+      setVoucherStatuses([]);
+    }
+  };
 
-      if (!excelBase64) {
-        showSnackBar("Failed to download file", "error");
-        setLoading(false);
-        return;
-      }
+  const handleVIDChange = (e) => {
+    const value = e.target.value.toUpperCase();
+
+    if (value.length > 50) {
+      setVidError("Maximum 50 characters allowed");
+      setTimeout(() => {
+        setVidError("")
+      }, 1500)
+      return;
+    }
+
+
+    if (
+      value.length <= 3 &&
+      !"VID".startsWith(value)
+    ) {
+      setVidError("Must start with VID");
+      setTimeout(() => {
+        setVidError("")
+      }, 1500)
+      return;
+    }
+
+    if (
+      value.length > 3 &&
+      !/^VID[0-9-]*$/.test(value)
+    ) {
+      setVidError(
+        "Only numbers and hyphen allowed after VID"
+      );
+      setTimeout(() => {
+        setVidError("")
+      }, 1500)
+      return;
+    }
+
+    setVidError("");
+    setSearchVID(value);
+  };
+
+
+
+
+
+  const fetchVouchers = async () => {
+    setSearchedStatus(searchStatus || "ACTIVE");
+    setLoading(true);
+
+    try {
+      const payload = {};
+
 
       if (
-        reportType === "profit_transactions" ||
-        reportType === "profit_transfer_report"
+        !searchVID &&
+        !searchStatus &&
+        !searchDate &&
+        !searchCategory
       ) {
-        downloadFile(responseData?.excelBase64, "excel", fileName, true);
-        showSnackBar("File downloaded successfully", "success");
-        return;
-      } else if (!pdfBase64) {
-        showSnackBar("Failed to download file", "error");
-        setLoading(false);
-        return;
+        payload.status = "ACTIVE";
       }
 
-      downloadFile(responseData?.pdfBase64, "pdf", fileName, true);
-      downloadFile(responseData?.excelBase64, "excel", fileName, true);
-      showSnackBar("Files downloaded successfully", "success");
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error while processing request", "error");
+      if (searchVID) {
+        payload.vid = searchVID;
+      }
+
+      if (searchStatus) {
+        payload.status = searchStatus;
+      }
+
+      if (searchDate) {
+        payload.date = dayjs(searchDate).format("YYYY-MM-DD");
+      }
+
+      if (searchCategory) {
+        payload.categoryId = searchCategory;
+      }
+
+      console.log("Search Payload =>", payload);
+
+      const response = await callApi(
+        "/VE/voucher-transactions/search-vid",
+        payload,
+        "POST"
+      );
+
+      console.log("Search Response =>", response);
+
+      const data = Array.isArray(response)
+        ? response
+        : response?.data || [];
+
+      setRows(data);
+
+    } catch (error) {
+      console.error("Fetch Error =>", error);
+
+      setSnackbar({
+        open: true,
+        message: "Failed to fetch vouchers",
+        severity: "error",
+      });
+
     } finally {
       setLoading(false);
     }
   };
 
-  const allColumns = useMemo(() => {
-    return [
-      { field: "id", headerName: "Request Id", flex: 0.5, minWidth: 130 },
+  const handleExport = async () => {
+    try {
+      setLoading(true);
 
-      // Dynamic columns from configs are injected here
-      ...(columns || []),
+      const payload = {};
 
-      ...(selectedMenuItem?.id === 43
-        ? [
-            {
-              field: "reqStatus",
-              headerName: "Status",
-              flex: 0.6,
-              minWidth: 140,
-              align: "center",
-              headerAlign: "center",
-              filterable: false,
-              sortable: false,
-              disableColumnMenu: true,
-              renderCell: (p) => {
-                const val = p.value;
-                return (
-                  <CustomChip
-                    icon={
-                      val === "QUEUE" ? (
-                        <HourglassBottomIcon />
-                      ) : val === "ACCEPTED" ? (
-                        <CheckCircleIcon />
-                      ) : (
-                        <PendingActionsIcon />
-                      )
-                    }
-                    label={
-                      val === "QUEUE"
-                        ? "In Queue"
-                        : val === "ACCEPTED"
-                          ? "Accepted"
-                          : "Pending"
-                    }
-                    color={
-                      val === "QUEUE"
-                        ? "error"
-                        : val === "ACCEPTED"
-                          ? "success"
-                          : "warning"
-                    }
-                    size="small"
-                    variant="outlined"
-                  />
-                );
-              },
-            },
-          ]
-        : []),
 
-      {
-        field: "changeType",
-        headerName: "Request type",
-        flex: 0.6,
-        minWidth: 150,
-        align: "center",
-        headerAlign: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (p) => {
-          const val = p.value;
-          return (
-            <CustomChip
-              icon={
-                val === "ADD" ? (
-                  <AddBoxIcon />
-                ) : val === "DELETE" ? (
-                  <AutoDeleteIcon />
-                ) : (
-                  <EditDocumentIcon />
-                )
-              }
-              label={
-                val === "ADD"
-                  ? "Added"
-                  : val === "DELETE"
-                    ? "Deleted"
-                    : "Modified"
-              }
-              color={
-                val === "ADD"
-                  ? "success"
-                  : val === "DELETE"
-                    ? "error"
-                    : "warning"
-              }
-              size="small"
-              variant="outlined"
-            />
-          );
+      if (
+        !searchVID &&
+        !searchStatus &&
+        !searchDate &&
+        !searchCategory
+      ) {
+        payload.status = "ACTIVE";
+      }
+
+      if (searchVID) {
+        payload.vid = searchVID;
+      }
+
+      if (searchStatus) {
+        payload.status = searchStatus;
+      }
+
+      if (searchDate) {
+        payload.date = dayjs(searchDate).format("YYYY-MM-DD");
+      }
+
+      if (searchCategory) {
+        payload.categoryId = searchCategory;
+      }
+
+      console.log("Export Payload =>", payload);
+
+      const response = await callApi(
+        "/VE/voucher-transactions/search-vid/export",
+        payload,
+        "POST",
+        "blob",
+        "application/json",
+        {},
+        false
+      );
+
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "VoucherRequests.xlsx";
+
+      document.body.appendChild(link);
+      link.click();
+
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Export Error =>", error);
+
+      setSnackbar({
+        open: true,
+        message: "Export failed",
+        severity: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  const handleReset = async () => {
+    setSearchVID("");
+    setSearchStatus("");
+    setSearchCategory("");
+    setSearchDate(null);
+    setSearchedStatus("ACTIVE");
+    setVidError("");
+
+    setLoading(true);
+
+    try {
+      const response = await callApi(
+        "/VE/voucher-transactions/search-vid",
+        {
+          status: "ACTIVE",
         },
-      },
+        "POST"
+      );
 
-      {
-        field: "creatorId",
-        headerName: "Creator",
-        flex: 0.8,
-        minWidth: 160,
-        align: "center",
-        headerAlign: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (p) => (
-          <CustomChip
-            icon={<AccountCircleIcon />}
-            size="small"
-            color="info"
-            label={p.value}
-            variant="outlined"
-          />
-        ),
-      },
+      const data = Array.isArray(response)
+        ? response
+        : response?.data || [];
 
+      setRows(data);
+
+    } catch (error) {
+      console.error("Reset Error =>", error);
+
+      setSnackbar({
+        open: true,
+        message: "Failed to fetch vouchers",
+        severity: "error",
+      });
+
+    } finally {
+      setLoading(false);
+    }
+  };
+  const handleDeleteClick = (row) => {
+    setSelectedRow(row);
+    setDeleteRemark("");
+    setRemarkTouched(false)
+    setRemarkError("")
+    setDeleteDialogOpen(true);
+  };
+
+  const handleTerminate = async () => {
+    try {
+      const payload = {
+        id: selectedRow?.id,
+        terminatedBy: sessionStorage.getItem("userId"),
+        remarks: deleteRemark,
+      };
+
+      await callApi(
+        "/VE/voucher-transactions/terminate-vid",
+        payload,
+        "POST"
+      );
+
+      setDeleteDialogOpen(false);
+
+      setSnackbar({
+        open: true,
+        message: `Voucher ${selectedRow.vid} terminated successfully`,
+        severity: "success",
+      });
+
+      fetchVouchers();
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: "Terminate failed",
+        severity: "error",
+      });
+    }
+  };
+
+
+
+  const columns = useMemo(() => {
+    const cols = [
+      { field: "vid", headerName: "VID", flex: 1 },
       {
-        field: "reqDate",
-        headerName: "Requested Date",
+        field: "categoryName",
+        headerName: "Category",
         flex: 1,
-        minWidth: 210,
-        disableColumnMenu: true,
-        renderCell: (p) => (
-          <Typography variant="body1" component="span" sx={styles.requestDate}>
-            {timeStampFormatter(p.value)}
-          </Typography>
-        ),
+      },
+      {
+        field: "allowedRoleName",
+        headerName: "Role",
+        flex: 1,
       },
 
       {
-        field: "actions",
-        headerName: "Actions",
-        flex: 0.7,
-        minWidth: 160,
-        headerAlign: "center",
-        align: "center",
-        sortable: false,
-        filterable: false,
-        disableColumnMenu: true,
-        renderCell: (p) => (
-          <Stack
-            direction="row"
-            spacing={1}
-            alignItems="center"
-            justifyContent="center"
-            style={styles.StackStyle}
+        field: "status",
+        headerName: "Status",
+        flex: 1,
+      },
+
+      {
+        field: "createdAt",
+        headerName: "Created At",
+        flex: 1.5,
+        renderCell: (params) =>
+          params.value
+            ? new Date(
+              params.value
+            ).toLocaleString()
+            : "",
+      },
+
+      {
+        field: "description",
+        headerName: "Details",
+        flex: 1,
+        renderCell: (params) => (
+          <Button
+            variant="text"
+            onClick={() =>
+              handleViewDescription(
+                params.row.description,
+                params.row.issueCategories
+              )
+            }
           >
-            <Tooltip title="View">
-              <IconButton onClick={() => handleViewClick(p.row)}>
-                <Visibility />
-              </IconButton>
-            </Tooltip>
-
-            {p.row.reqStatus === "PENDING" && (
-              <>
-                <Tooltip title="Approve">
-                  <IconButton
-                    color="success"
-                    onClick={() => openConfirmDialog("accept", p.row.id)}
-                  >
-                    <Check />
-                  </IconButton>
-                </Tooltip>
-
-                <Tooltip title="Reject">
-                  <IconButton
-                    color="error"
-                    onClick={() => openConfirmDialog("reject", p.row.id)}
-                  >
-                    <Clear />
-                  </IconButton>
-                </Tooltip>
-              </>
-            )}
-          </Stack>
+            View
+          </Button>
         ),
       },
     ];
-  }, [columns, handleViewClick, openConfirmDialog, selectedMenuItem?.id]);
+
+    if (searchedStatus === "TERMINATED") {
+      cols.push({
+        field: "remarks",
+        headerName: "Remark",
+        flex: 1,
+
+        renderCell: (params) => (
+          <Button
+            variant="text"
+            onClick={() =>
+              handleViewRemark(
+                params.row.remarks
+              )
+            }
+          >
+            View
+          </Button>
+        ),
+      });
+    }
+
+
+    if (
+      searchedStatus === "ACTIVE"
+
+    ) {
+      cols.push({
+        field: "action",
+        headerName: "Action",
+        flex: 1,
+
+        renderCell: (params) =>
+          params.row.status ===
+            "ACTIVE" ? (
+            <Button
+              color="error"
+              variant="contained"
+              startIcon={<BlockIcon />}
+              onClick={() =>
+                handleDeleteClick(
+                  params.row
+                )
+              }
+            >
+              Terminate
+            </Button>
+          ) : null,
+      });
+    }
+    return cols;
+  }, [searchedStatus]);
 
   return (
-    <Box sx={styles.container}>
-      {/* 
-        Wrapped Both Components in a unified Card 
-      */}
-      <Card
+    <Box
+      sx={{
+        p: 3,
+        height: "calc(100vh - 88px)",
+        minHeight: 0,
+        maxHeight: "calc(100vh - 88px)",
+        overflow: "hidden",
+        boxSizing: "border-box",
+      }}
+    >
+      <Paper
         sx={{
-          width: "100%",
-          boxShadow: 3,
-          borderRadius: 2,
-          bgcolor: "background.paper",
-          overflow: "hidden", // Prevents DataGrid from spilling over rounded corners
+          p: 3,
+          height: "100%",
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
         }}
       >
-        <RequestAnalytics data={rows} showDeleteRequest={showDeleteRequest} />
+        <Typography variant="h5" mb={2}>
+          View Voucher Requests
+        </Typography>
 
-        {/* Divider provides a clean separation between the charts and the grid */}
-        <Divider />
+        <Accordion expanded={expanded} onChange={() => setExpanded(!expanded)}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography>Search Filters</Typography>
+          </AccordionSummary>
 
-        <DataGrid
-          rows={rows}
-          columns={allColumns}
-          loading={dataGridLoading}
-          disableRowSelectionOnClick
-          pageSizeOptions={[5, 10, 25, 50]}
-          initialState={{
-            pagination: { paginationModel: { pageSize: 5 } },
-            sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] },
-          }}
-          getRowId={(row) => row.id}
-          sx={{
-            ...styles.dataGrid,
-            border: "none", // Remove standard borders so it flows with the card
-            "& .MuiDataGrid-columnHeaders": {
-              borderTop: "none",
-            },
-          }}
-          slots={{
-            noRowsOverlay: () => (
-              <Stack height="100%" alignItems="center" justifyContent="center">
-                <InfoIcon
-                  sx={{ fontSize: 48, color: "text.secondary", mb: 2 }}
-                />
-                <Typography variant="h6">No Pending Requests Found</Typography>
-                <Typography>
-                  All {selectedMenuItem?.title} have been processed.
-                </Typography>
-              </Stack>
-            ),
-          }}
-        />
-      </Card>
-
-      {/* View Dialog */}
-      <ViewRequestDialog
-        open={viewOpen}
-        handleClose={() => setViewOpen(false)}
-        data={viewData}
-        screenConfig={screenConfig}
-        handleDownload={handleDownload}
-      />
-
-      {/* Confirm Dialog */}
-      <Dialog
-        maxWidth="sm"
-        fullWidth
-        open={confirmDialog}
-        onClose={closeConfirmDialog}
-      >
-        <DialogTitle>
-          {selectedType === "accept" ? "Confirm Approval" : "Confirm Rejection"}
-        </DialogTitle>
-        <Divider />
-        <DialogContent>
-          <Typography>
-            {selectedType === "accept"
-              ? "Are you sure you want to approve the request?"
-              : "Please provide remarks to reject this request."}
-          </Typography>
-
-          {selectedType === "reject" && (
-            <TextField
-              fullWidth
-              label="Remarks*"
-              value={remarks}
-              multiline
-              rows={4}
-              onChange={handleRemarksChange}
-              margin="dense"
-              slotProps={{
-                htmlInput: {
-                  maxLength: 200,
-                },
+          <AccordionDetails>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "1.2fr 1.2fr 1.1fr 1.1fr auto auto",
+                gap: 2,
               }}
-              helperText={
-                remarks?.length > 0 && remarks?.length < 5
-                  ? "Enter at least 5 characters"
-                  : "Allowed 5-200 characters (alphabets, numbers, spaces,()&,/-.)"
+            >
+              <TextField
+                label="VID"
+                size="small"
+                value={searchVID}
+                error={Boolean(vidError)}
+                helperText={
+                  vidError
+                    ? vidError
+                    : "Format: VID followed by numbers (VID-2606-00102). Leave blank to search all Active vouchers."
+                }
+                onChange={handleVIDChange}
+              />
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <DatePicker
+                  disableFuture
+                  label="Date"
+                  value={searchDate}
+                  minDate={dayjs("2026-04-01")}
+                  onChange={(newValue) => setSearchDate(newValue)}
+                  slotProps={{
+                    textField: {
+                      size: "small",
+                      fullWidth: true,
+                      helperText: "Select a date for search",
+                      onKeyDown: (e) => e.preventDefault(),
+                      inputProps: {
+                        readOnly: true,
+                      },
+                    },
+                  }}
+                />
+              </LocalizationProvider>
+
+              <FormControl size="small">
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={searchStatus}
+                  label="Status"
+                  sx={{
+                    border: "none",
+                  }}
+                  onChange={(e) => setSearchStatus(e.target.value)}
+                >
+                  {voucherStatuses.map((item, index) => (
+                    <MenuItem key={index} value={item.value}>
+                      {item.value}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>
+                  Select the voucher status to filter the records.
+                </FormHelperText>
+              </FormControl>
+
+              <FormControl size="small">
+                <InputLabel>Category</InputLabel>
+                <Select
+                  value={searchCategory}
+                  label="Category"
+                  onChange={(e) => setSearchCategory(e.target.value)}
+                >
+                  {voucherCategories.map((item) => (
+                    <MenuItem key={item.id} value={item.id}>
+                      {item.categoryName}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>
+                  Select a voucher category or leave blank to search all
+                  categories.
+                </FormHelperText>
+              </FormControl>
+
+              <Button
+                size="small"
+                variant="contained"
+                onClick={fetchVouchers}
+                disabled={Boolean(vidError)}
+                sx={{ height: 40, minWidth: 90, textTransform: "none" }}
+              >
+                Search
+              </Button>
+
+              <Button
+                size="small"
+                sx={{ height: 40, minWidth: 90, textTransform: "none",  
+                  "&:hover":
+                  {
+                    color:"#fff",
+                  },
+                }}
+                variant="outlined"
+                onClick={handleReset}
+              >
+                Reset
+              </Button>
+            </Box>
+          </AccordionDetails>
+        </Accordion>
+
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "flex-end",
+            mt: 2,
+            mb: 1,
+            flexShrink: 0,
+          }}
+        >
+          <Button
+            variant="contained"
+            startIcon={<FileDownloadIcon />}
+            onClick={handleExport}
+            sx={{ textTransform: "none" }}
+          >
+            Export
+          </Button>
+        </Box>
+
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            width: "100%",
+          }}
+        >
+          <DataGrid
+            disableRowSelectionOnClick
+            hideFooterSelectedRowCount
+            rows={rows}
+            columns={columns}
+            sx={styles.dataGridContainer}
+            getRowId={(row) => row.id}
+            loading={loading}
+            pageSizeOptions={[25, 50, 100]}
+            initialState={{
+              pagination: {
+                paginationModel: {
+                  page: 0,
+                  pageSize: 25,
+                },
+              },
+            }}
+          />
+        </Box>
+      </Paper>
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Terminate Voucher</DialogTitle>
+
+        <DialogContent>
+          <InputLabel>Remark*</InputLabel>
+
+          <TextField
+            fullWidth
+            multiline
+            rows={5}
+            value={deleteRemark}
+            onChange={(e) => {
+              const value = e.target.value;
+
+              setRemarkTouched(true);
+
+              if (value.startsWith(" ")) {
+                setRemarkError(
+                  "Remark should not start with a space or contain consecutive spaces...",
+                );
+                return;
               }
-              error={remarks?.length > 0 && remarks?.length < 5}
-            />
-          )}
+
+              if (value.includes("  ")) {
+                setRemarkError("Consecutive spaces are not allowed.");
+                return;
+              }
+
+              setDeleteRemark(value);
+
+              if (value.length > 200) {
+                setRemarkError("Maximum 200 characters allowed.");
+              } else {
+                setRemarkError("");
+              }
+            }}
+            inputProps={{ maxLength: 200 }}
+            error={Boolean(remarkError)}
+            helperText={
+              remarkError
+                ? remarkError
+                : `All characters, numbers and special characters are allowed. (${deleteRemark.length}/200)`
+            }
+          />
+
+          {/* <TextField
+            fullWidth
+            multiline
+            rows={5}
+            value={deleteRemark}
+            // onChange={(e) => {
+            //   const value = e.target.value;
+             
+            //   if (value.startsWith(" ")) {
+
+            //     setRemarkError("remark should not start with a space or contain consecutive spaces..",
+            //     );
+            //     return;
+            //   }
+
+            //   setDeleteRemark(value);
+
+            //   if (value.length > 200) {
+
+            //     setRemarkError("Maximum 200 characters allowed");
+
+            //     setTimeout(() => {
+            //       setRemarkError("")
+            //     }, 1500)
+            //   } else {
+            //     setRemarkError("")
+            //   }
+
+            // }
+            // }
+
+            onChange={(e) => {
+  const value = e.target.value;
+
+  // First space not allowed
+  if (value.startsWith(" ")) {
+    setDeleteRemark(""); // state update
+    setRemarkError("Remark should not start with a space.");
+    return;
+  }
+
+  // Consecutive spaces
+  if (value.includes("  ")) {
+    setDeleteRemark(value);
+    setRemarkError("Consecutive spaces are not allowed.");
+    return;
+  }
+
+  // Max length
+  if (value.length > 200) {
+    setRemarkError("Maximum 200 characters allowed.");
+    return;
+  }
+
+  setDeleteRemark(value);
+  setRemarkError("");
+}}
+             inputProps={{ maxLength: 200 }}
+           
+           error={!!remarkError}
+helperText={
+  remarkError
+    ? `${remarkError} (${deleteRemark.length}/200)`
+    : `All characters, numbers and special characters are allowed. (${deleteRemark.length}/200)`
+}
+
+          /> */}
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={closeConfirmDialog}>Cancel</Button>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+
           <Button
+            color="error"
             variant="contained"
-            onClick={handleConfirm}
-            color={selectedType === "accept" ? "success" : "error"}
+            disabled={!deleteRemark.trim()}
+            onClick={handleTerminate}
           >
-            {selectedType === "accept" ? "Approve" : "Reject"}
+            Terminate
           </Button>
         </DialogActions>
       </Dialog>
 
-      <LoadingOverlay loading={loading} />
+      <Dialog
+        open={descriptionPopupOpen}
+        onClose={() => setDescriptionPopupOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle
+          sx={{
+            borderBottom: "1px solid #e0e0e0",
+            fontWeight: 600,
+          }}
+        >
+          Details
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 0 }}>
+          {/* Description Section */}
+
+          <Box
+            sx={{
+              px: 3,
+              py: 2,
+              borderBottom: "1px solid #e0e0e0",
+            }}
+          >
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontWeight: 700,
+                mb: 1,
+              }}
+            >
+              Description
+            </Typography>
+
+            <Typography
+              variant="body1"
+              sx={{
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                overflowWrap: "break-word",
+                lineHeight: 1.8,
+                color: "text.primary",
+                textAlign: "justify",
+              }}
+            >
+              {selectedDescription || "-"}
+            </Typography>
+          </Box>
+
+          {/* Issues Section */}
+
+          <Box
+            sx={{
+              px: 3,
+              py: 2,
+            }}
+          >
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontWeight: 700,
+                mb: 1.5,
+              }}
+            >
+              Issues
+            </Typography>
+
+            {selectedIssues.length > 0 ? (
+              <Box
+                component="ul"
+                sx={{
+                  pl: 3,
+                  m: 0,
+                }}
+              >
+                {selectedIssues.map((issue, index) => (
+                  <li key={index}>
+                    <Typography>{issue}</Typography>
+                  </li>
+                ))}
+              </Box>
+            ) : (
+              <Typography color="text.secondary">
+                No Issues Available
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            borderTop: "1px solid #e0e0e0",
+            px: 3,
+            py: 2,
+          }}
+        >
+          <Button
+            variant="contained"
+            onClick={() => setDescriptionPopupOpen(false)}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={remarkPopupOpen}
+        onClose={() => setRemarkPopupOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Termination Remark</DialogTitle>
+
+        <DialogContent>
+          <Typography>{selectedRemark}</Typography>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setRemarkPopupOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() =>
+          setSnackbar({
+            ...snackbar,
+            open: false,
+          })
+        }
+        anchorOrigin={{
+          vertical: "top",
+          horizontal: "center",
+        }}
+      >
+        <Alert severity={snackbar.severity} variant="filled">
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
-}
+};
+
+export default ViewVoucherRequestsScreen;
