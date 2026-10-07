@@ -1,482 +1,1106 @@
 
+  const [currentRoleId, setCurrentRoleId] = useState(null);
 
-        String reportDisplayName = fileName; // temporary display name
 
-        // Construct task id
-        String safeReportName = reportDisplayName.replaceAll("[^a-zA-Z0-9]", "_").toLowerCase().replaceAll("_", "_");
-        String safeDate = date.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        String taskId = String.format("%s_%s_%d", safeReportName, safeDate, System.currentTimeMillis());
+  // Track input values to prevent empty dropdown tray on focus
+  const [branchInputValues, setBranchInputValues] = useState({});
+  const [cglInputValues, setCglInputValues] = useState({});
 
-        // 2. Prepare Paths with the CORRECT format "dd-MM-yyyy"
-        String formattedDate = date.format(DateTimeFormatter.ISO_LOCAL_DATE);
-        String fileNamePrefix = fileName + "_" + date.format(DateTimeFormatter.ofPattern("ddMMyyyy"));
+  const [branchSearch, setBranchSearch] = useState({
+    loadingId: null,
+    options: [],
+  });
+  const [cglSearch, setCglSearch] = useState({
+    loadingId: null,
+    options: []
+  });
 
-        Path searchDirectory;
-        searchDirectory = new Path(tempReportsBasepath, formattedDate + "/" + runId);
-        log.info("Searching HDFS directory {} for temp reports with prefix '{}'...", searchDirectory,
-                fileNamePrefix);
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      // 1. INSTANT TAB-CLOSE RELEASE (Guaranteed to work on tab close)
+      if (lockedVidRef.current) {
+        let token = "";
+        try {
+          // Grab the token from Redux/Session
+          const auth = sessionStorage.getItem("persist:auth") || localStorage.getItem("persist:auth");
+          if (auth) {
+            const parsedAuth = JSON.parse(auth);
+            // Extract the token (adjust 'token' to whatever key your JWT is stored under)
+            token = parsedAuth.token || JSON.parse(parsedAuth.auth)?.token || ""; 
+          }
+        } catch (err) {}
 
-        // 3. Call the common stream Logic and return directly to the client
-        return streamReport(searchDirectory, taskId, userId, fileNamePrefix, reportDisplayName, date, fileName,
-                formattedDate);
+        // THE FIX: Use 'fetch' with 'keepalive: true'. 
+        // This forces the browser to send the HTTP request EVEN IF the tab is already closing!
+        fetch(`/JS/voucher/unlock/${lockedVidRef.current}`, {
+          method: 'POST',
+          headers: { 
+             'Authorization': `Bearer ${token}`,
+             'Content-Type': 'application/json'
+          },
+          keepalive: true
+        }).catch(() => {}); // Catch prevents console errors as the window dies
+      }
+
+      // 2. THE WARNING: If they are on Step 3 and haven't clicked submit
+      if (activeStep === 3 && !isFinalizing) {
+        e.preventDefault();
+        e.returnValue = "You have an unfinalized batch. If you leave, it will not be sent for approval!";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [activeStep, isFinalizing]); 
+
+
+
+  useEffect(() => {
+    // Cleanup function runs when the component is destroyed (e.g., navigating away via sidebar)
+    return () => {
+      if (lockedVidRef.current) {
+        // Fire and forget unlock on unmount
+        callApi(`/JS/voucher/unlock/${lockedVidRef.current}`, null, "POST").catch(() => { });
+      }
+    };
+  }, [callApi]);
+
+
+
+  useEffect(() => {
+    isMounted.current = true;
+    
+    // Use the Redux 'user' object instead of parsing local storage!
+    if (user) {
+      if (user.userId) setCurrentUserId(String(user.userId));
+      
+      // Look for roleId or role or ROLE_ID based on your auth structure
+      const actualRoleId = user.roleId || user.role || user.ROLE_ID;
+      if (actualRoleId) setCurrentRoleId(actualRoleId);
+    }
+    
+    return () => { isMounted.current = false; };
+  }, [user]); // Add 'user' to the dependency array
+
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        setIsPageLoading(true);
+
+          // Grab the role synchronously directly from the Redux user object
+        const actualRoleId = user?.roleId || user?.role || user?.ROLE_ID;
+
+        if (!actualRoleId) {
+          showSnackBar("User Role ID not found in session. Cannot fetch VIDs.", "error");
+          setIsPageLoading(false);
+          return; 
+        }
+
+        // Passes the guaranteed correct role ID to the backend
+        const vouchersResponse = await callApi(`/JS/voucher/active?roleId=${actualRoleId}`, null, "GET");
+
+        // Defensively extract the array whether your callApi unwraps the { data: [...] } or not
+        if (vouchersResponse && Array.isArray(vouchersResponse.data)) {
+          setVoucherList(vouchersResponse.data);
+        } else if (Array.isArray(vouchersResponse)) {
+          setVoucherList(vouchersResponse);
+        } else {
+          setVoucherList([]); // Safe fallback
+        }
+
+        // 1. FIRST: Check the EOD Status from your new API
+        const eodResponse = await callApi("/JS/voucher/eod_status", null, "GET");
+
+        // The API returns an array: [{ "eodStatus": 0 }]
+        if (eodResponse && Array.isArray(eodResponse) && eodResponse.length > 0) {
+          if (eodResponse[0].eodStatus === 1) {
+            setIsEodRunning(true);
+            setIsPageLoading(false);
+            return; // STOP loading everything else, block the screen
+          }
+        }
+
+        // 2. IF EOD IS NOT RUNNING: Continue loading the normal page data
+        const dateResponse = await callApi("/JS/voucher/current-posting-date", null, "GET");
+
+        if (dateResponse) {
+          try {
+            const [year, month, day] = dateResponse.split("-");
+            const formattedDate = `${day}-${month}-${year}`;
+            setPostingDate(formattedDate);
+          } catch (e) {
+            console.error("Could not parse date:", dateResponse, e);
+            setPostingDate(dateResponse);
+          }
+        } else {
+          showSnackBar("Failed to load posting date.", "error");
+          setPostingDate("Error");
+        }
+
+        const currencyResponse = await callApi("/JS/voucher/currencies", null, "GET");
+        const currencyData = currencyResponse?.data || currencyResponse;
+
+        if (Array.isArray(currencyData)) {
+          let uniqueCurrencies = [...new Set(currencyData)];
+
+          // Sort the array so "INR" is always at index 0, and the rest are alphabetical
+          uniqueCurrencies.sort((a, b) => {
+            if (a === "INR") return -1;
+            if (b === "INR") return 1;
+            return a.localeCompare(b);
+          });
+
+          setCurrencyOptions(uniqueCurrencies);
+        } else {
+          showSnackBar("Failed to load currencies.", "error");
+        }
+      } catch (error) {
+        console.error("Error fetching initial data:", error);
+        showSnackBar("An error occurred while loading page data.", "error");
+      } finally {
+        setIsPageLoading(false);
+      }
+    };
+
+    fetchInitialData();
+  }, [callApi, showSnackBar]);
+
+  const handleNext = async () => {
+    if (activeStep === 0) {
+      if (!selectedVoucher) {
+        showSnackBar("Please select a voucher from the list first.", "warning");
+        return;
+      }
+
+      // --- ONLY LOCK WHEN THEY CLICK "NEXT" ---
+      const vidToLock = selectedVoucher.vid || selectedVoucher.VID;
+      setIsPageLoading(true);
+
+      try {
+        await callApi(`/JS/voucher/lock/${vidToLock}`, null, "POST");
+        lockedVidRef.current = vidToLock;
+        setActiveStep((prevStep) => prevStep + 1);
+      } catch (error) {
+        // --- THIS FIXES THE DEADLOCK ---
+        const errMsg = error?.response?.data?.message || "This VID is already in use.";
+        showSnackBar(errMsg, "warning");
+
+        // 1. Clear the selection so they don't think they still have it
+        setSelectedVoucher(null);
+
+        // 2. Automatically refresh the table so the VID disappears/updates status
+        const vouchersResponse = await callApi(`/JS/voucher/active?roleId=${currentRoleId}`, null, "GET");
+        setVoucherList(vouchersResponse?.data || vouchersResponse || []);
+      } finally {
+        setIsPageLoading(false);
+      }
+    } else {
+      setActiveStep((prevStep) => prevStep + 1);
+    }
+  };
+
+  const releaseLock = useCallback(async (vid) => {
+    if (vid) {
+      try {
+        await callApi(`/JS/voucher/unlock/${vid}`, null, "POST");
+        lockedVidRef.current = null; // Clear the ref
+      } catch (e) {
+        console.error("Failed to release VID lock", e);
+      }
+    }
+  }, [callApi]);
+
+  const handleMethodSelection = (method) => {
+    setEntryMethod(method);
+    handleNext();
+  };
+
+
+
+  const handleResetWizard = () => {
+
+    // If the wizard is completely reset/cancelled, release the lock!
+    if (lockedVidRef.current) {
+      releaseLock(lockedVidRef.current);
     }
 
-    // ----------------------------------------------------------------------------------
-    // HELPER METHODS (Stream Logic + Redis)
-    // ----------------------------------------------------------------------------------
-    private ReportStreamResponse streamReport(Path searchDirectory, String taskId, String userId, String searchPattern,
-                                              String reportDisplayName, LocalDate date, String fileName, String formattedDate) {
 
-        StreamingResponseBody streamingBody = outputStream -> {
-            try (ZipOutputStream zipOut = new ZipOutputStream(outputStream)) {
-                if (!hdfsFileSystem.exists(searchDirectory)) {
-                    log.info("Directory not found in HDFS: {}", searchDirectory);
-                    // Throw immediately so a proper HTTP 404 is sent to the client
-                    throw new ResourceNotFoundException("Reports directory not found: " + searchDirectory);
-                }
-                Path globPath = new Path(searchDirectory, searchPattern + "*");
-                FileStatus[] fileStatuses = hdfsFileSystem.globStatus(globPath);
-                if (fileStatuses == null || fileStatuses.length == 0) {
-                    throw new ResourceNotFoundException("Report not found");
-                }
-                //FileStatus[] fileStatuses = hdfsFileSystem.listStatus(searchDirectory);
-                // 1. Calculate Total Size of all files to be downloaded
-                long calculatedTotalSize = 0;
-                for (FileStatus status : fileStatuses ) {
-                        calculatedTotalSize += status.getLen();
-                }
-                final long finalTotalSize = calculatedTotalSize; // Needed for lambda
+    setSelectedVoucher(null);
+    setEntryMethod("MANUAL");
+    setRows([createNewRow()]);
+    setCommonBatchRemarks("");
+    setScheduledTime(null);
+    setChecked(false);
+    setSubmittedBatchId(null);
+    setShowSchedulePicker(false);
+    navigate(getStatusMenu.route || selectedMenuItem.route)
 
-                // Atomic counter to track bytes read across multiple files (if multiple exist)
-                AtomicLong globalBytesRead = new AtomicLong(0);
+  };
+
+  const handleFinalizeRouting = async () => {
+    setIsFinalizing(true);
+    let formattedSchedule = null;
+
+    // Default to the manual batch ID (since it's already created in Step 2)
+    let finalDisplayBatchId = submittedBatchId;
+
+    try {
+      if (routingChoice === "SCHEDULE") {
+        if (!scheduledTime || !scheduledTime.isValid()) {
+          showSnackBar("Please select a valid time.", "warning");
+          setIsFinalizing(false);
+          return;
+        }
+
+        const today = dayjs();
+        const finalSchedule = scheduledTime
+          .year(today.year())
+          .month(today.month())
+          .date(today.date());
+
+        const minAllowed = dayjs().add(28, 'minute');
+        const maxAllowed = dayjs().endOf('day');
+
+        if (finalSchedule.isBefore(minAllowed)) {
+          showSnackBar("Schedule time must be at least 30 minutes from now.", "warning");
+          setIsFinalizing(false);
+          return;
+        }
+        if (finalSchedule.isAfter(maxAllowed)) {
+          showSnackBar("Schedule time cannot exceed today's end of day (11:59 PM).", "warning");
+          setIsFinalizing(false);
+          return;
+        }
+        formattedSchedule = finalSchedule.format('YYYY-MM-DD HH:mm:ss');
+      }
+
+      if (entryMethod === "BULK") {
+        // For Bulk, submittedBatchId actually holds the UUID. Create the batch NOW.
+        const [day, month, year] = postingDate.split("-");
+        const formattedBackendDate = `${day}/${month}/${year}`;
+
+        const response = await callApi("/JS/voucher/create-batch-from-cache", {
+          requestId: submittedBatchId,
+          postingDate: formattedBackendDate,
+          vid: selectedVoucher.vid,
+          commonBatchRemarks: "Voucher created successfully",
+          scheduledTime: formattedSchedule
+        }, "POST");
+
+        // SAFELY EXTRACT THE REAL ORACLE BATCH ID
+        finalDisplayBatchId = response?.[0]?.batchId || response?.batchId || (typeof response === 'string' ? response : "N/A");
+
+      } else {
+        // For Manual, the batch is already created, just update the schedule.
+        await callApi("/JS/voucher/update-schedule", {
+          batchId: submittedBatchId,
+          scheduledTime: formattedSchedule
+        }, "POST");
+      }
+
+      // SHOWS THE OFFICIAL SUBMISSION MESSAGE WITH THE CORRECT BATCH ID
+      showSnackBar(`Success! Your batch ${finalDisplayBatchId} is initialized and processing.`, "success");
+      handleResetWizard();
+
+    } catch (error) {
+      const serverMsg = error?.response?.data?.message
+        || error?.response?.data?.error
+        || (typeof error?.response?.data === 'string' ? error.response.data : null)
+        || error?.message;
+
+      const errMsg = serverMsg || "Unable to finalize execution routing. Please try again.";
+      showSnackBar(errMsg, "error");
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
 
 
-                boolean fileFound = false;
 
-                for (FileStatus status : fileStatuses) {
-                    if (!status.isFile())
-                        continue;
-                    String actualFileName = status.getPath().getName();
-                        fileFound = true;
-                        sendProgress(taskId, userId, 0, "Starting download...", "PROCESSING");
-                        ZipEntry zipEntry = new ZipEntry(actualFileName);
-                        zipOut.putNextEntry(zipEntry);
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
 
-                        try (FSDataInputStream hdfsStream = hdfsFileSystem.open(status.getPath())) {
-                            // --- REPLACED StreamUtils.copy WITH MANUAL LOOP ---
-                            byte[] buffer = new byte[32 * 1024]; // 32KB buffer
-                            int bytesRead;
-                            int lastPercent = 0;
-                            while ((bytesRead = hdfsStream.read(buffer)) != -1) {
-                                zipOut.write(buffer, 0, bytesRead);
-                                // Update global counter
-                                long currentTotal = globalBytesRead.addAndGet(bytesRead);
-                                // Calculate Percentage
-                                int percent = (int) ((currentTotal * 100) / finalTotalSize);
-                                // Cap at 99% so 100% is only sent when fully done
-                                if (percent > 99)
-                                    percent = 99;
-                                // Throttle: Send update only if percent changed by 5%
-                                if (percent >= lastPercent + 5) {
-                                    sendProgress(taskId, userId, percent, "Downloading... " + percent + "%",
-                                            "PROCESSING");
-                                    lastPercent = percent;
-                                }
-                            }
-                        } finally {
-                            zipOut.closeEntry();
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const handleRowExpand = (id) => {
+    setExpandedRow(expandedRow === id ? null : id);
+  };
+  const handleBack = () => {
+    // If returning from Step 1 back to the Voucher Selection table, release the lock!
+    if (activeStep === 1 && lockedVidRef.current) {
+      releaseLock(lockedVidRef.current);
+    }
+    setActiveStep((prevStep) => prevStep - 1);
+  };
+
+  const filterRemarks = (val) => {
+    let filtered = val.replace(/[^a-zA-Z0-9 ]/g, ""); // Allow only alphanumeric and spaces
+    filtered = filtered.replace(/^\s+/, ""); // Remove leading spaces
+    filtered = filtered.replace(/\s{2,}/g, " "); // Replace multiple consecutive spaces with a single space
+    return filtered;
+  };
+
+
+  // 1. Common remarks can be empty. If filled, must be 2-30.
+  const isCommonRemarksValid = (val) => val.trim().length === 0 || (val.trim().length >= 2 && val.trim().length <= 30);
+
+  // 2. Row remarks are STRICTLY compulsory (2-30 chars).
+  const isRowRemarksValid = (val) => val.trim().length >= 2 && val.trim().length <= 30;
+ const filterAndWarn = (val) => {
+    let filtered = val;
+    let hasError = false;
+    let msg = "Only alphanumeric characters and single spaces are allowed.";
+
+    // 1. Corrected Regex: Allows ONLY Alphanumeric and Spaces
+    const invalidCharRegex = /[^a-zA-Z0-9 ]/g;
+
+    if (invalidCharRegex.test(filtered)) {
+      hasError = true;
+      filtered = filtered.replace(invalidCharRegex, "");
+    }
+
+    // 2. Strip leading space and collapse double spaces
+    const beforeSpaceTrim = filtered;
+    filtered = filtered.replace(/^\s+/, "").replace(/\s{2,}/g, " ");
+
+    if (beforeSpaceTrim !== filtered && !hasError) {
+      hasError = true;
+      msg = "Remark should not start with a space or contain consecutive spaces.";
+    }
+
+    if (hasError) {
+      showSnackBar(msg, "warning");
+    }
+
+    return filtered;
+  };
+
+  // Both Common Batch Remarks and Row Remarks are now strictly compulsory (2-30 chars)
+  const isRemarksValid = (val) => val.trim().length >= 2 && val.trim().length <= 30;
+  const handleAddRow = () => {
+    const lastRow = rows[rows.length - 1];
+
+    if (
+      !lastRow.branch ||
+      !lastRow.currency ||
+      !lastRow.cgl ||
+      !lastRow.amount ||
+      !lastRow.txnType ||
+      !isRowRemarksValid(lastRow.remarks)
+    ) {
+      showSnackBar(
+        "Please fill all required fields (*) in the current row before adding a new one.",
+        "warning"
+      );
+      return;
+    }
+
+    const newRow = {
+      ...createNewRow(),
+      remarks: checked ? commonBatchRemarks : "",
+    };
+    setRows([...rows, newRow]);
+  };
+
+  const handleRemarksSync = (event) => {
+    const isChecked = event.target.checked;
+    setChecked(isChecked);
+
+    if (isChecked) {
+      const newRows = rows.map((row) => ({
+        ...row,
+        remarks: commonBatchRemarks,
+      }));
+      setRows(newRows);
+    } else {
+      const newRows = rows.map((row) => ({
+        ...row,
+        remarks: "",
+      }));
+      setRows(newRows);
+    }
+  };
+
+  const handleDeleteRow = (id) => {
+    if (rows.length > 2) {
+      setRows(rows.filter((row) => row.id !== id));
+      // Cleanup input tracking
+      const newBranchInputs = { ...branchInputValues };
+      delete newBranchInputs[id];
+      setBranchInputValues(newBranchInputs);
+      const newCglInputs = { ...cglInputValues };
+      delete newCglInputs[id];
+      setCglInputValues(newCglInputs);
+    } else {
+      showSnackBar("A minimum of two rows is required.", "warning");
+    }
+  };
+
+  const handleRowChange = (id, field, value) => {
+    setRows((prevRows) =>
+      prevRows.map((row) => {
+        if (row.id === id) {
+          return { ...row, [field]: value };
+        }
+        return row;
+      })
+    );
+  };
+
+  const searchBranches = useCallback(
+    debounce(async (query, rowId) => {
+      if (!query || query.trim().length < 3) {
+        setBranchSearch({ loadingId: null, options: [] });
+        return;
+      }
+      setBranchSearch((prev) => ({ ...prev, loadingId: rowId }));
+      try {
+        const response = await callApi(
+          `/JS/branches-journal/search?query=${encodeURIComponent(query)}`,
+          null,
+          "GET"
+        );
+
+        setBranchSearch({ loadingId: null, options: response || [] });
+      } catch (error) {
+        showSnackBar("Branch search failed.", "error");
+        setBranchSearch({ loadingId: null, options: [] });
+      }
+    }, 300),
+    [callApi, showSnackBar]
+  );
+
+  const searchCgls = useCallback(
+    debounce(async (query, rowId) => {
+      // Changed from === 0 to < 3 to enforce the minimum character limit
+      if (!query || query.trim().length < 3) {
+        setCglSearch({ loadingId: null, options: [] });
+        return;
+      }
+      setCglSearch((prev) => ({ ...prev, loadingId: rowId }));
+
+      try {
+        const response = await callApi(
+          `/JS/cgl-journal/search?query=${encodeURIComponent(query)}`,
+          null,
+          "GET"
+        );
+
+        setCglSearch({ loadingId: null, options: response || [] });
+      } catch (error) {
+        showSnackBar("CGL search failed.", "error");
+        setCglSearch({ loadingId: null, options: [] });
+      }
+    }, 300),
+    [callApi, showSnackBar]
+  );
+
+
+  const isFormReadyToSubmit = rows.length >= 2 && rows.every(
+    (row) =>
+      row.branch &&
+      row.currency &&
+      row.cgl &&
+      row.amount &&
+      parseFloat(row.amount) > 0 &&
+      row.txnType &&
+      isRowRemarksValid(row.remarks)
+  );
+
+  const handleValidateClick = async () => {
+    if (!isCommonRemarksValid(commonBatchRemarks)) {
+      showSnackBar("Common Batch Remarks must be 2-30 characters if provided.", "error");
+      return;
+    }
+
+    const branchCurrencyTotals = new Map();
+    const branchEntryCheck = new Map();
+
+    for (const [index, row] of rows.entries()) {
+      if (
+        !row.branch || !row.currency || !row.cgl || !row.amount ||
+        parseFloat(row.amount) === 0 || !row.txnType || !isRowRemarksValid(row.remarks)
+      ) {
+        showSnackBar(
+          `Row ${index + 1} is incomplete or has a zero amount. Amount must be greater than 0, and remarks must be 2-30 characters.`,
+          "error"
+        );
+        return;
+      }
+
+      const branchCode = row.branch.code;
+      const currency = row.currency;
+
+      const cglNumber = String(row.cgl.cglNumber);
+      const isMemo = cglNumber.startsWith("5");
+      const type = isMemo ? "MEMO" : "NORMAL";
+
+      const [integerPart = "0", fractionalPart = "0"] = (row.amount || "0").split(".");
+      const fractionalPadded = fractionalPart.substring(0, 4).padEnd(4, "0");
+      const amountAsBigInt = BigInt(integerPart + fractionalPadded);
+
+      const compositeKey = `${branchCode}-${currency}-${type}`;
+
+      if (!branchCurrencyTotals.has(compositeKey)) {
+        branchCurrencyTotals.set(compositeKey, { totalDebit: 0n, totalCredit: 0n });
+      }
+      const currencyTotals = branchCurrencyTotals.get(compositeKey);
+
+      if (row.txnType === "Debit") {
+        currencyTotals.totalDebit += amountAsBigInt;
+      } else if (row.txnType === "Credit") {
+
+        currencyTotals.totalCredit += amountAsBigInt;
+      }
+
+      if (!branchEntryCheck.has(branchCode)) {
+        branchEntryCheck.set(branchCode, { hasDebit: false, hasCredit: false });
+      }
+      const branchCheck = branchEntryCheck.get(branchCode);
+
+      if (row.txnType === "Debit" && amountAsBigInt > 0n) branchCheck.hasDebit = true;
+      else if (row.txnType === "Credit" && amountAsBigInt > 0n) branchCheck.hasCredit = true;
+    }
+
+    for (const [branchCode, totals] of branchEntryCheck.entries()) {
+      const { hasDebit, hasCredit } = totals;
+      if (!hasDebit || !hasCredit) {
+        showSnackBar("Branch must have at least one Debit and one Credit entry.", "error");
+        return;
+      }
+    }
+
+    for (const [compositeKey, totals] of branchCurrencyTotals.entries()) {
+      const { totalDebit, totalCredit } = totals;
+      if (totalDebit !== totalCredit) {
+        showSnackBar("Branch and Currency Debit/Credit Mismatch for Real/Memo CGL.", "error");
+        return;
+      }
+    }
+
+    // --- DIRECT SUBMIT DOWNSTREAM PROCESSING (MODAL BYPASSED) ---
+    setIsSubmitting(true);
+
+    const [day, month, year] = postingDate.split("-");
+    const formattedBackendDate = `${day}/${month}/${year}`;
+    const rowPayloads = [];
+
+    for (const row of rows) {
+      const finalAmount = row.txnType === "Credit" ? "-" + row.amount : row.amount;
+      rowPayloads.push({
+        branch: row.branch.code,
+        currency: row.currency,
+        cgl: row.cgl.cglNumber,
+        amount: finalAmount,
+        txnType: row.txnType,
+        productType: row.productCode,
+        remarks: row.remarks,
+        postingDate: formattedBackendDate
+      });
+    }
+
+    const finalPayload = {
+      vid: selectedVoucher?.vid,
+      scheduledTime: null,
+      commonBatchRemarks: commonBatchRemarks ? commonBatchRemarks.trim() : "Voucher created successfully",
+      rows: rowPayloads,
+    };
+
+    try {
+      const response = await callApi("/JS/voucher/create-batch", finalPayload, "POST");
+      const newBatchId = response?.[0]?.batchId || response?.batchId || "N/A";
+      setSubmittedBatchId(newBatchId);
+
+
+      setRows([createNewRow()]);
+      setCommonBatchRemarks("");
+      setChecked(false);
+      setBranchInputValues({});
+      setCglInputValues({});
+      setActiveStep(3); // Route forward automatically to Step 3
+    } catch (error) {
+      let errMsg = "Unable to submit the voucher request. Please try again.";
+      if (error?.response?.data && typeof error.response.data === 'string' && !error.response.data.startsWith("<")) {
+        errMsg = error.response.data;
+      } else if (error?.response?.data?.message) {
+        errMsg = error.response.data.message;
+      }
+      showSnackBar(errMsg, "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const SelectedVoucherCard = () => {
+    const [isDescExpanded, setIsDescExpanded] = useState(false);
+
+    if (!selectedVoucher) return null;
+
+    const desc = selectedVoucher.description || "No description provided.";
+    const isLongDesc = desc.length > 100 || desc.split(/\r?\n/).length > 2;
+
+    return (
+      <Paper elevation={0} sx={jpStyles.svPaper}>
+
+        <Box sx={jpStyles.svHeaderBox}>
+          <Typography variant="subtitle1" fontWeight="bold" color="text.primary">
+            Voucher Request Details
+          </Typography>
+        </Box>
+
+        <Grid container spacing={2}>
+          <Grid item size={12} sx={{ mb: 2 }}>
+            <Stack direction="row" spacing={8}>
+              <Box>
+                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>VID</Typography>
+                <Typography variant="body1" fontWeight="bold" color="primary">{selectedVoucher.vid}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Category</Typography>
+                <Typography variant="body1" fontWeight="500">{selectedVoucher.categoryName || "General"}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Issue Categories</Typography>
+                <Box>
+                  {selectedVoucher.issueCategories ? selectedVoucher.issueCategories.split(",").map((cat, index) => (
+                    <Chip key={index} label={cat.trim()} size="small" sx={jpStyles.issueCategoryChip} />
+                  )) : <Typography variant="body2" color="text.secondary">N/A</Typography>}
+                </Box>
+              </Box>
+            </Stack>
+          </Grid>
+          <Grid item size={12}>
+            <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+              Description
+            </Typography>
+
+            <Box sx={{ position: "relative" }}>
+              {/* collapsedSize={44} perfectly frames about 2 lines of body2 text */}
+              <Collapse in={!isLongDesc || isDescExpanded} collapsedSize={20}>
+                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "break-word", lineHeight: 1.6, fontWeight: 400, color: "text.primary" }}>
+                  {desc}
+                </Typography>
+              </Collapse>
+
+
+              {isLongDesc && (
+                <Box sx={{ display: "flex", justifyContent: "flex-start", mt: 0.5 }}>
+                  <Button
+                    size="small"
+                    disableRipple
+                    onClick={() => setIsDescExpanded(!isDescExpanded)}
+                    endIcon={isDescExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                    sx={{
+                      p: 0,
+                      minWidth: "auto",
+                      textTransform: "none",
+                      fontWeight: 600,
+                      color: "primary.main",
+                      "&:hover": { background: "transparent", textDecoration: "underline" }
+                    }}
+                  >
+                    {isDescExpanded ? "Read Less" : "Read More"}
+                  </Button>
+                </Box>
+              )}
+            </Box>
+          </Grid>
+        </Grid>
+      </Paper>
+    );
+  };
+
+  if (isPageLoading) {
+    return (
+      <Box sx={jpStyles.loadingBox}>
+        <CircularProgress size={60} />
+      </Box>
+    );
+  }
+  if (isEodRunning) {
+    return (
+      <Box sx={jpStyles.eodBox}>
+        <Paper elevation={4} sx={jpStyles.eodPaper}>
+          <Typography variant="h4" color="error" fontWeight="bold" gutterBottom>EOD is Currently Running</Typography>
+          <Typography variant="h6" color="text.secondary" sx={{ mt: 2 }}>Voucher Entry is temporarily disabled.</Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>Please wait until the End of Day process completes to post new transactions.</Typography>
+        </Paper>
+      </Box>
+    );
+  }
+
+
+
+
+  return (
+    <Paper sx={jpStyles.mainPaper}>
+
+      {/* INTERNAL STEP 0: VOUCHER SELECTION TABLE */}
+      {activeStep === 0 && (
+        <Box>
+          <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.main" sx={jpStyles.stepHeader}>
+            Select Voucher Id (VID)
+          </Typography>
+
+
+          <Paper elevation={2} sx={jpStyles.tablePaper}>
+            <TableContainer sx={jpStyles.tableContainer}>
+              <Table size="medium" sx={jpStyles.table}>
+                <TableHead sx={jpStyles.tableHead}>
+                  <TableRow>
+                    <TableCell padding="checkbox" sx={{ width: '5%' }}></TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '20%' }}>VID</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Category</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Created By</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Created At</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {voucherList
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((row) => {
+                      // FIX: Using clean camelCase keys exactly as mapped by the backend RowMapper
+                      const rowId = row.id;
+                      const rowVid = row.vid;
+                      const rowCategory = row.categoryName || "General";
+                      const rowCreatorName = row.createdByName || "System";
+                      const rowCreatorId = row.createdBy || "N/A";
+                      const rowCreatedAt = row.createdAt;
+                      const rowDescription = row.description || "No description provided for this voucher configuration.";
+                      const rowIssueCategories = row.issueCategories;
+
+                      const isSelected = selectedVoucher?.id === rowId;
+                      const isExpanded = expandedRow === rowId;
+                      return (
+                        <React.Fragment key={row.id}>
+                          {/* MAIN ROW */}
+                          <TableRow
+                            hover
+                            onClick={() => {
+                              setSelectedVoucher(row);
+                              handleRowExpand(row.id);
+                            }}
+                            sx={{
+                              cursor: 'pointer',
+                              backgroundColor: isSelected ? "action.selected" : "inherit",
+                              '& > *': { borderBottom: isExpanded ? 'none' : '1px solid rgba(224, 224, 224, 1)' }
+                            }}
+                          >
+                            <TableCell padding="checkbox">
+                              <Radio checked={isSelected} color="primary" />
+                            </TableCell>
+                            <TableCell sx={jpStyles.ellipsisCell}>
+                              {row.vid}
+                            </TableCell>
+                            <TableCell sx={jpStyles.ellipsisCell}>
+                              {row.categoryName || "General"}
+                            </TableCell>
+                            <TableCell sx={jpStyles.ellipsisCell}>
+                              {row.createdByName} <Typography component="span" variant="caption" color="text.secondary">({row.createdBy})</Typography>
+                            </TableCell>
+                            <TableCell sx={jpStyles.ellipsisCell}>
+                              {formatDateTime(row.createdAt)}
+                            </TableCell>                          </TableRow>
+
+                          <TableRow sx={{ backgroundColor: "background.default" }}>
+                            {/* colSpan is now 5 to match the new column count */}
+                            <TableCell style={{ paddingBottom: 0, paddingTop: 0, borderBottom: isExpanded ? '1px solid rgba(224, 224, 224, 1)' : 'none' }} colSpan={5}>
+                              <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                                <Grid container sx={jpStyles.collapseGrid}>
+                                  <Grid item size={{ lg: 1.3, md: 1.5 }}>
+                                    <Typography variant="body2" color="text.secondary">
+                                      <strong>Description:</strong>
+                                    </Typography>
+                                  </Grid>
+                                  <Grid item size={{ lg: 10.7, md: 10.5 }}>
+                                    <ExpandableDescription description={row.description} />
+                                  </Grid>
+                                  <Grid item size={{ lg: 1.3, md: 1.5 }}>
+                                    <Typography variant="body2" color="text.secondary">
+                                      <strong> Issue Categories: </strong>
+                                    </Typography>
+                                  </Grid>
+                                  <Grid item size={{ lg: 10.7, md: 10.5 }}>
+                                    <Box>
+                                      {row.issueCategories?.split(",")
+                                        .map((cat) => (
+                                          <Chip label={cat.trim()} sx={jpStyles.issueCategoryChip} />
+                                        ))}
+                                    </Box>
+                                  </Grid>
+                                  {/* </Box> */}
+                                </Grid>
+                              </Collapse>
+                            </TableCell>
+                          </TableRow>
+                        </React.Fragment>
+                      );
+                    })}
+                  {voucherList.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                        No configurations found.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <TablePagination
+              rowsPerPageOptions={[5, 10, 25]}
+              component="div"
+              count={voucherList.length}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={handleChangePage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+            />
+          </Paper>
+
+          <Box sx={jpStyles.buttonRightAlign}>
+            <Button variant="contained" onClick={handleNext} disabled={!selectedVoucher} endIcon={<ArrowForwardIcon />} sx={{ px: 4 }}>
+              Next
+            </Button>
+          </Box>
+        </Box>
+      )
+      }
+
+      {/* INTERNAL STEP 1: CHOOSE ENTRY METHOD */}
+      {
+        activeStep === 1 && (
+          <Box sx={jpStyles.methodContainer}>
+
+            <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.main" sx={{ mb: 2, textAlign: 'left' }}>
+              Select Posting Method
+            </Typography>
+
+            <Typography variant="h5" align="center" fontWeight="bold" gutterBottom sx={{ mt: 2 }}>
+              How would you like to create vouchers ?
+            </Typography>
+            <Typography variant="body1" align="center" color="text.secondary" sx={{ mb: 6 }}>
+              Selected VID : <b>{selectedVoucher?.vid}</b>
+            </Typography>
+            {/* Using Flexbox with fixed widths instead of dynamic Grids for perfect symmetry */}
+            <Box sx={jpStyles.cardsWrapper}>
+
+              {/* MANUAL ENTRY CARD */}
+              <Card elevation={2} sx={jpStyles.methodCard}>
+                <CardActionArea onClick={() => handleMethodSelection("MANUAL")} sx={jpStyles.methodCardArea}>
+                  <EditNoteIcon color="primary" sx={jpStyles.manualIcon} />
+                  <Typography variant="h6" fontWeight="bold" gutterBottom>Manual Posting</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Manual Voucher Entry
+                  </Typography>
+                </CardActionArea>
+              </Card>
+
+              {/* EXCEL UPLOAD CARD */}
+              <Card elevation={2} sx={jpStyles.methodCard}>
+                <CardActionArea onClick={() => handleMethodSelection("BULK")} sx={jpStyles.methodCardArea}>
+                  {/* Standard Excel Green Hex Code */}
+                  <TableChartIcon sx={jpStyles.excelIcon} />
+                  <Typography variant="h6" fontWeight="bold" gutterBottom>Excel Upload</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Upload an Excel file (.xlsx or .xls) to process hundreds of voucher entries instantly.
+                  </Typography>
+                </CardActionArea>
+              </Card>
+
+            </Box>
+
+            <Box sx={jpStyles.backButtonBox}>
+              <Button variant="outlined" onClick={handleBack} startIcon={<ArrowBackIcon />}>
+                Previous
+              </Button>
+            </Box>
+          </Box>
+        )
+      }
+
+      {/* INTERNAL STEP 2: DATA ENTRY GRID */}
+      {
+        activeStep === 2 && entryMethod === "MANUAL" && (
+          <Box>
+
+            {/* 1. SCREEN TITLE MOVED HERE (Outside both cards) */}
+            <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.main" sx={{ mb: 2 }}>
+              Voucher Entry
+            </Typography>
+            {/* Replaces the old basic header with the professional detailed card */}
+            <SelectedVoucherCard onBackClick={handleBack} showBackButton={true} />
+
+            <Box component={Paper} elevation={3} sx={jpStyles.dataEntryPaper}>
+
+              {/* // common batch */}
+              {/* ... EXISTING GRID START ... */}
+              <Grid item xs={12} md={12} sx={jpStyles.gridContainer}>
+                <Tooltip title="" placement="top-start">
+                  <TextField
+                    label="Common Batch Remarks"
+                    value={commonBatchRemarks}
+                    onChange={(e) => {
+                      const newValue = filterAndWarn(e.target.value); // Removed "alphanumeric_space"
+                      if (newValue.length <= 30) {
+                        setCommonBatchRemarks(newValue);
+                        if (checked) {
+                          setRows(rows.map((row) => ({ ...row, remarks: newValue })));
                         }
-                        log.info("Streamed file {} into zip response.", actualFileName);
-
-                }
-
-                if (!fileFound) {
-                    log.info("No report files found matching prefix: " + searchPattern);
-                    // Throw immediately so a proper HTTP 404 is sent to the client
-                    throw new ResourceNotFoundException("No report files found matching prefix: " + searchPattern);
-                }
-
-                // Notification is only sent AFTER all files are confirmed found and streamed
-                String successMsg = String.format("%s downloaded successfully.", reportDisplayName);
-
-                sendProgress(taskId, userId, 100, "Download Complete", "COMPLETED");
-
-                sendNotification(userId, successMsg, "/glif-reports", fileName + "_" + date);
-                // sendNotification(userId, "Report(s) downloaded successfully.",
-                // "/glif-reports", fileName + "_" + date);
-
-            } catch (ResourceNotFoundException e) {
-                // If a resource error happens before streaming starts, it's caught here
-                log.error("Resource not found error: {}", e.getMessage());
-                sendNotification(userId, reportDisplayName + " is not available.", "/glif-reports",
-                        fileName + "_" + date);
-                // Note: The controller must catch this exception to return a proper 404
-//                sendProgress(taskId, userId, 100, "Download Failed", "COMPLETED");
-            } catch (IOException e) {
-                // If an I/O error happens DURING streaming, the client will see a failed
-                // download
-                // Includes the internet/network-down , HDFS down and NameNode not reachable
-                // cases
-                log.error("Streaming I/O error for user {}: {}", userId, e.getMessage(), e);
-                sendNotification(userId,
-                        "Download failed due to a streaming or internet issue. Please check your connection and try again.",
-                        "/glif-reports", fileName + "_" + date);
-            }
-        };
-
-        String downloadName = fileName + "_" + formattedDate + ".zip";
-        return new ReportStreamResponse(downloadName, streamingBody);
-    }
-
-    private void sendProgress(String taskId, String userId, int percent, String msg, String status) {
-        try {
-            TaskProgressDto dto = TaskProgressDto.builder()
-                    .taskId(taskId)
-                    .userId(userId)
-                    .percentage(percent)
-                    .message(msg)
-                    .status(status)
-                    .build();
-            redisTemplate.convertAndSend(progressTopic, dto);
-        } catch (Exception e) {
-            log.warn("Redis notification failed: {}", e.getMessage());
-        }
-    }
-
-    private void sendNotification(String userId, String message, String url, String aggregateId) {
-        try {
-            notificationWriterService.createNotification(userId, null, message, url, aggregateId, "ReportService");
-        } catch (Exception e) {
-            log.warn("Persistent notification failed: {}", e.getMessage());
-        }
-    }
-
-    private LocalDate getStartDateFromAppConfig() {
-        return appConfigRepository.findByConfigKey(REPORTS_START_DATE_KEY)
-                .map(AppConfig::getConfigValue)
-                .map(LocalDate::parse)
-                .orElseThrow(() -> new ResourceNotFoundException("Configuration missing: " + REPORTS_START_DATE_KEY));
-    }
-
-    public ReportGenerationResponseDTO generateReports(ReportGenerationDTO parameters) throws IOException {
-
-        ReportGenerationResponseDTO reportGenerationResponseDTO = new ReportGenerationResponseDTO();
-        reportGenerationResponseDTO.setProcessRunId(parameters.getProcessRunId());
-        reportGenerationResponseDTO.setRunId(parameters.getRunId());
-        reportGenerationResponseDTO.setStageId(parameters.getStageId());
-        LocalDate reportDate = parameters.getDate();
-
-        if (reportDate == null) {
-            reportDate = controlDateService.getEtlDate();
-        }
-
-        reportGenerationResponseDTO.setDate(reportDate);
-        String formattedDate = reportDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-        String jasperFormattedDate = reportDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-        String datePrefix = reportDate.format(DateTimeFormatter.ofPattern("ddMMyyyy"));
-        String runId = String.valueOf(parameters.getRunId());
-
-        if(!(runId != null && runId.matches("-?\\d+")))
-        {
-            throw  new IllegalArgumentException("Invalid Run ID");
-        }
-        Path dateDir = new Path(tempReportsBasepath, formattedDate);
-        Path reportDir = new Path(dateDir, runId);
-        if(!jasperTemplateRegistry.getAllReportNames().contains(parameters.getReportType()))
-        {
-            throw new IllegalArgumentException("Invalid Report type");
-        }
-        // jasperTemplateRegistry.getReport(reportName).getName() to skip path manipulation issue
-        String reportName =  jasperTemplateRegistry.getReport(parameters.getReportType()).getName();
-        Path mainReportDir = new Path(new Path(reportsBasePath, formattedDate),reportName);
-        try {
-            if (!hdfsFileSystem.exists(reportDir)) {
-                hdfsFileSystem.mkdirs(reportDir);
-            }if (!hdfsFileSystem.exists(mainReportDir)) {
-                hdfsFileSystem.mkdirs(mainReportDir);
-            }
-        } catch (IOException e) {
-            throw new IOException("Failed to Create Folder in HDFS "+e.getMessage());
-        }
-        String logoPath = null;
-        try {
-            // logoPath = new
-            // ClassPathResource("images/logo.png").getFile().getAbsolutePath();
-            logoPath = extractLogoToTemp();
-        } catch (ResourceNotFoundException e) {
-            log.warn("Logo not found");
-        }
-        try (Connection connection = dataSource.getConnection()) {
-            reportGenerationResponseDTO.setReportName(reportName);
-            reportGenerationResponseDTO.setRunId(parameters.getRunId());
-            reportGenerationResponseDTO.setExtensions(new ArrayList<>());
-            StringBuilder status = new StringBuilder();
-            String fileBaseName = reportName + "_" + datePrefix + "_" + "run" + "_" + runId;
-            String fileNamePrefix = reportName + "_" + datePrefix.formatted(DateTimeFormatter.ofPattern("ddMMyyyy"));
-            try  {
-                JasperReport jasperReport = jasperTemplateRegistry.getReport(reportName);
-                Map<String, Object> reportParams = new HashMap<>();
-                reportParams.put("imagePath", logoPath);
-                reportParams.put("date", jasperFormattedDate);
-                log.info("Started Filling Jasper for {} Report", parameters.getReportType());
-                JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, reportParams, connection);
-                log.info("Completed Jasper Fill  for {} Report", parameters.getReportType());
-                Map<ReportFormat, FormatStatus> formatResults = new LinkedHashMap<>();
-                Map<ReportFormat, String> formatErrors = new HashMap<>();
-                generateReportFile(ReportFormat.PDF, jasperPrint, reportDir, fileBaseName, hdfsFileSystem,
-                        formatResults, formatErrors);
-                generateReportFile(ReportFormat.EXCEL, jasperPrint, reportDir, fileBaseName, hdfsFileSystem,
-                        formatResults, formatErrors);
-                generateReportFile(ReportFormat.PSV, jasperPrint, reportDir, fileBaseName, hdfsFileSystem,
-                        formatResults, formatErrors);
-
-                //saving reports parallely in "/reports/date" path
-                generateReportFile(ReportFormat.PDF, jasperPrint, mainReportDir, fileNamePrefix, hdfsFileSystem,
-                        formatResults, formatErrors);
-                generateReportFile(ReportFormat.EXCEL, jasperPrint, mainReportDir, fileNamePrefix, hdfsFileSystem,
-                        formatResults, formatErrors);
-                generateReportFile(ReportFormat.PSV, jasperPrint, mainReportDir, fileNamePrefix, hdfsFileSystem,
-                        formatResults, formatErrors);
-
-
-                long successCount = formatResults.values()
-                        .stream()
-                        .filter(v -> v == FormatStatus.GENERATED)
-                        .count();
-                String finalStatus;
-                String remark;
-                if (successCount == 0) {
-                    finalStatus = Constants.FAILED;
-                    remark = "Failed to generate all report formats.";
-                } else if (successCount == formatResults.size()) {
-                    finalStatus = Constants.SUCCESS;
-                    remark = "All formats generated successfully.";
-                } else {
-                    finalStatus = Constants.PARTIAL_SUCCESS;
-                    remark = "Generated: " +
-                            formatResults.entrySet().stream()
-                                    .filter(e -> e.getValue() == FormatStatus.GENERATED)
-                                    .map(e -> e.getKey().name())
-                                    .toList()
-                            + ", Failed: " +
-                            formatErrors.keySet();
-                }
-
-                reportGenerationResponseDTO.setStatus(finalStatus);
-                reportGenerationResponseDTO.setRemark(remark);
-                reportGenerationResponseDTO.setFormatErrors(formatErrors);
-                reportGenerationResponseDTO.setFormatResults(formatResults);
-
-            }
-
-            catch (IOException | JRException e) {
-                log.error("Error generating {}: {}", reportName, e.getMessage());
-            }
-
-        } catch (SQLException  e) {
-            throw new RuntimeException(e);
-        }
-        return reportGenerationResponseDTO;
-
-    }
-
-    public void generateReportFile(
-            ReportFormat format,
-            JasperPrint jasperPrint,
-            Path reportDir,
-            String fileBaseName,
-            FileSystem hdfsFileSystem,
-            Map<ReportFormat, FormatStatus> formatResults,
-            Map<ReportFormat, String> formatErrors
-
-    ) throws IOException {
-        log.info("Generating File {} with extension {} to place at {} ", fileBaseName, format,reportDir);
-        Path outputPath = new Path(reportDir, fileBaseName + format.ext());
-        try (FSDataOutputStream out = hdfsFileSystem.create(outputPath, true)) {
-            switch (format) {
-                case PDF -> {
-                    JasperExportManager
-                            .exportReportToPdfStream(jasperPrint, out);
-                }
-                case EXCEL -> {
-                    JRXlsxExporter exporter = new JRXlsxExporter();
-                    exporter.setExporterInput(
-                            new SimpleExporterInput(jasperPrint));
-                    exporter.setExporterOutput(
-                            new SimpleOutputStreamExporterOutput(out));
-                    exporter.exportReport();
-
-                }
-                case PSV -> {
-                    JRCsvExporter exporter = new JRCsvExporter();
-                    exporter.setExporterInput(
-                            new SimpleExporterInput(jasperPrint));
-                    exporter.setExporterOutput(
-                            new SimpleWriterExporterOutput(out));
-                    SimpleCsvExporterConfiguration config = new SimpleCsvExporterConfiguration();
-                    config.setFieldDelimiter("|");
-                    exporter.setConfiguration(config);
-                    exporter.exportReport();
-
-                }
-            }
-            formatResults.put(format, FormatStatus.GENERATED);
-        }
-
-        catch (IOException | JRException e) {
-            formatResults.put(format, FormatStatus.FAILED);
-            formatErrors.put(format, e.getMessage());
-        }
-
-    }
-
-    private String extractLogoToTemp() {
-        try {
-            Resource resource = resourceLoader.getResource("classpath:/images/logo.png");
-            if (!resource.exists()) {
-                log.warn("Logo not found in classpath");
-                return null;
-            }
-            File tempFile = File.createTempFile("jasper-logo-", ".png");
-            tempFile.deleteOnExit();
-            try (InputStream in = resource.getInputStream();
-                 OutputStream out = new FileOutputStream(tempFile)) {
-                FileCopyUtils.copy(in, out);
-            }
-            return tempFile.getAbsolutePath();
-        } catch (ResourceNotFoundException | IOException e) {
-            log.error("Failed to extract logo", e);
-            return null;
-        }
-    }
-
-    public ReportBase64ResponseDTO generateReportBase64(
-            ReportBase64RequestDTO request) throws IOException {
-
-        ReportBase64ResponseDTO response = new ReportBase64ResponseDTO();
-
-        try {
-
-            if (request.getReportType() == null || request.getReportType().isBlank()) {
-                throw new IllegalArgumentException("Report type is mandatory");
-            }
-
-            LocalDate reportDate = request.getDate();
-
-            if (reportDate == null) {
-                reportDate = controlDateService.getEtlDate();
-            }
-
-            // JasperReports reportDetails = jasperReportTypeRepository.findByType(request.getReportType());
-
-            String reportName = request.getReportType();
-
-            if (reportName != null) {
-                response.setReportName(reportName);
-            }
-            response.setReportDate(reportDate);
-
-            JasperPrint jasperPrint = fillJasperReport(
-                    request.getReportType(),
-                    reportDate,
-                    request.getInputParams());
-
-            ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
-
-            JasperExportManager.exportReportToPdfStream(
-                    jasperPrint,
-                    pdfStream);
-
-            response.setPdfBase64(
-                    Base64.getEncoder().encodeToString(pdfStream.toByteArray()));
-
-            ByteArrayOutputStream excelStream = new ByteArrayOutputStream();
-
-            JRXlsxExporter exporter = new JRXlsxExporter();
-
-            exporter.setExporterInput(new SimpleExporterInput(jasperPrint));
-            exporter.setExporterOutput(new SimpleOutputStreamExporterOutput(excelStream));
-
-            exporter.exportReport();
-
-            response.setExcelBase64(
-                    Base64.getEncoder().encodeToString(excelStream.toByteArray()));
-
-            response.setStatus(Constants.SUCCESS);
-            response.setRemark("Report generated successfully");
-
-        } catch (JRException e) {
-
-            log.error("Jasper report generation error: {}", e.getMessage());
-
-            response.setStatus(Constants.FAILED);
-            response.setRemark("Error while generating report");
-
-        } catch (Exception e) {
-
-            log.error("Unexpected error during report generation", e);
-
-            response.setStatus(Constants.FAILED);
-            response.setRemark("Unexpected error occurred");
-        }
-
-        return response;
-    }
-
-    private JasperPrint fillJasperReport(
-            String reportType,
-            LocalDate reportDate,
-            Map<String, Object> inputParams) throws IOException {
-
-
-
-
-
-        String logoPath = null;
-        try {
-            logoPath = extractLogoToTemp();
-        } catch (ResourceNotFoundException e) {
-            log.warn("Logo not found");
-        }
-
-
-        String formattedDate = reportDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-
-        try (Connection connection = dataSource.getConnection()) {
-            JasperReport jasperReport = jasperTemplateRegistry.getReport(reportType);
-            Map<String, Object> reportParams = new HashMap<>();
-            log.info("Formatted Date :{}",formattedDate);
-            reportParams.put("date", formattedDate);
-            reportParams.put("imagePath",logoPath);
-
-            if (inputParams != null) {
-                reportParams.putAll(inputParams);
-            }
-
-            log.info("Started Filling Jasper for {} Report", reportType);
-
-            JasperPrint jasperPrint = JasperFillManager.fillReport(
-                    jasperReport,
-                    reportParams,
-                    connection);
-
-            log.info("Completed Jasper Fill for {} Report", reportType);
-
-            return jasperPrint;
-
-        } catch (JRException e) {
-
-            log.error("Error filling Jasper report {}", reportType, e);
-
-            throw new RuntimeException(
-                    "Failed to generate report for type: " + reportType, e);
-        } catch (SQLException e) {
-
-            log.error("Database error while generating report {}", reportType, e);
-
-            throw new RuntimeException(
-                    "Database error during report generation", e);
-        }
-    }
-
-}
+                      }
+                    }}
+                    fullWidth multiline rows={1} inputProps={{ maxLength: 30 }}
+       error={commonBatchRemarks.length > 0 && !isCommonRemarksValid(commonBatchRemarks)}
+                    helperText="Allowed 2-30 chars: Alphanumeric and single spaces only"
+                  />
+                </Tooltip>
+
+                <Box sx={jpStyles.checkboxBox}>
+                  <FormControlLabel
+                    control={<Checkbox checked={checked} onChange={handleRemarksSync} color="primary" disabled={commonBatchRemarks.length > 0 && !isRemarksValid(commonBatchRemarks)} />}
+                    label="Apply this remark to all below transactions"
+                  />
+                </Box>
+              </Grid>
+
+              <Box sx={{ mt: 2 }}>
+                {rows.map((row, index) => {
+                  // Universal Regex: Up to 16 digits, up to 4 decimal places
+                  const amountRegex = /^\d{0,16}(\.\d{0,4})?$/;
+
+                  return (
+                    <React.Fragment key={row.id}>
+                      <Grid container spacing={2} alignItems="flex-start">
+
+                        {/* Branch */}
+                        <Grid item size={{ xl: 1.5, lg: 2 }}>
+                          <Autocomplete
+                            autoHighlight
+                            popupIcon={null}
+                            options={
+                              (branchInputValues[row.id] || "").length < 3
+                                ? []
+                                : (row.branch && !branchSearch.options.some((o) => o.code === row.branch.code)
+                                  ? [row.branch, ...branchSearch.options]
+                                  : branchSearch.options)
+                            }
+                            // SHOW CODE AND DESCRIPTION INSIDE THE TEXT BOX
+                            getOptionLabel={(option) => option && option.code ? `${option.code} - ${option.name}` : ""}
+                            // SHOW ELLIPSIS IN DROPDOWN
+                            renderOption={(props, option) => (
+                              <li {...props} key={option.code}>
+                                <Typography noWrap sx={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                  {option.code} - {option.name}
+                                </Typography>
+                              </li>
+                            )}
+                            slotProps={{
+                              popper: {
+                                placement: 'bottom-start',
+                                modifiers: [{ name: 'flip', enabled: false }, { name: 'preventOverflow', enabled: false }],
+                              },
+                            }}
+                            value={row.branch || null}
+                            onChange={(event, newValue) => handleRowChange(row.id, "branch", newValue)}
+                            inputValue={branchInputValues[row.id] || ""}
+                            onInputChange={(event, newInputValue, reason) => {
+                              if (reason === 'input') {
+                                const cleanInput = newInputValue.replace(BRANCH_REPLACE_REGEX, "").substring(0, 5);
+                                setBranchInputValues(prev => ({ ...prev, [row.id]: cleanInput }));
+
+                                let queryForSearch = cleanInput;
+                                if (cleanInput.length > 0 && cleanInput.length <= 2) {
+                                  queryForSearch = cleanInput.padStart(5, '0');
+                                }
+
+                                searchBranches(queryForSearch, row.id);
+                              } else {
+                                setBranchInputValues(prev => ({ ...prev, [row.id]: newInputValue }));
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Tab' && !row.branch && branchSearch.options?.length > 0) {
+                                handleRowChange(row.id, "branch", branchSearch.options[0]);
+                              }
+                            }}
+                            onBlur={() => {
+                              const typedValue = branchInputValues[row.id];
+                              if (!row.branch && typedValue && typedValue.length === 5) {
+                                const match = branchSearch.options.find(opt => opt.code === typedValue);
+                                if (match) {
+                                  handleRowChange(row.id, "branch", match);
+                                }
+                              }
+                            }}
+                            loading={branchSearch.loadingId === row.id}
+                            filterOptions={(x) => x}
+                            isOptionEqualToValue={(option, value) => option?.code === value?.code}
+                            noOptionsText={
+                              (branchInputValues[row.id] || "").length < 3
+                                ? "Enter 3 Digits to Search"
+                                : "No branches found"
+                            }
+                            renderInput={(params) => (
+                              <Tooltip title={row.branch ? `${row.branch.code} - ${row.branch.name}` : "Search by Branch Code"} placement="top-start">
+                                <TextField
+                                  {...params}
+                                  label="Branch *"
+                                  placeholder="Select Branch"
+                                  InputLabelProps={{ shrink: true }}
+                                  // Prevents text from breaking out of the box
+                                  inputProps={{ ...params.inputProps, style: { textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden' } }}
+                                  InputProps={{
+                                    ...params.InputProps,
+                                    endAdornment: (
+                                      <Box>
+                                        {branchSearch.loadingId === row.id ? (<CircularProgress color="inherit" size={20} />) : null}
+                                        {params.InputProps.endAdornment}
+                                      </Box>
+                                    )
+                                  }}
+                                  onPaste={(e) => { e.preventDefault(); showSnackBar("Pasting is not allowed here.", "warning"); }}
+                                  onCopy={(e) => e.preventDefault()}
+                                />
+                              </Tooltip>
+                            )}
+                          />
+                        </Grid>
+                        {/* Currency */}
+                        <Grid item size={{ xl: 1.5, lg: 2 }}>
+                          <Tooltip title=""  >
+                            <TextField
+                              select
+                              label="Currency *"
+                              value={row.currency || ""}
+                              fullWidth
+                              InputLabelProps={{ shrink: true }}
+                              onChange={(e) => {
+                                handleRowChange(row.id, "currency", e.target.value);
+                                handleRowChange(row.id, "amount", "");
+                              }}
+                              SelectProps={{
+                                displayEmpty: true,
+                                renderValue: (selected) => !selected ? <span style={{ color: 'gray', opacity: 0.8 }}>Currency</span> : selected,
+                                MenuProps: {
+                                  // The marginTop guarantees it clears the input box completely
+                                  PaperProps: { style: { maxHeight: 250, marginTop: '8px' } },
+                                  anchorOrigin: { vertical: "bottom", horizontal: "left" },
+                                  transformOrigin: { vertical: "top", horizontal: "left" }
+                                }
+                              }}
+                            >
+                              {currencyOptions.map((currency) => (
+                                <MenuItem key={currency} value={currency}>
+                                  {currency}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          </Tooltip>
+                        </Grid>
