@@ -1,19 +1,1047 @@
-Caused by: tools.jackson.core.exc.StreamConstraintsException: String value length (100007936) exceeds the maximum allowed (100000000, from `StreamReadConstraints.getMaxStringLength()`) (through reference chain: com.fincore.CommunicationService.dto.ApiResponse["data"]->com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse["attachments"]->java.util.ArrayList[0]->com.fincore.CommunicationService.dto.attachment.DownloadedAttachment["base64"])
- 
-Caused by: org.springframework.http.converter.HttpMessageNotReadableException: JSON parse error: String value length (100007936) exceeds the maximum allowed (100000000, from `StreamReadConstraints.getMaxStringLength()`)
-        at org.springframework.http.converter.AbstractJacksonHttpMessageConverter.readJavaType(AbstractJacksonHttpMessageConverter.java:363) ~[spring-web-7.0.8.jar!/:7.0.8]
-        at org.springframework.http.converter.AbstractJacksonHttpMessageConverter.read(AbstractJacksonHttpMessageConverter.java:319) ~[spring-web-7.0.8.jar!/:7.0.8]
-        at org.springframework.web.client.DefaultRestClient.readWithMessageConverters(DefaultRestClient.java:246) ~[spring-web-7.0.8.jar!/:7.0.8]
-        ... 75 common frames omitted
+      <Paper elevation={1} sx={jbuStyles.controlPanel}>
+        <Box sx={jbuStyles.dynamicWrapper(resultStatus === "ERROR", isProcessing || isCreatingBatch)}>
+          <Box sx={jbuStyles.uploadBox(isDragging, resultStatus === "ERROR")} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+            <Box sx={jbuStyles.templateSection} onClick={(e) => e.stopPropagation()}>
+              <Typography variant="caption" sx={jbuStyles.templateCaption}>
+                Need assistance? Download the template (.xlsx)
+              </Typography>
+              <Button variant="outlined" size="small" startIcon={<FileDownloadIcon />} onClick={handleDownloadTemplate} sx={jbuStyles.templateBtn}>
+                Download Template
+              </Button>
+            </Box>
+            <Box sx={jbuStyles.boxCenter}>
+              <Box sx={{ position: "relative", textAlign: "center" }}>
+                <CloudUploadIcon sx={jbuStyles.uploadIcon} />
+                <Typography sx={jbuStyles.headerText}>
+                  {file ? file.name : (isDragging ? "Drop file now" : "Drag or Browse the File")}
+                </Typography>
+                {!file && (
+                  <Typography sx={jbuStyles.subText}>
+                    Supported file formats: {ALLOWED_FILE_TYPES.join(", ")} (Maximum Size: 50MB)
+                  </Typography>
+                )}
 
- 
+                {/* 1. RESTORED: The "Remove File" (X) button is back! */}
+                {file && (
+                  <Tooltip title="Remove File">
+                    <IconButton size="small" onClick={handleClearFile} sx={jbuStyles.clearFileBtn}>
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
+            </Box>
 
-2026-09-02T10:00:49.713Z  INFO 1 --- [CommunicationService] [0-retry-1-0-C-1] c.f.C.o.CommunicationOrchestrator        : Orchestrator executing Event: evt-69220511-cf4b-4100-b4d4-45e441621168 | Personalized Flag: true
-2026-09-02T10:00:49.713Z  INFO 1 --- [CommunicationService] [0-retry-1-0-C-1] c.f.C.recipient.RecipientResolver        : Recipient Resolution Started.
-2026-09-02T10:00:49.715Z  INFO 1 --- [CommunicationService] [0-retry-1-0-C-1] c.f.C.recipient.RecipientResolver        : Recipient Resolution Completed. Total Unique Recipients : 15
-2026-09-02T10:00:49.715Z  INFO 1 --- [CommunicationService] [0-retry-1-0-C-1] c.f.C.o.CommunicationOrchestrator        : Delegating 3 attachments to AttachmentPreparationService.
-2026-09-02T10:00:52.143Z ERROR 1 --- [CommunicationService] [0-retry-1-0-C-1] c.f.C.client.ReportServiceClient         : Upstream HTTP failure communicating with Report Service.
- 
-org.springframework.web.client.RestClientException: Error while extracting response for type [com.fincore.CommunicationService.dto.ApiResponse<com.fincore.CommunicationService.dto.attachment.AttachmentDownloadResponse>] and content type [application/json]
 
+            <Box sx={jbuStyles.browseBtnWrapper} onClick={(e) => e.stopPropagation()}>
+
+              {/* Browse File Button Column */}
+
+              {!file && (
+                <Box>
+                  <input
+                    type="file"
+                    hidden
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    onClick={(e) => (e.target.value = null)}
+                    accept={ALLOWED_FILE_TYPES.join(",")}
+                  />
+                  <Button sx={jbuStyles.customBtn} variant="contained" onClick={() => fileInputRef.current.click()} disabled={isProcessing || isCreatingBatch}>
+                    Browse File
+                  </Button>
+                </Box>
+              )}
+            </Box>
+
+          </Box>
+
+          {(isProcessing || resultStatus) && (
+            <Box sx={jbuStyles.stepperBox}>
+              <Stepper activeStep={validationStage - 1} alternativeLabel>
+                {validationSteps.map((label, index) => {
+                  const labelProps = {};
+                  if (isValidationStepFailed(index)) {
+                    labelProps.optional = <Typography variant="caption" color="error">Failed</Typography>;
+                    labelProps.error = true;
+                  }
+                  return (
+                    <Step key={label}>
+                      <StepLabel {...labelProps}>{label}</StepLabel>
+                    </Step>
+                  );
+                })}
+              </Stepper>    
+            </Box>
+          )}
+
+          {resultStatus === "ERROR" && (
+            <Alert severity="error" sx={jbuStyles.errorAlert}>
+              <Typography variant="body1" fontWeight="500">
+                {resultMsg} {downloadMsg ? `— ${downloadMsg}` : ""}
+              </Typography>
+            </Alert>
+          )}
+
+          {batchCreated && (
+            <Alert severity="success" sx={jbuStyles.successAlert}>
+              <Typography variant="body1" fontWeight="bold">Batch Successfully Validated and Prepared!</Typography>
+              <Typography variant="body2">Total valid records processed: <strong>{totalRows.toLocaleString()}</strong>.</Typography>
+            </Alert>
+          )}
+
+          <Grid container sx={jbuStyles.bottomGrid}>
+            <Grid item size={2}>
+              <Button startIcon={<ArrowBackIcon />} onClick={handleBackNavigation} variant="outlined" size="small">
+                Previous
+              </Button>
+            </Grid>
+            {/* <Stack direction="row" sx={{ ...actionButtonsContainer, alignItems: "center" }}> */}
+            <Grid item sx={jbuStyles.bottomBtnBox} size={8}>
+
+
+              {!batchCreated && (
+                <Button
+                  variant="contained"
+                  size="large"
+                  onClick={handleStartValidation}
+                  disabled={!file || !selectedDate || isDebouncing || isProcessing || isCreatingBatch || isErrorDownloaded}
+                  startIcon={(isProcessing || isCreatingBatch) ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
+                >
+                  {isProcessing ? "Validating..." : isCreatingBatch ? "Preparing Batch..." : "Validate"}
+                </Button>
+              )}
+
+              {batchCreated && (
+                <Tooltip title="Clear and Upload New File" placement="top">
+                  <IconButton onClick={resetAll} color="primary" size="large" sx={jbuStyles.restartBtn}>
+                    <RestartAltIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {/* </Stack> */}
+            </Grid>
+          </Grid>
+        </Box>
+      </Paper>
+    </Box>
+  );
+};
+
+export default VoucherBulkUpload;import { Margin } from "@mui/icons-material";
+import { alpha } from "@mui/material/styles";
+import { size } from "zod";
+
+// --- Main Containers ---
+export const mainContainerStyle = {
+  padding: 3,
+  height: "100%",
+  width: "100%",
+};
+
+export const loadingContainerStyle = {
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  height: "60vh",
+  width: "100%",
+};
+
+export const stickyBoxStyle = {
+  position: "sticky",
+  top: 0,
+  zIndex: 2,
+  backgroundColor: "background.paper",
+  paddingBottom: 1,
+  marginBottom: 2,
+};
+
+// --- DataGrid Styles ---
+export const dataGridContainerStyle = {
  
+};
+
+// --- Table Styles ---
+export const tableContainerStyle = {
+  marginTop: 2,
+  borderRadius: 2,
+  border: "1px solid",
+  borderColor: "divider",
+  overflow: "auto",
+  maxHeight: 440, // often useful for sticky headers
+};
+
+export const stickyColumnCell = {
+  position: "sticky",
+  right: 0,
+  backgroundColor: "background.paper",
+  zIndex: 1,
+  boxShadow: "-2px 0px 5px rgba(0,0,0,0.05)",
+};
+
+export const dialogTitleStyle = {
+  m: 0,
+  p: 2,
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+};
+
+export const dialogActionsStyle = {
+  padding: 2,
+  display: "flex",
+  gap: 1,
+  justifyContent: "flex-end",
+};
+
+export const dialogContentStyle = {
+  paddingTop: "20px !important",
+};
+
+export const filterContainerStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 2,
+  flexWrap: "wrap",
+  gap: 2,
+};
+
+export const searchFieldStyle = {
+  minWidth: "250px",
+  "& .MuiOutlinedInput-root": {
+    borderRadius: "8px",
+  },
+};
+
+
+export const controlPanelStyle = {
+  padding: "2%",
+};
+
+export const uploadBoxStyle = {
+  // border: "soild",
+  display: "grid",
+  justifyContent: "center",
+  border: "2px dashed #9b78c7",
+  padding: "3% 0% 5% 0%",
+};
+
+export const headerTextStyle = {
+  textAlign: "center",
+};
+
+export const iconStyle = {
+  fontSize: "6rem",
+  margin: "1% 0% 1% 30% ",
+};
+
+export const dateinputfield = {
+  display: "flex",
+  justifyContent: "center",
+};
+export const subTextStyle = {
+  display: "flex",
+  justifyContent: "center",
+};
+
+
+
+
+export const jbuStyles = {
+  // 1. Loading & EOD Screen
+  loadingBox: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' },
+  eodBox: { display: 'flex', justifyContent: 'center', alignItems: 'top', height: '25vh', p: 3 },
+  eodPaper: { p: 6, textAlign: 'center', borderRadius: 4 },
+  eodSubtitle: { mt: 2 },
+  eodText: { mt: 1 },
+
+  // 2. Selected Voucher Details Card
+  svPaper: { p: 3, mb: 4, borderRadius: 1, border: "1px solid", borderColor: "divider" },
+  svHeaderBox: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: "1px solid", borderColor: "divider", pb: 1, mb: 2 },
+  svGridItem: { mb: 2 },
+  svDescription: { whiteSpace: "pre-wrap", lineHeight: 1.6, fontWeight: 300 },
+
+  // 3. Main Control Panel
+  controlPanel: { padding: "30px", marginBottom: "20px", borderRadius: "12px", backgroundColor: "background.paper", boxShadow: 2 },
+  dynamicWrapper: (isError, isProcessing) => ({
+    borderColor: isError ? "error.main" : "primary.main",
+    opacity: isProcessing ? 0.6 : 1,
+  }),
+
+  // 4. Drag & Drop Upload Box
+  uploadBox: (isDragging, isError) => ({
+    position: "relative", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center",
+    border: 2, borderStyle: "dashed", borderRadius: "12px", padding: "60px 40px 40px 40px", cursor: "default",
+    minHeight: "250px", transition: "all 0.3s ease",
+    borderColor: isDragging ? "secondary.main" : (isError ? "error.main" : "primary.main"),
+    backgroundColor: (theme) => isDragging ? alpha(theme.palette.primary.main, 0.12) : alpha(theme.palette.primary.main, 0.02),
+    transform: isDragging ? "scale(1.01)" : "scale(1)",
+    "&:hover": { backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.08), borderColor: "primary.dark" }
+  }),
+  
+  // 5. Upload Box Inner Elements
+  templateSection: { position: "absolute", top: 15, right: 20, textAlign: "right", zIndex: 10 },
+  templateCaption: { display: "block", color: "text.secondary", fontWeight: 500, mb: 0.5 },
+  templateBtn: { borderRadius: "8px", textTransform: "none" },
+  boxCenter: { display: "flex", justifyContent: "center", alignItems: "center", flexDirection: "column", width: "100%" },
+  uploadInnerBox: { position: "relative", textAlign: "center" },
+  uploadIcon: { fontSize: "6rem", color: "primary.main", mb: 1 },
+  headerText: { fontWeight: 600, fontSize: "1.2rem", textAlign: "center", color: "text.primary", mb: 1 },
+  subText: { color: "text.secondary", fontSize: "0.85rem", textAlign: "center", marginBottom: "25px" },
+  clearFileBtn: { position: "absolute", top: -10, right: -40, bgcolor: "background.paper", "&:hover": { bgcolor: "error.light", color: "white" } },
+
+  // 6. Action Buttons
+  browseBtnWrapper: { display: "flex", justifyContent: "center", alignItems: "center", width: "100%", flexDirection: "row", mt: 2 },
+  customBtn: { background: (theme) => alpha(theme.palette.primary.main, 0.8), boxShadow: "none", color: (theme) => theme.palette.primary.contrastText || "#fff", padding: "8px 40px", "&:hover": { background: (theme) => alpha(theme.palette.primary.main, 1) } },
+
+  // 7. Validation Stepper & Alerts
+  stepperBox: { mt: 4, mb: 2 },
+  errorAlert: { mt: 3, mx: "auto", maxWidth: "100%", backgroundColor: "#fff5f5", alignItems: "center" },
+  successAlert: { mt: 3, mx: "auto", maxWidth: "100%", backgroundColor: "transparent", '& .MuiAlert-message': { width: '100%' } },
+
+  // 8. Bottom Navigation
+  bottomGrid: { mt: 1, mb: 1 },
+  bottomBtnBox: { display: 'flex', justifyContent: 'center' },
+  restartBtn: { ml: 1, border: '1px solid', borderColor: 'primary.main', bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05), '&:hover': { bgcolor: (theme) => alpha(theme.palette.primary.main, 0.15) } },
+  issueCategoryChip: {
+    backgroundColor: "primary.light",
+    size: "small",
+    mr: "8px", mb: "5px"
+  },
+};
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import {
+  Box,
+  Typography,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  TextField,
+  Button,
+  CircularProgress,
+  Tooltip,
+  IconButton,
+  Stack,
+  Grid,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Checkbox,
+  TablePagination,
+  Alert,
+  FormHelperText,
+  Stepper,
+  Step,
+  StepLabel,
+  StepConnector,
+  stepConnectorClasses,
+  styled,
+  Avatar,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  ToggleButton,
+  ToggleButtonGroup,
+} from "@mui/material";
+
+import { DataGrid, GridToolbar } from "@mui/x-data-grid";
+import {
+  Check as CheckIcon,
+  Clear as ClearIcon,
+  Visibility as VisibilityIcon,
+  FileDownload as FileDownloadIcon,
+  Close as CloseIcon,
+  Add as AddIcon,
+  Remove as RemoveIcon,
+  Replay as ReplayIcon,
+} from "@mui/icons-material";
+import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import InfoIcon from "@mui/icons-material/Info";
+import { alpha } from "@mui/material/styles";
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import { jaStyles } from "./VoucherStyle";
+import { TimePicker } from "@mui/x-date-pickers/TimePicker";
+import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
+import dayjs from "dayjs";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { useSelector } from "react-redux";
+const styles = {
+  mainContainer: {
+    padding: 3,
+    height: "100%",
+    width: "100%",
+  },
+  dataGridContainer: {
+    height: 600,
+    width: "100%",
+    backgroundColor: "background.paper",
+    boxShadow: 2,
+    borderRadius: 2,
+    border: 1,
+    borderColor: "divider",
+    "& .MuiDataGrid-columnHeaders": {
+      backgroundColor: "#f5f5f5 !important",
+      fontWeight: 700,
+      borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+      position: 'sticky',
+      top: 0,
+      zIndex: 1,
+    },
+    "& .MuiDataGrid-row:hover": {
+      backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04),
+    },
+    // --- ADD THESE TWO BLOCKS TO KEEP THE 3 DOTS ALWAYS VISIBLE ---
+    "& .MuiDataGrid-menuIcon": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
+    "& .MuiDataGrid-iconButtonContainer": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
+  },
+
+
+
+  tableContainer: {
+    maxHeight: 450,
+    overflowY: "auto",
+    border: 1,
+    borderColor: "divider",
+    mt: 1,
+  },
+  fixedContentBox: {
+    minHeight: 400,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  tableHeaderCell: {
+    fontWeight: "bold",
+    backgroundColor: "#f5f6f8",
+    color: "text.primary",
+    whiteSpace: "normal",
+    wordBreak: "break-word",
+    lineHeight: 1.2,
+    zIndex: 10,
+  },
+  stickyHeaderColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    top: 0,
+    zIndex: 20,
+    backgroundColor: "background.paper",
+    borderBottom: 1,
+    borderRight: 1,
+    borderColor: "divider",
+    fontWeight: "bold",
+  }),
+  stickyBodyColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    zIndex: 5,
+    backgroundColor: "background.paper",
+    borderRight: 1,
+    borderColor: "divider",
+  }),
+  dialogTitle: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    pb: 1,
+  },
+  dialogActions: { p: 2, borderTop: 1, borderColor: "divider" },
+  loadingContainer: {
+    height: "100%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  helperText: {
+    fontSize: "0.75rem",
+    color: "text.secondary",
+    marginTop: "4px",
+  },
+};
+
+const CustomConnector = styled(StepConnector)(({ theme }) => ({
+  [`&.${stepConnectorClasses.alternativeLabel}`]: {
+    top: 12, // Exactly half of the 24px icon height
+    left: "calc(-50% + 12px)",
+    right: "calc(50% + 12px)",
+  },
+  [`&.${stepConnectorClasses.active}`]: {
+    [`& .${stepConnectorClasses.line}`]: {
+      borderColor: theme.palette.success.main,
+    },
+  },
+  [`&.${stepConnectorClasses.completed}`]: {
+    [`& .${stepConnectorClasses.line}`]: {
+      borderColor: theme.palette.success.main,
+    },
+  },
+  [`& .${stepConnectorClasses.line}`]: {
+    borderColor: theme.palette.divider,
+    borderTopWidth: 2,
+    borderRadius: 1,
+  },
+}));
+
+const BigConnector = styled(StepConnector)(({ theme }) => ({
+  [`&.${stepConnectorClasses.alternativeLabel}`]: {
+    top: 20, // Center of the 40px tall pill
+    left: "calc(-50% + 80px)", // Offset by half the width of the 160px pill
+    right: "calc(50% + 80px)",
+  },
+  [`&.${stepConnectorClasses.active}`]: {
+    [`& .${stepConnectorClasses.line}`]: {
+      borderColor: theme.palette.success.main,
+    },
+  },
+  [`&.${stepConnectorClasses.completed}`]: {
+    [`& .${stepConnectorClasses.line}`]: {
+      borderColor: theme.palette.success.main,
+    },
+  },
+  [`& .${stepConnectorClasses.line}`]: {
+    borderColor: theme.palette.divider,
+    borderTopWidth: 3,
+    borderRadius: 1,
+  },
+}));
+
+const BigWorkflowIcon = (props) => {
+  const { statusFlag, label } = props;
+
+  const baseStyle = {
+    height: 40,
+    minWidth: 160,
+    borderRadius: 20, // Pill shape
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 1,
+    px: 2,
+    position: "relative",
+    zIndex: 2,
+    backgroundColor: "white",
+  };
+
+  // Info/Escalation Badge (Top Right)
+  const InfoBadge = () => (
+    <Box sx={jaStyles.infoBadge}>!</Box>
+  );
+
+  if (statusFlag === "COMPLETED") {
+    return (
+      <Box sx={jaStyles.bwfCompleted(baseStyle)}>
+        <CheckIcon sx={{ fontSize: 18 }} />
+        <Typography variant="body2" fontWeight="bold">{label}</Typography>
+      </Box>
+    );
+  }
+  if (statusFlag === "REJECTED") {
+    return (
+      <Box sx={jaStyles.bwfRejected(baseStyle)}>
+        <CloseIcon sx={{ fontSize: 18 }} />
+        <Typography variant="body2" fontWeight="bold">{label}</Typography>
+      </Box>
+    );
+  }
+  if (statusFlag === "ESCALATED" || statusFlag === "ACTIVE") {
+    return (
+      <Box sx={jaStyles.bwfEscalated(baseStyle)}>
+        <Typography variant="body2" fontWeight="bold">{label}</Typography>
+        <InfoBadge />
+      </Box>
+    );
+  }
+
+  // PENDING / FUTURE STEPS (Gray outline)
+  return (
+    <Box sx={jaStyles.bwfPending(baseStyle)}>
+      <Typography variant="body2" fontWeight="bold">{label}</Typography>
+    </Box>
+  );
+};
+
+function CustomNoRowsOverlay() {
+  return (
+    <Stack sx={jaStyles.noRowsStack}>
+      <InfoIcon sx={jaStyles.noRowsIcon} />
+      <Typography variant="h6">No Pending Requests</Typography>
+    </Stack>
+  );
+}
+
+const formatDateTime = (dateVal) => {
+  if (!dateVal) return "N/A";
+  // Removing .toLowerCase() keeps DayJS's native capitalized months (e.g. 'Jun')
+  return dayjs(dateVal).format("DD MMM YYYY, hh:mm a");
+};
+
+export default function VoucherAuthorization() {
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  const user = useSelector((state) => state.auth?.user || null);
+  const isMounted = useRef(true);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState([]);
+  const [workflowStepsMap, setWorkflowStepsMap] = useState({});
+  const [detailTotalCount, setDetailTotalCount] = useState(0);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingAction, setSubmittingAction] = useState(null);
+  const [selectedBatch, setSelectedBatch] = useState(null);
+  const [modalMode, setModalMode] = useState("ACCEPTED");
+  const [executorRemarks, setExecutorRemarks] = useState("");
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [batchDetails, setBatchDetails] = useState([]);
+  const [viewingBatch, setViewingBatch] = useState(null);
+  const [actionSelection, setActionSelection] = useState(null); // SINGLE DECLARATION, DEFAULT NULL
+  const [isScheduleLapseModalOpen, setIsScheduleLapseModalOpen] = useState(false);
+  const [newScheduleTime, setNewScheduleTime] = useState("");
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [viewingBatchId, setViewingBatchId] = useState(null);
+  const [viewingBatchCreatorId, setViewingBatchCreatorId] = useState(null);
+  const [viewingBatchState, setViewingBatchState] = useState("");
+  const [dynamicSteps, setDynamicSteps] = useState([]);
+  const [dbRoleMap, setDbRoleMap] = useState({});
+  const [isFetchingSteps, setIsFetchingSteps] = useState(false);
+  const [vidDetails, setVidDetails] = useState(null);
+  const [isFetchingVid, setIsFetchingVid] = useState(false);
+  const [workflowHistory, setWorkflowHistory] = useState([]);
+  const [isDescExpanded, setIsDescExpanded] = useState(false);
+  const [viewingBatchOrder, setViewingBatchOrder] = useState(1);
+
+  const [isActionMode, setIsActionMode] = useState(false); // Universal action screen state
+  const [scheduleOverrideType, setScheduleOverrideType] = useState("KEEP");
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
+  const [totalRowCount, setTotalRowCount] = useState(0);
+  const [filterModel, setFilterModel] = useState({ items: [] });
+  const [finalScheduleTime, setFinalScheduleTime] = useState("");
+  const handleDownloadExcel = async () => {
+    if (!viewingBatchId) {
+      showSnackBar("Error: Batch ID is missing!", "error");
+      return;
+    }
+
+    try {
+      showSnackBar("Downloading Excel...", "info");
+
+      const response = await callApi(
+        `/JS/voucher/download-batch/${viewingBatchId}`,
+        null,
+        "GET",
+        "blob",
+        null,
+        {},
+        false
+      );
+
+      const blobData = response.data || response;
+      if (!blobData) {
+        throw new Error("No data received from backend");
+      }
+
+      const blob = new Blob([blobData], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Batch_${viewingBatchId}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showSnackBar("Download complete.", "success");
+    } catch (e) {
+      console.error("Download failed:", e);
+      let errorMsg = "Failed to download Excel file.";
+      if (e.response && e.status === 404) {
+        errorMsg = "API endpoint not found (404).";
+      }
+      showSnackBar(errorMsg, "error");
+    }
+  };
+
+  const handleDirectRetry = async (row) => {
+    setIsSubmitting(true);
+    try {
+      await callApi(
+        "/JS/voucher/workflow/action",
+        {
+          batchId: row.batchId,
+          status: "ACCEPTED",
+          // CRITICAL FIX: Changed from 36 characters to 12 characters to pass your 30-char validation limit!
+          remarks: "System Retry",
+          overrideScheduleLapse: false,
+          newScheduledTime: null,
+        },
+        "POST"
+      );
+      showSnackBar(`Batch ${row.batchId} execution triggered for retry!`, "success");
+      fetchPendingBatches(); // Refresh table
+    } catch (e) {
+      showSnackBar(`Failed to retry Batch ${row.batchId}.`, "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const CustomWorkflowIcon = (props) => {
+    const { statusFlag, iconLetter, label, isMini } = props;
+    const showTextInside = isMini && (statusFlag === "ACTIVE" || statusFlag === "ESCALATED");
+
+    const baseStyle = {
+      height: 24, // Reduced size
+      borderRadius: 12,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 2,
+      position: "relative",
+      fontWeight: "bold",
+      fontSize: "0.7rem",
+      px: showTextInside ? 1.5 : 0,
+      minWidth: showTextInside ? "auto" : 24,
+      width: showTextInside ? "max-content" : 24,
+      whiteSpace: "nowrap",
+      boxSizing: "border-box", // Prevents borders from making circles larger
+    };
+
+    if (statusFlag === "COMPLETED") {
+      return (
+        <Box sx={{ ...baseStyle, backgroundColor: "success.main", color: "#fff" }}>
+          <CheckIcon sx={{ fontSize: 16 }} />
+        </Box>
+      );
+    }
+    if (statusFlag === "ESCALATED") {
+      return (
+        <Box sx={{ ...baseStyle, backgroundColor: "white", border: "2px solid", borderColor: "warning.main", color: "warning.main" }}>
+          {showTextInside ? label : "!"}
+        </Box>
+      );
+    }
+    if (statusFlag === "ACTIVE") {
+      return (
+        <Box sx={{ ...baseStyle, backgroundColor: "white", border: "2px solid", borderColor: "warning.main", color: "warning.main" }}>
+          {showTextInside ? label : iconLetter}
+        </Box>
+      );
+    }
+
+    // PENDING / FUTURE STEPS (Now white with grey border to match the big stepper)
+    return (
+      <Box sx={{ ...baseStyle, backgroundColor: "white", border: "2px solid #e2e8f0", color: "text.disabled" }}>
+        {iconLetter}
+      </Box>
+    );
+  };
+
+   useEffect(() => {
+    isMounted.current = true;
+    
+    // Use the Redux 'user' object instead of parsing local storage!
+    if (user && user.userId) {
+      setCurrentUserId(String(user.userId));
+      
+      // Look for roleId or role or ROLE_ID based on your auth structure 
+      const actualRoleId = user.roleId || user.role || user.ROLE_ID;
+      if (actualRoleId) setDbRoleMap((prev) => ({ ...prev, currentRoleId: actualRoleId }));
+    }
+    
+    return () => {
+      isMounted.current = false;
+    };
+  }, [user]); 
+
+
+ const filterAndWarn = (val) => {
+    let filtered = val;
+    let hasError = false;
+    let msg = "Only alphanumeric characters and single spaces are allowed.";
+
+    // 1. Strict Regex: Allows ONLY Alphabets, Numbers, and Spaces
+    const invalidCharRegex = /[^a-zA-Z0-9 ]/g;
+
+    if (invalidCharRegex.test(filtered)) {
+      hasError = true;
+      filtered = filtered.replace(invalidCharRegex, "");
+    }
+
+    // 2. Strip leading space and collapse double spaces
+    const beforeSpaceTrim = filtered;
+    filtered = filtered.replace(/^\s+/, "").replace(/\s{2,}/g, " ");
+
+    if (beforeSpaceTrim !== filtered && !hasError) {
+      hasError = true;
+      msg = "Remark should not start with a space or contain consecutive spaces.";
+    }
+
+    if (hasError) {
+      showSnackBar(msg, "warning");
+    }
+
+    return filtered;
+  };
+
+  const handleRemarksChange = (e, setter) => {
+    const val = filterAndWarn(e.target.value);
+    if (val.length <= 30) {
+      setter(val);
+    }
+  };
+
+  // Validation logic: Remarks are strictly compulsory (min 2, max 30)
+  const isRemarksValid = (val) =>
+    val.trim().length >= 2 && val.trim().length <= 30;
+
+  const isViewingSelfCreated =
+    currentUserId &&
+    viewingBatchCreatorId &&
+    String(currentUserId).trim().toUpperCase() ===
+    String(viewingBatchCreatorId).trim().toUpperCase();
+
+  const isLargeBatch = detailTotalCount > 2000;
+  const fetchPendingBatches = useCallback(async () => {
+    setLoading(true);
+    try {
+      // --- ADD: EXTRACT SEARCH FILTERS ---
+      let batchIdSearch = "";
+      let vidSearch = "";
+      if (filterModel && filterModel.items) {
+        filterModel.items.forEach(item => {
+          if (item.field === 'batchId' && item.value) batchIdSearch = item.value;
+          if (item.field === 'vid' && item.value) vidSearch = item.value;
+        });
+      }
+
+      // --- ADD: PASS FILTERS TO API ---
+      const response = await callApi(
+        `/JS/voucher/checker/pending-approvals?page=${paginationModel.page}&size=${paginationModel.pageSize}&batchId=${encodeURIComponent(batchIdSearch)}&vid=${encodeURIComponent(vidSearch)}`,
+        null,
+        "GET"
+      );
+
+      // --- ADAPT: HANDLE PAGINATED RESPONSE ---
+      let fetchedRows = [];
+      let totalElements = 0;
+
+      if (response && response.content) {
+        fetchedRows = response.content;
+        totalElements = response.totalElements;
+      } else if (Array.isArray(response)) {
+        fetchedRows = response;
+        totalElements = response.length;
+      }
+
+      const uniqueWorkflows = [...new Set(fetchedRows.map((row) => row.approvalWorkflow).filter(Boolean))];
+
+      const stepsMap = {};
+      await Promise.all(
+        uniqueWorkflows.map(async (wfCode) => {
+          try {
+            const stepsResponse = await callApi(`/JS/voucher/workflow/steps/${wfCode}`, null, "GET");
+            stepsMap[wfCode] = Array.isArray(stepsResponse) ? stepsResponse : (stepsResponse?.data || []);
+          } catch (e) {
+            stepsMap[wfCode] = [{ state: "P", designation: "Creator" }, { state: "APPROVED", designation: "Approver" }];
+          }
+        })
+      );
+
+      if (isMounted.current) {
+        setWorkflowStepsMap(stepsMap);
+        setRows(fetchedRows);
+        setTotalRowCount(totalElements);
+      }
+    } catch (err) {
+      if (isMounted.current && err.name !== "CanceledError")
+        showSnackBar("Failed to load requests", "error");
+    } finally {
+      if (isMounted.current) setLoading(false);
+    }
+  }, [callApi, showSnackBar, paginationModel, filterModel]); // <--- IMPORTANT: Added paginationModel and filterModel here
+
+  useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        // Fetch the { "9001": "TCSGLIF" } map from our new API
+        const rolesData = await callApi(
+          "/JS/voucher/active-roles",
+          null,
+          "GET"
+        );
+        if (rolesData && isMounted.current) {
+          setDbRoleMap(rolesData);
+        }
+      } catch (err) {
+        console.error("Failed to fetch roles mapping", err);
+      }
+    };
+    fetchRoles();
+  }, [callApi]);
+
+  useEffect(() => {
+    fetchPendingBatches();
+  }, [fetchPendingBatches]);
+
+  const fetchBatchDetailsPaginated = async (batchId, page, size) => {
+    setDetailLoading(true);
+    try {
+      const res = await callApi(
+        `/JS/voucher/by-batch-paginated/${batchId}?page=${page}&size=${size}`,
+        null,
+        "GET"
+      );
+
+      const contentArray = res?.content || (Array.isArray(res) ? res : []);
+
+      if (contentArray && isMounted.current) {
+        setDetailTotalCount(res?.totalElements || contentArray.length || 0);
+        const journalGroups = new Map();
+
+        contentArray.forEach((req, index) => {
+          try {
+            console.log("Backend Row Data in Authorization:", req);
+
+            const jId = req.journalId || req.id || `UNKNOWN-${index}`;
+            const prefix = String(jId).split("-")[0];
+
+            const amountVal = parseFloat(req.amount || req.reqAmount) || 0;
+
+            const row = {
+              ...req,
+              journalPrefix: prefix, // Save the distinct prefix
+              amount: Math.abs(amountVal),
+              transactionType: amountVal < 0 ? "Credit" : "Debit",
+              branch: req.branchCode || req.reqBranchCode || "-",
+              currency: req.currency || req.reqCurrency || "-",
+              cgl: req.cgl || req.reqCgl || "-",
+              remarks: req.narration || req.reqNarration || "-",
+              product: req.productCode || req.reqProduct || "-",
+            };
+
+            // FIX: Group explicitly by Branch!
+            if (!journalGroups.has(prefix)) journalGroups.set(prefix, []);
+            journalGroups.get(prefix).push(row);
+          } catch (e) {
+            console.error("Failed to map row details:", req, e);
+          }
+        });
+
+        setBatchDetails(Array.from(journalGroups.values()));
+      }
+    } catch (e) {
+      if (isMounted.current) showSnackBar("Failed to load details", "error");
+    } finally {
+      if (isMounted.current) setDetailLoading(false);
+    }
+  };
+  const handleOpenViewModal = async (row) => {
+    // 1. CLEAN SLATE FIX: Wipe all old data BEFORE opening the modal so nothing flashes!
+    setVidDetails(null);
+    setDynamicSteps([]);
+    setWorkflowHistory([]);
+    setIsDescExpanded(false);
+
+    // Reset all action screen states to guarantee a clean slate
+    setIsActionMode(false);
+    setActionSelection(null);
+    setExecutorRemarks("");
+    setScheduleOverrideType("KEEP");
+    setFinalScheduleTime("");
+
+    setViewingBatch(row);
+    setViewingBatchId(row.batchId);
+    setViewingBatchCreatorId(String(row.creatorId));
+    setViewingBatchState(row.workflowState || "");
+    setViewingBatchOrder(row.currentOrder || 1);
+
+    // Open modal immediately to show the perfectly sized loading spinners
+    setIsViewModalOpen(true);
+    setIsFetchingSteps(true);
+    setIsFetchingVid(true);
+
+    try {
+      const workflowCode = row.approvalWorkflow || "Workflow_3";
+
+      const [stepsData, summaryData, historyData] = await Promise.all([
+        callApi(`/JS/voucher/workflow/steps/${workflowCode}`, null, "GET"),
+        callApi(`/JS/voucher/batch-summary/${row.batchId}`, null, "GET"),
+        callApi(`/JS/voucher/workflow-history/${row.batchId}`, null, "GET"),
+      ]);
+
+      setDynamicSteps(Array.isArray(stepsData) ? stepsData : (stepsData?.data || []));
+      setVidDetails(summaryData?.data || summaryData);
+      setWorkflowHistory(Array.isArray(historyData) ? historyData : (historyData?.data || []));
+
+    } catch (err) {
+      showSnackBar("Failed to load batch details.", "error");
+    } finally {
+      setIsFetchingSteps(false);
+      setIsFetchingVid(false);
+    }
+  };
+
+  const handleDetailRowsPerPageChange = (event) => {
+    const newSize = parseInt(event.target.value, 10);
+    setDetailRowsPerPage(newSize);
+    setDetailPage(0);
+    fetchBatchDetailsPaginated(viewingBatchId, 0, newSize);
+  };
+
+  const getRoleDisplayName = (roleValue) => {
+    if (!roleValue || roleValue === "null" || roleValue === "System")
+      return "System";
+
+    // Now it looks inside the dynamic DB map instead of a hardcoded one!
+    return dbRoleMap[String(roleValue)] || roleValue;
+  };
+  const handleCloseViewModal = () => {
+    // 1. Force blur on whatever is currently focused to prevent jumping
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    document.body.focus();
+
+    // 2. SMOOTH CLOSE FIX: Set modal to false IMMEDIATELY to trigger MUI fade-out animation.
+    setIsViewModalOpen(false);
+
+    // 3. Wait 300ms for the animation to finish, THEN wipe the data memory.
+    setTimeout(() => {
+      setBatchDetails([]);
+      setViewingBatch(null);
+      setViewingBatchId(null);
+      setViewingBatchCreatorId(null);
+      setIsDescExpanded(false);
+      setVidDetails(null);
+      setDynamicSteps([]);
+      setWorkflowHistory([]);
+
+      // Reset Action UI states
+      setIsActionMode(false);
+      setActionSelection(null);
+      setExecutorRemarks("");
+      setScheduleOverrideType("KEEP");
+      setFinalScheduleTime("");
+
+      // Refresh the table behind the scenes
+      fetchPendingBatches();
+    }, 300);
+  };
+
