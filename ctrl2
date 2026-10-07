@@ -1,498 +1,898 @@
-package com.fincore.ReportService.service;
+ {/* CGL */}
+                        <Grid item size={{ xl: 2.3, lg: 3.1 }} >
+                          <Autocomplete
+                            autoHighlight
+                            popupIcon={null}
+                            options={
+                              (cglInputValues[row.id] || "").length < 3
+                                ? []
+                                : (row.cgl && !cglSearch.options.some((o) => o.cglNumber === row.cgl.cglNumber)
+                                  ? [row.cgl, ...cglSearch.options]
+                                  : cglSearch.options)
+                            }
+                            slotProps={{
+                              popper: {
+                                placement: 'bottom-start',
+                                modifiers: [
+                                  { name: 'flip', enabled: false },
+                                  { name: 'preventOverflow', enabled: false }
+                                ],
+                              },
+                            }}
+                            // SHOW CODE AND DESCRIPTION INSIDE THE TEXTBOX
+                            getOptionLabel={(option) => option && option.cglNumber ? `${option.cglNumber} - ${option.description}` : ""}
+                            renderOption={(props, option) => (
+                              <li {...props} key={option.cglNumber}>
+                                <Typography noWrap sx={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                  {option.cglNumber} - {option.description}
+                                </Typography>
+                              </li>
+                            )}
+                            value={row.cgl || null}
+                            onChange={(event, newValue) => handleRowChange(row.id, "cgl", newValue)}
+                            inputValue={cglInputValues[row.id] || ""}
+                            onInputChange={(event, newInputValue, reason) => {
+                              if (reason === 'input') {
+                                const cleanInput = newInputValue.replace(CGL_REPLACE_REGEX, "").substring(0, 10);
+                                setCglInputValues(prev => ({ ...prev, [row.id]: cleanInput }));
+                                searchCgls(cleanInput, row.id);
+                              } else {
+                                setCglInputValues(prev => ({ ...prev, [row.id]: newInputValue }));
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if ((e.key === 'Tab' || e.key === 'Enter') && !row.cgl && cglSearch.options?.length > 0) {
+                                handleRowChange(row.id, "cgl", cglSearch.options[0]);
+                              }
+                            }}
+                            onBlur={() => {
+                              const typedValue = cglInputValues[row.id];
+                              if (!row.cgl && typedValue && typedValue.length === 10) {
+                                const match = cglSearch.options.find(opt => String(opt.cglNumber) === typedValue) ||
+                                  (cglSearch.options.length > 0 ? cglSearch.options[0] : null);
+                                if (match) {
+                                  handleRowChange(row.id, "cgl", match);
+                                }
+                              }
+                            }}
+                            loading={cglSearch.loadingId === row.id}
+                            filterOptions={(x) => x}
+                            isOptionEqualToValue={(option, value) => String(option?.cglNumber) === String(value?.cglNumber)}
+                            noOptionsText={
+                              (cglInputValues[row.id] || "").length < 3
+                                ? "Enter 3 Digits to Search"
+                                : "CGL not found"
+                            }
+                            renderInput={(params) => (
+                              <Tooltip title={row.cgl ? `${row.cgl.cglNumber} - ${row.cgl.description}` : "Search by CGL Number"} placement="top-start">
+                                <TextField
+                                  {...params}
+                                  label="CGL *"
+                                  placeholder="CGL"
+                                  InputLabelProps={{ shrink: true }}
+                                  // Prevents text from breaking out of the box
+                                  inputProps={{ ...params.inputProps, style: { textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden' } }}
+                                  InputProps={{
+                                    ...params.InputProps,
+                                    endAdornment: (
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                        {/* SMALL MEMO CHIP INSIDE THE TEXTBOX */}
+                                        {row.cgl && String(row.cgl.cglNumber).startsWith("5") && (
+                                          <Chip label="MEMO" size="small" color="warning" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 'bold' }} />
+                                        )}
+                                        {cglSearch.loadingId === row.id ? <CircularProgress color="inherit" size={20} /> : null}
+                                        {params.InputProps.endAdornment}
+                                      </Box>
+                                    )
+                                  }}
+                                  onPaste={(e) => { e.preventDefault(); showSnackBar("Pasting is not allowed here.", "warning"); }}
+                                  onCopy={(e) => e.preventDefault()}
+                                />
+                              </Tooltip>
+                            )}
+                          />
+                        </Grid>
 
-import com.fincore.ReportService.config.JasperTemplateRegistry;
-import com.fincore.ReportService.dto.*;
-import com.fincore.ReportService.exception.ResourceNotFoundException;
-import com.fincore.ReportService.model.AppConfig;
-import com.fincore.ReportService.model.ReportType;
-import com.fincore.ReportService.repository.AppConfigRepository;
-import com.fincore.ReportService.repository.ReportTypeRepository;
-import com.fincore.ReportService.util.Constants;
-import com.fincore.ReportService.util.FormatStatus;
-import lombok.extern.slf4j.Slf4j;
-import com.fincore.ReportService.util.ReportFormat;
-import com.fincore.commonutilities.buisnessobject.ControlDateService;
 
-import net.sf.jasperreports.engine.*;
-import net.sf.jasperreports.engine.export.JRCsvExporter;
-import net.sf.jasperreports.engine.export.ooxml.JRXlsxExporter;
-import net.sf.jasperreports.export.SimpleCsvExporterConfiguration;
-import net.sf.jasperreports.export.SimpleExporterInput;
-import net.sf.jasperreports.export.SimpleOutputStreamExporterOutput;
-import net.sf.jasperreports.export.SimpleWriterExporterOutput;
-import org.apache.hadoop.fs.*;
-import org.apache.hadoop.fs.FileSystem;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.PropertySource;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.io.ResourceLoader;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.FileCopyUtils;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
-import org.springframework.core.io.Resource;
-import javax.sql.DataSource;
-import java.io.*;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
-import java.util.Base64;
-import com.fincore.ReportService.dto.AttachmentDownloadRequest;
-import com.fincore.ReportService.dto.AttachmentDownloadResponse;
-import com.fincore.ReportService.dto.AttachmentRef;
-import com.fincore.ReportService.dto.DownloadedAttachment;
-import java.util.regex.Pattern;
-import java.util.regex.Matcher;
-import java.util.Set;
-import java.util.HashSet;
+                        {/* Amount */}
+                        <Grid item size={{ xl: 2, lg: 2.8 }}>
+                          <Tooltip title="" placement="top-start">
+                            <TextField
+                              label="Amount *"
+                              type="text"
+                              value={row.amount}
+                              InputLabelProps={{ shrink: true }}
+                              fullWidth
+                              placeholder="0.0000"
+                              inputProps={{ style: { textAlign: "right" } }}
+                              // Checks if input is not empty AND equals zero numerically
+                              error={row.amount !== "" && parseFloat(row.amount) === 0}
+                              onChange={(e) => {
+                                const rawVal = e.target.value;
+                                if (/[^0-9.]/.test(rawVal)) {
+                                  showSnackBar("Only numbers and decimal point are allowed.", "warning"); return;
+                                }
+                                if (rawVal === "" || /^\d{0,16}(\.\d{0,4})?$/.test(rawVal)) {
+                                  handleRowChange(row.id, "amount", rawVal);
+                                }
+                                else {
+                                  showSnackBar("Exceeded maximum digits or decimal places.", "warning");
+                                }
+                              }}
 
-/**
- * Service implementation for handling business logic related to GLIF reports.
- */
-@Service
-@Slf4j
-@PropertySource("classpath:jasper-reports.properties")
-public class ReportServiceImpl implements ReportService {
+                              onPaste={(e) => { e.preventDefault(); showSnackBar("Pasting is not allowed here.", "warning"); }}
+                              onCopy={(e) => e.preventDefault()}
+                            />
+                          </Tooltip>
+                          <Typography
+                            variant="caption"
+                            // Turns the caption red if the error state is triggered
+                            sx={{ ...jpStyles.captionText, color: (row.amount !== "" && parseFloat(row.amount) === 0) ? 'error.main' : 'text.secondary' }}
+                          >
+                            {(row.amount !== "" && parseFloat(row.amount) === 0) ? "Amount cannot be zero" : "Max 16 digits, 4 decimals"}
+                          </Typography>
+                        </Grid>
 
-    private static final int BUFFER_SIZE = 32 * 1024;
-    private static final Set<String> ALREADY_COMPRESSED_EXTS = Set.of("pdf", "xlsx", "xls", "zip", "gz", "png", "jpg",
-            "jpeg");
-    private final ReportTypeRepository reportTypeRepository;
-    private final String reportsBasePath;
-    private final AppConfigRepository appConfigRepository;
-    private final NotificationWriterService notificationWriterService;
-    private final FileSystem hdfsFileSystem;
-    private final String tempReportsBasepath;
-    private final ControlDateService controlDateService;
 
-    // ================= Redis Template for Progress ===================
-    private final RedisTemplate<String, TaskProgressDto> redisTemplate;
-    private final String REPORTS_START_DATE_KEY = "REPORTS_START_DATE";
+                        {/* Txn Type */}
+                        <Grid item size={{ xl: 1, lg: 1.5 }}>
+                          <Tooltip title="" placement="top-start">
+                            <TextField
+                              select
+                              label="Type *"
+                              value={row.txnType}
+                              fullWidth
+                              InputLabelProps={{ shrink: true }}
+                              onChange={(e) => handleRowChange(row.id, "txnType", e.target.value)}
+                              onPaste={(e) => { e.preventDefault(); showSnackBar("Pasting is not allowed here.", "warning"); }}
+                              onCopy={(e) => e.preventDefault()}
+                              onKeyDown={(e) => {
+                                // Intercept keystrokes to auto-select
+                                const key = e.key.toLowerCase();
+                                if (key === 'd') {
+                                  e.preventDefault(); // Prevents standard browser behavior
+                                  handleRowChange(row.id, "txnType", "Debit");
+                                } else if (key === 'c') {
+                                  e.preventDefault();
+                                  handleRowChange(row.id, "txnType", "Credit");
+                                }
+                              }}
+                              SelectProps={{
+                                displayEmpty: true,
+                                renderValue: (selected) => !selected ? <span style={{ color: 'gray', opacity: 0.8 }}>Type</span> : selected,
+                                MenuProps: {
+                                  // The marginTop guarantees it clears the tooltip completely
+                                  PaperProps: { style: { maxHeight: 250, marginTop: '8px' } },
+                                  anchorOrigin: { vertical: "bottom", horizontal: "left" },
+                                  transformOrigin: { vertical: "top", horizontal: "left" }
+                                }
+                              }}
+                            >
+                              <MenuItem value="Credit">Credit</MenuItem>
+                              <MenuItem value="Debit">Debit</MenuItem>
 
+                            </TextField>
+                          </Tooltip>
+                        </Grid>
+
+                        {/* Remarks (Individual) */}
+                        <Grid item size={{ xl: 2.2, lg: 3.2 }}>
+                          <Tooltip title="" placement="top-start">
+                            <TextField
+                              label="Remarks *"
+                              value={row.remarks}
+                              InputLabelProps={{ shrink: true }}
+                              onPaste={(e) => { e.preventDefault(); showSnackBar("Pasting is not allowed here.", "warning"); }}
+                              onCopy={(e) => e.preventDefault()}
+                              placeholder="Enter remarks..."
+                              fullWidth
+                              inputProps={{ minLength: 2, maxLength: 30 }}
+                              disabled={checked}
+                              error={row.remarks.length > 0 && !isRowRemarksValid(row.remarks)}
+                              onChange={(e) => {
+                                const val = filterAndWarn(e.target.value);
+                                if (val.length <= 30) {
+                                  handleRowChange(row.id, "remarks", val);
+                                }
+                              }}
+                              helperText="Allowed 2-30 chars: Alphanumeric and single spaces only"
+                            />
+                          </Tooltip>
+                        </Grid>
+                        {/* Product Code */}
+                        <Grid item
+                          // xs={12} md={2}
+                          size={{ xl: 1, lg: 1.5 }} >
+                          <Tooltip title="" placement="top-start">
+                            <TextField label="Product Code" value={row.productCode} InputLabelProps={{ shrink: true }} placeholder="Product Code.." fullWidth inputProps={{ maxLength: 8 }} onChange={(e) => { const rawVal = e.target.value; const cleanVal = rawVal.replace(/[^0-9]/g, ""); if (rawVal !== cleanVal) { showSnackBar("Only digits are allowed.", "warning"); } if (cleanVal.length <= 8) { handleRowChange(row.id, "productCode", cleanVal); } }} />
+                          </Tooltip>
+                          <Typography variant="caption" sx={jpStyles.captionText}>Max 8 digits</Typography>
+                        </Grid>
+
+                        {/* Delete Action */}
+                        <Grid item size={{ xl: 0.5, lg: 0.8 }} sx={{ textAlign: "center", display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {/* ONLY ALLOW DELETION IF THERE ARE MORE THAN 2 ROWS */}
+                          {rows.length > 2 && (
+                            <Tooltip title="Delete row" arrow>
+                              <IconButton
+                                onClick={() => handleDeleteRow(row.id)}
+                                aria-label="delete row"
+                                sx={jpStyles.deleteIconButton}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Grid>
+                      </Grid> {/* <--- THIS IS THE MISSING TAG THAT CRASHED REACT! */}
+
+                      {index < rows.length - 1 && (<Box sx={jpStyles.rowDivider} />)}
+                    </React.Fragment>
+                  );
+                })}
+
+                {/* ACTION BUTTONS */}
+                <Box sx={jpStyles.actionButtonsWrapper}>
+                  <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={handleBack}>
+                    Previous
+                  </Button>
+
+                  <Box sx={{ display: "flex", gap: 2 }}>
+                    {/* NEW RESET BUTTON */}
+                    <Button variant="outlined" onClick={handleResetRows} 
+                    sx=
+                    {{
+                      "&:hover":
+                      {
+                        color:"#fff",
+                      },
+                      }}>
+                      Reset
+                    </Button>
+
+                    <Button variant="contained" startIcon={<AddIcon />} onClick={handleAddRow}>
+                      Add Row
+                    </Button>
+
+                    <Tooltip title={rows.length < 2 ? "Minimum 2 rows required" : "Submit batch"} placement="top">
+                      <span>
+                        <Button
+                          variant="contained"
+                          color="success"
+                          onClick={handleValidateClick}
+                          disabled={isSubmitting || !isCommonRemarksValid(commonBatchRemarks) || !isFormReadyToSubmit}
+                        >
+                          {isSubmitting ? <CircularProgress size={24} color="inherit" /> : "Validate"}
+                        </Button>
+                      </span>
+                    </Tooltip>
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          </Box>
+        )
+      }
+
+      {/* EXTERNAL STEP 2: BULK UPLOAD EXCEL COMPONENT */}
+      {
+        activeStep === 2 && entryMethod === "BULK" && (
+          <JournalBulkUpload
+            selectedVoucher={selectedVoucher}
+            onBack={handleBack}
+            onReset={handleResetWizard}
+            // Triggered automatically when Bulk Excel completes
+            onSuccessSubmit={(batchId) => {
+              setSubmittedBatchId(batchId);
+              setActiveStep(3);
+            }}
+          />
+        )
+      }
+
+      {/* NEW STEP 3: POST-SUBMISSION SUCCESS & SCHEDULING SCREEN */}
+      {
+        activeStep === 3 && (
+          <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
+            <Paper elevation={3} sx={{ p: 4, borderRadius: 3, maxWidth: 650, width: '100%', textAlign: 'center' }}>
+              <Typography variant="h6" fontWeight="bold" color="text.primary" gutterBottom>
+                Set Execution Preference
+              </Typography>
+              <Typography variant="h5" fontWeight="bold" gutterBottom>
+                Your batch is validated and ready to submit.
+              </Typography>
+
+              <Divider sx={{ my: 3 }} />
+
+
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
+                Please select how you want this batch to be executed after the final approval.
+              </Typography>
+
+              {/* SELECTION CARDS */}
+              <Grid container spacing={3} sx={{ mb: 4, textAlign: 'left' }}>
+                <Grid item xs={12} sm={6}>
+                  <Box
+                    onClick={() => setRoutingChoice("IMMEDIATE")}
+                    sx={{
+                      p: 2.5, border: "2px solid", borderRadius: 2, cursor: "pointer", transition: "all 0.2s ease",
+                      borderColor: routingChoice === "IMMEDIATE" ? "primary.main" : "divider",
+                      backgroundColor: routingChoice === "IMMEDIATE" ? "primary.50" : "transparent",
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 1, textAlign: "center",
+                      "&:hover": { borderColor: routingChoice !== "IMMEDIATE" ? "primary.light" : "primary.main", transform: "translateY(-2px)", boxShadow: 2 }
+                    }}
+                  >
+                    <BoltIcon color={routingChoice === "IMMEDIATE" ? "primary" : "action"} sx={{ fontSize: 36 }} />
+                    <Typography variant="subtitle1" fontWeight="bold" color={routingChoice === "IMMEDIATE" ? "primary.main" : "text.primary"}>
+                      Execute Immediately
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Post automatically upon final approval
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Box
+                    onClick={() => {
+                      setRoutingChoice("SCHEDULE");
+                      setScheduledTime(dayjs().add(30, 'minute').startOf('minute'));
+                    }}
+                    sx={{
+                      p: 2.5, border: "2px solid", borderRadius: 2, cursor: "pointer", transition: "all 0.2s ease",
+                      borderColor: routingChoice === "SCHEDULE" ? "primary.main" : "divider",
+                      backgroundColor: routingChoice === "SCHEDULE" ? "primary.50" : "transparent",
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 1, textAlign: "center",
+                      "&:hover": { borderColor: routingChoice !== "SCHEDULE" ? "primary.light" : "primary.main", transform: "translateY(-2px)", boxShadow: 2 }
+                    }}
+                  >
+                    <ScheduleIcon color={routingChoice === "SCHEDULE" ? "primary" : "action"} sx={{ fontSize: 36 }} />
+                    <Typography variant="subtitle1" fontWeight="bold" color={routingChoice === "SCHEDULE" ? "primary.main" : "text.primary"}>
+                      Schedule Execution
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Delay posting to a future time today
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+
+              {/* SMOOTH COLLAPSE FOR TIMEPICKER */}
+              <Collapse in={routingChoice === "SCHEDULE"}>
+                <Box sx={{ p: 3, mb: 4, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                  <Typography variant="subtitle2" fontWeight="bold" align="left" gutterBottom>
+                    Select Time
+                  </Typography>
+                  <LocalizationProvider dateAdapter={AdapterDayjs}>
+                    <TimePicker
+                      value={scheduledTime}
+                      onChange={(newValue) => setScheduledTime(newValue)}
+                      // --- THE FIX IS HERE ---
+                      // .startOf('minute') forces seconds to :00 so it perfectly matches the UI selection
+                      minTime={dayjs().add(30, 'minute').startOf('minute')}
+                      maxTime={dayjs().endOf('day')}
+                      timeSteps={{ minutes: 1 }}
+                      slotProps={{
+                        textField: {
+                          size: 'medium',
+                          fullWidth: true,
+                          sx: { caretColor: 'transparent' },
+                          helperText: "Execution must be scheduled at least 30 minutes from now, before 11:59 PM today.",
+                          onKeyDown: (e) => e.preventDefault(),
+                          onPaste: (e) => e.preventDefault(),
+                          inputProps: { readOnly: true }
+                        }
+                      }}
+                    />
+                  </LocalizationProvider>
+                </Box>
+              </Collapse>
+
+              {/* FINAL SUBMIT BUTTON */}
+              <Button
+                variant="contained"
+                size="large"
+                fullWidth
+                disabled={!routingChoice || (routingChoice === 'SCHEDULE' && !scheduledTime) || isFinalizing}
+                onClick={handleFinalizeRouting}
+                sx={{ py: 1.5, fontSize: '1.1rem', fontWeight: 'bold', borderRadius: 2 }}
+              >
+                {isFinalizing ? <CircularProgress size={28} color="inherit" /> : "Submit"}
+              </Button>
+
+            </Paper>
+          </Box>
+        )
+      }
+
+    </Paper >
+
+  );
+}
+import React, { useState, useRef, useEffect } from "react";
+import dayjs from "dayjs";
+import {
+  Box,
+  Typography,
+  Paper,
+  TextField,
+  Button,
+  CircularProgress,
+  Chip,
+  Alert,
+  Stack,
+  Stepper,
+  Step,
+  StepLabel,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
+  IconButton,
+  Tooltip,
+  Collapse,
+  Grid
+} from "@mui/material";
+import {
+  CloudUpload as CloudUploadIcon,
+  RestartAlt as RestartAltIcon,
+  Description as DescriptionIcon,
+  Send as SendIcon,
+  FileDownload as FileDownloadIcon,
+  ArrowBack as ArrowBackIcon,
+  Close as CloseIcon,
+  TaskAlt as TaskAltIcon,
+  KeyboardArrowUp,
+  KeyboardArrowDown
+} from "@mui/icons-material";
+import { alpha } from "@mui/material/styles";
+
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+
+import { jbuStyles } from "./VoucherBulkStyle";
+import { useSelector } from "react-redux";
+
+// --- STYLES ---
+const mainContainerStyle = { padding: 3, height: "100%", width: "100%" };
+const ALLOWED_FILE_TYPES = [".xlsx"];
+
+const mainSteps = ["Upload & Validate", "Preview & Submit"];
+const validationSteps = [
+  "Format Validation",
+  "Database Validation",
+  "Balance Validation",
+];
+
+const VoucherBulkUpload = ({ selectedVoucher, onBack, onReset, onSuccessSubmit }) => {
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  
+  const user = useSelector((state) => state.auth?.user || null);
+
+  const [activeStep, setActiveStep] = useState(0);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [file, setFile] = useState(null);
+  const fileInputRef = useRef(null);
+  const [requestId, setRequestId] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isDebouncing, setIsDebouncing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const [validationStage, setValidationStage] = useState(0);
+  const [resultStatus, setResultStatus] = useState(null);
+  const [resultMsg, setResultMsg] = useState("");
+  const [autoDlTriggered, setAutoDlTriggered] = useState(false);
+  const [downloadMsg, setDownloadMsg] = useState("Downloading error report...");
+  const [isErrorDownloaded, setIsErrorDownloaded] = useState(false);
+  const [previewRows, setPreviewRows] = useState([]);
+  const [totalRows, setTotalRows] = useState(0);
+
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
+  const [isCreatingBatch, setIsCreatingBatch] = useState(false);
+  const [batchCreated, setBatchCreated] = useState(false);
+  const [isDescExpanded, setIsDescExpanded] = useState(false);
+  const [isPageLoading, setIsPageLoading] = useState(true);
+  const [isEodRunning, setIsEodRunning] = useState(false);
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        setIsPageLoading(true);
+
+        // 1. Check EOD Status First
+        const eodResponse = await callApi("/JS/voucher/eod_status", null, "GET");
+        if (eodResponse && Array.isArray(eodResponse) && eodResponse.length > 0) {
+          if (eodResponse[0].eodStatus === 1) {
+            setIsEodRunning(true);
+            return; // Stop loading anything else, block the screen
+          }
+        }
+
+        // 2. Fetch the Official Posting Date
+        const dateResponse = await callApi("/JS/voucher/current-posting-date", null, "GET");
+        if (dateResponse) {
+          // Parse the YYYY-MM-DD date perfectly into DayJS for the calendar
+          const parsedDate = dayjs(dateResponse, "YYYY-MM-DD");
+          if (parsedDate.isValid()) {
+            setSelectedDate(parsedDate);
+          } else {
+            showSnackBar("Failed to parse official posting date.", "error");
+          }
+        } else {
+          showSnackBar("Failed to load official posting date.", "error");
+        }
+
+      } catch (error) {
+        console.error("Failed to fetch initial data:", error);
+      } finally {
+        setIsPageLoading(false);
+      }
+    };
+
+    fetchInitialData();
+  }, [callApi, showSnackBar]);
+
+
+  useEffect(() => {
+    const checkEodStatus = async () => {
+      try {
+        setIsPageLoading(true);
+        const eodResponse = await callApi("/JS/voucher/eod_status", null, "GET");
+
+        // The API returns an array: [{ "eodStatus": 0 }]
+        if (eodResponse && Array.isArray(eodResponse) && eodResponse.length > 0) {
+          if (eodResponse[0].eodStatus === 1) {
+            setIsEodRunning(true);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to check EOD status:", error);
+      } finally {
+        setIsPageLoading(false);
+      }
+    };
+
+    checkEodStatus();
+  }, [callApi]);
+
+  const triggerDebounce = () => {
+    setIsDebouncing(true);
+    setTimeout(() => {
+      setIsDebouncing(false);
+    }, 3000);
+  };
+
+  const validateAndSetFile = (selected) => {
+    if (!selected) return;
+    const fileName = selected.name.toLowerCase();
+    const fileSize = selected.size;
+
+    const isValidExt = ALLOWED_FILE_TYPES.some((ext) => fileName.endsWith(ext));
+
+    if (fileName.length > 100) {
+      showSnackBar(`File name is too long! Please rename it to be under 100 characters.`, "error");
+      clearInput();
+      return;
+    }
+
+    const MAX_SIZE_MB = 50;
+    if (fileSize > MAX_SIZE_MB * 1024 * 1024) {
+      showSnackBar(`File too large! Maximum allowed size is ${MAX_SIZE_MB}MB.`, "error");
+      clearInput();
+      return;
+    }
+
+    if (fileSize === 0) {
+      showSnackBar("The selected file is empty. Please upload a valid file.", "error");
+      clearInput();
+      return;
+    }
+
+
+
+    setFile(selected);
+    setResultStatus(null);
+    setResultMsg("");
+    setValidationStage(0);
+    setPreviewRows([]);
+    setTotalRows(0);
+    setRequestId(null);
+    setAutoDlTriggered(false);
+    setIsProcessing(false);
+    setIsErrorDownloaded(false);
+    setDownloadMsg("Downloading error report...");
+  };
+
+  const handleFileSelect = (e) => {
+    if (e.target.files[0]) {
+      validateAndSetFile(e.target.files[0]);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      validateAndSetFile(e.dataTransfer.files[0]);
+      e.dataTransfer.clearData();
+    }
+  };
+
+  const clearInput = () => {
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleClearFile = (e) => {
+    if (e) e.stopPropagation();
+    setFile(null);
+    clearInput();
+    setResultStatus(null);
+    setResultMsg("");
+    setValidationStage(0);
+    setIsProcessing(false);
+    setIsErrorDownloaded(false);
+    setBatchCreated(false);
+  };
+  const resetAll = () => {
+    setRequestId(null);
+    setResultStatus(null);
+    setValidationStage(0);
+    setResultMsg("");
+    setPreviewRows([]);
+    setTotalRows(0);
+    setIsProcessing(false);
+    setAutoDlTriggered(false);
+    setIsErrorDownloaded(false);
+    setBatchCreated(false);
+    setFile(null);
+    setPage(0);
+    setDownloadMsg("Downloading error report...");
+    clearInput();
+    if (onReset) onReset(); // Tells JournalPosting.jsx to go back to Step 0
+  };
+  const handleBackNavigation = () => {
+    if (onBack) onBack(); // Tells JournalPosting.jsx to go back to Step 1
+  };
+
+  const handleBack = () => {
+    setActiveStep(0);
+    setResultStatus(null);
+    setValidationStage(0);
+    setResultMsg("");
+    setIsProcessing(false);
+    setAutoDlTriggered(false);
+    setDownloadMsg("Downloading error report...");
+  };
+
+  const downloadFileHelper = async (url, filename) => {
+    try {
+      const response = await callApi(url, null, "GET", "blob", null, {}, false);
+      const blobData = response.data || response;
+      if (!blobData) throw new Error("Empty response data");
+
+      const blob = new Blob([blobData], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const link = document.createElement("a");
+      const objectUrl = window.URL.createObjectURL(blob);
+      link.href = objectUrl;
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+      return true;
+    } catch (e) {
+      showSnackBar("File download failed.", "error");
+      return false;
+    }
+  };
+
+  const handleDownloadTemplate = (e) => {
+    if (e) e.stopPropagation();
+    downloadFileHelper("/JS/voucher/download-template", "Voucher_Upload_Template.xlsx");
+  };
+
+ const handleDownloadFile = async (type, reqId = requestId) => {
+    if (type === "ERROR") showSnackBar("Downloading error report...", "info");
     
-    private static final Pattern ATTACHMENT_PATTERN=Pattern.compile("^[A-Za-z0-9._-]{1,100}$");
-
-    @Autowired
-    private DataSource dataSource;
-
-
-
-    @Value("${notification.progress.topic}")
-    private String progressTopic;
-
-    @Autowired
-    private ResourceLoader resourceLoader;
-
-    @Autowired
-    private ReportPathBuilderService reportPathBuilderService;
-
-
-
-    @Autowired
-    private JasperTemplateRegistry jasperTemplateRegistry;
-
-    public ReportServiceImpl(ReportTypeRepository reportTypeRepository,
-                             @Value("${glif.reports.base-path}") String basePath,
-                             AppConfigRepository appConfigRepository,
-                             NotificationWriterService notificationWriterService,
-                             FileSystem hdfsFileSystem,
-                             @Qualifier("progressRedisTemplate") RedisTemplate<String, TaskProgressDto> redisTemplate,
-                             @Value("${glif.temp-reports.base-path}") String tempReportsBasepath,
-                             ControlDateService controlDateService) {
-        this.reportTypeRepository = reportTypeRepository;
-        this.reportsBasePath = basePath;
-        this.appConfigRepository = appConfigRepository;
-        this.notificationWriterService = notificationWriterService;
-        this.hdfsFileSystem = hdfsFileSystem;
-        this.redisTemplate = redisTemplate;
-        this.tempReportsBasepath = tempReportsBasepath;
-        this.controlDateService = controlDateService;
-    }
-
-    /**
-     * Retrieves a list of report types that are explicitly mapped to the given
-     * roleId AND start date from app_config table.
-     *
-     * @param roleId The ID of the user's role.
-     * @return A list of DTOs representing the available reports and start date.
-     */
-    @Override
-    public List<ReportTypeDto> getReportTypes(int roleId, String moduleType) {
-        if (moduleType == null || moduleType.isBlank()) {
-            throw new IllegalArgumentException("Module Type can not be empty.");
-        }
-        //
-        // if(!moduleType.equalsIgnoreCase("BRANCH_WISE") ||
-        // !moduleType.equalsIgnoreCase("WHOLE_BANK")) {
-        // throw new IllegalArgumentException("Invalid Module Type.");
-        // }
-
-        // Fetch the date from appConfig to validate the start date of date-picker
-        LocalDate startDate = getStartDateFromAppConfig();
-
-        if (Constants.BRANCH_WISE.equalsIgnoreCase(moduleType)) {
-            return reportTypeRepository.findBranchWiseReports(roleId).stream()
-                    .map(reportType -> new ReportTypeDto(reportType.getReportName(), reportType.getFileName(),
-                            startDate,reportType.getReportDescription()))
-                    .collect(Collectors.toList());
-        }
-
-        return reportTypeRepository.findByRoleId(roleId).stream()
-                .map(reportType -> new ReportTypeDto(reportType.getReportName(), reportType.getFileName(),startDate,reportType.getReportDescription() ))
-                .collect(Collectors.toList());
-    }
-    @Override
-    public List<ReportTypeDto> getAdhocReportTypes(int roleId)
-    {
-        LocalDate startDate = getStartDateFromAppConfig();
-        return reportTypeRepository.findAdhocReportByRoleId(roleId).stream()
-                .map(reportType -> new ReportTypeDto(reportType.getReportName(), reportType.getFileName(), startDate , reportType.getReportDescription()))
-                .collect(Collectors.toList());
-    }
-    // ----------------------------------------------------------------------------------
-    // 1. DOWNLOAD STREAM WITH PROGRESS
-    // ----------------------------------------------------------------------------------
-    @Transactional
-    @Override
-    public ReportStreamResponse downloadReportStream(String fileName, LocalDate date, int userRoleId, String userId,
-                                                     String branchCode)  {
-        // 1. Authorization Check
-        ReportType reportType = reportTypeRepository.findByFileNameAndRoles_roleId(fileName, userRoleId)
-                .orElseThrow(() -> {
-                    log.warn("Access Denied: User {} -> Report {}", userId, fileName);
-                    sendNotification(userId, "Access Denied for report: " + fileName, "/glif-reports",
-                            fileName + "_" + date);
-                    return new AccessDeniedException("Access Denied for report: " + fileName);
-                });
-
-        log.info("Fetched report from db : {}", reportType.getReportName());
-        // This is the human-readable name (e.g., "Daily Balance Sheet")
-        String reportDisplayName = reportType.getReportName();
-        //reportPathBuilderService.testReportPath();
-        ReportPath reportPath = reportPathBuilderService.buildReportPath(reportType,date,branchCode);
-
-        // Construct task id
-        String safeReportName = reportDisplayName.replaceAll("[^a-zA-Z0-9]", "_").toLowerCase().replaceAll("_", "_");
-        String safeDate = date.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        String taskId = String.format("%s_%s_%d", safeReportName, safeDate, System.currentTimeMillis());
-
-        // 2. Prepare Paths with the CORRECT format "dd-MM-yyyy"
-        String formattedDate = date.format(DateTimeFormatter.ISO_LOCAL_DATE);
-        Path searchDirectory = reportPath.searchDirectory();
-        String searchPattern = reportPath.searchPattern();
-
-
-        return streamReport(searchDirectory, taskId, userId, searchPattern, reportDisplayName, date, fileName,
-                formattedDate);
-
-    }
-
-    // ----------------------------------------------------------------------------------
-    // 2. CREATE REPORT WITH PROGRESS
-    // ----------------------------------------------------------------------------------
-    @Override
-    public Map<String, String> createReports(ReportCreationDto parameters, String userId) throws IOException {
-        Map<String, String> reportStat = new HashMap<>();
-        String taskId = "gen_" + System.currentTimeMillis();
-
-        LocalDate reportDate = LocalDate.parse(parameters.getDate(), DateTimeFormatter.ofPattern("dd-MM-yyyy"));
-        String jasperFormattedDate = reportDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-        String formattedDate = reportDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
-        String datePrefix = reportDate.format(DateTimeFormatter.ofPattern("ddMMyyyy"));
-        Path reportDir = new Path(reportsBasePath, formattedDate);
-
-        Set<String> reportList = jasperTemplateRegistry.getAllReportNames();
-        if(reportList.isEmpty()) {
-            throw new ResourceNotFoundException("Failed to create reports");
-        }
-
-        try {
-            if (!hdfsFileSystem.exists(reportDir)) {
-                hdfsFileSystem.mkdirs(reportDir);
-            }
-        } catch (IOException e) {
-            throw new IOException("Unable to create folder in hdfs");
-        }
-
-        log.info("Report List : {}",reportList);
-        int totalReports = reportList.size();
-        int processedCount = 0;
-
-        sendProgress(taskId, userId, 0, "Starting report generation...", "PROCESSING");
-        String logoPath = null;
-        try {
-            logoPath = new ClassPathResource("images/logo.png").getFile().getAbsolutePath();
-        } catch (ResourceNotFoundException e) {
-            log.warn("Logo not found");
-        }
-
-        // Use a single connection for the batch, but handle failures gracefully
-        try (Connection connection = dataSource.getConnection()) {
-            for (String reportName : reportList) {
-                processedCount++;
-
-//                 jasperFileName = jasperTemplateRegistry.getReport(reportName);
-
-                // Calculate base percentage for this report
-                int basePercent = (int) (((double) (processedCount - 1) / totalReports) * 100);
-                sendProgress(taskId, userId, basePercent, "Generating " + reportName + "...", "PROCESSING");
-                log.info("Generating report: {}", reportName);
-                StringBuilder status = new StringBuilder();
-                try {
-
-                    JasperReport jasperReport = jasperTemplateRegistry.getReport(reportName);
-                        Map<String, Object> reportParams = new HashMap<>();
-                        reportParams.put("imagePath", logoPath);
-                        reportParams.put("date", parameters.getDate());
-
-                        JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, reportParams, connection);
-
-                        // --- PDF ---
-                        Path pdfPath = new Path(reportDir, reportName + "_" + datePrefix + ".pdf");
-                        try (FSDataOutputStream pdfOut = hdfsFileSystem.create(pdfPath, true)) {
-                            JasperExportManager.exportReportToPdfStream(jasperPrint, pdfOut);
-                            status.append("PDF generated");
-                        }
-
-                        // --- EXCEL ---
-                        Path xlsxPath = new Path(reportDir, reportName + "_" + datePrefix + ".xlsx");
-                        try (FSDataOutputStream xlsxOut = hdfsFileSystem.create(xlsxPath, true)) {
-                            JRXlsxExporter xlsxExporter = new JRXlsxExporter();
-                            xlsxExporter.setExporterInput(new SimpleExporterInput(jasperPrint));
-                            xlsxExporter.setExporterOutput(new SimpleOutputStreamExporterOutput(xlsxOut));
-                            xlsxExporter.exportReport();
-                            status.append(", Excel generated");
-                        }
-
-                        // --- PSV ---
-                        Path psvPath = new Path(reportDir, reportName + "_" + datePrefix + ".psv");
-                        try (FSDataOutputStream psvOut = hdfsFileSystem.create(psvPath, true)) {
-                            JRCsvExporter csvExporter = new JRCsvExporter();
-                            csvExporter.setExporterInput(new SimpleExporterInput(jasperPrint));
-                            csvExporter.setExporterOutput(new SimpleWriterExporterOutput(psvOut));
-                            SimpleCsvExporterConfiguration csvConfig = new SimpleCsvExporterConfiguration();
-                            csvConfig.setFieldDelimiter("|");
-                            csvExporter.setConfiguration(csvConfig);
-                            csvExporter.exportReport();
-                            status.append(", PSV generated");
-                        }
-
-                        reportStat.put(reportName, status.toString());
-                    }
-
-                catch (JRException e)
-                {
-                    log.error("Unable to create report");
-                }
-            }
-        } catch (SQLException e) {
-            log.error("Unable to fetch records from db");
-        }
-
-        sendProgress(taskId, userId, 100, "All reports generated.", "COMPLETED");
-        log.info("All reports generated.");
-        return reportStat;
-    }
-
-
-
-    /**
-     * Handles report attachment retrieval from HDFS
-     * for Communication Service requests
-     */
-
-    @Override
-    public AttachmentDownloadResponse downloadAttachments(
-            AttachmentDownloadRequest request) throws IOException {
-
-
-        log.info("Inside the report service download method");
-
-        List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
-
-                // Validate exactly 3 attachments
-        if (request == null
- 
-                || request.getAttachments() == null
-                || request.getAttachments().size() != 3) {
-
-            throw new IllegalArgumentException(
-                    "Exactly 3 attachments are required");
-        }
-
-
-        // Validate exact filenames
-        Set<String> requiredFileNames = Set.of(
-                "intr_report",
-                "balance_compare_report",
-                "cntr_report"
-        );
-
-        Set<String> actualFileNames = new HashSet<>();
-
-        for (AttachmentRef attachment : request.getAttachments()) {
-
-            if (attachment == null || attachment.getFileName() == null) {
-                throw new IllegalArgumentException(
-                        "Attachment filename is required");
-            }
-
-            actualFileNames.add(attachment.getFileName());
-        }
-
-        if (actualFileNames.size() != 3
-                || !actualFileNames.equals(requiredFileNames)) {
-
-            throw new IllegalArgumentException(
-                    "Attachments must contain exactly these filenames: intr_report, balance_compare_report, cntr_report");
-        }
-
-        //Process each requested attachment individually
-
-        for (AttachmentRef attachment : request.getAttachments()) {
-
-            log.info("-------------------------------------------------------------------");
-            log.info("Attachment Download Request Received");
-            log.info("Attachment Id: {}",attachment.getAttachmentId());
-            log.info("Report Name: {}",attachment.getFileName());
-            log.info("Attachment Type: {}",attachment.getAttachmentType());
-
-            //Extract report details from attachment reference
-
-            String attachmentId = attachment.getAttachmentId();
-            
-
-            if(attachmentId == null || !ATTACHMENT_PATTERN.matcher(attachmentId).matches()){
-                log.info("Invalid attachment Id");
-                throw new IllegalArgumentException("Invalid attachment Id");
-            }
-            String reportFolder = attachment.getFileName();
-
-            // Extracting date from attachmentId
-            // Example : balance_compare_report_31032026
-            String date = attachmentId.substring(attachmentId.lastIndexOf("_") + 1);
-
-            String folderDate =
-                    date.substring(4, 8) + "-"
-                + date.substring(2, 4) + "-"
-                + date.substring(0, 2);
-
-            byte[] fileBytes;
-            long fileSize;
-            String actualFileName = attachmentId + ".xlsx";
-            log.info("Actual file name: {}",actualFileName);
-
-            //Construct HDFS file path based on report date and folder
-
-            if(!folderDate.matches("\\d{4}-\\d{2}-\\d{2}")){
-                throw new IllegalArgumentException("Invalid report date");
-            }
-            if(!ATTACHMENT_PATTERN.matcher(actualFileName).matches()){
-                throw new SecurityException("Invalid file name");
-            }
-
-            if(reportsBasePath.contains("..")){
-                throw new SecurityException("Invalid base path");
-            }
-
-            Path base=new Path(reportsBasePath);
-            Path datePath=new Path(base,folderDate);
-            // Path folderName=new Path(datePath,reportFolder);
-            // Path filePath= new Path(folderName,actualFileName);
-            Path filePath= new Path(datePath,actualFileName);
-
-            String finalPath = filePath.toString();
-            if(finalPath.contains("..")){
-                throw new SecurityException("Directory traversal detected");
-            }
-
-            log.info("Reading HDFS File : {}", filePath);
-
-            //validate report existence in HDFS
-
-            if (!hdfsFileSystem.exists(filePath)) {
-                log.info("Attachment not found");
-                throw new ResourceNotFoundException(
-                        "Attachment not found : " + filePath);
-            }
-
-            FileStatus status = hdfsFileSystem.getFileStatus(filePath);
-            Path normalizedPath = Path.getPathWithoutSchemeAndAuthority(filePath);
-
-            if (!normalizedPath.equals(filePath)) {
-                throw new SecurityException("Invalid HDFS path");
-            }
-
-            //Read report content from HDFS
-
-            try (FSDataInputStream inputStream = hdfsFileSystem.open(normalizedPath);
-                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    outputStream.write(buffer, 0, bytesRead);
-                }
-
-                fileBytes = outputStream.toByteArray();
-            }catch(IOException e){
-                log.error("Unable to read HDFS file {}",filePath,e);
-                throw new ResourceNotFoundException(
-                    "Unable to read attachment from HDFS:"+actualFileName);
-            }
-
-            fileSize = status.getLen();
-            
-
-            DownloadedAttachment downloaded = new DownloadedAttachment();
-
-            downloaded.setFileName(actualFileName);
-            downloaded.setContentType(
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            downloaded.setFileSize(fileSize);
-            //Encode report content into Base64 for REST response
-            downloaded.setBase64(Base64.getEncoder().encodeToString(fileBytes));
-
-            downloadedFiles.add(downloaded);
-
-            
-            log.info("REPORT DOWNLOADED SUCCESSFULLY");
-            log.info("Attachment Id   : {}", attachment.getAttachmentId());
-            log.info("Report Name     : {}", downloaded.getFileName());
-            log.info("Attachment Type : {}", attachment.getAttachmentType());
-            log.info("Content Type    : {}", downloaded.getContentType());
-            log.info("File Size       : {} bytes", downloaded.getFileSize());
-        }
-
-        AttachmentDownloadResponse response = new AttachmentDownloadResponse();
-        //Prepare final response containing all downloaded attachments
-        response.setAttachments(downloadedFiles);
-
-        
-        log.info("------------------------------------------------------------");
-        log.info("Attachment Download Completed Successfully");
-        log.info("Total Reports Downloaded : {}", downloadedFiles.size());
-
-        return response;
-    }
+    const cleanTimestamp = dayjs().format("DD_MM_YYYY_HH_mm");
+    const targetFilename = type === "ERROR" ? `Error_Report_${cleanTimestamp}.xlsx` : "";
+
+    const success = await downloadFileHelper(
+      `/JS/voucher/download-bulk-file/${reqId}?type=${type}`,
+      targetFilename
+    );
     
+    if (success && type === "SUCCESS") showSnackBar("Downloaded successfully.", "success");
+    if (success && type === "ERROR") {
+      setDownloadMsg("Error report downloaded.");
+      setIsErrorDownloaded(true);
+    }
+  };
+  const handleStartValidation = async () => {
+    if (!selectedDate || !selectedDate.isValid() || !file) {
+      showSnackBar("Please select a valid date and file.", "warning");
+      return;
+    }
+    triggerDebounce();
+    setResultStatus(null);
+    setResultMsg("");
+    setValidationStage(0);
+    setRequestId(null);     // FIX: Prevent the useEffect from polling the old ID
+    setIsProcessing(true);
+    setAutoDlTriggered(false);
+    setDownloadMsg("");
 
-    // ----------------------------------------------------------------------------------
-    // DOWNLOAD REPORTS FOR TEMP-REPORTS PATH (/temp-reports/date/runId/)
-    // ----------------------------------------------------------------------------------
-    @Transactional
-    @Override
-    public ReportStreamResponse downloadTempReportStream(String fileName, LocalDate date, int userRoleId, String userId,
-                                                         String runId) throws IOException {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("postingDate", selectedDate.format("DD/MM/YYYY"));
+
+
+    // Automatically appends the globally selected VID to your upload request payload context
+    if (selectedVoucher) {
+      formData.append("vid", selectedVoucher.VID || selectedVoucher.vid);
+    }
+
+    try {
+      const data = await callApi("/JS/voucher/bulk-validate-init", formData, "POST", "json", "multipart/form-data");
+      if (data && data.requestId) {
+        setRequestId(data.requestId);
+      } else {
+        throw new Error("Invalid response from server.");
+      }
+    } catch (error) {
+      setIsProcessing(false);
+      setResultStatus("ERROR");
+
+      // ROBUST EXTRACTION: Checks standard message, default Spring Boot 'error' field, raw strings, and Axios messages
+      const serverMsg = error?.response?.data?.message
+        || error?.response?.data?.error
+        || (typeof error?.response?.data === 'string' ? error.response.data : null)
+        || error?.message;
+
+      const errMsg = serverMsg || "Unable to initialize file validation. Please check your connection.";
+      setResultMsg(errMsg);
+    }
+  };
+
+  useEffect(() => {
+    let interval;
+    if (isProcessing && requestId) {
+      interval = setInterval(async () => {
+        try {
+          const res = await callApi(`/JS/voucher/bulk-status/${requestId}`, null, "GET");
+          if (!res) return;
+          if (res.totalRows) setTotalRows(res.totalRows);
+          if (res.status === "ERROR") {
+            setIsProcessing(false);
+            setResultStatus("ERROR");
+            setResultMsg(res.message);
+            setValidationStage(res.currentStage || 1);
+            clearInterval(interval);
+            showSnackBar(res.message, "error", 5000);
+            if (res.hasErrorFile && !autoDlTriggered) {
+              setAutoDlTriggered(true);
+              handleDownloadFile("ERROR", res.requestId);
+            }
+          } else if (res.status === "SUCCESS") {
+            setResultStatus("SUCCESS");
+            setValidationStage(4);
+            setTotalRows(res.totalRows);
+            clearInterval(interval);
+            setIsProcessing(false);
+
+            // ONLY advance to Step 3. Do not auto-submit to the backend yet!
+            if (onSuccessSubmit) {
+              onSuccessSubmit(res.requestId);
+            }
+          } else {
+            setValidationStage(res.currentStage);
+
+          }
+        } catch (e) { }
+      }, 800);
+    }
+    return () => clearInterval(interval);
+  }, [isProcessing, requestId, autoDlTriggered, callApi, showSnackBar]);
+
+  const handleChangePage = (event, newPage) => setPage(newPage);
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const visibleRows = previewRows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const isValidationStepFailed = (index) => {
+    return resultStatus === "ERROR" && index === validationStage - 1;
+  };
+  if (isPageLoading) {
+    return (
+      <Box sx={jbuStyles.loadingBox}>
+        <CircularProgress size={60} />
+      </Box>
+    );
+  }
+  const desc = selectedVoucher?.DESCRIPTION || selectedVoucher?.description || "No description provided.";
+  const isLongDesc = desc.length > 100 || desc.split(/\r?\n/).length > 2;
+
+
+
+  if (isEodRunning) {
+    return (
+      <Box sx={jbuStyles.eodBox}>
+        <Paper elevation={4} sx={jbuStyles.eodPaper}>
+          <Typography variant="h4" color="error" fontWeight="bold" gutterBottom>
+            EOD is Currently Running
+          </Typography>
+          <Typography variant="h6" color="text.secondary" sx={jbuStyles.eodSubtitle}>
+            Bulk Upload is temporarily disabled.
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={jbuStyles.eodText}>
+            Please wait until the End of Day process completes to upload new transactions.
+          </Typography>
+        </Paper>
+      </Box>
+    );
+  }
+
+  // --- ORIGINAL UI RENDER (Cleaned up without activeSteps) ---
+  return (
+    <Box sx={mainContainerStyle}>
+
+
+      {/* 1. SCREEN TITLE ADDED HERE (Outside both cards) */}
+      <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.main" sx={{ mb: 2 }}>
+        Voucher Entry (Excel Upload)
+      </Typography>
+      {/* --- STANDARDIZED HORIZONTAL SELECTION HEADER --- */}
+      {selectedVoucher && (
+        <Paper elevation={0} sx={jbuStyles.svPaper}>
+          <Box sx={jbuStyles.svHeaderBox}>
+            <Typography variant="subtitle1" fontWeight="bold" color="text.primary">
+              Voucher Request Details
+            </Typography>
+          </Box>
+
+          <Grid container>
+            <Grid item sx={jbuStyles.svGridItem} size={12}>
+              <Stack direction="row" spacing={10}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>VID</Typography>
+                  <Typography variant="body1" fontWeight="bold" color="primary">{selectedVoucher.VID || selectedVoucher.vid}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Category</Typography>
+                  <Typography variant="body1" fontWeight="500">{selectedVoucher.categoryName || "General"}</Typography>
+                </Box>                <Box>
+                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Issue Categories</Typography>
+                  <Box>
+                    {selectedVoucher.issueCategories ? selectedVoucher.issueCategories.split(",").map((cat, index) => (
+                      <Chip key={index} label={cat.trim()} size="small" sx={jbuStyles.issueCategoryChip} />
+                    )) : <Typography variant="body2" color="text.secondary">N/A</Typography>}
+                  </Box>
+                </Box>
+              </Stack>
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                Description
+              </Typography>
