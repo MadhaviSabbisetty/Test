@@ -1,961 +1,1717 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Box, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Typography, Button, Stack, Tooltip, IconButton, Divider } from "@mui/material";
-import InfoIcon from "@mui/icons-material/Info";
-import { DataGrid } from "@mui/x-data-grid";
-import { Check, Clear, Visibility } from "@mui/icons-material";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import RestoreIcon from "@mui/icons-material/Restore";
-import AccountCircleIcon from "@mui/icons-material/AccountCircle";
-import ChangeCircleSharpIcon from "@mui/icons-material/ChangeCircleSharp";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import {
+  Box,
+  Typography,
+  Grid,
+  TextField,
+  Button,
+  Paper,
+  IconButton,
+  MenuItem,
+  CircularProgress,
+  Autocomplete,
+  Tooltip,
+  Checkbox,
+  FormControlLabel,
+  Chip,
+  FormHelperText,
+  Divider,
+  Card,
+  CardActionArea,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
+  Collapse,
+  Radio,
+  Stack,
+  Stepper,
+  Popper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Popover
+
+} from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import AddIcon from "@mui/icons-material/Add";
+import { Bolt as BoltIcon } from "@mui/icons-material";
+import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import DeleteIcon from "@mui/icons-material/Delete";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import ScheduleIcon from "@mui/icons-material/Schedule";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import DateRangeTwoToneIcon from '@mui/icons-material/DateRangeTwoTone';
+import EditNoteIcon from '@mui/icons-material/EditNote';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import TableChartIcon from '@mui/icons-material/TableChart';
+import { debounce } from "lodash";
+import useApi from "../../hooks/useApi";
+import JournalBulkUpload from "./VoucherBulkUpload";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import dayjs from "dayjs";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { TimePicker } from "@mui/x-date-pickers/TimePicker";
+import { jpStyles } from "./VoucherStyle";
 import { useSelector } from "react-redux";
+import { findMenuById } from "../../utils/CommonUtilities";
+const createNewRow = () => ({
+  id: crypto.randomUUID ? crypto.randomUUID() : Date.now() + Math.random(),
+  branch: null,
+  currency: "",
+  cgl: null,
+  amount: "",
+  txnType: "",
+  remarks: "",
+  productCode: "",
+});
 
-import useApi from "../../../../hooks/useApi";
-import useCustomSnackbar from "../../../../utils/useCustomSnackbar";
-import CustomChip from "../../../../utils/CustomChip";
-import { timeStampFormatter } from "../../../../utils/CommonUtilities";
-import LoadingOverlay from "../../../../utils/LoadingOverlay";
+const formatDateTime = (dateVal) => {
+  if (!dateVal) return "N/A";
+  // Formats to: "19 Jun 2026, 12:58 pm"
+  return dayjs(dateVal).format("DD MMM YYYY, hh:mm a").toLowerCase();
+};
 
-import TemplateRequestAnalytics from "../analytics/TemplateRequestAnalytics";
-import ViewRequestDialog from "../dialogs/ViewRequestDialog";
-import CompareTemplateDialog from "../dialogs/CompareTemplate/CompareTemplateDialog";
-import { styles } from "../../TemplateRequestScreenStyles";
-
-const BASE_URL_CONFIG = "/TC/template-config"
-
-export default function PendingRequestsTab() {
-  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
-  const requestType = selectedMenuItem?.requestType || "";
-  const navigate = useNavigate();
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
-
-  const [loading, setLoading] = useState(false);
-  const [dataGridLoading, setDataGridLoading] = useState(true);
-  const [rows, setRows] = useState([]);
-  const [remarks, setRemarks] = useState("");
-
-  const [viewOpen, setViewOpen] = useState(false);
-  const [viewData, setViewData] = useState(null);
-  const [compareOpen, setCompareOpen] = useState(false);
-  const [selectedRequestId, setSelectedRequestId] = useState(null);
-
-  const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null, rowId: null });
-
-  const fetchData = useCallback(async () => {
-    if (!requestType) return;
-    try {
-      const response = await callApi(BASE_URL_CONFIG + "/template-requests/pending", null, "GET");
-      const result = response?.data || response || [];
-
-      const data = result.map((row) => ({
-        ...row,
-        ...(typeof row.summary === "object" ? row.summary : {}),
-      }));
-
-      setRows(data);
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error fetching data", "error");
-    } finally {
-      setRemarks("");
-      setDataGridLoading(false);
-      setConfirmDialog({ open: false, type: null, rowId: null });
-    }
-  }, [callApi, showSnackBar, requestType]);
-
-  useEffect(() => {
-    setRows([]);
-    setRemarks("");
-    setConfirmDialog({ open: false, type: null, rowId: null });
-    fetchData();
-  }, [fetchData, navigate]);
-
-  const handleConfirm = async () => {
-    if (confirmDialog.type === "reject" && remarks.trim().length < 5) {
-      showSnackBar("Please provide minimum 5 characters remarks before rejecting", "warning");
-      return;
-    }
-    setLoading(true);
-
-    try {
-      const payload = {
-        requestId: confirmDialog.rowId,
-        status: confirmDialog.type === "reject" ? "REJECTED" : "ACCEPTED",
-        remarks: confirmDialog.type === "reject" ? remarks.trim() : "No Remarks",
-      };
-
-      const res = await callApi(BASE_URL_CONFIG + "/template-requests/process", payload, "PATCH");
-      if (res?.success || res) {
-        showSnackBar(confirmDialog.type === "accept" ? "Request Approved" : "Request Rejected", "success");
-        fetchData();
-      } else {
-        showSnackBar("Failed to process request" + res?.message, "error");
-      }
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error while processing request", "error");
-    } finally {
-      closeConfirmDialog();
-      setLoading(false);
-    }
-  };
-
-  const generateProps = (value) => {
-    let props = {};
-    switch (value) {
-      case "ADD": {
-        props = {
-          ...props,
-          icon: <AddBoxIcon />,
-          label: "Added",
-          color: "success"
-        }
-        break;
-      };
-      case "DELETE": {
-        props = {
-          ...props,
-          icon: <AutoDeleteIcon />,
-          label: "Deleted",
-          color: "error"
-        }
-        break;
-      }
-      case "STATUS": {
-        props = {
-          ...props,
-          icon: <ChangeCircleSharpIcon />,
-          label: "Status-change",
-          color: "info"
-        }
-        break;
-      }
-      case "UPDATE": {
-        props = {
-          ...props,
-          icon: <EditDocumentIcon />,
-          label: "Modified",
-          color: "info"
-        }
-        break;
-      }
-      case "ROLLBACK": {
-        props = {
-          ...props,
-          icon: <RestoreIcon />,
-          label: "Rollback",
-          color: "success"
-        }
-        break;
-      }
-    }
-    return props;
-  }
-
-  const handleViewClick = (data) => {
-    if (data.changeType === "UPDATE") {
-      setSelectedRequestId(data.id);
-      setCompareOpen(true);
-    } else {
-      setViewData(data);
-      setViewOpen(true);
-    }
-  };
-
-  const openConfirmDialog = (type, id) => setConfirmDialog({ open: true, type, rowId: id });
-  const closeConfirmDialog = () => setConfirmDialog({ open: false, type: null, rowId: null });
-
-  const allColumns = useMemo(() => [
-    { field: "reportId", headerName: "Report Id", flex: 0.5 },
-    { field: "reportName", headerName: "Report Name", flex: 1.2 },
-    {
-      field: "changeType", headerName: "Type", flex: 0.6,
-      renderCell: (p) => (
-        <CustomChip
-          {...generateProps(p.value)}
-          size="small" variant="outlined"
-        />
-      ),
-    },
-    {
-      field: "creatorId", headerName: "Creator", flex: 0.8,
-      renderCell: (p) => <CustomChip icon={<AccountCircleIcon />} size="small" color="info" label={p.value} variant="outlined" />,
-    },
-    {
-      field: "reqDate", headerName: "Date", flex: 1,
-      renderCell: (p) => <Typography variant="body1" component="span" sx={styles.requestDate}>{timeStampFormatter(p.value)}</Typography>,
-    },
-    {
-      field: "actions", headerName: "Actions", flex: 0.7,
-      renderCell: (p) => (
-        <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" style={styles.StackStyle}>
-          <Tooltip title="Approve">
-            <IconButton color="success" onClick={() => openConfirmDialog("accept", p.row.id)}><Check /></IconButton>
-          </Tooltip>
-          <Tooltip title="Reject">
-            <IconButton color="error" onClick={() => openConfirmDialog("reject", p.row.id)}><Clear /></IconButton>
-          </Tooltip>
-          <Tooltip title="View">
-            <IconButton onClick={() => handleViewClick(p.row)}><Visibility /></IconButton>
-          </Tooltip>
-        </Stack>
-      ),
-    },
-  ], []);
+const ExpandableDescription = ({ description }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const desc = description || "No description provided for this voucher configuration.";
+  const isLongDesc = desc.length > 100 || desc.split(/\r?\n/).length > 2;
 
   return (
-    <Box>
-      <TemplateRequestAnalytics data={rows} />
-      <DataGrid
-        rows={rows} columns={allColumns} loading={dataGridLoading} disableRowSelectionOnClick
-        pageSizeOptions={[5, 10, 25, 50]}
-        initialState={{ pagination: { paginationModel: { pageSize: 5 } }, sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] } }}
-        getRowId={(row) => row.id} sx={styles.dataGrid}
-        slots={{
-          noRowsOverlay: () => (
-            <Stack height="100%" alignItems="center" justifyContent="center">
-              <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-              <Typography variant="h6">No Pending Requests Found</Typography>
-              <Typography>All {selectedMenuItem.title} have been processed.</Typography>
-            </Stack>
-          ),
-        }}
-      />
-
-      <ViewRequestDialog open={viewOpen} handleClose={() => { setViewOpen(false); setViewData(null); }} data={viewData} />
-      <CompareTemplateDialog open={compareOpen} requestId={selectedRequestId} onClose={() => { setCompareOpen(false); setSelectedRequestId(null); }} />
-
-      <Dialog maxWidth="sm" fullWidth open={confirmDialog.open} onClose={closeConfirmDialog}>
-        <DialogTitle>{confirmDialog.type === "accept" ? "Confirm Approval" : "Confirm Rejection"}</DialogTitle>
-        <Divider />
-        <DialogContent>
-          <Typography mb={2}>{confirmDialog.type === "accept" ? "Are you sure you want to approve the request?" : "Please provide remarks to reject this request."}</Typography>
-          {confirmDialog.type === "reject" && (
-            <TextField
-              fullWidth label="Remarks" value={remarks} multiline rows={4}
-              onChange={(e) => setRemarks(e.target.value)} margin="dense"
-              slotProps={{ htmlInput: { maxLength: 200 } }}
-              helperText={remarks?.length !== 0 && remarks?.length < 5 ? "Enter at least 5 characters" : "Allowed 5-200 characters"}
-              error={remarks?.length !== 0 && remarks?.length < 5}
-            />
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeConfirmDialog} 
-            sx=
-          {{
-            "&:hover":
-            {
-              color:"#fff",
-            },
-            }}>Cancel</Button>
-          <Button variant="contained" onClick={handleConfirm} color={confirmDialog.type === "accept" ? "success" : "error"}>
-            {confirmDialog.type === "accept" ? "Approve" : "Reject"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-      <LoadingOverlay loading={loading} />
-    </Box>
-  );
-}
-
-import React, { useState } from "react";
-import { Box, Tabs, Tab, Paper } from "@mui/material";
-import PendingRequestsTab from "./components/tabs/PendingRequestsTab";
-import MyRequestsTab from "./components/tabs/MyRequestsTab";
-import { styles } from "./TemplateRequestScreenStyles";
-import PendingActionsIcon from '@mui/icons-material/PendingActions';
-import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
-import PendingIcon from '@mui/icons-material/Pending';
-import { useOutletContext } from "react-router-dom";
-import ReportBuilderComponent from "../reportTemplateBuilder/ReportBuilder.component";
-
-export default function TemplateRequestScreen() {
-  const [tabIndex, setTabIndex] = useState(0);
-  const [editingRequestId, setEditingRequestId] = useState(null);
-  const outletContext = useOutletContext();
-  const { setShowComponentTitle } = outletContext || {};
-  const handleTabChange = (event, newValue) => {
-    setTabIndex(newValue);
-  };
-
-  return (
-    <Box sx={styles.container}>
-      {/* <Paper sx={{ mb: 2, borderRadius: 1 }}> */}
-      {!editingRequestId &&
-        <Box sx={{
-          borderBottom: 1,
-          borderColor: "divider", width: "100%"
-        }}>
-          <Tabs
-            value={tabIndex}
-            onChange={handleTabChange}
-            indicatorColor="primary"
-            textColor="primary"
-            variant="fullWidth"
+    <Box sx={{ position: "relative" }}>
+      <Collapse in={!isLongDesc || isExpanded} collapsedSize={20}>
+        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "break-word" }}>
+          {desc}
+        </Typography>
+      </Collapse>
+      {isLongDesc && (
+        <Box sx={{ display: "flex", justifyContent: "flex-start", mt: 0.5 }}>
+          <Button
+            size="small"
+            disableRipple
+            onClick={(e) => {
+              e.stopPropagation(); // Prevents the main row from collapsing when clicked
+              setIsExpanded(!isExpanded);
+            }}
+            endIcon={isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
             sx={{
-              px: 2,
-              pt: 1,
-              width: "100%",
-              "& .MuiTabs-flexContainer": {
-                width: "100%",
-                justifyContent: "space-between",
-              }
+              p: 0,
+              minWidth: "auto",
+              textTransform: "none",
+              fontWeight: 600,
+              color: "primary.main",
+              "&:hover": { background: "transparent", textDecoration: "underline" }
             }}
           >
-            <Tab
-              icon={<PendingActionsIcon />}
-              iconPosition="start"
-              label="Pending Requests" sx={{ fontWeight: 'bold', textTransform: 'none', fontSize: '0.95rem', minHeight: 48, px: 3 }} />
-            <Tab
-              icon={<AssignmentIndIcon />}
-              iconPosition="start"
-              label="My Requests" sx={{ fontWeight: 'bold', textTransform: 'none', fontSize: '0.95rem', minHeight: 48, px: 3 }} />
-          </Tabs>
-          {/* </Paper> */}
-
-          {/* Tab Panels */}
-          {tabIndex === 0 && <PendingRequestsTab />}
-          {tabIndex === 1 && <MyRequestsTab editHandler={setEditingRequestId} />}
+            {isExpanded ? "Read Less" : "Read More"}
+          </Button>
         </Box>
-      }
-      {editingRequestId &&
-        <Box sx={{ height: "100vh", bgcolor: "background.default" }}>
-          <ReportBuilderComponent
-            setShowComponentTitle={setShowComponentTitle}
-            id={editingRequestId}
-            onBack={() => setEditingRequestId(null)}
-            forModify={true}
-          />
-        </Box>
-      }
+      )}
     </Box>
   );
-}
-export const styles = {
-  container: { p: 2 },
-
-  noRowsOverlay: {
-    fontSize: 48,
-    color: "text.secondary",
-    mb: 2,
-  },
-
-  dataGrid: {
-   
-  },
-
-  requestDate: {
-    fontSize: "0.9rem",
-  },
-
-  StackStyle: {
-    height: "100%",
-  },
-};
-import React, { useMemo } from "react";
-import { Box, Typography, Card, Stack, Chip } from "@mui/material";
-
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from "recharts";
-
-import { analyticsStyles as s } from "./TemplateRequestAnalyticsStyles";
-
-const COLORS = ["#d87093", "#6a5acd", "#20b2aa", "#0062ff", "#0d5e01"];
-
-const RequestAnalytics = ({ data = [] }) => {
-  const { total, pieData } = useMemo(() => {
-    const counts = { add: 0, modify: 0, delete: 0, statusUpdate: 0, rollback: 0 };
-
-    data.forEach((d) => {
-      if (d.changeType === "ADD") counts.add++;
-      if (d.changeType === "UPDATE") counts.modify++;
-      if (d.changeType === "DELETE") counts.delete++;
-      if (d.changeType === "STATUS") counts.statusUpdate++;
-      if (d.changeType === "ROLLBACK") counts.rollback++;
-    });
-
-    return {
-      total: data.length,
-      pieData: [
-        { name: "Add Requests", value: counts.add },
-        { name: "Modify Requests", value: counts.modify },
-        { name: "Delete Requests", value: counts.delete },
-        { name: "Status Change Requests", value: counts.statusUpdate },
-        { name: "Rollback Requests", value: counts.rollback },
-      ],
-    };
-  }, [data]);
-
-  const histogramData = useMemo(() => {
-    const map = {};
-    data.forEach((item) => {
-      if (item.reqDate) {
-        const date = new Date(item.reqDate).toLocaleDateString("en-GB");
-        map[date] = (map[date] || 0) + 1;
-      }
-    });
-
-    return Object.keys(map).map((d) => ({ date: d, count: map[d] }));
-  }, [data]);
-
-  return (
-    <Card sx={s.card}>
-      <Typography sx={s.headerTitle}>Request Analytics Overview</Typography>
-      <Typography variant="caption" sx={s.headerSubtitle}>
-        Requests comparison by type and daily frequency
-      </Typography>
-
-      {total > 0 ? (
-        <Box sx={s.wrapper}>
-          {/* PIE SECTION */}
-          <Box sx={s.pieWrapper}>
-            <Box sx={s.pieChartBox}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <defs>
-                    {COLORS.map((color, idx) => (
-                      <linearGradient
-                        key={idx}
-                        id={`gradient-${idx}`}
-                        x1="0"
-                        y1="0"
-                        x2="1"
-                        y2="1"
-                      >
-                        <stop stopColor={color} stopOpacity={0.9} offset="0%" />
-                        <stop
-                          stopColor={color}
-                          stopOpacity={0.5}
-                          offset="100%"
-                        />
-                      </linearGradient>
-                    ))}
-                  </defs>
-
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={52}
-                    outerRadius={76}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {pieData.map((_, i) => (
-                      <Cell key={i} fill={`url(#gradient-${i})`} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-
-              {/* Center Label */}
-              <Box sx={s.pieCenterBox}>
-                <Typography variant="caption" sx={s.pieCenterSubtitle}>
-                  Total Requests
-                </Typography>
-                <Typography sx={s.pieCenterValue}>{total}</Typography>
-              </Box>
-            </Box>
-
-            {/* Legend row */}
-            <Stack direction="row" spacing={1.5} sx={s.legendRow}>
-              {pieData.map((p, i) => (
-                <Stack
-                  key={p.name}
-                  direction="row"
-                  alignItems="center"
-                  spacing={0.5}
-                  sx={s.legendChipBox}
-                >
-                  <Box sx={s.legendColorDot(COLORS[i])} />
-                  <Typography variant="caption">{p.name}</Typography>
-                  <Chip
-                    label={p.value}
-                    sx={{ bgcolor: COLORS[i], color: "white" }}
-                    size="small"
-                  />
-                </Stack>
-              ))}
-            </Stack>
-          </Box>
-
-          {/* BAR SECTION */}
-          <Box sx={s.barChartArea}>
-            <ResponsiveContainer>
-              <BarChart data={histogramData}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="rgba(255,255,255,0.3)"
-                />
-                <XAxis
-                  dataKey="date"
-                  stroke="white"
-                  fontSize={10}
-                  tickMargin={4}
-                />
-                <YAxis stroke="white" fontSize={10} />
-                <Tooltip />
-                <Bar
-                  dataKey="count"
-                  fill="url(#gradient-0)"
-                  radius={[6, 6, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </Box>
-        </Box>
-      ) : (
-        <Typography>No data to display</Typography>
-      )}
-    </Card>
-  );
 };
 
-export default RequestAnalytics;
 
-export const analyticsStyles = {
-  card: {
-    p: 2,
-    mb: 3,
-  },
-
-  headerTitle: {
-    mb: 0.5,
-    fontWeight: 600,
-  },
-
-  headerSubtitle: {
-    color: "gray",
-    mb: 2,
-    display: "block",
-  },
-
-  wrapper: {
-    display: "flex",
-    flexDirection: { xs: "column", lg: "row" },
-    gap: 2,
-    alignItems: "flex-start",
-  },
-
-  pieWrapper: {
-    flex: 1,
-    position: "relative",
-    height: 220,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-  },
-
-  pieChartBox: {
-    width: "100%",
-    height: 180,
-  },
-
-  pieCenterBox: {a
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%, -90%)",
-    textAlign: "center",
-  },
-
-  pieCenterSubtitle: {
-    color: "gray",
-  },
-
-  pieCenterValue: {
-    fontWeight: "bold",
-    color: "white",
-  },
-
-  legendRow: {
-    mt: 1,
-    flexWrap: "wrap",
-    width: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  legendChipBox: {
-    bgcolor: "rgba(255,255,255,0.05)",
-    borderRadius: 2,
-    px: 1,
-    py: 0.3,
-  },
-
-  legendColorDot: (color) => ({
-    width: 10,
-    height: 10,
-    borderRadius: "50%",
-    bgcolor: color,
-  }),
-
-  barChartArea: {
-    flex: 1,
-    width: "100%",
-    height: 220,
-  },
-};
-
-export const paperStyles = {
-  position: "fixed",
-  top: 16,
-  right: 16,
-  zIndex: 3000,
-  p: 2,
-  pr: 2.5,
-  borderRadius: 1,
-  display: "flex",
-  alignItems: "center",
-  gap: 1.5,
-  width: { xs: "90%", sm: 380 },
-  backgroundColor: "rgba(255,255,255,0.7)",
-  backdropFilter: "blur(10px)",
-  cursor: "pointer",
-  boxShadow: "0 8px 20px rgba(0,0,0,0.15)",
-  transition: "all 0.25s ease",
-  "&:hover": {
-    transform: "scale(1.015)",
-    boxShadow: "0 10px 24px rgba(0,0,0,0.22)",
-  },
-};
-
-export const avatarStyles = {
-  bgcolor: "#5D3FD3",
-  width: 44,
-  height: 44,
-};
-
-export const iconStyles = {
-  fontSize: 22,
-};
-
-export const menuTitleStyles = {
-  mb: 0.2,
-};
-
-export const messageTextStyles = {
-  mb: 0.3,
-  fontSize: "0.85rem",
-  color: "text.primary",
-};
-
-export const captionTextStyles = {
-  color: "text.secondary",
-};
-
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Box, Typography, Stack, Tooltip, IconButton, Dialog, DialogContent, DialogTitle, DialogActions, Button } from "@mui/material";
-import InfoIcon from "@mui/icons-material/Info";
-import { DataGrid } from "@mui/x-data-grid";
-import { Visibility, PendingActions, CheckCircle, Cancel, CancelRounded, EditSquare, Block } from "@mui/icons-material";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import RestoreIcon from "@mui/icons-material/Restore";
-import ChangeCircleSharpIcon from "@mui/icons-material/ChangeCircleSharp";
-import { useSelector } from "react-redux";
-
-import useApi from "../../../../hooks/useApi";
-import useCustomSnackbar from "../../../../utils/useCustomSnackbar";
-import CustomChip from "../../../../utils/CustomChip";
-import { timeStampFormatter } from "../../../../utils/CommonUtilities";
-
-import TemplateRequestAnalytics from "../analytics/TemplateRequestAnalytics";
-import { styles } from "../../TemplateRequestScreenStyles";
-import CompareTemplateDialog from "../dialogs/CompareTemplate/CompareTemplateDialog";
-import ViewRequestDialog from "../dialogs/ViewRequestDialog";
-import RemarksDialog from "../../../reportTemplateManager/pages/RemarksDialog";
-import ReportBuilderComponent from "../../../reportTemplateBuilder/ReportBuilder.component";
-
-const BASE_URL_CONFIG = "/TC/template-config"
-
-export default function MyRequestsTab({ editHandler }) {
-  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
-  const requestType = selectedMenuItem?.requestType || "";
+export default function VoucherPosting() {
   const { callApi } = useApi();
   const showSnackBar = useCustomSnackbar();
+  const navigate = useNavigate();
+  const menus = useSelector((state) => state.menus);
+  const menuItems = useSelector((state) => state.menus.menus);
+  const selectedMenuItem = menus.selectedMenuItem;
+  const getStatusMenu = findMenuById(menuItems, 32);
 
-  const [dataGridLoading, setDataGridLoading] = useState(true);
-  const [rows, setRows] = useState([]);
+  const user = useSelector((state) => state.auth?.user || null);
 
-  const [viewOpen, setViewOpen] = useState(false);
-  const [viewData, setViewData] = useState(null);
-  const [openRemarks, setOpenRemarks] = useState(false);
-  const [loading, setLoading] = useState(false);
-  // const [edit, setEdit] = useState(false);
-  // const [compareOpen, setCompareOpen] = useState(false);
-  const [selectedRequestId, setSelectedRequestId] = useState(null);
-  // const [selectedTemplateId, setSelectedTemplateId] = useState(null);
+  const lockedVidRef = useRef(null);
+  // --- INTERNAL WIZARD STATE ---
+  const [activeStep, setActiveStep] = useState(0);
+  const [entryMethod, setEntryMethod] = useState("MANUAL");
 
-  const fetchData = useCallback(async () => {
-    if (!requestType) return;
-    try {
-      const response = await callApi(BASE_URL_CONFIG + "/template-requests/my-requests", null, "GET");
-      const result = response?.data || response || [];
-      const data = result.map((row) => {
-        const payloadObj = typeof row.summary == "object" && row.summary !== null ? row.summary : {};
-        //const reportMeta = payloadObj?.template?.reportMeta || {};
-        return {
-          ...row,
-          payload: payloadObj,
-          reportId: payloadObj.reportId,
-          reportName: payloadObj.reportName || payloadObj.reportName
-        };
-      });
-      setRows(data);
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error fetching my requests", "error");
-    } finally {
-      setDataGridLoading(false);
-    }
-  }, [callApi, showSnackBar, requestType]);
+  const [submittedBatchId, setSubmittedBatchId] = useState(null);
+  const [showSchedulePicker, setShowSchedulePicker] = useState(false);
+  const [isApplyingSchedule, setIsApplyingSchedule] = useState(false);
+  const [isExecutingImmediately, setIsExecutingImmediately] = useState(false);
+  const [routingChoice, setRoutingChoice] = useState(null); // 'IMMEDIATE' or 'SCHEDULE'
+  const [isFinalizing, setIsFinalizing] = useState(false);
+
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+
+
+  // --- VOUCHER TABLE STATE ---
+  const [voucherList, setVoucherList] = useState([]);
+  const [selectedVoucher, setSelectedVoucher] = useState(null);
+  const [expandedRow, setExpandedRow] = useState(null); // Tracks which row is clicked open
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
+
+  const isMounted = useRef(true);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  // --- STEPPER & WIZARD STATE ---
+  const steps = ['Select Voucher', 'Entry Method', 'Data Entry'];
+
+  const [groupedVouchers, setGroupedVouchers] = useState({});
+  const [scheduledTime, setScheduledTime] = useState(() =>
+    dayjs().add(30, 'minute').startOf('minute')
+  );
+
+
+  const [rows, setRows] = useState([createNewRow(), createNewRow()]);
+
+  const handleResetRows = () => {
+    setRows([createNewRow(), createNewRow()]);
+    setBranchInputValues({});
+    setCglInputValues({});
+    setCommonBatchRemarks("");
+    setChecked(false);
+  };
+
+  const [currencyOptions, setCurrencyOptions] = useState([]);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [commonBatchRemarks, setCommonBatchRemarks] = useState("");
+  const [postingDate, setPostingDate] = useState("");
+
+  const [checked, setChecked] = useState(false);
+
+  const [isPageLoading, setIsPageLoading] = useState(true);
+  const [isEodRunning, setIsEodRunning] = useState(false);
+
+  // Replaces anything that is NOT an alphabet, number, or space
+  const REMARKS_REPLACE_REGEX = /[^a-zA-Z0-9 ]/g;
+
+  // Replaces anything that is NOT a digit (CGL is strictly digits)
+  const CGL_REPLACE_REGEX = /[^0-9]/g;
+
+  // Replaces anything that is NOT alphanumeric (Branch is strictly alphanumeric)
+  const BRANCH_REPLACE_REGEX = /[^0-9]/g;
+
+
+  const [currentRoleId, setCurrentRoleId] = useState(null);
+
+
+  // Track input values to prevent empty dropdown tray on focus
+  const [branchInputValues, setBranchInputValues] = useState({});
+  const [cglInputValues, setCglInputValues] = useState({});
+
+  const [branchSearch, setBranchSearch] = useState({
+    loadingId: null,
+    options: [],
+  });
+  const [cglSearch, setCglSearch] = useState({
+    loadingId: null,
+    options: []
+  });
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    const handleBeforeUnload = (e) => {
+      // 1. INSTANT TAB-CLOSE RELEASE (Guaranteed to work on tab close)
+      if (lockedVidRef.current) {
+        let token = "";
+        try {
+          // Grab the token from Redux/Session
+          const auth = sessionStorage.getItem("persist:auth") || localStorage.getItem("persist:auth");
+          if (auth) {
+            const parsedAuth = JSON.parse(auth);
+            // Extract the token (adjust 'token' to whatever key your JWT is stored under)
+            token = parsedAuth.token || JSON.parse(parsedAuth.auth)?.token || ""; 
+          }
+        } catch (err) {}
 
-  const handleViewClick = (data) => {
-    // if (data.changeType === "UPDATE") {
-    //   setSelectedRequestId(data.id);
-    //   setCompareOpen(true);
-    // } else {
-    //   setViewData(data);
-    //   setViewOpen(true);
-    // }
-    setViewData(data);
-    setViewOpen(true);
+        // THE FIX: Use 'fetch' with 'keepalive: true'. 
+        // This forces the browser to send the HTTP request EVEN IF the tab is already closing!
+        fetch(`/JS/voucher/unlock/${lockedVidRef.current}`, {
+          method: 'POST',
+          headers: { 
+             'Authorization': `Bearer ${token}`,
+             'Content-Type': 'application/json'
+          },
+          keepalive: true
+        }).catch(() => {}); // Catch prevents console errors as the window dies
+      }
+
+      // 2. THE WARNING: If they are on Step 3 and haven't clicked submit
+      if (activeStep === 3 && !isFinalizing) {
+        e.preventDefault();
+        e.returnValue = "You have an unfinalized batch. If you leave, it will not be sent for approval!";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [activeStep, isFinalizing]); 
+
+
+
+  useEffect(() => {
+    // Cleanup function runs when the component is destroyed (e.g., navigating away via sidebar)
+    return () => {
+      if (lockedVidRef.current) {
+        // Fire and forget unlock on unmount
+        callApi(`/JS/voucher/unlock/${lockedVidRef.current}`, null, "POST").catch(() => { });
+      }
+    };
+  }, [callApi]);
+
+
+
+  useEffect(() => {
+    isMounted.current = true;
+    
+    // Use the Redux 'user' object instead of parsing local storage!
+    if (user) {
+      if (user.userId) setCurrentUserId(String(user.userId));
+      
+      // Look for roleId or role or ROLE_ID based on your auth structure
+      const actualRoleId = user.roleId || user.role || user.ROLE_ID;
+      if (actualRoleId) setCurrentRoleId(actualRoleId);
+    }
+    
+    return () => { isMounted.current = false; };
+  }, [user]); // Add 'user' to the dependency array
+
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        setIsPageLoading(true);
+
+          // Grab the role synchronously directly from the Redux user object
+        const actualRoleId = user?.roleId || user?.role || user?.ROLE_ID;
+
+        if (!actualRoleId) {
+          showSnackBar("User Role ID not found in session. Cannot fetch VIDs.", "error");
+          setIsPageLoading(false);
+          return; 
+        }
+
+        // Passes the guaranteed correct role ID to the backend
+        const vouchersResponse = await callApi(`/JS/voucher/active?roleId=${actualRoleId}`, null, "GET");
+
+        // Defensively extract the array whether your callApi unwraps the { data: [...] } or not
+        if (vouchersResponse && Array.isArray(vouchersResponse.data)) {
+          setVoucherList(vouchersResponse.data);
+        } else if (Array.isArray(vouchersResponse)) {
+          setVoucherList(vouchersResponse);
+        } else {
+          setVoucherList([]); // Safe fallback
+        }
+
+        // 1. FIRST: Check the EOD Status from your new API
+        const eodResponse = await callApi("/JS/voucher/eod_status", null, "GET");
+
+        // The API returns an array: [{ "eodStatus": 0 }]
+        if (eodResponse && Array.isArray(eodResponse) && eodResponse.length > 0) {
+          if (eodResponse[0].eodStatus === 1) {
+            setIsEodRunning(true);
+            setIsPageLoading(false);
+            return; // STOP loading everything else, block the screen
+          }
+        }
+
+        // 2. IF EOD IS NOT RUNNING: Continue loading the normal page data
+        const dateResponse = await callApi("/JS/voucher/current-posting-date", null, "GET");
+
+        if (dateResponse) {
+          try {
+            const [year, month, day] = dateResponse.split("-");
+            const formattedDate = `${day}-${month}-${year}`;
+            setPostingDate(formattedDate);
+          } catch (e) {
+            console.error("Could not parse date:", dateResponse, e);
+            setPostingDate(dateResponse);
+          }
+        } else {
+          showSnackBar("Failed to load posting date.", "error");
+          setPostingDate("Error");
+        }
+
+        const currencyResponse = await callApi("/JS/voucher/currencies", null, "GET");
+        const currencyData = currencyResponse?.data || currencyResponse;
+
+        if (Array.isArray(currencyData)) {
+          let uniqueCurrencies = [...new Set(currencyData)];
+
+          // Sort the array so "INR" is always at index 0, and the rest are alphabetical
+          uniqueCurrencies.sort((a, b) => {
+            if (a === "INR") return -1;
+            if (b === "INR") return 1;
+            return a.localeCompare(b);
+          });
+
+          setCurrencyOptions(uniqueCurrencies);
+        } else {
+          showSnackBar("Failed to load currencies.", "error");
+        }
+      } catch (error) {
+        console.error("Error fetching initial data:", error);
+        showSnackBar("An error occurred while loading page data.", "error");
+      } finally {
+        setIsPageLoading(false);
+      }
+    };
+
+    fetchInitialData();
+  }, [callApi, showSnackBar]);
+
+  const handleNext = async () => {
+    if (activeStep === 0) {
+      if (!selectedVoucher) {
+        showSnackBar("Please select a voucher from the list first.", "warning");
+        return;
+      }
+
+      // --- ONLY LOCK WHEN THEY CLICK "NEXT" ---
+      const vidToLock = selectedVoucher.vid || selectedVoucher.VID;
+      setIsPageLoading(true);
+
+      try {
+        await callApi(`/JS/voucher/lock/${vidToLock}`, null, "POST");
+        lockedVidRef.current = vidToLock;
+        setActiveStep((prevStep) => prevStep + 1);
+      } catch (error) {
+        // --- THIS FIXES THE DEADLOCK ---
+        const errMsg = error?.response?.data?.message || "This VID is already in use.";
+        showSnackBar(errMsg, "warning");
+
+        // 1. Clear the selection so they don't think they still have it
+        setSelectedVoucher(null);
+
+        // 2. Automatically refresh the table so the VID disappears/updates status
+        const vouchersResponse = await callApi(`/JS/voucher/active?roleId=${currentRoleId}`, null, "GET");
+        setVoucherList(vouchersResponse?.data || vouchersResponse || []);
+      } finally {
+        setIsPageLoading(false);
+      }
+    } else {
+      setActiveStep((prevStep) => prevStep + 1);
+    }
   };
 
-  const handleCancelClick = useCallback(async (remarks) => {
+  const releaseLock = useCallback(async (vid) => {
+    if (vid) {
+      try {
+        await callApi(`/JS/voucher/unlock/${vid}`, null, "POST");
+        lockedVidRef.current = null; // Clear the ref
+      } catch (e) {
+        console.error("Failed to release VID lock", e);
+      }
+    }
+  }, [callApi]);
+
+  const handleMethodSelection = (method) => {
+    setEntryMethod(method);
+    handleNext();
+  };
+
+
+
+  const handleResetWizard = () => {
+
+    // If the wizard is completely reset/cancelled, release the lock!
+    if (lockedVidRef.current) {
+      releaseLock(lockedVidRef.current);
+    }
+
+
+    setSelectedVoucher(null);
+    setEntryMethod("MANUAL");
+    setRows([createNewRow()]);
+    setCommonBatchRemarks("");
+    setScheduledTime(null);
+    setChecked(false);
+    setSubmittedBatchId(null);
+    setShowSchedulePicker(false);
+    navigate(getStatusMenu.route || selectedMenuItem.route)
+
+  };
+
+  const handleFinalizeRouting = async () => {
+    setIsFinalizing(true);
+    let formattedSchedule = null;
+
+    // Default to the manual batch ID (since it's already created in Step 2)
+    let finalDisplayBatchId = submittedBatchId;
+
     try {
-      setLoading(true);
-      await callApi(BASE_URL_CONFIG + "/template-requests/cancel",
-        {
-          requestId: selectedRequestId,
-          remarks
-        },
-        "PATCH"
-      );
-      showSnackBar("Request Cancelled Successfully.", "success");
-      fetchData();
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error while cancelling the request!", "error");
+      if (routingChoice === "SCHEDULE") {
+        if (!scheduledTime || !scheduledTime.isValid()) {
+          showSnackBar("Please select a valid time.", "warning");
+          setIsFinalizing(false);
+          return;
+        }
+
+        const today = dayjs();
+        const finalSchedule = scheduledTime
+          .year(today.year())
+          .month(today.month())
+          .date(today.date());
+
+        const minAllowed = dayjs().add(28, 'minute');
+        const maxAllowed = dayjs().endOf('day');
+
+        if (finalSchedule.isBefore(minAllowed)) {
+          showSnackBar("Schedule time must be at least 30 minutes from now.", "warning");
+          setIsFinalizing(false);
+          return;
+        }
+        if (finalSchedule.isAfter(maxAllowed)) {
+          showSnackBar("Schedule time cannot exceed today's end of day (11:59 PM).", "warning");
+          setIsFinalizing(false);
+          return;
+        }
+        formattedSchedule = finalSchedule.format('YYYY-MM-DD HH:mm:ss');
+      }
+
+      if (entryMethod === "BULK") {
+        // For Bulk, submittedBatchId actually holds the UUID. Create the batch NOW.
+        const [day, month, year] = postingDate.split("-");
+        const formattedBackendDate = `${day}/${month}/${year}`;
+
+        const response = await callApi("/JS/voucher/create-batch-from-cache", {
+          requestId: submittedBatchId,
+          postingDate: formattedBackendDate,
+          vid: selectedVoucher.vid,
+          commonBatchRemarks: "Voucher created successfully",
+          scheduledTime: formattedSchedule
+        }, "POST");
+
+        // SAFELY EXTRACT THE REAL ORACLE BATCH ID
+        finalDisplayBatchId = response?.[0]?.batchId || response?.batchId || (typeof response === 'string' ? response : "N/A");
+
+      } else {
+        // For Manual, the batch is already created, just update the schedule.
+        await callApi("/JS/voucher/update-schedule", {
+          batchId: submittedBatchId,
+          scheduledTime: formattedSchedule
+        }, "POST");
+      }
+
+      // SHOWS THE OFFICIAL SUBMISSION MESSAGE WITH THE CORRECT BATCH ID
+      showSnackBar(`Success! Your batch ${finalDisplayBatchId} is initialized and processing.`, "success");
+      handleResetWizard();
+
+    } catch (error) {
+      const serverMsg = error?.response?.data?.message
+        || error?.response?.data?.error
+        || (typeof error?.response?.data === 'string' ? error.response.data : null)
+        || error?.message;
+
+      const errMsg = serverMsg || "Unable to finalize execution routing. Please try again.";
+      showSnackBar(errMsg, "error");
     } finally {
-      setOpenRemarks(false);
-      setLoading(false);
-    }
-  }, [selectedRequestId, callApi, showSnackBar]);
-
-  // const handleEditClick = (row) => {
-  //   setSelectedRequestId(row?.id)
-  //   setSelectedTemplateId(row?.summary.templateId)
-  //   setEdit(true);
-  // }
-
-  // const handleRequestUpdate = async (requestId, payload) => {
-  //   try {
-  //     setLoading(true);
-  //     await callApi(BASE_URL_CONFIG + "/template-requests/modify",
-  //       {
-  //         requestId: selectedRequestId,
-  //         payload: payload,
-  //       },
-  //       "PATCH"
-  //     );
-  //     showSnackBar("Request modified successfully.", "success");
-  //   } catch (err) {
-  //     console.error(err);
-  //     showSnackBar("Error while modifying the request!", "error");
-  //   } finally {
-  //     setOpenRemarks(false);
-  //     setLoading(false);
-  //   }
-  // }
-
-  const getStatusDetails = (status) => {
-    switch (status) {
-      case "ACCEPTED": return { color: "success", icon: <CheckCircle />, label: "Approved" };
-      case "REJECTED": return { color: "error", icon: <Block />, label: "Rejected" };
-      case "CANCELLED": return { color: "error", icon: <Cancel />, label: "Cancelled" };
-      default: return { color: "warning", icon: <PendingActions />, label: "Pending" };
+      setIsFinalizing(false);
     }
   };
 
-  const generateProps = (value) => {
-    let props = {};
-    switch (value) {
-      case "ADD": {
-        props = {
-          ...props,
-          icon: <AddBoxIcon />,
-          label: "Added",
-          color: "success"
+
+
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const handleRowExpand = (id) => {
+    setExpandedRow(expandedRow === id ? null : id);
+  };
+  const handleBack = () => {
+    // If returning from Step 1 back to the Voucher Selection table, release the lock!
+    if (activeStep === 1 && lockedVidRef.current) {
+      releaseLock(lockedVidRef.current);
+    }
+    setActiveStep((prevStep) => prevStep - 1);
+  };
+
+  const filterRemarks = (val) => {
+    let filtered = val.replace(/[^a-zA-Z0-9 ]/g, ""); // Allow only alphanumeric and spaces
+    filtered = filtered.replace(/^\s+/, ""); // Remove leading spaces
+    filtered = filtered.replace(/\s{2,}/g, " "); // Replace multiple consecutive spaces with a single space
+    return filtered;
+  };
+
+
+  // 1. Common remarks can be empty. If filled, must be 2-30.
+  const isCommonRemarksValid = (val) => val.trim().length === 0 || (val.trim().length >= 2 && val.trim().length <= 30);
+
+  // 2. Row remarks are STRICTLY compulsory (2-30 chars).
+  const isRowRemarksValid = (val) => val.trim().length >= 2 && val.trim().length <= 30;
+ const filterAndWarn = (val) => {
+    let filtered = val;
+    let hasError = false;
+    let msg = "Only alphanumeric characters and single spaces are allowed.";
+
+    // 1. Corrected Regex: Allows ONLY Alphanumeric and Spaces
+    const invalidCharRegex = /[^a-zA-Z0-9 ]/g;
+
+    if (invalidCharRegex.test(filtered)) {
+      hasError = true;
+      filtered = filtered.replace(invalidCharRegex, "");
+    }
+
+    // 2. Strip leading space and collapse double spaces
+    const beforeSpaceTrim = filtered;
+    filtered = filtered.replace(/^\s+/, "").replace(/\s{2,}/g, " ");
+
+    if (beforeSpaceTrim !== filtered && !hasError) {
+      hasError = true;
+      msg = "Remark should not start with a space or contain consecutive spaces.";
+    }
+
+    if (hasError) {
+      showSnackBar(msg, "warning");
+    }
+
+    return filtered;
+  };
+
+  // Both Common Batch Remarks and Row Remarks are now strictly compulsory (2-30 chars)
+  const isRemarksValid = (val) => val.trim().length >= 2 && val.trim().length <= 30;
+  const handleAddRow = () => {
+    const lastRow = rows[rows.length - 1];
+
+    if (
+      !lastRow.branch ||
+      !lastRow.currency ||
+      !lastRow.cgl ||
+      !lastRow.amount ||
+      !lastRow.txnType ||
+      !isRowRemarksValid(lastRow.remarks)
+    ) {
+      showSnackBar(
+        "Please fill all required fields (*) in the current row before adding a new one.",
+        "warning"
+      );
+      return;
+    }
+
+    const newRow = {
+      ...createNewRow(),
+      remarks: checked ? commonBatchRemarks : "",
+    };
+    setRows([...rows, newRow]);
+  };
+
+  const handleRemarksSync = (event) => {
+    const isChecked = event.target.checked;
+    setChecked(isChecked);
+
+    if (isChecked) {
+      const newRows = rows.map((row) => ({
+        ...row,
+        remarks: commonBatchRemarks,
+      }));
+      setRows(newRows);
+    } else {
+      const newRows = rows.map((row) => ({
+        ...row,
+        remarks: "",
+      }));
+      setRows(newRows);
+    }
+  };
+
+  const handleDeleteRow = (id) => {
+    if (rows.length > 2) {
+      setRows(rows.filter((row) => row.id !== id));
+      // Cleanup input tracking
+      const newBranchInputs = { ...branchInputValues };
+      delete newBranchInputs[id];
+      setBranchInputValues(newBranchInputs);
+      const newCglInputs = { ...cglInputValues };
+      delete newCglInputs[id];
+      setCglInputValues(newCglInputs);
+    } else {
+      showSnackBar("A minimum of two rows is required.", "warning");
+    }
+  };
+
+  const handleRowChange = (id, field, value) => {
+    setRows((prevRows) =>
+      prevRows.map((row) => {
+        if (row.id === id) {
+          return { ...row, [field]: value };
         }
-        break;
-      };
-      case "DELETE": {
-        props = {
-          ...props,
-          icon: <AutoDeleteIcon />,
-          label: "Deleted",
-          color: "error"
-        }
-        break;
+        return row;
+      })
+    );
+  };
+
+  const searchBranches = useCallback(
+    debounce(async (query, rowId) => {
+      if (!query || query.trim().length < 3) {
+        setBranchSearch({ loadingId: null, options: [] });
+        return;
       }
-      case "STATUS": {
-        props = {
-          ...props,
-          icon: <ChangeCircleSharpIcon />,
-          label: "Status-change",
-          color: "info"
-        }
-        break;
+      setBranchSearch((prev) => ({ ...prev, loadingId: rowId }));
+      try {
+        const response = await callApi(
+          `/JS/branches-journal/search?query=${encodeURIComponent(query)}`,
+          null,
+          "GET"
+        );
+
+        setBranchSearch({ loadingId: null, options: response || [] });
+      } catch (error) {
+        showSnackBar("Branch search failed.", "error");
+        setBranchSearch({ loadingId: null, options: [] });
       }
-      case "UPDATE": {
-        props = {
-          ...props,
-          icon: <EditDocumentIcon />,
-          label: "Modified",
-          color: "info"
-        }
-        break;
+    }, 300),
+    [callApi, showSnackBar]
+  );
+
+  const searchCgls = useCallback(
+    debounce(async (query, rowId) => {
+      // Changed from === 0 to < 3 to enforce the minimum character limit
+      if (!query || query.trim().length < 3) {
+        setCglSearch({ loadingId: null, options: [] });
+        return;
+      }
+      setCglSearch((prev) => ({ ...prev, loadingId: rowId }));
+
+      try {
+        const response = await callApi(
+          `/JS/cgl-journal/search?query=${encodeURIComponent(query)}`,
+          null,
+          "GET"
+        );
+
+        setCglSearch({ loadingId: null, options: response || [] });
+      } catch (error) {
+        showSnackBar("CGL search failed.", "error");
+        setCglSearch({ loadingId: null, options: [] });
+      }
+    }, 300),
+    [callApi, showSnackBar]
+  );
+
+
+  const isFormReadyToSubmit = rows.length >= 2 && rows.every(
+    (row) =>
+      row.branch &&
+      row.currency &&
+      row.cgl &&
+      row.amount &&
+      parseFloat(row.amount) > 0 &&
+      row.txnType &&
+      isRowRemarksValid(row.remarks)
+  );
+
+  const handleValidateClick = async () => {
+    if (!isCommonRemarksValid(commonBatchRemarks)) {
+      showSnackBar("Common Batch Remarks must be 2-30 characters if provided.", "error");
+      return;
+    }
+
+    const branchCurrencyTotals = new Map();
+    const branchEntryCheck = new Map();
+
+    for (const [index, row] of rows.entries()) {
+      if (
+        !row.branch || !row.currency || !row.cgl || !row.amount ||
+        parseFloat(row.amount) === 0 || !row.txnType || !isRowRemarksValid(row.remarks)
+      ) {
+        showSnackBar(
+          `Row ${index + 1} is incomplete or has a zero amount. Amount must be greater than 0, and remarks must be 2-30 characters.`,
+          "error"
+        );
+        return;
       }
 
-      case "ROLLBACK": {
-        props = {
-          ...props,
-          icon: <RestoreIcon />,
-          label: "Rollback",
-          color: "success"
-        }
-        break;
+      const branchCode = row.branch.code;
+      const currency = row.currency;
+
+      const cglNumber = String(row.cgl.cglNumber);
+      const isMemo = cglNumber.startsWith("5");
+      const type = isMemo ? "MEMO" : "NORMAL";
+
+      const [integerPart = "0", fractionalPart = "0"] = (row.amount || "0").split(".");
+      const fractionalPadded = fractionalPart.substring(0, 4).padEnd(4, "0");
+      const amountAsBigInt = BigInt(integerPart + fractionalPadded);
+
+      const compositeKey = `${branchCode}-${currency}-${type}`;
+
+      if (!branchCurrencyTotals.has(compositeKey)) {
+        branchCurrencyTotals.set(compositeKey, { totalDebit: 0n, totalCredit: 0n });
+      }
+      const currencyTotals = branchCurrencyTotals.get(compositeKey);
+
+      if (row.txnType === "Debit") {
+        currencyTotals.totalDebit += amountAsBigInt;
+      } else if (row.txnType === "Credit") {
+
+        currencyTotals.totalCredit += amountAsBigInt;
+      }
+
+      if (!branchEntryCheck.has(branchCode)) {
+        branchEntryCheck.set(branchCode, { hasDebit: false, hasCredit: false });
+      }
+      const branchCheck = branchEntryCheck.get(branchCode);
+
+      if (row.txnType === "Debit" && amountAsBigInt > 0n) branchCheck.hasDebit = true;
+      else if (row.txnType === "Credit" && amountAsBigInt > 0n) branchCheck.hasCredit = true;
+    }
+
+    for (const [branchCode, totals] of branchEntryCheck.entries()) {
+      const { hasDebit, hasCredit } = totals;
+      if (!hasDebit || !hasCredit) {
+        showSnackBar("Branch must have at least one Debit and one Credit entry.", "error");
+        return;
       }
     }
-    return props;
+
+    for (const [compositeKey, totals] of branchCurrencyTotals.entries()) {
+      const { totalDebit, totalCredit } = totals;
+      if (totalDebit !== totalCredit) {
+        showSnackBar("Branch and Currency Debit/Credit Mismatch for Real/Memo CGL.", "error");
+        return;
+      }
+    }
+
+    // --- DIRECT SUBMIT DOWNSTREAM PROCESSING (MODAL BYPASSED) ---
+    setIsSubmitting(true);
+
+    const [day, month, year] = postingDate.split("-");
+    const formattedBackendDate = `${day}/${month}/${year}`;
+    const rowPayloads = [];
+
+    for (const row of rows) {
+      const finalAmount = row.txnType === "Credit" ? "-" + row.amount : row.amount;
+      rowPayloads.push({
+        branch: row.branch.code,
+        currency: row.currency,
+        cgl: row.cgl.cglNumber,
+        amount: finalAmount,
+        txnType: row.txnType,
+        productType: row.productCode,
+        remarks: row.remarks,
+        postingDate: formattedBackendDate
+      });
+    }
+
+    const finalPayload = {
+      vid: selectedVoucher?.vid,
+      scheduledTime: null,
+      commonBatchRemarks: commonBatchRemarks ? commonBatchRemarks.trim() : "Voucher created successfully",
+      rows: rowPayloads,
+    };
+
+    try {
+      const response = await callApi("/JS/voucher/create-batch", finalPayload, "POST");
+      const newBatchId = response?.[0]?.batchId || response?.batchId || "N/A";
+      setSubmittedBatchId(newBatchId);
+
+
+      setRows([createNewRow()]);
+      setCommonBatchRemarks("");
+      setChecked(false);
+      setBranchInputValues({});
+      setCglInputValues({});
+      setActiveStep(3); // Route forward automatically to Step 3
+    } catch (error) {
+      let errMsg = "Unable to submit the voucher request. Please try again.";
+      if (error?.response?.data && typeof error.response.data === 'string' && !error.response.data.startsWith("<")) {
+        errMsg = error.response.data;
+      } else if (error?.response?.data?.message) {
+        errMsg = error.response.data.message;
+      }
+      showSnackBar(errMsg, "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const SelectedVoucherCard = () => {
+    const [isDescExpanded, setIsDescExpanded] = useState(false);
+
+    if (!selectedVoucher) return null;
+
+    const desc = selectedVoucher.description || "No description provided.";
+    const isLongDesc = desc.length > 100 || desc.split(/\r?\n/).length > 2;
+
+    return (
+      <Paper elevation={0} sx={jpStyles.svPaper}>
+
+        <Box sx={jpStyles.svHeaderBox}>
+          <Typography variant="subtitle1" fontWeight="bold" color="text.primary">
+            Voucher Request Details
+          </Typography>
+        </Box>
+
+        <Grid container spacing={2}>
+          <Grid item size={12} sx={{ mb: 2 }}>
+            <Stack direction="row" spacing={8}>
+              <Box>
+                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>VID</Typography>
+                <Typography variant="body1" fontWeight="bold" color="primary">{selectedVoucher.vid}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Category</Typography>
+                <Typography variant="body1" fontWeight="500">{selectedVoucher.categoryName || "General"}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Issue Categories</Typography>
+                <Box>
+                  {selectedVoucher.issueCategories ? selectedVoucher.issueCategories.split(",").map((cat, index) => (
+                    <Chip key={index} label={cat.trim()} size="small" sx={jpStyles.issueCategoryChip} />
+                  )) : <Typography variant="body2" color="text.secondary">N/A</Typography>}
+                </Box>
+              </Box>
+            </Stack>
+          </Grid>
+          <Grid item size={12}>
+            <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+              Description
+            </Typography>
+
+            <Box sx={{ position: "relative" }}>
+              {/* collapsedSize={44} perfectly frames about 2 lines of body2 text */}
+              <Collapse in={!isLongDesc || isDescExpanded} collapsedSize={20}>
+                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "break-word", lineHeight: 1.6, fontWeight: 400, color: "text.primary" }}>
+                  {desc}
+                </Typography>
+              </Collapse>
+
+
+              {isLongDesc && (
+                <Box sx={{ display: "flex", justifyContent: "flex-start", mt: 0.5 }}>
+                  <Button
+                    size="small"
+                    disableRipple
+                    onClick={() => setIsDescExpanded(!isDescExpanded)}
+                    endIcon={isDescExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                    sx={{
+                      p: 0,
+                      minWidth: "auto",
+                      textTransform: "none",
+                      fontWeight: 600,
+                      color: "primary.main",
+                      "&:hover": { background: "transparent", textDecoration: "underline" }
+                    }}
+                  >
+                    {isDescExpanded ? "Read Less" : "Read More"}
+                  </Button>
+                </Box>
+              )}
+            </Box>
+          </Grid>
+        </Grid>
+      </Paper>
+    );
+  };
+
+  if (isPageLoading) {
+    return (
+      <Box sx={jpStyles.loadingBox}>
+        <CircularProgress size={60} />
+      </Box>
+    );
+  }
+  if (isEodRunning) {
+    return (
+      <Box sx={jpStyles.eodBox}>
+        <Paper elevation={4} sx={jpStyles.eodPaper}>
+          <Typography variant="h4" color="error" fontWeight="bold" gutterBottom>EOD is Currently Running</Typography>
+          <Typography variant="h6" color="text.secondary" sx={{ mt: 2 }}>Voucher Entry is temporarily disabled.</Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>Please wait until the End of Day process completes to post new transactions.</Typography>
+        </Paper>
+      </Box>
+    );
   }
 
-  const allColumns = useMemo(() => [
-    { field: "reportId", headerName: "Report Id", flex: 0.5 },
-    { field: "reportName", headerName: "Report Name", flex: 1.2 },
-    {
-      field: "changeType", headerName: "Request Type", flex: 0.6,
-      renderCell: (p) => (
-        <CustomChip
-          // icon={p.value === "ADD" ? <AddBoxIcon /> : p.value === "DELETE" ? <AutoDeleteIcon /> : <EditDocumentIcon />}
-          // label={p.value === "ADD" ? "Added" : p.value === "DELETE" ? "Deleted" : "Modified"}
-          // color={p.value === "ADD" ? "success" : p.value === "DELETE" ? "error" : "info"}
-          {...generateProps(p.value)}
-          size="small" variant="outlined"
-        />
-      ),
-    },
-    {
-      field: "reqStatus", headerName: "Status", flex: 0.8,
-      renderCell: (p) => {
-        const { color, icon, label } = getStatusDetails(p.value);
-        return <CustomChip icon={icon} size="small" color={color} label={label} variant="outlined" />;
-      },
-    },
-    {
-      field: "reqDate", headerName: "Submitted Date", flex: 1,
-      renderCell: (p) => <Typography variant="body2">{timeStampFormatter(p.value)}</Typography>,
-    },
-    {
-      field: "actions", headerName: "Actions", flex: 0.5,
-      renderCell: (p) => (
-        <Stack direction="row" spacing={1} alignItems="center" justifyContent="flex-start">
-          <Tooltip title="View Request Details">
-            <IconButton color="primary" onClick={() => handleViewClick(p.row)}>
-              <Visibility />
-            </IconButton>
-            {/* <IconButton color="primary" onClick={() => handleViewClick(p.row)}>
-              <Visibility />
-            </IconButton> */}
-          </Tooltip>
-          {p.row.reqStatus === "PENDING" &&
-            <Tooltip title="Cancel Request">
-              <IconButton color="primary" onClick={() => { setOpenRemarks(true), setSelectedRequestId(p.row.id) }}>
-                <CancelRounded />
-              </IconButton>
-            </Tooltip>
-          }
-          {((p.row.changeType === "ADD" || p.row.changeType === "UPDATE") && (p.row.reqStatus === "PENDING" || p.row.reqStatus === "REJECTED")) &&
-            <Tooltip title="Modify Request">
-              {/* <IconButton color="primary" onClick={() => handleEditClick(p.row)}> */}
-              <IconButton color="primary" onClick={() => editHandler(p.row.id)}>
-                <EditSquare />
-              </IconButton>
-            </Tooltip>
-          }
-        </Stack>
-      ),
-    },
-  ], []);
+
+
 
   return (
-    <>
-      <Box>
-        <TemplateRequestAnalytics data={rows} />
-        <DataGrid
-          rows={rows} columns={allColumns} loading={dataGridLoading} disableRowSelectionOnClick
-          pageSizeOptions={[5, 10, 25, 50]}
-          initialState={{ pagination: { paginationModel: { pageSize: 5 } }, sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] } }}
-          getRowId={(row) => row.id} sx={styles.dataGrid}
-          slots={{
-            noRowsOverlay: () => (
-              <Stack height="100%" alignItems="center" justifyContent="center">
-                <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
-                <Typography variant="h6">No Requests Found</Typography>
-                <Typography variant="body2" color="text.secondary">You have not created any requests yet.</Typography>
-              </Stack>
-            ),
-          }}
-        />
+    <Paper sx={jpStyles.mainPaper}>
 
-        <ViewRequestDialog open={viewOpen} handleClose={() => { setViewOpen(false); setViewData(null); }} data={viewData} />
-        <RemarksDialog
-          open={openRemarks}
-          onClose={() => setOpenRemarks(false)}
-          onConfirm={handleCancelClick}
-          saving={loading}
-          title={"Cancel Request"}
-          submitLabel={"Cancel Request"}
-        />
-        {/* <CompareTemplateDialog open={compareOpen} requestId={selectedRequestId} onClose={() => { setCompareOpen(false); setSelectedRequestId(null); }} /> */}
-      </Box>
-      {/* <Dialog
-        open={edit}
-        onClose={() => { setEdit(false), setSelectedRequestId(null) }}
-        fullWidth
-        maxWidth="xl">
-        <DialogContent>
-          <ReportBuilderComponent
-            templateId={selectedTemplateId}
-            onBack={() => { setEdit(false), setSelectedRequestId(null) }}
-            modify={true}
+      {/* INTERNAL STEP 0: VOUCHER SELECTION TABLE */}
+      {activeStep === 0 && (
+        <Box>
+          <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.main" sx={jpStyles.stepHeader}>
+            Select Voucher Id (VID)
+          </Typography>
+
+
+          <Paper elevation={2} sx={jpStyles.tablePaper}>
+            <TableContainer sx={jpStyles.tableContainer}>
+              <Table size="medium" sx={jpStyles.table}>
+                <TableHead sx={jpStyles.tableHead}>
+                  <TableRow>
+                    <TableCell padding="checkbox" sx={{ width: '5%' }}></TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '20%' }}>VID</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Category</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Created By</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Created At</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {voucherList
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((row) => {
+                      // FIX: Using clean camelCase keys exactly as mapped by the backend RowMapper
+                      const rowId = row.id;
+                      const rowVid = row.vid;
+                      const rowCategory = row.categoryName || "General";
+                      const rowCreatorName = row.createdByName || "System";
+                      const rowCreatorId = row.createdBy || "N/A";
+                      const rowCreatedAt = row.createdAt;
+                      const rowDescription = row.description || "No description provided for this voucher configuration.";
+                      const rowIssueCategories = row.issueCategories;
+
+                      const isSelected = selectedVoucher?.id === rowId;
+                      const isExpanded = expandedRow === rowId;
+                      return (
+                        <React.Fragment key={row.id}>
+                          {/* MAIN ROW */}
+                          <TableRow
+                            hover
+                            onClick={() => {
+                              setSelectedVoucher(row);
+                              handleRowExpand(row.id);
+                            }}
+                            sx={{
+                              cursor: 'pointer',
+                              backgroundColor: isSelected ? "action.selected" : "inherit",
+                              '& > *': { borderBottom: isExpanded ? 'none' : '1px solid rgba(224, 224, 224, 1)' }
+                            }}
+                          >
+                            <TableCell padding="checkbox">
+                              <Radio checked={isSelected} color="primary" />
+                            </TableCell>
+                            <TableCell sx={jpStyles.ellipsisCell}>
+                              {row.vid}
+                            </TableCell>
+                            <TableCell sx={jpStyles.ellipsisCell}>
+                              {row.categoryName || "General"}
+                            </TableCell>
+                            <TableCell sx={jpStyles.ellipsisCell}>
+                              {row.createdByName} <Typography component="span" variant="caption" color="text.secondary">({row.createdBy})</Typography>
+                            </TableCell>
+                            <TableCell sx={jpStyles.ellipsisCell}>
+                              {formatDateTime(row.createdAt)}
+                            </TableCell>                          </TableRow>
+
+                          <TableRow sx={{ backgroundColor: "background.default" }}>
+                            {/* colSpan is now 5 to match the new column count */}
+                            <TableCell style={{ paddingBottom: 0, paddingTop: 0, borderBottom: isExpanded ? '1px solid rgba(224, 224, 224, 1)' : 'none' }} colSpan={5}>
+                              <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                                <Grid container sx={jpStyles.collapseGrid}>
+                                  <Grid item size={{ lg: 1.3, md: 1.5 }}>
+                                    <Typography variant="body2" color="text.secondary">
+                                      <strong>Description:</strong>
+                                    </Typography>
+                                  </Grid>
+                                  <Grid item size={{ lg: 10.7, md: 10.5 }}>
+                                    <ExpandableDescription description={row.description} />
+                                  </Grid>
+                                  <Grid item size={{ lg: 1.3, md: 1.5 }}>
+                                    <Typography variant="body2" color="text.secondary">
+                                      <strong> Issue Categories: </strong>
+                                    </Typography>
+                                  </Grid>
+                                  <Grid item size={{ lg: 10.7, md: 10.5 }}>
+                                    <Box>
+                                      {row.issueCategories?.split(",")
+                                        .map((cat) => (
+                                          <Chip label={cat.trim()} sx={jpStyles.issueCategoryChip} />
+                                        ))}
+                                    </Box>
+                                  </Grid>
+                                  {/* </Box> */}
+                                </Grid>
+                              </Collapse>
+                            </TableCell>
+                          </TableRow>
+                        </React.Fragment>
+                      );
+                    })}
+                  {voucherList.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                        No configurations found.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <TablePagination
+              rowsPerPageOptions={[5, 10, 25]}
+              component="div"
+              count={voucherList.length}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={handleChangePage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+            />
+          </Paper>
+
+          <Box sx={jpStyles.buttonRightAlign}>
+            <Button variant="contained" onClick={handleNext} disabled={!selectedVoucher} endIcon={<ArrowForwardIcon />} sx={{ px: 4 }}>
+              Next
+            </Button>
+          </Box>
+        </Box>
+      )
+      }
+
+      {/* INTERNAL STEP 1: CHOOSE ENTRY METHOD */}
+      {
+        activeStep === 1 && (
+          <Box sx={jpStyles.methodContainer}>
+
+            <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.main" sx={{ mb: 2, textAlign: 'left' }}>
+              Select Posting Method
+            </Typography>
+
+            <Typography variant="h5" align="center" fontWeight="bold" gutterBottom sx={{ mt: 2 }}>
+              How would you like to create vouchers ?
+            </Typography>
+            <Typography variant="body1" align="center" color="text.secondary" sx={{ mb: 6 }}>
+              Selected VID : <b>{selectedVoucher?.vid}</b>
+            </Typography>
+            {/* Using Flexbox with fixed widths instead of dynamic Grids for perfect symmetry */}
+            <Box sx={jpStyles.cardsWrapper}>
+
+              {/* MANUAL ENTRY CARD */}
+              <Card elevation={2} sx={jpStyles.methodCard}>
+                <CardActionArea onClick={() => handleMethodSelection("MANUAL")} sx={jpStyles.methodCardArea}>
+                  <EditNoteIcon color="primary" sx={jpStyles.manualIcon} />
+                  <Typography variant="h6" fontWeight="bold" gutterBottom>Manual Posting</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Manual Voucher Entry
+                  </Typography>
+                </CardActionArea>
+              </Card>
+
+              {/* EXCEL UPLOAD CARD */}
+              <Card elevation={2} sx={jpStyles.methodCard}>
+                <CardActionArea onClick={() => handleMethodSelection("BULK")} sx={jpStyles.methodCardArea}>
+                  {/* Standard Excel Green Hex Code */}
+                  <TableChartIcon sx={jpStyles.excelIcon} />
+                  <Typography variant="h6" fontWeight="bold" gutterBottom>Excel Upload</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Upload an Excel file (.xlsx or .xls) to process hundreds of voucher entries instantly.
+                  </Typography>
+                </CardActionArea>
+              </Card>
+
+            </Box>
+
+            <Box sx={jpStyles.backButtonBox}>
+              <Button variant="outlined" onClick={handleBack} startIcon={<ArrowBackIcon />}>
+                Previous
+              </Button>
+            </Box>
+          </Box>
+        )
+      }
+
+      {/* INTERNAL STEP 2: DATA ENTRY GRID */}
+      {
+        activeStep === 2 && entryMethod === "MANUAL" && (
+          <Box>
+
+            {/* 1. SCREEN TITLE MOVED HERE (Outside both cards) */}
+            <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.main" sx={{ mb: 2 }}>
+              Voucher Entry
+            </Typography>
+            {/* Replaces the old basic header with the professional detailed card */}
+            <SelectedVoucherCard onBackClick={handleBack} showBackButton={true} />
+
+            <Box component={Paper} elevation={3} sx={jpStyles.dataEntryPaper}>
+
+              {/* // common batch */}
+              {/* ... EXISTING GRID START ... */}
+              <Grid item xs={12} md={12} sx={jpStyles.gridContainer}>
+                <Tooltip title="" placement="top-start">
+                  <TextField
+                    label="Common Batch Remarks"
+                    value={commonBatchRemarks}
+                    onChange={(e) => {
+                      const newValue = filterAndWarn(e.target.value); // Removed "alphanumeric_space"
+                      if (newValue.length <= 30) {
+                        setCommonBatchRemarks(newValue);
+                        if (checked) {
+                          setRows(rows.map((row) => ({ ...row, remarks: newValue })));
+                        }
+                      }
+                    }}
+                    fullWidth multiline rows={1} inputProps={{ maxLength: 30 }}
+       error={commonBatchRemarks.length > 0 && !isCommonRemarksValid(commonBatchRemarks)}
+                    helperText="Allowed 2-30 chars: Alphanumeric and single spaces only"
+                  />
+                </Tooltip>
+
+                <Box sx={jpStyles.checkboxBox}>
+                  <FormControlLabel
+                    control={<Checkbox checked={checked} onChange={handleRemarksSync} color="primary" disabled={commonBatchRemarks.length > 0 && !isRemarksValid(commonBatchRemarks)} />}
+                    label="Apply this remark to all below transactions"
+                  />
+                </Box>
+              </Grid>
+
+              <Box sx={{ mt: 2 }}>
+                {rows.map((row, index) => {
+                  // Universal Regex: Up to 16 digits, up to 4 decimal places
+                  const amountRegex = /^\d{0,16}(\.\d{0,4})?$/;
+
+                  return (
+                    <React.Fragment key={row.id}>
+                      <Grid container spacing={2} alignItems="flex-start">
+
+                        {/* Branch */}
+                        <Grid item size={{ xl: 1.5, lg: 2 }}>
+                          <Autocomplete
+                            autoHighlight
+                            popupIcon={null}
+                            options={
+                              (branchInputValues[row.id] || "").length < 3
+                                ? []
+                                : (row.branch && !branchSearch.options.some((o) => o.code === row.branch.code)
+                                  ? [row.branch, ...branchSearch.options]
+                                  : branchSearch.options)
+                            }
+                            // SHOW CODE AND DESCRIPTION INSIDE THE TEXT BOX
+                            getOptionLabel={(option) => option && option.code ? `${option.code} - ${option.name}` : ""}
+                            // SHOW ELLIPSIS IN DROPDOWN
+                            renderOption={(props, option) => (
+                              <li {...props} key={option.code}>
+                                <Typography noWrap sx={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                  {option.code} - {option.name}
+                                </Typography>
+                              </li>
+                            )}
+                            slotProps={{
+                              popper: {
+                                placement: 'bottom-start',
+                                modifiers: [{ name: 'flip', enabled: false }, { name: 'preventOverflow', enabled: false }],
+                              },
+                            }}
+                            value={row.branch || null}
+                            onChange={(event, newValue) => handleRowChange(row.id, "branch", newValue)}
+                            inputValue={branchInputValues[row.id] || ""}
+                            onInputChange={(event, newInputValue, reason) => {
+                              if (reason === 'input') {
+                                const cleanInput = newInputValue.replace(BRANCH_REPLACE_REGEX, "").substring(0, 5);
+                                setBranchInputValues(prev => ({ ...prev, [row.id]: cleanInput }));
+
+                                let queryForSearch = cleanInput;
+                                if (cleanInput.length > 0 && cleanInput.length <= 2) {
+                                  queryForSearch = cleanInput.padStart(5, '0');
+                                }
+
+                                searchBranches(queryForSearch, row.id);
+                              } else {
+                                setBranchInputValues(prev => ({ ...prev, [row.id]: newInputValue }));
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Tab' && !row.branch && branchSearch.options?.length > 0) {
+                                handleRowChange(row.id, "branch", branchSearch.options[0]);
+                              }
+                            }}
+                            onBlur={() => {
+                              const typedValue = branchInputValues[row.id];
+                              if (!row.branch && typedValue && typedValue.length === 5) {
+                                const match = branchSearch.options.find(opt => opt.code === typedValue);
+                                if (match) {
+                                  handleRowChange(row.id, "branch", match);
+                                }
+                              }
+                            }}
+                            loading={branchSearch.loadingId === row.id}
+                            filterOptions={(x) => x}
+                            isOptionEqualToValue={(option, value) => option?.code === value?.code}
+                            noOptionsText={
+                              (branchInputValues[row.id] || "").length < 3
+                                ? "Enter 3 Digits to Search"
+                                : "No branches found"
+                            }
+                            renderInput={(params) => (
+                              <Tooltip title={row.branch ? `${row.branch.code} - ${row.branch.name}` : "Search by Branch Code"} placement="top-start">
+                                <TextField
+                                  {...params}
+                                  label="Branch *"
+                                  placeholder="Select Branch"
+                                  InputLabelProps={{ shrink: true }}
+                                  // Prevents text from breaking out of the box
+                                  inputProps={{ ...params.inputProps, style: { textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden' } }}
+                                  InputProps={{
+                                    ...params.InputProps,
+                                    endAdornment: (
+                                      <Box>
+                                        {branchSearch.loadingId === row.id ? (<CircularProgress color="inherit" size={20} />) : null}
+                                        {params.InputProps.endAdornment}
+                                      </Box>
+                                    )
+                                  }}
+                                  onPaste={(e) => { e.preventDefault(); showSnackBar("Pasting is not allowed here.", "warning"); }}
+                                  onCopy={(e) => e.preventDefault()}
+                                />
+                              </Tooltip>
+                            )}
+                          />
+                        </Grid>
+                        {/* Currency */}
+                        <Grid item size={{ xl: 1.5, lg: 2 }}>
+                          <Tooltip title=""  >
+                            <TextField
+                              select
+                              label="Currency *"
+                              value={row.currency || ""}
+                              fullWidth
+                              InputLabelProps={{ shrink: true }}
+                              onChange={(e) => {
+                                handleRowChange(row.id, "currency", e.target.value);
+                                handleRowChange(row.id, "amount", "");
+                              }}
+                              SelectProps={{
+                                displayEmpty: true,
+                                renderValue: (selected) => !selected ? <span style={{ color: 'gray', opacity: 0.8 }}>Currency</span> : selected,
+                                MenuProps: {
+                                  // The marginTop guarantees it clears the input box completely
+                                  PaperProps: { style: { maxHeight: 250, marginTop: '8px' } },
+                                  anchorOrigin: { vertical: "bottom", horizontal: "left" },
+                                  transformOrigin: { vertical: "top", horizontal: "left" }
+                                }
+                              }}
+                            >
+                              {currencyOptions.map((currency) => (
+                                <MenuItem key={currency} value={currency}>
+                                  {currency}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          </Tooltip>
+                        </Grid>
+
+
+                        {/* CGL */}
+                        <Grid item size={{ xl: 2.3, lg: 3.1 }} >
+                          <Autocomplete
+                            autoHighlight
+                            popupIcon={null}
+                            options={
+                              (cglInputValues[row.id] || "").length < 3
+                                ? []
+                                : (row.cgl && !cglSearch.options.some((o) => o.cglNumber === row.cgl.cglNumber)
+                                  ? [row.cgl, ...cglSearch.options]
+                                  : cglSearch.options)
+                            }
+                            slotProps={{
+                              popper: {
+                                placement: 'bottom-start',
+                                modifiers: [
+                                  { name: 'flip', enabled: false },
+                                  { name: 'preventOverflow', enabled: false }
+                                ],
+                              },
+                            }}
+                            // SHOW CODE AND DESCRIPTION INSIDE THE TEXTBOX
+                            getOptionLabel={(option) => option && option.cglNumber ? `${option.cglNumber} - ${option.description}` : ""}
+                            renderOption={(props, option) => (
+                              <li {...props} key={option.cglNumber}>
+                                <Typography noWrap sx={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                  {option.cglNumber} - {option.description}
+                                </Typography>
+                              </li>
+                            )}
+                            value={row.cgl || null}
+                            onChange={(event, newValue) => handleRowChange(row.id, "cgl", newValue)}
+                            inputValue={cglInputValues[row.id] || ""}
+                            onInputChange={(event, newInputValue, reason) => {
+                              if (reason === 'input') {
+                                const cleanInput = newInputValue.replace(CGL_REPLACE_REGEX, "").substring(0, 10);
+                                setCglInputValues(prev => ({ ...prev, [row.id]: cleanInput }));
+                                searchCgls(cleanInput, row.id);
+                              } else {
+                                setCglInputValues(prev => ({ ...prev, [row.id]: newInputValue }));
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if ((e.key === 'Tab' || e.key === 'Enter') && !row.cgl && cglSearch.options?.length > 0) {
+                                handleRowChange(row.id, "cgl", cglSearch.options[0]);
+                              }
+                            }}
+                            onBlur={() => {
+                              const typedValue = cglInputValues[row.id];
+                              if (!row.cgl && typedValue && typedValue.length === 10) {
+                                const match = cglSearch.options.find(opt => String(opt.cglNumber) === typedValue) ||
+                                  (cglSearch.options.length > 0 ? cglSearch.options[0] : null);
+                                if (match) {
+                                  handleRowChange(row.id, "cgl", match);
+                                }
+                              }
+                            }}
+                            loading={cglSearch.loadingId === row.id}
+                            filterOptions={(x) => x}
+                            isOptionEqualToValue={(option, value) => String(option?.cglNumber) === String(value?.cglNumber)}
+                            noOptionsText={
+                              (cglInputValues[row.id] || "").length < 3
+                                ? "Enter 3 Digits to Search"
+                                : "CGL not found"
+                            }
+                            renderInput={(params) => (
+                              <Tooltip title={row.cgl ? `${row.cgl.cglNumber} - ${row.cgl.description}` : "Search by CGL Number"} placement="top-start">
+                                <TextField
+                                  {...params}
+                                  label="CGL *"
+                                  placeholder="CGL"
+                                  InputLabelProps={{ shrink: true }}
+                                  // Prevents text from breaking out of the box
+                                  inputProps={{ ...params.inputProps, style: { textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden' } }}
+                                  InputProps={{
+                                    ...params.InputProps,
+                                    endAdornment: (
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                        {/* SMALL MEMO CHIP INSIDE THE TEXTBOX */}
+                                        {row.cgl && String(row.cgl.cglNumber).startsWith("5") && (
+                                          <Chip label="MEMO" size="small" color="warning" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 'bold' }} />
+                                        )}
+                                        {cglSearch.loadingId === row.id ? <CircularProgress color="inherit" size={20} /> : null}
+                                        {params.InputProps.endAdornment}
+                                      </Box>
+                                    )
+                                  }}
+                                  onPaste={(e) => { e.preventDefault(); showSnackBar("Pasting is not allowed here.", "warning"); }}
+                                  onCopy={(e) => e.preventDefault()}
+                                />
+                              </Tooltip>
+                            )}
+                          />
+                        </Grid>
+
+
+
+                        {/* Amount */}
+                        <Grid item size={{ xl: 2, lg: 2.8 }}>
+                          <Tooltip title="" placement="top-start">
+                            <TextField
+                              label="Amount *"
+                              type="text"
+                              value={row.amount}
+                              InputLabelProps={{ shrink: true }}
+                              fullWidth
+                              placeholder="0.0000"
+                              inputProps={{ style: { textAlign: "right" } }}
+                              // Checks if input is not empty AND equals zero numerically
+                              error={row.amount !== "" && parseFloat(row.amount) === 0}
+                              onChange={(e) => {
+                                const rawVal = e.target.value;
+                                if (/[^0-9.]/.test(rawVal)) {
+                                  showSnackBar("Only numbers and decimal point are allowed.", "warning"); return;
+                                }
+                                if (rawVal === "" || /^\d{0,16}(\.\d{0,4})?$/.test(rawVal)) {
+                                  handleRowChange(row.id, "amount", rawVal);
+                                }
+                                else {
+                                  showSnackBar("Exceeded maximum digits or decimal places.", "warning");
+                                }
+                              }}
+
+                              onPaste={(e) => { e.preventDefault(); showSnackBar("Pasting is not allowed here.", "warning"); }}
+                              onCopy={(e) => e.preventDefault()}
+                            />
+                          </Tooltip>
+                          <Typography
+                            variant="caption"
+                            // Turns the caption red if the error state is triggered
+                            sx={{ ...jpStyles.captionText, color: (row.amount !== "" && parseFloat(row.amount) === 0) ? 'error.main' : 'text.secondary' }}
+                          >
+                            {(row.amount !== "" && parseFloat(row.amount) === 0) ? "Amount cannot be zero" : "Max 16 digits, 4 decimals"}
+                          </Typography>
+                        </Grid>
+
+
+                        {/* Txn Type */}
+                        <Grid item size={{ xl: 1, lg: 1.5 }}>
+                          <Tooltip title="" placement="top-start">
+                            <TextField
+                              select
+                              label="Type *"
+                              value={row.txnType}
+                              fullWidth
+                              InputLabelProps={{ shrink: true }}
+                              onChange={(e) => handleRowChange(row.id, "txnType", e.target.value)}
+                              onPaste={(e) => { e.preventDefault(); showSnackBar("Pasting is not allowed here.", "warning"); }}
+                              onCopy={(e) => e.preventDefault()}
+                              onKeyDown={(e) => {
+                                // Intercept keystrokes to auto-select
+                                const key = e.key.toLowerCase();
+                                if (key === 'd') {
+                                  e.preventDefault(); // Prevents standard browser behavior
+                                  handleRowChange(row.id, "txnType", "Debit");
+                                } else if (key === 'c') {
+                                  e.preventDefault();
+                                  handleRowChange(row.id, "txnType", "Credit");
+                                }
+                              }}
+                              SelectProps={{
+                                displayEmpty: true,
+                                renderValue: (selected) => !selected ? <span style={{ color: 'gray', opacity: 0.8 }}>Type</span> : selected,
+                                MenuProps: {
+                                  // The marginTop guarantees it clears the tooltip completely
+                                  PaperProps: { style: { maxHeight: 250, marginTop: '8px' } },
+                                  anchorOrigin: { vertical: "bottom", horizontal: "left" },
+                                  transformOrigin: { vertical: "top", horizontal: "left" }
+                                }
+                              }}
+                            >
+                              <MenuItem value="Credit">Credit</MenuItem>
+                              <MenuItem value="Debit">Debit</MenuItem>
+
+                            </TextField>
+                          </Tooltip>
+                        </Grid>
+
+                        {/* Remarks (Individual) */}
+                        <Grid item size={{ xl: 2.2, lg: 3.2 }}>
+                          <Tooltip title="" placement="top-start">
+                            <TextField
+                              label="Remarks *"
+                              value={row.remarks}
+                              InputLabelProps={{ shrink: true }}
+                              onPaste={(e) => { e.preventDefault(); showSnackBar("Pasting is not allowed here.", "warning"); }}
+                              onCopy={(e) => e.preventDefault()}
+                              placeholder="Enter remarks..."
+                              fullWidth
+                              inputProps={{ minLength: 2, maxLength: 30 }}
+                              disabled={checked}
+                              error={row.remarks.length > 0 && !isRowRemarksValid(row.remarks)}
+                              onChange={(e) => {
+                                const val = filterAndWarn(e.target.value);
+                                if (val.length <= 30) {
+                                  handleRowChange(row.id, "remarks", val);
+                                }
+                              }}
+                              helperText="Allowed 2-30 chars: Alphanumeric and single spaces only"
+                            />
+                          </Tooltip>
+                        </Grid>
+                        {/* Product Code */}
+                        <Grid item
+                          // xs={12} md={2}
+                          size={{ xl: 1, lg: 1.5 }} >
+                          <Tooltip title="" placement="top-start">
+                            <TextField label="Product Code" value={row.productCode} InputLabelProps={{ shrink: true }} placeholder="Product Code.." fullWidth inputProps={{ maxLength: 8 }} onChange={(e) => { const rawVal = e.target.value; const cleanVal = rawVal.replace(/[^0-9]/g, ""); if (rawVal !== cleanVal) { showSnackBar("Only digits are allowed.", "warning"); } if (cleanVal.length <= 8) { handleRowChange(row.id, "productCode", cleanVal); } }} />
+                          </Tooltip>
+                          <Typography variant="caption" sx={jpStyles.captionText}>Max 8 digits</Typography>
+                        </Grid>
+
+                        {/* Delete Action */}
+                        <Grid item size={{ xl: 0.5, lg: 0.8 }} sx={{ textAlign: "center", display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {/* ONLY ALLOW DELETION IF THERE ARE MORE THAN 2 ROWS */}
+                          {rows.length > 2 && (
+                            <Tooltip title="Delete row" arrow>
+                              <IconButton
+                                onClick={() => handleDeleteRow(row.id)}
+                                aria-label="delete row"
+                                sx={jpStyles.deleteIconButton}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Grid>
+                      </Grid> {/* <--- THIS IS THE MISSING TAG THAT CRASHED REACT! */}
+
+                      {index < rows.length - 1 && (<Box sx={jpStyles.rowDivider} />)}
+                    </React.Fragment>
+                  );
+                })}
+
+                {/* ACTION BUTTONS */}
+                <Box sx={jpStyles.actionButtonsWrapper}>
+                  <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={handleBack}>
+                    Previous
+                  </Button>
+
+                  <Box sx={{ display: "flex", gap: 2 }}>
+                    {/* NEW RESET BUTTON */}
+                    <Button variant="outlined" onClick={handleResetRows} 
+                    sx=
+                    {{
+                      "&:hover":
+                      {
+                        color:"#fff",
+                      },
+                      }}>
+                      Reset
+                    </Button>
+
+                    <Button variant="contained" startIcon={<AddIcon />} onClick={handleAddRow}>
+                      Add Row
+                    </Button>
+
+                    <Tooltip title={rows.length < 2 ? "Minimum 2 rows required" : "Submit batch"} placement="top">
+                      <span>
+                        <Button
+                          variant="contained"
+                          color="success"
+                          onClick={handleValidateClick}
+                          disabled={isSubmitting || !isCommonRemarksValid(commonBatchRemarks) || !isFormReadyToSubmit}
+                        >
+                          {isSubmitting ? <CircularProgress size={24} color="inherit" /> : "Validate"}
+                        </Button>
+                      </span>
+                    </Tooltip>
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          </Box>
+        )
+      }
+
+      {/* EXTERNAL STEP 2: BULK UPLOAD EXCEL COMPONENT */}
+      {
+        activeStep === 2 && entryMethod === "BULK" && (
+          <JournalBulkUpload
+            selectedVoucher={selectedVoucher}
+            onBack={handleBack}
+            onReset={handleResetWizard}
+            // Triggered automatically when Bulk Excel completes
+            onSuccessSubmit={(batchId) => {
+              setSubmittedBatchId(batchId);
+              setActiveStep(3);
+            }}
           />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => { setEdit(false), setSelectedRequestId(null) }}>Cancel</Button>
-        </DialogActions>
-      </Dialog> */}
-    </>
+        )
+      }
+
+      {/* NEW STEP 3: POST-SUBMISSION SUCCESS & SCHEDULING SCREEN */}
+      {
+        activeStep === 3 && (
+          <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
+            <Paper elevation={3} sx={{ p: 4, borderRadius: 3, maxWidth: 650, width: '100%', textAlign: 'center' }}>
+              <Typography variant="h6" fontWeight="bold" color="text.primary" gutterBottom>
+                Set Execution Preference
+              </Typography>
+              <Typography variant="h5" fontWeight="bold" gutterBottom>
+                Your batch is validated and ready to submit.
+              </Typography>
+
+              <Divider sx={{ my: 3 }} />
+
+
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
+                Please select how you want this batch to be executed after the final approval.
+              </Typography>
+
+              {/* SELECTION CARDS */}
+              <Grid container spacing={3} sx={{ mb: 4, textAlign: 'left' }}>
+                <Grid item xs={12} sm={6}>
+                  <Box
+                    onClick={() => setRoutingChoice("IMMEDIATE")}
+                    sx={{
+                      p: 2.5, border: "2px solid", borderRadius: 2, cursor: "pointer", transition: "all 0.2s ease",
+                      borderColor: routingChoice === "IMMEDIATE" ? "primary.main" : "divider",
+                      backgroundColor: routingChoice === "IMMEDIATE" ? "primary.50" : "transparent",
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 1, textAlign: "center",
+                      "&:hover": { borderColor: routingChoice !== "IMMEDIATE" ? "primary.light" : "primary.main", transform: "translateY(-2px)", boxShadow: 2 }
+                    }}
+                  >
+                    <BoltIcon color={routingChoice === "IMMEDIATE" ? "primary" : "action"} sx={{ fontSize: 36 }} />
+                    <Typography variant="subtitle1" fontWeight="bold" color={routingChoice === "IMMEDIATE" ? "primary.main" : "text.primary"}>
+                      Execute Immediately
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Post automatically upon final approval
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Box
+                    onClick={() => {
+                      setRoutingChoice("SCHEDULE");
+                      setScheduledTime(dayjs().add(30, 'minute').startOf('minute'));
+                    }}
+                    sx={{
+                      p: 2.5, border: "2px solid", borderRadius: 2, cursor: "pointer", transition: "all 0.2s ease",
+                      borderColor: routingChoice === "SCHEDULE" ? "primary.main" : "divider",
+                      backgroundColor: routingChoice === "SCHEDULE" ? "primary.50" : "transparent",
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 1, textAlign: "center",
+                      "&:hover": { borderColor: routingChoice !== "SCHEDULE" ? "primary.light" : "primary.main", transform: "translateY(-2px)", boxShadow: 2 }
+                    }}
+                  >
+                    <ScheduleIcon color={routingChoice === "SCHEDULE" ? "primary" : "action"} sx={{ fontSize: 36 }} />
+                    <Typography variant="subtitle1" fontWeight="bold" color={routingChoice === "SCHEDULE" ? "primary.main" : "text.primary"}>
+                      Schedule Execution
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Delay posting to a future time today
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+
+              {/* SMOOTH COLLAPSE FOR TIMEPICKER */}
+              <Collapse in={routingChoice === "SCHEDULE"}>
+                <Box sx={{ p: 3, mb: 4, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                  <Typography variant="subtitle2" fontWeight="bold" align="left" gutterBottom>
+                    Select Time
+                  </Typography>
+                  <LocalizationProvider dateAdapter={AdapterDayjs}>
+                    <TimePicker
+                      value={scheduledTime}
+                      onChange={(newValue) => setScheduledTime(newValue)}
+                      // --- THE FIX IS HERE ---
+                      // .startOf('minute') forces seconds to :00 so it perfectly matches the UI selection
+                      minTime={dayjs().add(30, 'minute').startOf('minute')}
+                      maxTime={dayjs().endOf('day')}
+                      timeSteps={{ minutes: 1 }}
+                      slotProps={{
+                        textField: {
+                          size: 'medium',
+                          fullWidth: true,
+                          sx: { caretColor: 'transparent' },
+                          helperText: "Execution must be scheduled at least 30 minutes from now, before 11:59 PM today.",
+                          onKeyDown: (e) => e.preventDefault(),
+                          onPaste: (e) => e.preventDefault(),
+                          inputProps: { readOnly: true }
+                        }
+                      }}
+                    />
+                  </LocalizationProvider>
+                </Box>
+              </Collapse>
+
+              {/* FINAL SUBMIT BUTTON */}
+              <Button
+                variant="contained"
+                size="large"
+                fullWidth
+                disabled={!routingChoice || (routingChoice === 'SCHEDULE' && !scheduledTime) || isFinalizing}
+                onClick={handleFinalizeRouting}
+                sx={{ py: 1.5, fontSize: '1.1rem', fontWeight: 'bold', borderRadius: 2 }}
+              >
+                {isFinalizing ? <CircularProgress size={28} color="inherit" /> : "Submit"}
+              </Button>
+
+            </Paper>
+          </Box>
+        )
+      }
+
+    </Paper >
+
   );
 }
