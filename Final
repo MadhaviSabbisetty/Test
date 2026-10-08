@@ -1,115 +1,575 @@
-  @Override
-    public AttachmentDownloadResponse downloadAttachments(
-            AttachmentDownloadRequest request,
-            int userRoleId,
-            String userId) throws IOException {
+import {
+  Close as CloseIcon,
+  Download as DownloadIcon,
+  Inbox as NoDataIcon,
+  PlayArrow as PlayArrowIcon,
+  Assessment as SummaryIcon,
+} from "@mui/icons-material";
+import {
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TablePagination,
+  TableRow,
+  Tooltip,
+  Typography,
+  useTheme,
+} from "@mui/material";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import useApi from "../../hooks/useApi";
+import downloadFile from "../../utils/DownloadUtils";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import {
+  formatProcessTime,
+  timeStampFormatter,
+} from "../../utils/CommonUtilities";
 
+// --- API Constants ---
+const TRIGGER_API_URL = "/PS/airflow/trigger";
+const INITIAL_DATA_URL = "/PS/process/processes/data/7";
+const SUMMARY_BASE_URL = "/CM/lho-transfers/summary/";
+const CREATE_REQUEST_URL = "/CR/create-request";
+const DOWNLOAD_URL = "/RS/reports/generate/base64";
 
-        log.info("Inside the report service download method");
+export default function YearEndProfitTransferTab1() {
+  const theme = useTheme();
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  const isMounted = useRef(true);
 
-        List<DownloadedAttachment> downloadedFiles = new ArrayList<>();
+  // Table & Loading States
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [tableData, setTableData] = useState([]);
+  const [totalElements, setTotalElements] = useState(0);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [myRequests, setMyRequests] = useState([]);
 
-        //Process each requested attachment individually
+  // Summary & Submission States
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [isEligibleToInitiate, setIsEligibleToInitiate] = useState(false);
+  const [summaryData, setSummaryData] = useState([]);
+  const [summaryTotals, setSummaryTotals] = useState({
+    totalAmount: 0,
+    totalRecordCount: 0,
+  });
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-        for (AttachmentRef attachment : request.getAttachments()) {
+  const [rowContext, setRowContext] = useState({
+    processRunId: null,
+    processId: null,
+    runId: null,
+    etlDate: null,
+    processStatus: null,
+  });
 
-            log.info("-------------------------------------------------------------------");
-            log.info("Attachment Download Request Received");
-            log.info("Attachment Id: {}",attachment.getAttachmentId());
-            log.info("Report Name: {}",attachment.getFileName());
-            log.info("Attachment Type: {}",attachment.getAttachmentType());
+  const getTodayFormatted = () => new Date().toISOString().split("T")[0];
 
-            //Extract report details from attachment reference
-
-            String attachmentId = attachment.getAttachmentId();
-            String reportFolder = attachment.getFileName();
-
-            // Extracting date from attachmentId
-            // Example : balance_compare_report_31032026
-            String date = attachmentId.substring(attachmentId.lastIndexOf("_") + 1);
-
-            String folderDate =
-                    date.substring(4, 8) + "-"
-                + date.substring(2, 4) + "-"
-                + date.substring(0, 2);
-
-            byte[] fileBytes;
-            long fileSize;
-            String actualFileName = attachmentId + ".xlsx";
-
-            //Construct HDFS file path based on report date and folder
-            
-            String hdfsPath =
-                    reportsBasePath + "/"
-                + folderDate + "/"
-                // + reportFolder + "/"
-                + actualFileName;
-
-            Path filePath = new Path(hdfsPath);
-
-            log.info("Reading HDFS File : {}", filePath);
-
-            //validate report existence in HDFS
-
-            if (!hdfsFileSystem.exists(filePath)) {
-                log.info("Attachment not found");
-                throw new ResourceNotFoundException(
-                        "Attachment not found : " + filePath);
-            }
-
-            FileStatus status = hdfsFileSystem.getFileStatus(filePath);
-
-            //Read report content from HDFS
-
-            try (FSDataInputStream inputStream = hdfsFileSystem.open(filePath);
-                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    outputStream.write(buffer, 0, bytesRead);
-                }
-
-                fileBytes = outputStream.toByteArray();
-            }catch(IOException e){
-                log.error("Unable to read HDFS file {}",filePath,e);
-                throw new ResourceNotFoundException(
-                    "Unable to read attachment from HDFS:"+actualFileName);
-            }
-
-            fileSize = status.getLen();
-            
-
-            DownloadedAttachment downloaded = new DownloadedAttachment();
-
-            downloaded.setFileName(actualFileName);
-            downloaded.setContentType(
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            downloaded.setFileSize(fileSize);
-            //Encode report content into Base64 for REST response
-            downloaded.setBase64(Base64.getEncoder().encodeToString(fileBytes));
-
-            downloadedFiles.add(downloaded);
-
-            
-            log.info("REPORT DOWNLOADED SUCCESSFULLY");
-            log.info("Attachment Id   : {}", attachment.getAttachmentId());
-            log.info("Report Name     : {}", downloaded.getFileName());
-            log.info("Attachment Type : {}", attachment.getAttachmentType());
-            log.info("Content Type    : {}", downloaded.getContentType());
-            log.info("File Size       : {} bytes", downloaded.getFileSize());
+  /**
+   * DATA FETCHING
+   */
+  const fetchInitialData = useCallback(
+    async (isPolling = false) => {
+      if (!isPolling) setIsInitialLoading(true);
+      try {
+        const paginatedUrl = `${INITIAL_DATA_URL}`;
+        const response = await callApi(paginatedUrl, null, "GET");
+        if (isMounted.current && response) {
+          setTableData(response.initialData || []);
+          setTotalElements(
+            response.totalElements || response.initialData?.length || 0,
+          );
         }
+      } catch (error) {
+        if (!isPolling && error !== undefined) {
+          const errorMessage = error?.message || "Failed to load process data";
+          showSnackBar(errorMessage, "error");
+        }
+      } finally {
+        if (isMounted.current && !isPolling) setIsInitialLoading(false);
+      }
+    },
+    [callApi, showSnackBar],
+  );
 
-        AttachmentDownloadResponse response = new AttachmentDownloadResponse();
-        //Prepare final response containing all downloaded attachments
-        response.setAttachments(downloadedFiles);
-
-        
-        log.info("------------------------------------------------------------");
-        log.info("Attachment Download Completed Successfully");
-        log.info("Total Reports Downloaded : {}", downloadedFiles.size());
-
-        return response;
+  const fetchMyRequests = useCallback(async () => {
+    const payload = { requestType: "YEAR_END_PROFIT_TRANSFER" };
+    const response = await callApi("/CR/my-requests", payload, "POST");
+    if (response?.data) {
+      setMyRequests(response.data);
+      return response.data;
+    } else {
+      setMyRequests([]);
+      return [];
     }
-    
+  }, [callApi]);
+
+  useEffect(() => {
+    isMounted.current = true;
+    fetchInitialData();
+    return () => {
+      isMounted.current = false;
+    };
+  }, [fetchInitialData, page, rowsPerPage]);
+
+  useEffect(() => {
+    const pollInterval = setInterval(() => {
+      fetchInitialData(true);
+    }, 10000);
+
+    return () => clearInterval(pollInterval);
+  }, [fetchInitialData, page, rowsPerPage]);
+
+  const handleCancelAllRequest = async () => {
+    try {
+      // const myRequests = await fetchMyRequests();
+
+      // const requestId = myRequests
+      //   ?.filter((req) => req.reqStatus === "PENDING")
+      //   ?.at(0)?.id;
+      // if (!requestId) return;
+      // const payload = {
+      //   requestId,
+      //   remarks: "Auto-canceled this Request",
+      // };
+
+      const payload = {
+        requestType: "YEAR_END_PROFIT_TRANSFER",
+        remarks: "Cancelling all requests to Re-Inititate Profit Transfer",
+      };
+
+      const response = await callApi("/CR/bulk-cancel", payload, "POST");
+      if (response?.success) {
+        showSnackBar(
+          ` All previous pending Year-End Profit Transfer requests are cancelled successfully.`,
+          "success",
+        );
+
+        return true;
+      } else {
+        console.log("Inside else");
+        showSnackBar(
+          response?.message
+            ? response?.message
+            : "Failed to  cancel all requests, Kindly try again",
+          "error",
+        );
+        return false;
+      }
+    } catch (error) {
+      console.error(error);
+      showSnackBar("Failed to  cancel all requests, Kindly try again", "error");
+
+      return false;
+    }
+  };
+
+  const fetchIsEligibleToInitiate = async () => {
+    try {
+      const payload = {};
+
+      const response = await callApi(
+        "/CM/lho-transfers/year-end-eligibility",
+        payload,
+        "GET",
+      );
+      setIsEligibleToInitiate(response?.data?.eligible);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    fetchIsEligibleToInitiate();
+  }, []);
+
+  const handleTransferLho = async () => {
+    setIsTransferring(true);
+    const payload = {
+      dagId: "cbs_wrap_dag",
+      processId: 7,
+      remarks: "Profit Transfer Initiated",
+    };
+
+    try {
+      const cancelRequestFlag = await handleCancelAllRequest();
+
+      if (!cancelRequestFlag) return;
+
+      await callApi(TRIGGER_API_URL, payload, "POST");
+      showSnackBar("Profit Transfer Inititated successfully", "success");
+      fetchInitialData();
+    } catch (error) {
+      const errorMessage =
+        error?.message || "Failed to initiate Profit Transfer";
+      showSnackBar(errorMessage, "warning");
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  const handleSubmitLhoRequest = async () => {
+    setIsSubmitting(true);
+    const finalRequestPayload = {
+      requestType: "YEAR_END_PROFIT_TRANSFER",
+      changeType: "ADD",
+      targetId: null,
+      payload: {
+        processRunId: rowContext.processRunId,
+        processId: rowContext.processId,
+        etlDate: rowContext.etlDate,
+        batchId: String(rowContext.runId),
+        date: getTodayFormatted(),
+        totalAmount: summaryTotals.totalAmount,
+        totalRecordCount: summaryTotals.totalRecordCount,
+        circleWiseDetails: summaryData.map((item) => ({
+          transferDate: getTodayFormatted(),
+          circleName: item.circleName,
+          totalProfitLoss: Number(item.totalProfitLoss),
+        })),
+      },
+    };
+
+    try {
+      const resposne = await callApi(
+        CREATE_REQUEST_URL,
+        finalRequestPayload,
+        "POST",
+      );
+      if (resposne?.data?.id) {
+        showSnackBar(
+          "Year-End Profit Transfer Request Submitted Successfully with request id " +
+            resposne?.data?.id,
+          "success",
+        );
+      }
+      setSummaryOpen(false);
+    } catch (error) {
+      const errorMessage =
+        error?.message || "Submission failed. Check network/payload";
+      showSnackBar(errorMessage, "warning");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleGetSummary = async (row) => {
+    setSummaryOpen(true);
+    setSummaryLoading(true);
+    setRowContext({
+      processRunId: row.processRunId,
+      processId: row.processId,
+      runId: row.runId,
+      etlDate: row.etlDate,
+      processStatus: row.status,
+    });
+
+    try {
+      const response = await callApi(
+        `${SUMMARY_BASE_URL}${row.processRunId}`,
+        null,
+        "GET",
+      );
+
+      // Navigate through the new response structure
+      const responseData = response?.data || {};
+      const rawMap = responseData.circleWiseDetails || {};
+
+      setSummaryTotals({
+        totalAmount: responseData.totalAmount || 0,
+        totalRecordCount: responseData.totalRecordCount || 0,
+      });
+
+      // Mapped name to circleName
+      setSummaryData(
+        Object.entries(rawMap).map(([name, balance]) => ({
+          circleName: name,
+          totalProfitLoss: balance,
+        })),
+      );
+    } catch (error) {
+      const errorMessage = error?.message || "Could not fetch summary data";
+      showSnackBar(errorMessage, "error");
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    try {
+      const payload = {
+        reportType: "profit_transfer_report",
+        date: "31-03-2026",
+      };
+
+      const responseData = await callApi(DOWNLOAD_URL, payload, "POST");
+      const { excelBase64 } = responseData;
+
+      if (!excelBase64) {
+        showSnackBar("Failed to download file", "error");
+        return;
+      }
+
+      let fileName = "Profit_Transfer_Report_2026-03-31";
+      downloadFile(excelBase64, "excel", fileName, true);
+
+      showSnackBar("File downloaded successfully", "success");
+    } catch (err) {
+      console.error(err);
+      showSnackBar("Error while downloading file", "error");
+    }
+  };
+
+  const getStatusChip = (s) => {
+    if (s === 1)
+      return (
+        <Chip
+          label="In Progress"
+          color="primary"
+          variant="outlined"
+          size="small"
+        />
+      );
+    if (s === 2)
+      return <Chip label="Profit Calculated" color="success" size="small" />;
+    if (s === 3) return <Chip label="Failed" color="error" size="small" />;
+    return <Chip label="Unknown" variant="outlined" size="small" />;
+  };
+
+  useEffect(() => {
+    if (!summaryOpen) return;
+    fetchMyRequests();
+  }, [fetchMyRequests, summaryOpen]);
+
+  // Check if any process is currently running
+  const isAnyProcessRunning = tableData.some((row) => row.status === 1);
+  const anyPendingRequests = useMemo(() => {
+    return myRequests?.some((row) => row.reqStatus === "PENDING");
+  }, [myRequests]);
+
+  return (
+    <Box p={3} width="100%">
+      {/* Header Action */}
+      <Box display="flex" justifyContent="flex-end" mb={2}>
+        <Button
+          variant="contained"
+          startIcon={
+            isTransferring ? (
+              <CircularProgress size={20} color="inherit" />
+            ) : (
+              <PlayArrowIcon />
+            )
+          }
+          onClick={handleTransferLho}
+          disabled={
+            isTransferring ||
+            isInitialLoading ||
+            isAnyProcessRunning ||
+            !isEligibleToInitiate
+          }
+        >
+          {isTransferring ? "Transferring..." : "Initiate Profit Transfer"}
+        </Button>
+      </Box>
+
+      {/* Main Table */}
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead sx={{ bgcolor: theme.palette.action.hover }}>
+            <TableRow>
+              <TableCell align="center">
+                <strong>Process Name</strong>
+              </TableCell>
+              <TableCell align="center">
+                <strong>Profit Calculation</strong>
+              </TableCell>
+              <TableCell align="center">
+                <strong>Created by</strong>
+              </TableCell>
+              <TableCell align="center">
+                <strong>Start Date</strong>
+              </TableCell>
+              <TableCell align="center">
+                <strong>End Date</strong>
+              </TableCell>
+              <TableCell align="center">
+                <strong>Action</strong>
+              </TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {isInitialLoading ? (
+              <TableRow>
+                <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
+                  <CircularProgress size={40} />
+                </TableCell>
+              </TableRow>
+            ) : tableData.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
+                  <NoDataIcon
+                    sx={{ fontSize: 48, color: "text.disabled", mb: 1 }}
+                  />
+                  <Typography variant="body1" color="text.secondary">
+                    There is no data to show.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : (
+              tableData
+                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                .map((row) => (
+                  <TableRow key={row.processRunId}>
+                    <TableCell align="center">{row.processType}</TableCell>
+                    <TableCell align="center">
+                      {getStatusChip(row.status)}
+                    </TableCell>
+                    <TableCell align="center">{row.triggeredBy}</TableCell>
+                    <TableCell align="center">
+                      {timeStampFormatter(row.processStartTime)}
+                    </TableCell>
+                    <TableCell align="center">
+                      {timeStampFormatter(row.processEndTime)}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Tooltip
+                        title={
+                          row.status === 2 ? "Get Summary" : "Not Available"
+                        }
+                      >
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={row.status !== 2}
+                            onClick={() => handleGetSummary(row)}
+                            color="primary"
+                          >
+                            <SummaryIcon />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))
+            )}
+          </TableBody>
+        </Table>
+        {/* <TablePagination
+          component="div"
+          count={totalElements}
+          page={page}
+          onPageChange={(e, p) => setPage(p)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(parseInt(e.target.value, 10));
+            setPage(0);
+          }}
+        /> */}
+      </TableContainer>
+
+      {/* --- SUMMARY DIALOG --- */}
+      <Dialog
+        open={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle sx={{ m: 0, p: 2 }}>
+          Circle Wise Summary
+          <IconButton
+            onClick={() => setSummaryOpen(false)}
+            sx={{ position: "absolute", right: 8, top: 8 }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          {summaryLoading ? (
+            <Box display="flex" justifyContent="center" py={5}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <>
+              <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell
+                        align="left"
+                        sx={{ bgcolor: theme.palette.grey[50] }}
+                      >
+                        <strong>Circle Name</strong>
+                      </TableCell>
+                      {/* Changed to align Right */}
+                      <TableCell
+                        align="right"
+                        sx={{ bgcolor: theme.palette.grey[50] }}
+                      >
+                        <strong>Total Profit/Loss</strong>
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {summaryData.map((row, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell align="left">{row.circleName}</TableCell>
+                        {/* Changed to align Right */}
+                        <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                          {Number(row.totalProfitLoss).toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, justifyContent: "space-between" }}>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={handleDownload}
+            disabled={summaryData.length === 0}
+          >
+            Download Excel
+          </Button>
+
+          <Button
+            variant="contained"
+            disabled={
+              anyPendingRequests ||
+              summaryData.length === 0 ||
+              isSubmitting ||
+              rowContext?.processStatus !== 2 ||
+              !isEligibleToInitiate
+            }
+            onClick={handleSubmitLhoRequest}
+            startIcon={
+              isSubmitting && <CircularProgress size={16} color="inherit" />
+            }
+          >
+            {isSubmitting ? "Submitting..." : "Submit Request"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}
