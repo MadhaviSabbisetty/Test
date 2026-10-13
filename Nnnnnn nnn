@@ -56,7 +56,7 @@ const styles = {
     width: "100%",
   },
   dataGridContainer: {
-    height: 600,
+    height: 727,
     width: "100%",
     backgroundColor: "background.paper",
     boxShadow: 2,
@@ -947,7 +947,7 @@ export default function VoucherPostingStatus() {
 
   return (
     <Paper elevation={0}>
-      <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.main" sx={{ ml: 6, mt: 2 }}>
+      <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.main" sx={{ ml: 3, mt: 2, mb: 0 }}>
         Voucher Posting Status
       </Typography>
       <Box sx={styles.mainContainer}>
