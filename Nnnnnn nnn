@@ -614,29 +614,32 @@ const ViewVoucherRequestsScreen = () => {
   return (
     <Box
       sx={{
-        p: 3,
+        p: 2,
         height: "calc(100vh - 88px)",
         minHeight: 0,
         maxHeight: "calc(100vh - 88px)",
+        width:"100%",
         overflow: "hidden",
         boxSizing: "border-box",
       }}
     >
       <Paper
         sx={{
-          p: 3,
+          p: 2,
           height: "100%",
           minHeight: 0,
+          width:"100%",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          boxSizing:"border-box",
         }}
       >
         <Typography variant="h5" mb={2}>
           View Voucher Requests
         </Typography>
 
-        <Accordion expanded={expanded} onChange={() => setExpanded(!expanded)}>
+        <Accordion expanded={expanded} onChange={() => setExpanded(!expanded)} disableGutters sx={{ flexDirection:0, "&:before":{ display:"none" },}}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Typography>Search Filters</Typography>
           </AccordionSummary>
@@ -753,8 +756,8 @@ const ViewVoucherRequestsScreen = () => {
           sx={{
             display: "flex",
             justifyContent: "flex-end",
-            mt: 2,
-            mb: 1,
+            mt: 1,
+            mb: 0.5,
             flexShrink: 0,
           }}
         >
@@ -770,9 +773,10 @@ const ViewVoucherRequestsScreen = () => {
 
         <Box
           sx={{
-            flex: 1,
+            flex: "1 1 0",
             minHeight: 0,
             width: "100%",
+            overflow:"hidden",
           }}
         >
           <DataGrid
