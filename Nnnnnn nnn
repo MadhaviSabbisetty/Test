@@ -1,133 +1,735 @@
-import React, { useState, useEffect } from "react";
-import CountdownPage from "./components/CountdownPage";
-import CelebrationOverlay from "./components/CelebrationOverlay";
-import Login from "../../features/auth/Login";
-import PageLoadingOverlay from "../../utils/PageLoadingOverlay";
-import { resolveConfig } from "../../config/EnvironmentConfig";
-import { useDispatch } from "react-redux";
-import { setAppConfig } from "../../store/slices/appConfigSlice";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import React from "react";
+import { styled } from "@mui/material/styles";
+import { Box, Tabs, Fab, Grid, Chip, Stack, TextField } from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+import AddIcon from "@mui/icons-material/Add";
+//segmentmaster
 
-const LaunchScreen = () => {
-  const dispatch = useDispatch();
-  const showSnackbar = useCustomSnackbar();
-  const [launchData, setLaunchData] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [showCelebration, setShowCelebration] = useState(false);
-  const [isLaunched, setIsLaunched] = useState(false);
+export const Boxdtatagrid = styled(Box)(({ theme }) => ({
+  height: 500,
+}));
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s safety timeout
+export const BoxStyle = styled(Box)(({ theme }) => ({
+  borderBottom: 1,
+  borderColor: "divider",
+}));
 
-    const checkLaunchStatus = async () => {
-      try {
-        const API_URL = resolveConfig("/LS") + "/auth/init";
+export const Box2Style = styled(Box)(({ theme }) => ({
+  p: 1,
+}));
 
-        const response = await fetch(API_URL, {
-          method: "GET",
-          signal: controller.signal,
-          headers: {
-            Accept: "application/json",
-            "Cache-Control": "no-cache",
-          },
-        });
+export const TabsStyle = styled(Tabs)(({ theme }) => ({
+  width: "100%",
+}));
 
-        clearTimeout(timeoutId);
+//segmentmastertab
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+export const StackStyle = styled(Stack)(({ theme }) => ({
+  mt: 1.5,
+}));
 
-        const data = await response.json();
+export const FabStyle = styled(Fab)(({ theme }) => ({
+  position: "fixed",
+  borderRadius: 1,
+  fontSize: "15px",
+  bottom: theme.spacing(4),
+  right: theme.spacing(4),
+  zIndex: 1000,
+}));
 
-        // Inside the fetch success block:
-        dispatch(
-          setAppConfig({
-            appVersion: data.version || "1.0.0",
-            publicKey: data.publicKey || null,
-          }),
-        );
+export const AddIconStyle = styled(AddIcon)(({ theme }) => ({
+  mr: 1,
+}));
 
-        // Standardize incoming data with defaults
-        const prodDate =
-          data.prodDate || new Date().toISOString().split("T")[0];
-        const launchTime = data.launchTime || "00:00:00";
+export const GridContainer = styled(Grid)(({ theme }) => ({
+  pt: 1,
+}));
 
-        // Convert to IST Date Object (+05:30)
-        const target = new Date(`${prodDate}T${launchTime}+05:30`);
+export const GridItem1 = styled(Grid)(({ theme }) => ({
+  mt: 2,
+  mb: 3,
+}));
 
-        if (target.getTime() <= Date.now()) {
-          setIsLaunched(true);
-        } else {
-          setLaunchData({
-            ...data,
-            targetDate: target,
-            appName: data.appName || "Fincore",
-            version: data.version || "1.0.0",
-          });
-        }
-      } catch (error) {
-        if (error.name !== "AbortError") {
-          console.error("Launch Check Failed:", error);
-        }
-        if (error.response?.status === 429) {
-          // Note: Axios lowercases all header names automatically.
-          const retryTime =
-            error.response.headers["retry-after"] || "a few minutes";
-          console.log(
-            `Maximum login attempts exceeded. Please retry after ${retryTime} seconds.`,
-          );
-          showSnackbar(
-            "Too Many Requests, Maximum login attempts exceeded. Please try after sometime.",
-            "error",
-          );
-          return;
-        }
-        setIsLaunched(true); // Fallback to Login on API failure
-      } finally {
-        // Small buffer to let the "Cool" loader finish its shimmer
-        setTimeout(() => setIsLoading(false), 5000);
-      }
-    };
+// export const Textfielss = styled(TextField)(({ theme }) => ({
+//     mb: 90,
+// }));
 
-    checkLaunchStatus();
-    return () => {
-      clearTimeout(timeoutId);
-      controller.abort();
-    };
-  }, [dispatch, showSnackbar]);
+export const GridItem2 = styled(Grid)(({ theme }) => ({
+  display: "flex",
+  justifyContent: "flex-end",
+  mt: 2,
+}));
 
-  const handleCountdownComplete = () => setShowCelebration(true);
+//mysegmentrequeststab
+export const DataGridStyles = styled(DataGrid)(({ theme }) => ({}));
 
-  const handleCelebrationComplete = () => {
-    setShowCelebration(false);
-    setIsLaunched(true);
-  };
+export const Chip1Style = styled(Chip)(({ theme }) => ({
+  p: 0.5,
+  m: 0,
+  width: "90%",
+}));
+import React, { useState } from "react";
+import PropTypes from "prop-types";
+import Tab from "@mui/material/Tab";
+import { Box, Paper } from "@mui/material";
+import ConnectWithoutContactIcon from "@mui/icons-material/ConnectWithoutContact";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
 
-  // 1. Loading State (Your Glassmorphism Overlay)
-  if (isLoading && !isLaunched)
-    return <PageLoadingOverlay loading={isLoading} />;
+import { BoxStyle, Box2Style, TabsStyle } from "./YearEndProfitTransferStyles";
+import YearEndProfitTransferTab1 from "./YearEndProfitTransferTab1";
+import YearEndProfitTransferTab2 from "./YearEndProfitTransferTab2";
 
-  // 2. Post-Launch State (Login Screen)
-  if (isLaunched) return <Login />;
+function CustomTabPanel(props) {
+  const { children, value, index, ...other } = props;
 
-  // 3. Countdown / Celebration State
   return (
-    <>
-      {showCelebration ? (
-        <CelebrationOverlay
-          version={launchData?.version}
-          onComplete={handleCelebrationComplete}
-        />
-      ) : (
-        <CountdownPage
-          targetDate={launchData?.targetDate}
-          appName={launchData?.appName}
-          version={launchData?.version}
-          onCountdownComplete={handleCountdownComplete}
-        />
-      )}
-    </>
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`simple-tabpanel-${index}`}
+      aria-labelledby={`simple-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box2Style>{children}</Box2Style>}
+    </div>
   );
+}
+
+CustomTabPanel.propTypes = {
+  children: PropTypes.node,
+  index: PropTypes.number.isRequired,
+  value: PropTypes.number.isRequired,
 };
 
-export default LaunchScreen;
+function a11yProps(index) {
+  return {
+    id: `simple-tab-${index}`,
+    "aria-controls": `simple-tabpanel-${index}`,
+  };
+}
+
+export default function YearEndProfitTransfer() {
+  const [value, setValue] = useState(0);
+
+  const handleChange = (event, newValue) => {
+    setValue(newValue);
+  };
+
+  return (
+    <Paper
+        elevation={2}
+        sx={{
+          display:"flex",
+          flexDirection:"column",
+          borderRadius:2,
+          overflow:"hidden",
+          minHeight:"calc(100vh - 122px)",
+          width:"100%",
+        }}>
+    <Box>
+      <BoxStyle fullwidth>
+        <TabsStyle
+          value={value}
+          onChange={handleChange}
+          aria-label="basic tabs example"
+          variant="fullWidth"
+        >
+          <Tab
+            label="Year-End Profit Transfer"
+            icon={<ConnectWithoutContactIcon />}
+            iconPosition="start"
+            {...a11yProps(0)}
+          />
+          <Tab
+            icon={<PendingActionsIcon />}
+            iconPosition="start"
+            label="My Requests"
+            {...a11yProps(1)}
+          />
+        </TabsStyle>
+      </BoxStyle>
+      <CustomTabPanel value={value} index={0}>
+        <YearEndProfitTransferTab1 />
+      </CustomTabPanel>
+      <CustomTabPanel value={value} index={1}>
+        <YearEndProfitTransferTab2 />
+      </CustomTabPanel>
+    </Box>
+    </Paper>
+  );
+}
+import {
+  Close as CloseIcon,
+  Download as DownloadIcon,
+  Inbox as NoDataIcon,
+  PlayArrow as PlayArrowIcon,
+  Assessment as SummaryIcon,
+} from "@mui/icons-material";
+import {
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TablePagination,
+  TableRow,
+  Tooltip,
+  Typography,
+  useTheme,
+} from "@mui/material";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import useApi from "../../hooks/useApi";
+import downloadFile from "../../utils/DownloadUtils";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import {
+  formatProcessTime,
+  timeStampFormatter,
+} from "../../utils/CommonUtilities";
+
+// --- API Constants ---
+const TRIGGER_API_URL = "/PS/airflow/trigger";
+const INITIAL_DATA_URL = "/PS/process/processes/data/7";
+const SUMMARY_BASE_URL = "/CM/lho-transfers/summary/";
+const CREATE_REQUEST_URL = "/CR/create-request";
+const DOWNLOAD_URL = "/RS/reports/generate/base64";
+
+export default function YearEndProfitTransferTab1() {
+  const theme = useTheme();
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  const isMounted = useRef(true);
+
+  // Table & Loading States
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [tableData, setTableData] = useState([]);
+  const [totalElements, setTotalElements] = useState(0);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [myRequests, setMyRequests] = useState([]);
+
+  // Summary & Submission States
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [isEligibleToInitiate, setIsEligibleToInitiate] = useState(false);
+  const [summaryData, setSummaryData] = useState([]);
+  const [summaryTotals, setSummaryTotals] = useState({
+    totalAmount: 0,
+    totalRecordCount: 0,
+  });
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [rowContext, setRowContext] = useState({
+    processRunId: null,
+    processId: null,
+    runId: null,
+    etlDate: null,
+    processStatus: null,
+  });
+
+  const getTodayFormatted = () => new Date().toISOString().split("T")[0];
+
+  /**
+   * DATA FETCHING
+   */
+  const fetchInitialData = useCallback(
+    async (isPolling = false) => {
+      if (!isPolling) setIsInitialLoading(true);
+      try {
+        const paginatedUrl = `${INITIAL_DATA_URL}`;
+        const response = await callApi(paginatedUrl, null, "GET");
+        if (isMounted.current && response) {
+          setTableData(response.initialData || []);
+          setTotalElements(
+            response.totalElements || response.initialData?.length || 0,
+          );
+        }
+      } catch (error) {
+        if (!isPolling && error !== undefined) {
+          const errorMessage = error?.message || "Failed to load process data";
+          showSnackBar(errorMessage, "error");
+        }
+      } finally {
+        if (isMounted.current && !isPolling) setIsInitialLoading(false);
+      }
+    },
+    [callApi, showSnackBar],
+  );
+
+  const fetchMyRequests = useCallback(async () => {
+    const payload = { requestType: "YEAR_END_PROFIT_TRANSFER" };
+    const response = await callApi("/CR/my-requests", payload, "POST");
+    if (response?.data) {
+      setMyRequests(response.data);
+      return response.data;
+    } else {
+      setMyRequests([]);
+      return [];
+    }
+  }, [callApi]);
+
+  useEffect(() => {
+    isMounted.current = true;
+    fetchInitialData();
+    return () => {
+      isMounted.current = false;
+    };
+  }, [fetchInitialData, page, rowsPerPage]);
+
+  useEffect(() => {
+    const pollInterval = setInterval(() => {
+      fetchInitialData(true);
+    }, 10000);
+
+    return () => clearInterval(pollInterval);
+  }, [fetchInitialData, page, rowsPerPage]);
+
+  const handleCancelAllRequest = async () => {
+    try {
+      // const myRequests = await fetchMyRequests();
+
+      // const requestId = myRequests
+      //   ?.filter((req) => req.reqStatus === "PENDING")
+      //   ?.at(0)?.id;
+      // if (!requestId) return;
+      // const payload = {
+      //   requestId,
+      //   remarks: "Auto-canceled this Request",
+      // };
+
+      const payload = {
+        requestType: "YEAR_END_PROFIT_TRANSFER",
+        remarks: "Cancelling all requests to Re-Inititate Profit Transfer",
+      };
+
+      const response = await callApi("/CR/bulk-cancel", payload, "POST");
+      if (response?.success) {
+        showSnackBar(
+          ` All previous pending Year-End Profit Transfer requests are cancelled successfully.`,
+          "success",
+        );
+
+        return true;
+      } else {
+        console.log("Inside else");
+        showSnackBar(
+          response?.message
+            ? response?.message
+            : "Failed to  cancel all requests, Kindly try again",
+          "error",
+        );
+        return false;
+      }
+    } catch (error) {
+      console.error(error);
+      showSnackBar("Failed to  cancel all requests, Kindly try again", "error");
+
+      return false;
+    }
+  };
+
+  const fetchIsEligibleToInitiate = async () => {
+    try {
+      const payload = {};
+
+      const response = await callApi(
+        "/CM/lho-transfers/year-end-eligibility",
+        payload,
+        "GET",
+      );
+      setIsEligibleToInitiate(response?.data?.eligible);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    fetchIsEligibleToInitiate();
+  }, []);
+
+  const handleTransferLho = async () => {
+    setIsTransferring(true);
+    const payload = {
+      dagId: "cbs_wrap_dag",
+      processId: 7,
+      remarks: "Profit Transfer Initiated",
+    };
+
+    try {
+      const cancelRequestFlag = await handleCancelAllRequest();
+
+      if (!cancelRequestFlag) return;
+
+      await callApi(TRIGGER_API_URL, payload, "POST");
+      showSnackBar("Profit Transfer Inititated successfully", "success");
+      fetchInitialData();
+    } catch (error) {
+      const errorMessage =
+        error?.message || "Failed to initiate Profit Transfer";
+      showSnackBar(errorMessage, "warning");
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  const handleSubmitLhoRequest = async () => {
+    setIsSubmitting(true);
+    const finalRequestPayload = {
+      requestType: "YEAR_END_PROFIT_TRANSFER",
+      changeType: "ADD",
+      targetId: null,
+      payload: {
+        processRunId: rowContext.processRunId,
+        processId: rowContext.processId,
+        etlDate: rowContext.etlDate,
+        batchId: String(rowContext.runId),
+        date: getTodayFormatted(),
+        totalAmount: summaryTotals.totalAmount,
+        totalRecordCount: summaryTotals.totalRecordCount,
+        circleWiseDetails: summaryData.map((item) => ({
+          transferDate: getTodayFormatted(),
+          circleName: item.circleName,
+          totalProfitLoss: Number(item.totalProfitLoss),
+        })),
+      },
+    };
+
+    try {
+      const resposne = await callApi(
+        CREATE_REQUEST_URL,
+        finalRequestPayload,
+        "POST",
+      );
+      if (resposne?.data?.id) {
+        showSnackBar(
+          "Year-End Profit Transfer Request Submitted Successfully with request id " +
+            resposne?.data?.id,
+          "success",
+        );
+      }
+      setSummaryOpen(false);
+    } catch (error) {
+      const errorMessage =
+        error?.message || "Submission failed. Check network/payload";
+      showSnackBar(errorMessage, "warning");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleGetSummary = async (row) => {
+    setSummaryOpen(true);
+    setSummaryLoading(true);
+    setRowContext({
+      processRunId: row.processRunId,
+      processId: row.processId,
+      runId: row.runId,
+      etlDate: row.etlDate,
+      processStatus: row.status,
+    });
+
+    try {
+      const response = await callApi(
+        `${SUMMARY_BASE_URL}${row.processRunId}`,
+        null,
+        "GET",
+      );
+
+      // Navigate through the new response structure
+      const responseData = response?.data || {};
+      const rawMap = responseData.circleWiseDetails || {};
+
+      setSummaryTotals({
+        totalAmount: responseData.totalAmount || 0,
+        totalRecordCount: responseData.totalRecordCount || 0,
+      });
+
+      // Mapped name to circleName
+      setSummaryData(
+        Object.entries(rawMap).map(([name, balance]) => ({
+          circleName: name,
+          totalProfitLoss: balance,
+        })),
+      );
+    } catch (error) {
+      const errorMessage = error?.message || "Could not fetch summary data";
+      showSnackBar(errorMessage, "error");
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    try {
+      const payload = {
+        reportType: "profit_transfer_report",
+        date: "31-03-2026",
+      };
+
+      const responseData = await callApi(DOWNLOAD_URL, payload, "POST");
+      const { excelBase64 } = responseData;
+
+      if (!excelBase64) {
+        showSnackBar("Failed to download file", "error");
+        return;
+      }
+
+      let fileName = "Profit_Transfer_Report_2026-03-31";
+      downloadFile(excelBase64, "excel", fileName, true);
+
+      showSnackBar("File downloaded successfully", "success");
+    } catch (err) {
+      console.error(err);
+      showSnackBar("Error while downloading file", "error");
+    }
+  };
+
+  const getStatusChip = (s) => {
+    if (s === 1)
+      return (
+        <Chip
+          label="In Progress"
+          color="primary"
+          variant="outlined"
+          size="small"
+        />
+      );
+    if (s === 2)
+      return <Chip label="Profit Calculated" color="success" size="small" />;
+    if (s === 3) return <Chip label="Failed" color="error" size="small" />;
+    return <Chip label="Unknown" variant="outlined" size="small" />;
+  };
+
+  useEffect(() => {
+    if (!summaryOpen) return;
+    fetchMyRequests();
+  }, [fetchMyRequests, summaryOpen]);
+
+  // Check if any process is currently running
+  const isAnyProcessRunning = tableData.some((row) => row.status === 1);
+  const anyPendingRequests = useMemo(() => {
+    return myRequests?.some((row) => row.reqStatus === "PENDING");
+  }, [myRequests]);
+
+  return (
+    <Box p={3} width="100%">
+      {/* Header Action */}
+      <Box display="flex" justifyContent="flex-end" mb={2}>
+        <Button
+          variant="contained"
+          startIcon={
+            isTransferring ? (
+              <CircularProgress size={20} color="inherit" />
+            ) : (
+              <PlayArrowIcon />
+            )
+          }
+          onClick={handleTransferLho}
+          disabled={
+            isTransferring ||
+            isInitialLoading ||
+            isAnyProcessRunning ||
+            !isEligibleToInitiate
+          }
+        >
+          {isTransferring ? "Transferring..." : "Initiate Profit Transfer"}
+        </Button>
+      </Box>
+
+      {/* Main Table */}
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead sx={{ bgcolor: theme.palette.action.hover }}>
+            <TableRow>
+              <TableCell align="center">
+                <strong>Process Name</strong>
+              </TableCell>
+              <TableCell align="center">
+                <strong>Profit Calculation</strong>
+              </TableCell>
+              <TableCell align="center">
+                <strong>Created by</strong>
+              </TableCell>
+              <TableCell align="center">
+                <strong>Start Date</strong>
+              </TableCell>
+              <TableCell align="center">
+                <strong>End Date</strong>
+              </TableCell>
+              <TableCell align="center">
+                <strong>Action</strong>
+              </TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {isInitialLoading ? (
+              <TableRow>
+                <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
+                  <CircularProgress size={40} />
+                </TableCell>
+              </TableRow>
+            ) : tableData.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
+                  <NoDataIcon
+                    sx={{ fontSize: 48, color: "text.disabled", mb: 1 }}
+                  />
+                  <Typography variant="body1" color="text.secondary">
+                    There is no data to show.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : (
+              tableData
+                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                .map((row) => (
+                  <TableRow key={row.processRunId}>
+                    <TableCell align="center">{row.processType}</TableCell>
+                    <TableCell align="center">
+                      {getStatusChip(row.status)}
+                    </TableCell>
+                    <TableCell align="center">{row.triggeredBy}</TableCell>
+                    <TableCell align="center">
+                      {timeStampFormatter(row.processStartTime)}
+                    </TableCell>
+                    <TableCell align="center">
+                      {timeStampFormatter(row.processEndTime)}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Tooltip
+                        title={
+                          row.status === 2 ? "Get Summary" : "Not Available"
+                        }
+                      >
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={row.status !== 2}
+                            onClick={() => handleGetSummary(row)}
+                            color="primary"
+                          >
+                            <SummaryIcon />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))
+            )}
+          </TableBody>
+        </Table>
+        {/* <TablePagination
+          component="div"
+          count={totalElements}
+          page={page}
+          onPageChange={(e, p) => setPage(p)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(parseInt(e.target.value, 10));
+            setPage(0);
+          }}
+        /> */}
+      </TableContainer>
+
+      {/* --- SUMMARY DIALOG --- */}
+      <Dialog
+        open={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle sx={{ m: 0, p: 2 }}>
+          Circle Wise Summary
+          <IconButton
+            onClick={() => setSummaryOpen(false)}
+            sx={{ position: "absolute", right: 8, top: 8 }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          {summaryLoading ? (
+            <Box display="flex" justifyContent="center" py={5}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <>
+              <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell
+                        align="left"
+                        sx={{ bgcolor: theme.palette.grey[50] }}
+                      >
+                        <strong>Circle Name</strong>
+                      </TableCell>
+                      {/* Changed to align Right */}
+                      <TableCell
+                        align="right"
+                        sx={{ bgcolor: theme.palette.grey[50] }}
+                      >
+                        <strong>Total Profit/Loss</strong>
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {summaryData.map((row, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell align="left">{row.circleName}</TableCell>
+                        {/* Changed to align Right */}
+                        <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                          {Number(row.totalProfitLoss).toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, justifyContent: "space-between" }}>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={handleDownload}
+            disabled={summaryData.length === 0}
+          >
+            Download Excel
+          </Button>
+
+          <Button
+            variant="contained"
+            disabled={
+              anyPendingRequests ||
+              summaryData.length === 0 ||
+              isSubmitting ||
+              rowContext?.processStatus !== 2 ||
+              !isEligibleToInitiate
+            }
+            onClick={handleSubmitLhoRequest}
+            startIcon={
+              isSubmitting && <CircularProgress size={16} color="inherit" />
+            }
+          >
+            {isSubmitting ? "Submitting..." : "Submit Request"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}
