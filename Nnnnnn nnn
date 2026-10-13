@@ -1,735 +1,1394 @@
-import React from "react";
-import { styled } from "@mui/material/styles";
-import { Box, Tabs, Fab, Grid, Chip, Stack, TextField } from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
-import AddIcon from "@mui/icons-material/Add";
-//segmentmaster
-
-export const Boxdtatagrid = styled(Box)(({ theme }) => ({
-  height: 500,
-}));
-
-export const BoxStyle = styled(Box)(({ theme }) => ({
-  borderBottom: 1,
-  borderColor: "divider",
-}));
-
-export const Box2Style = styled(Box)(({ theme }) => ({
-  p: 1,
-}));
-
-export const TabsStyle = styled(Tabs)(({ theme }) => ({
-  width: "100%",
-}));
-
-//segmentmastertab
-
-export const StackStyle = styled(Stack)(({ theme }) => ({
-  mt: 1.5,
-}));
-
-export const FabStyle = styled(Fab)(({ theme }) => ({
-  position: "fixed",
-  borderRadius: 1,
-  fontSize: "15px",
-  bottom: theme.spacing(4),
-  right: theme.spacing(4),
-  zIndex: 1000,
-}));
-
-export const AddIconStyle = styled(AddIcon)(({ theme }) => ({
-  mr: 1,
-}));
-
-export const GridContainer = styled(Grid)(({ theme }) => ({
-  pt: 1,
-}));
-
-export const GridItem1 = styled(Grid)(({ theme }) => ({
-  mt: 2,
-  mb: 3,
-}));
-
-// export const Textfielss = styled(TextField)(({ theme }) => ({
-//     mb: 90,
-// }));
-
-export const GridItem2 = styled(Grid)(({ theme }) => ({
-  display: "flex",
-  justifyContent: "flex-end",
-  mt: 2,
-}));
-
-//mysegmentrequeststab
-export const DataGridStyles = styled(DataGrid)(({ theme }) => ({}));
-
-export const Chip1Style = styled(Chip)(({ theme }) => ({
-  p: 0.5,
-  m: 0,
-  width: "90%",
-}));
-import React, { useState } from "react";
-import PropTypes from "prop-types";
-import Tab from "@mui/material/Tab";
-import { Box, Paper } from "@mui/material";
-import ConnectWithoutContactIcon from "@mui/icons-material/ConnectWithoutContact";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-
-import { BoxStyle, Box2Style, TabsStyle } from "./YearEndProfitTransferStyles";
-import YearEndProfitTransferTab1 from "./YearEndProfitTransferTab1";
-import YearEndProfitTransferTab2 from "./YearEndProfitTransferTab2";
-
-function CustomTabPanel(props) {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`simple-tabpanel-${index}`}
-      aria-labelledby={`simple-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box2Style>{children}</Box2Style>}
-    </div>
-  );
-}
-
-CustomTabPanel.propTypes = {
-  children: PropTypes.node,
-  index: PropTypes.number.isRequired,
-  value: PropTypes.number.isRequired,
-};
-
-function a11yProps(index) {
-  return {
-    id: `simple-tab-${index}`,
-    "aria-controls": `simple-tabpanel-${index}`,
-  };
-}
-
-export default function YearEndProfitTransfer() {
-  const [value, setValue] = useState(0);
-
-  const handleChange = (event, newValue) => {
-    setValue(newValue);
-  };
-
-  return (
-    <Paper
-        elevation={2}
-        sx={{
-          display:"flex",
-          flexDirection:"column",
-          borderRadius:2,
-          overflow:"hidden",
-          minHeight:"calc(100vh - 122px)",
-          width:"100%",
-        }}>
-    <Box>
-      <BoxStyle fullwidth>
-        <TabsStyle
-          value={value}
-          onChange={handleChange}
-          aria-label="basic tabs example"
-          variant="fullWidth"
-        >
-          <Tab
-            label="Year-End Profit Transfer"
-            icon={<ConnectWithoutContactIcon />}
-            iconPosition="start"
-            {...a11yProps(0)}
-          />
-          <Tab
-            icon={<PendingActionsIcon />}
-            iconPosition="start"
-            label="My Requests"
-            {...a11yProps(1)}
-          />
-        </TabsStyle>
-      </BoxStyle>
-      <CustomTabPanel value={value} index={0}>
-        <YearEndProfitTransferTab1 />
-      </CustomTabPanel>
-      <CustomTabPanel value={value} index={1}>
-        <YearEndProfitTransferTab2 />
-      </CustomTabPanel>
-    </Box>
-    </Paper>
-  );
-}
-import {
-  Close as CloseIcon,
-  Download as DownloadIcon,
-  Inbox as NoDataIcon,
-  PlayArrow as PlayArrowIcon,
-  Assessment as SummaryIcon,
-} from "@mui/icons-material";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Box,
-  Button,
+  Typography,
   Chip,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
+  DialogContentText,
   DialogTitle,
+  Button,
+  CircularProgress,
+  Tooltip,
   IconButton,
-  Paper,
+  Stack,
+  Grid,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
-  TablePagination,
   TableRow,
-  Tooltip,
-  Typography,
-  useTheme,
+  Paper,
+  Checkbox,
+  TablePagination,
+  Stepper,
+  Step,
+  StepLabel,
+  StepConnector,
+  stepConnectorClasses,
+  styled,
+  Avatar,
+  Alert,
 } from "@mui/material";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import useApi from "../../hooks/useApi";
-import downloadFile from "../../utils/DownloadUtils";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import { DataGrid, GridToolbar } from "@mui/x-data-grid";
 import {
-  formatProcessTime,
-  timeStampFormatter,
-} from "../../utils/CommonUtilities";
+  DeleteSweep as DeleteSweepIcon,
+  Visibility as VisibilityIcon,
+  FileDownload as FileDownloadIcon,
+  Close as CloseIcon,
+} from "@mui/icons-material";
+import CheckIcon from "@mui/icons-material/Check";
+import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import InfoIcon from "@mui/icons-material/Info";
+import DeleteIcon from "@mui/icons-material/Delete";
+import { alpha } from "@mui/material/styles";
+import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import dayjs from "dayjs";
+import { useSelector } from "react-redux";
 
-// --- API Constants ---
-const TRIGGER_API_URL = "/PS/airflow/trigger";
-const INITIAL_DATA_URL = "/PS/process/processes/data/7";
-const SUMMARY_BASE_URL = "/CM/lho-transfers/summary/";
-const CREATE_REQUEST_URL = "/CR/create-request";
-const DOWNLOAD_URL = "/RS/reports/generate/base64";
+const styles = {
+  mainContainer: {
+    padding: 3,
+    height: "100%",
+    width: "100%",
+  },
+  dataGridContainer: {
+    height: 600,
+    width: "100%",
+    backgroundColor: "background.paper",
+    boxShadow: 2,
+    borderRadius: 2,
+    border: 1,
+    borderColor: "divider",
+    "& .MuiDataGrid-columnHeaders": {
+      backgroundColor: "#f5f5f5 !important",
+      fontWeight: 700,
+      borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+      position: 'sticky',
+      top: 0,
+      zIndex: 1,
+    },
+    "& .MuiDataGrid-row:hover": {
+      backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04),
+    },
+    // --- ADD THESE TWO BLOCKS TO KEEP THE 3 DOTS ALWAYS VISIBLE ---
+    "& .MuiDataGrid-menuIcon": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
+    "& .MuiDataGrid-iconButtonContainer": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
+  },
+  tableContainer: {
+    maxHeight: 450,
+    overflowY: "auto",
+    border: 1,
+    borderColor: "divider",
+    mt: 1,
+  },
+  fixedContentBox: {
+    minHeight: 400,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  tableHeaderCell: {
+    fontWeight: "bold",
+    backgroundColor: "#f5f6f8",
+    color: "text.primary",
+    whiteSpace: "nowrap",
+    zIndex: 10,
+  },
+  stickyHeaderColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    top: 0,
+    zIndex: 20,
+    backgroundColor: "background.paper",
+    borderBottom: 1,
+    borderRight: 1,
+    borderColor: "divider",
+    fontWeight: "bold",
+  }),
+  stickyBodyColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    zIndex: 5,
+    backgroundColor: "background.paper",
+    borderRight: 1,
+    borderColor: "divider",
+  }),
+  dialogTitle: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    pb: 1,
+  },
+  dialogActions: { p: 2, borderTop: 1, borderColor: "divider" },
+  loadingContainer: {
+    height: "100%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+};
+const formatCurrency = (val) => {
+  if (val === null || val === undefined || val === "") return "0.0000";
+  const strVal = String(val).trim();
+  const parts = strVal.split(".");
+  let intPart = parts[0];
+  let decPart = (parts[1] || "").padEnd(4, "0").substring(0, 4);
+  intPart = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${intPart}.${decPart}`;
+};
+const getStatusChipColor = (status) => {
+  switch (status) {
+    case "ACCEPTED":
+      return "success";
+    case "REJECTED":
+      return "error";
+    default:
+      return "warning";
+  }
+};
+const getTxnTypeColor = (txnType) =>
+  txnType === "Credit" ? "error" : "success";
 
-export default function YearEndProfitTransferTab1() {
-  const theme = useTheme();
+const CustomConnector = styled(StepConnector)(({ theme }) => ({
+  [`&.${stepConnectorClasses.alternativeLabel}`]: {
+    top: 12,
+    left: 'calc(-50% + 12px)',
+    right: 'calc(50% + 12px)',
+  },
+  [`&.${stepConnectorClasses.active}`]: {
+    [`& .${stepConnectorClasses.line}`]: { borderColor: theme.palette.success.main },
+  },
+  [`&.${stepConnectorClasses.completed}`]: {
+    [`& .${stepConnectorClasses.line}`]: { borderColor: theme.palette.success.main },
+  },
+  [`& .${stepConnectorClasses.line}`]: {
+    borderColor: theme.palette.divider,
+    borderTopWidth: 2,
+    borderRadius: 1,
+  },
+}));
+
+
+const BigConnector = styled(StepConnector)(({ theme }) => ({
+  [`&.${stepConnectorClasses.alternativeLabel}`]: {
+    top: 20,
+    left: 'calc(-50% + 80px)',
+    right: 'calc(50% + 80px)',
+  },
+  [`&.${stepConnectorClasses.active}`]: {
+    [`& .${stepConnectorClasses.line}`]: { borderColor: theme.palette.success.main },
+  },
+  [`&.${stepConnectorClasses.completed}`]: {
+    [`& .${stepConnectorClasses.line}`]: { borderColor: theme.palette.success.main },
+  },
+  [`& .${stepConnectorClasses.line}`]: {
+    borderColor: theme.palette.divider,
+    borderTopWidth: 3,
+    borderRadius: 1,
+  },
+}));
+
+const CustomWorkflowIcon = (props) => {
+  const { statusFlag, iconLetter, label, isMini } = props;
+  const showTextInside = isMini && (statusFlag === "ACTIVE" || statusFlag === "ESCALATED");
+
+  const baseStyle = {
+    height: 24, // Smaller, consistent size
+    borderRadius: 12,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2,
+    position: "relative",
+    fontWeight: "bold",
+    fontSize: "0.7rem",
+    px: showTextInside ? 1.2 : 0,
+    minWidth: showTextInside ? "auto" : 24,
+    width: showTextInside ? "max-content" : 24,
+    whiteSpace: "nowrap",
+    boxSizing: "border-box", // Strictly ensures borders don't bloat the circle making them unequal
+  };
+
+  if (statusFlag === "COMPLETED") {
+    return (
+      <Box sx={{ ...baseStyle, backgroundColor: "success.main", border: "2px solid", borderColor: "success.main", color: "#fff" }}>
+        <CheckIcon sx={{ fontSize: 16 }} />
+      </Box>
+    );
+  }
+  if (statusFlag === "REJECTED") {
+    return (
+      <Box sx={{ ...baseStyle, backgroundColor: "error.main", border: "2px solid", borderColor: "error.main", color: "#fff" }}>
+        <CloseIcon sx={{ fontSize: 16 }} />
+      </Box>
+    );
+  }
+  if (statusFlag === "ESCALATED") {
+    return (
+      <Box sx={{ ...baseStyle, backgroundColor: "white", border: "2px solid", borderColor: "warning.main", color: "warning.main" }}>
+        {showTextInside ? `${label} !` : "!"}
+      </Box>
+    );
+  }
+  if (statusFlag === "ACTIVE") {
+    return (
+      <Box sx={{ ...baseStyle, backgroundColor: "white", border: "2px solid", borderColor: "warning.main", color: "warning.main" }}>
+        {showTextInside ? label : iconLetter}
+      </Box>
+    );
+  }
+
+  // PENDING / FUTURE STEPS
+  return (
+    <Box sx={{ ...baseStyle, backgroundColor: "white", border: "2px solid #e2e8f0", color: "text.disabled" }}>
+      {iconLetter}
+    </Box>
+  );
+};
+
+
+const BigWorkflowIcon = (props) => {
+  const { statusFlag, label } = props;
+  const baseStyle = {
+    height: 40,
+    minWidth: 160,
+    borderRadius: 20,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 1,
+    px: 2,
+    position: "relative",
+    zIndex: 2,
+    backgroundColor: "white",
+  };
+  const InfoBadge = () => (
+    <Box
+      sx={{
+        position: "absolute",
+        top: -4,
+        right: -4,
+        width: 18,
+        height: 18,
+        borderRadius: "50%",
+        backgroundColor: "warning.main",
+        color: "white",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "11px",
+        fontWeight: "bold",
+        border: "2px solid white",
+      }}
+    >
+      !
+    </Box>
+  );
+
+  if (statusFlag === "COMPLETED")
+    return (
+      <Box
+        sx={{
+          ...baseStyle,
+          border: "2px solid",
+          borderColor: "success.main",
+          backgroundColor: "#e8f5e9",
+          color: "success.main",
+        }}
+      >
+        <CheckIcon sx={{ fontSize: 18 }} />
+        <Typography variant="body2" fontWeight="bold">
+          {label}
+        </Typography>
+      </Box>
+    );
+  if (statusFlag === "REJECTED")
+    return (
+      <Box
+        sx={{
+          ...baseStyle,
+          border: "2px solid",
+          borderColor: "error.main",
+          backgroundColor: "#ffebee",
+          color: "error.main",
+        }}
+      >
+        <CloseIcon sx={{ fontSize: 18 }} />
+        <Typography variant="body2" fontWeight="bold">
+          {label}
+        </Typography>
+      </Box>
+    );
+  if (statusFlag === "ESCALATED" || statusFlag === "ACTIVE")
+    return (
+      <Box
+        sx={{
+          ...baseStyle,
+          border: "2px solid",
+          borderColor: "warning.main",
+          color: "text.primary",
+        }}
+      >
+        <Typography variant="body2" fontWeight="bold">
+          {label}
+        </Typography>
+        <InfoBadge />
+      </Box>
+    );
+  return (
+    <Box
+      sx={{ ...baseStyle, border: "2px solid #e2e8f0", color: "text.disabled" }}
+    >
+      <Typography variant="body2" fontWeight="bold">
+        {label}
+      </Typography>
+    </Box>
+  );
+};
+
+const calculateTimeElapsed = (startDateString) => {
+  if (!startDateString) return "N/A";
+  const diffMins = Math.floor(
+    Math.abs(new Date() - new Date(startDateString)) / 60000
+  );
+  if (diffMins === 0) return "Just now";
+  if (diffMins < 60) return `${diffMins} min`;
+  const hours = Math.floor(diffMins / 60);
+  return diffMins % 60 > 0 ? `${hours} hr ${diffMins % 60} min` : `${hours} hr`;
+};
+
+function CustomNoRowsOverlay() {
+  return (
+    <Stack height="100%" alignItems="center" justifyContent="center">
+      {" "}
+      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />{" "}
+      <Typography variant="h6">No Requests Found</Typography>{" "}
+    </Stack>
+  );
+}
+
+const formatDateTime = (dateVal) => {
+  if (!dateVal) return "N/A";
+  // Removing .toLowerCase() keeps DayJS's native capitalized months (e.g. 'Jun')
+  return dayjs(dateVal).format("DD MMM YYYY, hh:mm a");
+};
+
+const handleBlurAll = () => {
+  // This finds any element currently holding focus and forces it to lose focus
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur();
+  }
+};
+
+export default function VoucherPostingStatus() {
   const { callApi } = useApi();
   const showSnackBar = useCustomSnackbar();
   const isMounted = useRef(true);
+  const user = useSelector((state) => state.auth?.user || null);
 
-  // Table & Loading States
-  const [isTransferring, setIsTransferring] = useState(false);
-  const [tableData, setTableData] = useState([]);
-  const [totalElements, setTotalElements] = useState(0);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [myRequests, setMyRequests] = useState([]);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
-  // Summary & Submission States
-  const [summaryOpen, setSummaryOpen] = useState(false);
-  const [isEligibleToInitiate, setIsEligibleToInitiate] = useState(false);
-  const [summaryData, setSummaryData] = useState([]);
-  const [summaryTotals, setSummaryTotals] = useState({
-    totalAmount: 0,
-    totalRecordCount: 0,
-  });
-  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const [rowContext, setRowContext] = useState({
-    processRunId: null,
-    processId: null,
-    runId: null,
-    etlDate: null,
-    processStatus: null,
-  });
-
-  const getTodayFormatted = () => new Date().toISOString().split("T")[0];
-
-  /**
-   * DATA FETCHING
-   */
-  const fetchInitialData = useCallback(
-    async (isPolling = false) => {
-      if (!isPolling) setIsInitialLoading(true);
-      try {
-        const paginatedUrl = `${INITIAL_DATA_URL}`;
-        const response = await callApi(paginatedUrl, null, "GET");
-        if (isMounted.current && response) {
-          setTableData(response.initialData || []);
-          setTotalElements(
-            response.totalElements || response.initialData?.length || 0,
-          );
-        }
-      } catch (error) {
-        if (!isPolling && error !== undefined) {
-          const errorMessage = error?.message || "Failed to load process data";
-          showSnackBar(errorMessage, "error");
-        }
-      } finally {
-        if (isMounted.current && !isPolling) setIsInitialLoading(false);
-      }
-    },
-    [callApi, showSnackBar],
-  );
-
-  const fetchMyRequests = useCallback(async () => {
-    const payload = { requestType: "YEAR_END_PROFIT_TRANSFER" };
-    const response = await callApi("/CR/my-requests", payload, "POST");
-    if (response?.data) {
-      setMyRequests(response.data);
-      return response.data;
-    } else {
-      setMyRequests([]);
-      return [];
-    }
-  }, [callApi]);
+  const [selectedBatch, setSelectedBatch] = useState(null);
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
+  const [totalRowCount, setTotalRowCount] = useState(0);
+  const [filterModel, setFilterModel] = useState({ items: [] });
+  // View/Paginate States
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [viewingBatchId, setViewingBatchId] = useState(null);
+  const [viewingBatch, setViewingBatch] = useState(null);
+  const [viewingBatchState, setViewingBatchState] = useState("");
+  const [viewingBatchCreatorId, setViewingBatchCreatorId] = useState(null);
+  const [viewingBatchRequestDate, setViewingBatchRequestDate] = useState(null);
+  const [viewingBatchRequestCount, setViewingBatchRequestCount] = useState(0);
+  const [viewingBatchTimeSinceLastAction, setViewingBatchTimeSinceLastAction] = useState("");
+  const [workflowStepsMap, setWorkflowStepsMap] = useState({});
+  const [vidDetails, setVidDetails] = useState(null);
+  const [dynamicSteps, setDynamicSteps] = useState([]);
+  const [workflowHistory, setWorkflowHistory] = useState([]);
+  const [isFetchingVid, setIsFetchingVid] = useState(false);
+  const [isFetchingSteps, setIsFetchingSteps] = useState(false);
+  const [isDescExpanded, setIsDescExpanded] = useState(false);
+  const [dbRoleMap, setDbRoleMap] = useState({});
+  const [viewingBatchOrder, setViewingBatchOrder] = useState(1);
+  const [viewingBatchRawStatus, setViewingBatchRawStatus] = useState("");
 
   useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        const rolesData = await callApi(
+          "/JS/voucher/active-roles",
+          null,
+          "GET"
+        );
+        if (rolesData && isMounted.current) setDbRoleMap(rolesData);
+      } catch (err) { }
+    };
+    fetchRoles();
+  }, [callApi]);
+
+  const getRoleDisplayName = (roleValue) => {
+    if (!roleValue || roleValue === "null" || roleValue === "System")
+      return "System";
+    return dbRoleMap[String(roleValue)] || roleValue;
+  };
+
+  const handleDownloadExcel = async () => {
+    if (!viewingBatchId) return;
+
+    try {
+      showSnackBar("Downloading Excel...", "info");
+
+      const response = await callApi(
+        `/JS/voucher/download-batch/${viewingBatchId}`,
+        null,
+        "GET",
+        "blob",
+        null,
+        {},
+        false
+      );
+
+      const blobData = response.data || response;
+      if (!blobData) throw new Error("No data received");
+
+      const blob = new Blob([blobData], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Batch_${viewingBatchId}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showSnackBar("Download complete.", "success");
+    } catch (e) {
+      console.error("Download failed:", e);
+      showSnackBar("Failed to download Excel file.", "error");
+    }
+  };
+
+// --- SAFE AUTH CHECK (Redux) ---
+  useEffect(() => {
     isMounted.current = true;
-    fetchInitialData();
+    
+    // Use the Redux 'user' object directly
+    if (user && user.userId) {
+      setCurrentUserId(String(user.userId));
+    }
+    
     return () => {
       isMounted.current = false;
     };
-  }, [fetchInitialData, page, rowsPerPage]);
+  }, [user]); // Add 'user' to dependency array
 
-  useEffect(() => {
-    const pollInterval = setInterval(() => {
-      fetchInitialData(true);
-    }, 10000);
+  const fetchMyBatches = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
+   try {
+      // Synchronously grab the role directly from the Redux user object
+      const actualRoleId = user?.roleId || user?.role || user?.ROLE_ID || null;
 
-    return () => clearInterval(pollInterval);
-  }, [fetchInitialData, page, rowsPerPage]);
+      // --- EXTRACT SEARCH FILTERS CORRECTLY ---
+      let batchIdSearch = "";
+      let vidSearch = "";
 
-  const handleCancelAllRequest = async () => {
-    try {
-      // const myRequests = await fetchMyRequests();
-
-      // const requestId = myRequests
-      //   ?.filter((req) => req.reqStatus === "PENDING")
-      //   ?.at(0)?.id;
-      // if (!requestId) return;
-      // const payload = {
-      //   requestId,
-      //   remarks: "Auto-canceled this Request",
-      // };
-
-      const payload = {
-        requestType: "YEAR_END_PROFIT_TRANSFER",
-        remarks: "Cancelling all requests to Re-Inititate Profit Transfer",
-      };
-
-      const response = await callApi("/CR/bulk-cancel", payload, "POST");
-      if (response?.success) {
-        showSnackBar(
-          ` All previous pending Year-End Profit Transfer requests are cancelled successfully.`,
-          "success",
-        );
-
-        return true;
-      } else {
-        console.log("Inside else");
-        showSnackBar(
-          response?.message
-            ? response?.message
-            : "Failed to  cancel all requests, Kindly try again",
-          "error",
-        );
-        return false;
+      if (filterModel && filterModel.items) {
+        filterModel.items.forEach(item => {
+          if (item.field === 'batchId' && item.value) batchIdSearch = item.value;
+          if (item.field === 'vid' && item.value) vidSearch = item.value;
+        });
       }
-    } catch (error) {
-      console.error(error);
-      showSnackBar("Failed to  cancel all requests, Kindly try again", "error");
 
-      return false;
-    }
-  };
+      // --- THE FIX: We must pass batchId and vid in the API call! ---
+      const apiUrl = `/JS/voucher/all-requests-summary?roleId=${actualRoleId}&page=${paginationModel.page}&size=${paginationModel.pageSize}&batchId=${encodeURIComponent(batchIdSearch)}&vid=${encodeURIComponent(vidSearch)}`;
 
-  const fetchIsEligibleToInitiate = async () => {
-    try {
-      const payload = {};
+      const response = await callApi(apiUrl, null, "GET");
 
-      const response = await callApi(
-        "/CM/lho-transfers/year-end-eligibility",
-        payload,
-        "GET",
+      console.log("2. Raw API Response:", response);
+
+      let fetchedRows = [];
+      if (response && response.content) {
+        fetchedRows = response.content;
+        setTotalRowCount(response.totalElements);
+      } else if (Array.isArray(response)) {
+        fetchedRows = response;
+        setTotalRowCount(response.length);
+      }
+
+      console.log("3. Extracted Rows:", fetchedRows);
+
+      const uniqueWorkflows = [
+        ...new Set(
+          fetchedRows.map((row) => row?.approvalWorkflow).filter(Boolean)
+        ),
+      ];
+      console.log("4. Unique Workflows to fetch steps for:", uniqueWorkflows);
+
+      const stepsMap = {};
+      await Promise.all(
+        uniqueWorkflows.map(async (wfCode) => {
+          try {
+            const stepsResponse = await callApi(
+              `/JS/voucher/workflow/steps/${wfCode}`,
+              null,
+              "GET"
+            );
+            const steps = Array.isArray(stepsResponse)
+              ? stepsResponse
+              : stepsResponse?.data || [];
+
+            stepsMap[wfCode] = steps;
+          } catch (e) {
+            console.warn(`Failed to fetch steps for ${wfCode}`, e);
+            stepsMap[wfCode] = [
+              { state: "P", designation: "Creator" },
+              { state: "APPROVED", designation: "Approver" }
+            ];
+          }
+        })
       );
-      setIsEligibleToInitiate(response?.data?.eligible);
-    } catch (error) {
-      console.error(error);
-    }
-  };
 
-  useEffect(() => {
-    fetchIsEligibleToInitiate();
-  }, []);
+      console.log("5. Final Steps Map:", stepsMap);
 
-  const handleTransferLho = async () => {
-    setIsTransferring(true);
-    const payload = {
-      dagId: "cbs_wrap_dag",
-      processId: 7,
-      remarks: "Profit Transfer Initiated",
-    };
+      if (isMounted.current) {
+        setWorkflowStepsMap(stepsMap);
+        setRows(fetchedRows);
+      }
+    } catch (err) {
+      console.error("CATCH BLOCK TRIGGERED. Full Error Object:", err);
+      console.error("Error Message:", err.message);
 
-    try {
-      const cancelRequestFlag = await handleCancelAllRequest();
-
-      if (!cancelRequestFlag) return;
-
-      await callApi(TRIGGER_API_URL, payload, "POST");
-      showSnackBar("Profit Transfer Inititated successfully", "success");
-      fetchInitialData();
-    } catch (error) {
-      const errorMessage =
-        error?.message || "Failed to initiate Profit Transfer";
-      showSnackBar(errorMessage, "warning");
+      if (isMounted.current && err.name !== "CanceledError") {
+        showSnackBar(
+          `Failed to load: ${err.message}`,
+          "error"
+        );
+      }
     } finally {
-      setIsTransferring(false);
+      if (isMounted.current) setLoading(false);
     }
+    // --- THE FIX: Must add filterModel to dependencies so React re-runs this when you type ---
+  }, [callApi, showSnackBar, paginationModel.page, paginationModel.pageSize, filterModel]);
+
+  useEffect(() => {
+    fetchMyBatches();
+  }, [fetchMyBatches]);
+
+  const hasProcessingBatches = rows.some((row) => row.batchStatus === 'S');
+
+  useEffect(() => {
+    let interval;
+    if (hasProcessingBatches) {
+      interval = setInterval(() => {
+        fetchMyBatches(true); // true = silent mode
+      }, 5000); // Ping server every 5 seconds
+    }
+    return () => clearInterval(interval);
+  }, [hasProcessingBatches, fetchMyBatches]);
+
+  const handleOpenModal = (batch) => {
+    setSelectedBatch(batch);
+    setIsModalOpen(true);
+  };
+  const handleCloseModal = () => {
+    if (isSubmitting) return;
+    setIsModalOpen(false);
+    setSelectedBatch(null);
   };
 
-  const handleSubmitLhoRequest = async () => {
+  const handleSubmitBatchCancel = async () => {
     setIsSubmitting(true);
-    const finalRequestPayload = {
-      requestType: "YEAR_END_PROFIT_TRANSFER",
-      changeType: "ADD",
-      targetId: null,
-      payload: {
-        processRunId: rowContext.processRunId,
-        processId: rowContext.processId,
-        etlDate: rowContext.etlDate,
-        batchId: String(rowContext.runId),
-        date: getTodayFormatted(),
-        totalAmount: summaryTotals.totalAmount,
-        totalRecordCount: summaryTotals.totalRecordCount,
-        circleWiseDetails: summaryData.map((item) => ({
-          transferDate: getTodayFormatted(),
-          circleName: item.circleName,
-          totalProfitLoss: Number(item.totalProfitLoss),
-        })),
-      },
-    };
+    const targetBatchId = selectedBatch.batchId; // Store it before modal closes
 
     try {
-      const resposne = await callApi(
-        CREATE_REQUEST_URL,
-        finalRequestPayload,
-        "POST",
+      await callApi(
+        `/JS/voucher/my-requests/by-batch/${targetBatchId}`,
+        null,
+        "DELETE"
       );
-      if (resposne?.data?.id) {
-        showSnackBar(
-          "Year-End Profit Transfer Request Submitted Successfully with request id " +
-            resposne?.data?.id,
-          "success",
-        );
-      }
-      setSummaryOpen(false);
+      showSnackBar(
+        `Batch ${targetBatchId} deletion process started.`,
+        "success"
+      );
+
+      setRows((prevRows) =>
+        prevRows.filter((row) => row.batchId !== targetBatchId)
+      );
+
+      handleCloseModal();
+
+      setTimeout(() => {
+        fetchMyBatches();
+      }, 1500);
     } catch (error) {
-      const errorMessage =
-        error?.message || "Submission failed. Check network/payload";
-      showSnackBar(errorMessage, "warning");
+      const serverMsg = error?.response?.data?.message
+        || error?.response?.data?.error
+        || (typeof error?.response?.data === 'string' ? error.response.data : null)
+        || error?.message;
+
+      showSnackBar(serverMsg || "Failed to delete batch. It may have already been processed.", "error");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleGetSummary = async (row) => {
-    setSummaryOpen(true);
-    setSummaryLoading(true);
-    setRowContext({
-      processRunId: row.processRunId,
-      processId: row.processId,
-      runId: row.runId,
-      etlDate: row.etlDate,
-      processStatus: row.status,
-    });
+  const handleOpenViewModal = async (row) => {
+    // 1. CLEAN SLATE FIX: Wipe all old data BEFORE opening the modal so nothing flashes!
+    setVidDetails(null);
+    setDynamicSteps([]);
+    setWorkflowHistory([]);
+    setIsDescExpanded(false);
+    setViewingBatchId(row.batchId);
+    setViewingBatchCreatorId(row.creatorId);
+    setViewingBatch(row);
+    setViewingBatchState(row.currentStatus || "");
+    setViewingBatchRawStatus(row.batchStatus || "");
+    setViewingBatchRequestDate(row.requestDate);
+    setViewingBatchRequestCount(row.requestCount || 0);
+    setViewingBatchOrder(row.currentOrder);
+    setViewingBatchTimeSinceLastAction(row.timeSinceLastAction || "");
+
+    setIsViewModalOpen(true); // Open modal immediately
+    setIsFetchingSteps(true);
+    setIsFetchingVid(true);
 
     try {
-      const response = await callApi(
-        `${SUMMARY_BASE_URL}${row.processRunId}`,
-        null,
-        "GET",
-      );
+      const workflowCode = row.approvalWorkflow || "Workflow_3";
+      const [stepsData, summaryData, historyData] = await Promise.all([
+        callApi(`/JS/voucher/workflow/steps/${workflowCode}`, null, "GET"),
+        callApi(`/JS/voucher/batch-summary/${row.batchId}`, null, "GET"),
+        callApi(`/JS/voucher/workflow-history/${row.batchId}`, null, "GET"),
+      ]);
 
-      // Navigate through the new response structure
-      const responseData = response?.data || {};
-      const rawMap = responseData.circleWiseDetails || {};
-
-      setSummaryTotals({
-        totalAmount: responseData.totalAmount || 0,
-        totalRecordCount: responseData.totalRecordCount || 0,
-      });
-
-      // Mapped name to circleName
-      setSummaryData(
-        Object.entries(rawMap).map(([name, balance]) => ({
-          circleName: name,
-          totalProfitLoss: balance,
-        })),
-      );
-    } catch (error) {
-      const errorMessage = error?.message || "Could not fetch summary data";
-      showSnackBar(errorMessage, "error");
-    } finally {
-      setSummaryLoading(false);
-    }
-  };
-
-  const handleDownload = async () => {
-    try {
-      const payload = {
-        reportType: "profit_transfer_report",
-        date: "31-03-2026",
-      };
-
-      const responseData = await callApi(DOWNLOAD_URL, payload, "POST");
-      const { excelBase64 } = responseData;
-
-      if (!excelBase64) {
-        showSnackBar("Failed to download file", "error");
-        return;
-      }
-
-      let fileName = "Profit_Transfer_Report_2026-03-31";
-      downloadFile(excelBase64, "excel", fileName, true);
-
-      showSnackBar("File downloaded successfully", "success");
+      setDynamicSteps(Array.isArray(stepsData) ? stepsData : []);
+      setVidDetails(summaryData);
+      setWorkflowHistory(Array.isArray(historyData) ? historyData : []);
     } catch (err) {
-      console.error(err);
-      showSnackBar("Error while downloading file", "error");
+      showSnackBar("Failed to load details.", "error");
+    } finally {
+      setIsFetchingSteps(false);
+      setIsFetchingVid(false);
     }
   };
 
-  const getStatusChip = (s) => {
-    if (s === 1)
-      return (
-        <Chip
-          label="In Progress"
-          color="primary"
-          variant="outlined"
-          size="small"
-        />
-      );
-    if (s === 2)
-      return <Chip label="Profit Calculated" color="success" size="small" />;
-    if (s === 3) return <Chip label="Failed" color="error" size="small" />;
-    return <Chip label="Unknown" variant="outlined" size="small" />;
+  const handleCloseViewModal = () => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    document.body.focus();
+
+    // 2. SMOOTH CLOSE FIX: Set the modal to false IMMEDIATELY to trigger the MUI fade-out animation.
+    setIsViewModalOpen(false);
+
+    // 3. Wait for the 300ms fade-out animation to finish, THEN wipe the memory.
+    setTimeout(() => {
+      setViewingBatchId(null);
+      setViewingBatch(null);
+      setIsDescExpanded(false);
+      setVidDetails(null);
+      setDynamicSteps([]);
+      setWorkflowHistory([]);
+    }, 300);
   };
 
-  useEffect(() => {
-    if (!summaryOpen) return;
-    fetchMyRequests();
-  }, [fetchMyRequests, summaryOpen]);
 
-  // Check if any process is currently running
-  const isAnyProcessRunning = tableData.some((row) => row.status === 1);
-  const anyPendingRequests = useMemo(() => {
-    return myRequests?.some((row) => row.reqStatus === "PENDING");
-  }, [myRequests]);
+  const handleDetailPageChange = (event, newPage) => {
+    setDetailPage(newPage);
+    fetchDetailRows(viewingBatchId, newPage, detailRowsPerPage);
+  };
+  const handleDetailRowsPerPageChange = (event) => {
+    const newSize = parseInt(event.target.value, 10);
+    setDetailRowsPerPage(newSize);
+    setDetailPage(0);
+    fetchDetailRows(viewingBatchId, 0, newSize);
+  };
+
+  const handleCancelSelectedJournals = async () => {
+    if (selectedJournalPrefixes.length === 0) {
+      showSnackBar("Select at least one entry.", "warning");
+      return;
+    }
+    setIsPartialSubmitting(true);
+    try {
+      await callApi(
+        "/JS/voucher/my-requests/by-journal-list",
+        selectedJournalPrefixes,
+        "DELETE"
+      );
+      showSnackBar("Selected entries deleted successfully.", "success");
+      handleCloseViewModal();
+    } catch (error) {
+      showSnackBar("Failed to delete selection", "error");
+      setIsPartialSubmitting(false);
+    }
+  };
+
+  // Standardized normalization for matching user contexts safely
+  const isViewingSelfCreated =
+    currentUserId &&
+    viewingBatchCreatorId &&
+    String(currentUserId).trim().toUpperCase() === String(viewingBatchCreatorId).trim().toUpperCase();
+
+  // batch delete
+  const isBatchDeletable =
+    viewingBatchRawStatus === "P" &&
+    Number(viewingBatchOrder) === 2 &&
+    !isFetchingSteps &&
+    workflowHistory.length <= 1;
+
+  const columns = [
+    {
+      field: "batchId",
+      headerName: "Batch ID",
+      width: 120,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: false, // <--- ENABLED
+      filterable: true,         // <--- ENABLED
+      sortable: false,
+    },
+    {
+      field: "vid",
+      headerName: "VID",
+      width: 150,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: false, // <--- ENABLED
+      filterable: true,         // <--- ENABLED
+      sortable: false,
+    },
+    {
+      field: "currentStatus",
+      headerName: "Workflow Progress",
+      width: 440,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: true,
+      sortable: false,
+      renderCell: (params) => {
+        if (params.row.batchStatus === 'S') {
+          return (
+            <Box sx={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "flex-start", pl: 2, height: "100%" }}>
+              <Chip icon={<CircularProgress size={16} sx={{ color: 'primary.main' }} />} label="Creating Batch..." variant="outlined" color="primary" sx={{ fontWeight: 'bold', borderStyle: 'dashed' }} />
+            </Box>
+          );
+        }
+
+        const state = params.value || "";
+        const workflow = params.row.approvalWorkflow;
+        const isRejected = params.row.currentStatus === "REJECTED" || params.row.batchStatus === "R";
+        const steps = workflowStepsMap[workflow] || [];
+
+        let activeStep = params.row.currentOrder ? params.row.currentOrder - 1 : 0;
+
+        // PERFECTED STEPPER LOGIC:
+        if (params.row.isExecutionFailed) {
+          activeStep = steps.length - 1;
+        } else if (!isRejected && (state === "POSTED" || state === "C" || params.row.currentStatus === "POSTED")) {
+          // 1. ONLY push past the end (All Green) if it is fully completed and posted
+          activeStep = steps.length;
+        } else if (!isRejected && (state === "SCHEDULED" || state === "WAITING FOR EXECUTION" || state === "APPROVED")) {
+          // 2. If it is waiting for the scheduler, PAUSE on the final Execution step!
+          activeStep = steps.length - 1;
+        }
+
+        if (activeStep === -1) activeStep = 0;
+
+
+        const escalationHours = params.row.escalationTime || 24;
+        const hoursPending = Math.abs(new Date() - new Date(params.row.requestDate)) / 36e5;
+        const isEscalated = !isRejected && activeStep < steps.length && hoursPending > escalationHours;
+
+        return (
+          <Box sx={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "flex-start", pl: 2, height: "100%" }}>
+            <Stepper activeStep={activeStep} alternativeLabel connector={<CustomConnector />} sx={{ width: "100%", mt: 0.5 }}>
+              {steps.map((step, index) => {
+                const isCompleted = index < activeStep;
+                const isCurrent = index === activeStep;
+
+                let statusFlag = "PENDING";
+                if (isCompleted) statusFlag = "COMPLETED";
+                if (isCurrent && isRejected) statusFlag = "REJECTED";
+                // NEW FIX: Turn the Execution stage RED with an X if it failed!
+                else if (isCurrent && params.row.isExecutionFailed) statusFlag = "REJECTED";
+                else if (isCurrent && isEscalated) statusFlag = "ESCALATED";
+                else if (isCurrent) statusFlag = "ACTIVE";
+
+                const label = step?.designation || step?.state || "Unknown";
+
+                return (
+                  <Tooltip title={statusFlag === "ESCALATED" ? "Escalation Time lapsed - Attention Required" : label} key={`${label}-${index}`} arrow>
+                    <Step completed={isCompleted} active={isCurrent} sx={{ px: 0, opacity: (isRejected || params.row.isExecutionFailed) && index > activeStep ? 0.3 : 1 }}>
+                      <StepLabel
+                        StepIconComponent={() => (
+                          <CustomWorkflowIcon statusFlag={statusFlag} iconLetter={label.charAt(0).toUpperCase()} label={label} isMini={true} />
+                        )}
+                        sx={{ p: 0, m: 0 }}
+                      />
+                    </Step>
+                  </Tooltip>
+                );
+              })}
+            </Stepper>
+          </Box>
+        );
+      },
+    },
+    {
+      field: "creatorId",
+      headerName: "Creator",
+      width: 300,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: true,
+      sortable: false,
+
+      cellClassName: "creator-cell",
+
+      renderCell: (p) => {
+        const name = p.row.creatorName || p.value;
+        const id = p.value;
+
+        return (
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="center"
+            spacing={1}
+            sx={{
+              width: "100%",
+              height: "100%",
+              overflow: "visible !important",
+              px: 1,
+            }}
+          >
+            <AccountCircleIcon sx={{ color: "text.secondary", fontSize: 20 }} />
+            <Typography
+              variant="body2"
+              sx={{
+                whiteSpace: "nowrap",
+                overflow: "visible !important",
+                textOverflow: "clip",
+                textAlign: "center",
+              }}
+            >
+              {name} <strong>({id})</strong>
+            </Typography>
+          </Stack>
+        );
+      },
+    },
+    {
+      field: "requestDate",
+      headerName: "Submitted On",
+      width: 200,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: true,
+      sortable: false,
+      renderCell: (p) => formatDateTime(p.value),
+    },
+
+    {
+      field: "requestCount",
+      headerName: "No. of Entries",
+      width: 150,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: true,
+      sortable: false,
+    },
+    {
+      field: "actions",
+      headerName: "Action",
+      width: 140,
+      align: "center",
+      headerAlign: "center",
+      disableColumnMenu: true,
+      sortable: false,
+      renderCell: (params) => {
+        const isDraft = params.row.batchStatus === 'S'; // NEW: Check if still compiling
+
+        return (
+          <Tooltip title={isDraft ? "Data is currently being compiled. Please wait." : "View & Actions"} arrow>
+            <span> {/* Required span to allow Tooltip to show over a disabled button */}
+              <Button
+                variant="contained"
+                size="small"
+                disabled={isDraft} // NEW: Locks the button
+                onClick={() => handleOpenViewModal(params.row)}
+                sx={{ textTransform: "none", borderRadius: 2, boxShadow: 0 }}
+              >
+                View & Action
+              </Button>
+            </span>
+          </Tooltip>
+        );
+      },
+    },
+  ];
 
   return (
-    <Box p={3} width="100%">
-      {/* Header Action */}
-      <Box display="flex" justifyContent="flex-end" mb={2}>
-        <Button
-          variant="contained"
-          startIcon={
-            isTransferring ? (
-              <CircularProgress size={20} color="inherit" />
-            ) : (
-              <PlayArrowIcon />
-            )
-          }
-          onClick={handleTransferLho}
-          disabled={
-            isTransferring ||
-            isInitialLoading ||
-            isAnyProcessRunning ||
-            !isEligibleToInitiate
-          }
-        >
-          {isTransferring ? "Transferring..." : "Initiate Profit Transfer"}
-        </Button>
-      </Box>
+    <Paper elevation={0}>
+      <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.main" sx={{ ml: 6, mt: 2 }}>
+        Voucher Posting Status
+      </Typography>
+      <Box sx={styles.mainContainer}>
 
-      {/* Main Table */}
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead sx={{ bgcolor: theme.palette.action.hover }}>
-            <TableRow>
-              <TableCell align="center">
-                <strong>Process Name</strong>
-              </TableCell>
-              <TableCell align="center">
-                <strong>Profit Calculation</strong>
-              </TableCell>
-              <TableCell align="center">
-                <strong>Created by</strong>
-              </TableCell>
-              <TableCell align="center">
-                <strong>Start Date</strong>
-              </TableCell>
-              <TableCell align="center">
-                <strong>End Date</strong>
-              </TableCell>
-              <TableCell align="center">
-                <strong>Action</strong>
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {isInitialLoading ? (
-              <TableRow>
-                <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
-                  <CircularProgress size={40} />
-                </TableCell>
-              </TableRow>
-            ) : tableData.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
-                  <NoDataIcon
-                    sx={{ fontSize: 48, color: "text.disabled", mb: 1 }}
-                  />
-                  <Typography variant="body1" color="text.secondary">
-                    There is no data to show.
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              tableData
-                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((row) => (
-                  <TableRow key={row.processRunId}>
-                    <TableCell align="center">{row.processType}</TableCell>
-                    <TableCell align="center">
-                      {getStatusChip(row.status)}
-                    </TableCell>
-                    <TableCell align="center">{row.triggeredBy}</TableCell>
-                    <TableCell align="center">
-                      {timeStampFormatter(row.processStartTime)}
-                    </TableCell>
-                    <TableCell align="center">
-                      {timeStampFormatter(row.processEndTime)}
-                    </TableCell>
-                    <TableCell align="center">
-                      <Tooltip
-                        title={
-                          row.status === 2 ? "Get Summary" : "Not Available"
-                        }
-                      >
-                        <span>
-                          <IconButton
-                            size="small"
-                            disabled={row.status !== 2}
-                            onClick={() => handleGetSummary(row)}
-                            color="primary"
-                          >
-                            <SummaryIcon />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))
-            )}
-          </TableBody>
-        </Table>
-        {/* <TablePagination
-          component="div"
-          count={totalElements}
-          page={page}
-          onPageChange={(e, p) => setPage(p)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(e) => {
-            setRowsPerPage(parseInt(e.target.value, 10));
-            setPage(0);
+
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          loading={loading}
+          getRowId={(row) => row.batchId}
+          disableRowSelectionOnClick
+          pageSizeOptions={[5, 10, 25, 50]} // <--- Added 50 here
+          disableColumnResize
+          rowHeight={52}
+          // --- NEW: SERVER SIDE PAGINATION PROPS ---
+          paginationMode="server"
+          rowCount={totalRowCount}
+          paginationModel={paginationModel}
+          onPaginationModelChange={setPaginationModel}
+          // -----------------------------------------
+
+          filterMode="server"
+          filterModel={filterModel}
+          onFilterModelChange={setFilterModel}
+
+          slots={{
+            noRowsOverlay: CustomNoRowsOverlay,
+            toolbar: GridToolbar
           }}
-        /> */}
-      </TableContainer>
 
-      {/* --- SUMMARY DIALOG --- */}
-      <Dialog
-        open={summaryOpen}
-        onClose={() => setSummaryOpen(false)}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle sx={{ m: 0, p: 2 }}>
-          Circle Wise Summary
-          <IconButton
-            onClick={() => setSummaryOpen(false)}
-            sx={{ position: "absolute", right: 8, top: 8 }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {summaryLoading ? (
-            <Box display="flex" justifyContent="center" py={5}>
-              <CircularProgress />
+
+          sx={styles.dataGridContainer}
+        />
+        <Dialog
+          open={isModalOpen}
+          onClose={handleCloseModal}
+          fullWidth
+          maxWidth="sm"
+        >
+          <DialogTitle sx={{ display: "flex", alignItems: "center" }}>
+            <DeleteSweepIcon sx={{ mr: 1, color: "error.main" }} /> Confirm Deletion
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Are you sure you want to delete batch <strong>{selectedBatch?.batchId}</strong>? This item will be permanently deleted
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions sx={{ p: 3, borderTop: "1px solid", borderColor: "divider" }}>
+            <Button onClick={handleCloseModal} disabled={isSubmitting}>Cancel</Button>
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : <DeleteIcon />}
+              onClick={handleSubmitBatchCancel}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Deleting..." : "Confirm Delete"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+
+        {/* --- WORKFLOW DETAILS MODAL --- */}
+        <Dialog
+          open={isViewModalOpen}
+          onClose={() => {
+            handleBlurAll(); // <--- KILL FOCUS WHEN CLICKING BACKDROP
+            handleCloseViewModal();
+          }}
+          fullWidth
+          maxWidth="lg"
+        >
+          <DialogTitle sx={styles.dialogTitle}>
+            <Typography variant="h6" fontWeight="bold">
+              Batch Workflow Details: {viewingBatchId}
+            </Typography>
+            <IconButton onClick={handleCloseViewModal}>
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
+
+          <DialogContent dividers sx={{ p: 0, backgroundColor: "#f8fafc", height: '75vh', display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, overflowY: "auto" }}>
+
+              {/* ---  HEADER CARDS --- */}
+              <Box sx={{ p: 4, backgroundColor: "white", borderBottom: "1px solid", borderColor: "divider" }}>
+                {isFetchingVid ? (
+                  /* LAYOUT SHIFT FIX: Added minHeight: 300px so it holds space for the incoming cards */
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px', p: 4 }}>
+                    <CircularProgress size={32} />
+                  </Box>
+                ) : vidDetails && vidDetails.VID ? (
+                  <Stack spacing={3} sx={{ width: '100%' }}>
+                    {/* SECTION 1: VOUCHER DETAILS */}
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: 2, width: '100%', border: "1px solid", borderColor: "divider", display: 'flex', flexDirection: 'column' }}>
+                      <Typography variant="subtitle1" fontWeight="bold" color="text.primary" gutterBottom sx={{ borderBottom: "1px solid", borderColor: "divider", pb: 1, mb: 2 }}>
+                        Voucher Request ID : {vidDetails.VID}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Voucher Description</Typography>
+                      <Box sx={{ maxHeight: isDescExpanded ? 200 : 90, mb: "24px", overflowY: "auto", pr: 1, transition: "max-height 0.3s ease" }}>
+                        <Typography variant="body2" color="text.primary" sx={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                          {(vidDetails.DESCRIPTION || "").length > 100 && !isDescExpanded
+                            ? `${vidDetails.DESCRIPTION.substring(0, 100)}...`
+                            : (vidDetails.DESCRIPTION || "No description provided.")}
+
+                          {(vidDetails.DESCRIPTION || "").length > 100 && (
+                            <Typography
+                              component="span"
+                              color="primary"
+                              onClick={() => setIsDescExpanded(!isDescExpanded)}
+                              sx={{ cursor: "pointer", ml: 1, fontWeight: "bold", '&:hover': { textDecoration: 'underline' } }}
+                            >
+                              {isDescExpanded ? "Read Less" : "Read More"}
+                            </Typography>
+                          )}
+                        </Typography>
+                      </Box>
+                      <Grid item xs={12} sm={3} sx={{ mb: "24px" }}>
+                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                          Issue Categories
+                        </Typography>
+                        <Typography variant="body1" fontWeight="600" color="primary.main">
+                          {vidDetails.ISSUE_CATEGORIES || "N/A"}
+                        </Typography>
+                      </Grid>
+                      <Grid container spacing={3}>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Category</Typography>
+                          <Typography variant="body1" fontWeight="500">{vidDetails.CATEGORY_NAME}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Created By</Typography>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <AccountCircleIcon sx={{ fontSize: 20, color: "text.secondary" }} />
+                            <Typography variant="body1" fontWeight="500">
+                              {vidDetails.VID_CREATED_BY_NAME} <Typography component="span" variant="caption" color="text.secondary">({vidDetails.VID_CREATOR_ID})</Typography>
+                            </Typography>
+                          </Stack>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Created At</Typography>
+                          <Typography variant="body1" fontWeight="500">
+                            {formatDateTime(vidDetails.VID_CREATED_AT)}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </Paper>
+
+                    {/* SECTION 2: BATCH DETAILS */}
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: 2, width: '100%', border: "1px solid", borderColor: "divider", display: 'flex', flexDirection: 'column' }}>
+                      <Typography variant="subtitle1" fontWeight="bold" color="text.primary" gutterBottom sx={{ borderBottom: "1px solid", borderColor: "divider", pb: 1, mb: 2 }}>
+                        Voucher Details
+                      </Typography>
+                      <Grid container spacing={3} alignItems="center">
+                        <Grid item xs={12} sm={3}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Created By</Typography>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <AccountCircleIcon sx={{ fontSize: 20, color: "text.secondary" }} />
+                            <Typography variant="body1" fontWeight="500">
+                              {vidDetails.BATCH_CREATED_BY_NAME} <Typography component="span" variant="caption" color="text.secondary">({vidDetails.BATCH_CREATOR_ID})</Typography>
+                            </Typography>
+                          </Stack>
+                        </Grid>
+                        <Grid item xs={12} sm={2}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Created At</Typography>
+                          <Typography variant="body1" fontWeight="500">
+                            {formatDateTime(vidDetails.BATCH_CREATED_AT)}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={2}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>No. of Entries</Typography>
+                          <Typography variant="body1" fontWeight="600" color="primary.main">
+                            {viewingBatchRequestCount}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Is Execution Scheduled?</Typography>
+                          <Typography variant="body1" fontWeight="500" color={vidDetails.SCHEDULED_TIME ? "info.main" : "text.primary"}>
+                            {vidDetails.SCHEDULED_TIME ? (
+                              <>
+                                Yes ({formatDateTime(vidDetails.SCHEDULED_TIME)})
+                                {new Date(vidDetails.SCHEDULED_TIME) < new Date() && !["POSTED", "SCHEDULED", "APPROVED", "REJECTED", "C", "S"].includes(viewingBatchState) && (
+                                  <Typography component="span" color="error.main" fontWeight="bold" sx={{ ml: 1, fontSize: "0.75rem" }}>
+                                    (Execution time lapsed)
+                                  </Typography>
+                                )}
+                              </>
+                            ) : "No"}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={2}>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>Download Voucher Batch</Typography>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<FileDownloadIcon />}
+                            onClick={handleDownloadExcel}
+                            disabled={!viewingBatchId}
+                            tabIndex={-1} // <--- ADD THIS
+                            onMouseDown={(e) => e.preventDefault()} // <--- ADD THIS: Prevents focus on click
+                            sx={{
+                              borderColor: "#217346",
+                              color: "#217346",
+                              "&:hover": { backgroundColor: "#e8f5e9", borderColor: "#1e6b40" },
+                              // Completely nuke all focus states
+                              "&:focus, &.Mui-focusVisible, &:active": {
+                                outline: "none !important",
+                                boxShadow: "none !important",
+                                backgroundColor: "transparent !important",
+                                border: "1px solid #217346 !important"
+                              }
+                            }}
+                          >
+                            Download Batch
+                          </Button>
+                        </Grid>
+                      </Grid>
+                    </Paper>
+                  </Stack>
+                ) : null}
+              </Box>
+
+              {/* --- HORIZONTAL TIMELINE --- */}
+              <Box sx={{ p: 4, flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <Typography variant="subtitle1" fontWeight="bold" color="text.primary" sx={{ mb: 3 }}>
+                  Workflow Progress
+                </Typography>
+
+
+                {isFetchingSteps ? (
+                  /* LAYOUT SHIFT FIX: Added minHeight: 120px so it holds space for the incoming timeline */
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '120px', p: 3 }}>
+                    <CircularProgress size={32} />
+                  </Box>
+                ) : dynamicSteps.length > 0 ? (
+                  <Stepper
+                    activeStep={(() => {
+                      if (viewingBatch?.isExecutionFailed) return dynamicSteps.length - 1;
+                      if (viewingBatchState === "POSTED" || viewingBatchState === "C") return dynamicSteps.length;
+                      if (viewingBatchState === "SCHEDULED" || viewingBatchState === "WAITING FOR EXECUTION" || viewingBatchState === "APPROVED") return dynamicSteps.length - 1;
+                      return viewingBatchOrder - 1;
+                    })()}
+                    alternativeLabel
+                    connector={<BigConnector />}
+                  >
+                    {dynamicSteps.map((step, index) => {
+                      // 1. ONLY mark as fully done if physically posted to the ledger
+                      const isFullyDone = viewingBatchState === "POSTED" || viewingBatchState === "C";
+
+                      let activeStepIndex = isFullyDone ? dynamicSteps.length : viewingBatchOrder - 1;
+
+                      // 2. Pause on the final step if Scheduled/Waiting
+                      if (viewingBatchState === "SCHEDULED" || viewingBatchState === "WAITING FOR EXECUTION" || viewingBatchState === "APPROVED") {
+                        activeStepIndex = dynamicSteps.length - 1;
+                      } else if (viewingBatch?.isExecutionFailed) {
+                        activeStepIndex = dynamicSteps.length - 1;
+                      }
+
+                      const isCompleted = index < activeStepIndex;
+                      const isCurrent = index === activeStepIndex;
+
+                      let statusFlag = 'PENDING';
+                      if (isCompleted) statusFlag = 'COMPLETED';
+                      if (isCurrent && viewingBatchState === "REJECTED") statusFlag = 'REJECTED';
+
+                      else if (isCurrent && viewingBatch?.isExecutionFailed) statusFlag = 'REJECTED';
+                      else if (isCurrent) statusFlag = 'ACTIVE';
+
+                      const historyItem = workflowHistory[index];
+                      const executorStr = historyItem ? `${historyItem.ACTION_USER_NAME || 'System'} (${historyItem.LAST_ACTION_BY})` : null;
+
+                      return (
+                        <Step key={step.state} completed={isCompleted} active={isCurrent} sx={{ opacity: viewingBatchState === "REJECTED" && index > activeStepIndex ? 0.3 : 1 }}>
+                          <StepLabel StepIconComponent={() => <BigWorkflowIcon statusFlag={statusFlag} label={step.designation} />}>
+
+                            <Chip
+                              label={getRoleDisplayName(step.role)}
+                              size="small"
+                              variant="outlined"
+                              color={isCurrent && statusFlag !== 'REJECTED' ? "primary" : "default"}
+                              sx={{ mt: 1, height: 22, fontSize: "0.65rem", fontWeight: "bold" }}
+                            />
+
+                            {(isCompleted || (isCurrent && viewingBatchState === "REJECTED") || (isCurrent && viewingBatch?.isExecutionFailed)) && (
+                              <Box>
+                                {historyItem && (
+                                  <Typography variant="caption" display="block" color="success.main" sx={{ mt: 0.5, fontWeight: "bold" }}>
+                                    {executorStr}
+                                  </Typography>
+                                )}
+
+                                {historyItem && historyItem.stageDuration && historyItem.LAST_ACTION_BY !== "SYSTEM" && (
+                                  <Typography variant="caption" display="block" color="text.secondary" sx={{ fontStyle: 'italic', fontSize: '0.65rem' }}>
+                                    Pending Duration: {historyItem.stageDuration}
+                                  </Typography>
+                                )}
+                              </Box>
+                            )}
+
+                            {isCurrent && viewingBatchState !== "REJECTED" && !viewingBatch?.isExecutionFailed && step.role !== "System" && (
+                              <Typography variant="caption" display="block" color="text.secondary" fontWeight="bold" sx={{ mt: 0.5 }}>
+                                Pending Since: {viewingBatchTimeSinceLastAction || "0h 0m"}
+                              </Typography>
+                            )}
+
+                          </StepLabel>
+                        </Step>
+                      );
+                    })}
+                  </Stepper>
+                ) : (
+                  <Alert severity="info" sx={{ mt: 2 }}>Workflow configuration not found.</Alert>
+                )}
+              </Box>
+
+              {/* --- WORKFLOW HISTORY --- */}
+              <Box sx={{ p: 4, borderTop: "1px solid", borderColor: "divider" }}>
+                {isFetchingSteps ? (
+                  /* LAYOUT SHIFT FIX: Added minHeight: 200px so it holds space for the incoming history list */
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px', p: 2 }}>
+                    <CircularProgress size={32} />
+                  </Box>
+                ) : (
+                  <>
+                    <Typography variant="subtitle1" fontWeight="bold" color="text.primary" sx={{ mb: 3 }}>
+                      Workflow History ({workflowHistory.length})
+                    </Typography>
+                    <Stack spacing={2.5}>
+                      {workflowHistory.map((history, idx) => {
+
+                        const isSystem = history.LAST_ACTION_BY === "SYSTEM";
+                        const userName = history.ACTION_USER_NAME || (isSystem ? "Automated System" : "User");
+                        const initial = isSystem ? "S" : userName.charAt(0).toUpperCase();
+
+                        const isExecutionFail = history.LAST_ACTION?.toUpperCase().includes("FAILED");
+
+                        // 1. Clean the action label
+                        const rawAction = history.LAST_ACTION || "System Action";
+                        const cleanAction = rawAction.replace(/\s*\(.*?\)\s*/g, '').trim();
+
+                        // 2. Identify action types
+                        const isSubmission = rawAction.toUpperCase().includes("SUBMIT");
+                        const isFinalApproval = rawAction.toUpperCase().includes("FINAL") || rawAction.toUpperCase().includes("ACCEPT");
+
+                        const isSchOverride = rawAction.toUpperCase().includes("SCH. OVERRIDE");
+                        const isImmOverride = rawAction.toUpperCase().includes("IMM. OVERRIDE");
+                        const isKeptSchedule = rawAction.toUpperCase().includes("(SCHEDULED)");
+
+                        // 3. STRICT HISTORICAL SNAPSHOT: ONLY read from this specific history row!
+                        // We NO LONGER check vidDetails here. This prevents the "overwriting" bug.
+                        const historyRowTime = history.SCHEDULED_TIME;
+
+                        return (
+                          <Box key={idx} sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                            <Box>
+                              <Avatar sx={{ bgcolor: isSystem ? 'secondary.main' : 'primary.main', width: 40, height: 40, fontWeight: 'bold', fontSize: '1rem' }}>
+                                {initial}
+                              </Avatar>
+                            </Box>
+                            <Box sx={{ flexGrow: 1, backgroundColor: "white", p: 2.5, borderRadius: 2, border: "1px solid", borderColor: isExecutionFail ? "#d32f2f" : isSystem ? "#9c27b0" : "#e2e8f0", borderLeftWidth: isExecutionFail || isSystem ? "4px" : "1px", boxShadow: "0 1px 2px 0 rgb(0 0 0 / 0.05)" }}>
+
+                              <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                                <Typography variant="subtitle2" fontWeight="bold" color="text.primary">
+                                  {userName} {isSystem ? "" : `(${history.LAST_ACTION_BY})`}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">• {formatDateTime(history.LAST_ACTION_AT)}</Typography>
+                              </Box>
+
+                              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5, flexWrap: "wrap", gap: 1 }}>
+                                <Chip
+                                  label={cleanAction}
+                                  size="small"
+                                  sx={{ height: 22, fontSize: "0.7rem", fontWeight: "bold", backgroundColor: isExecutionFail || rawAction.includes("Reject") ? "#fee2e2" : isSystem ? "#f3e8ff" : "#e0e7ff", color: isExecutionFail || rawAction.includes("Reject") ? "#991b1b" : isSystem ? "#7e22ce" : "#3730a3" }}
+                                />
+
+                                {/* --- STRICT ISOLATED CHIP LOGIC --- */}
+
+                                {/* A. Logic exclusively for the Maker / Creator */}
+                                {isSubmission ? (
+                                  historyRowTime ? (
+                                    <Chip label={`Scheduled for: ${formatDateTime(historyRowTime)}`} size="small" color="info" variant="outlined" sx={{ height: 22, fontSize: "0.7rem", fontWeight: "bold" }} />
+                                  ) : (
+                                    <Chip label="Immediate Execution" size="small" color="default" variant="outlined" sx={{ height: 22, fontSize: "0.7rem", fontWeight: "bold", backgroundColor: "#f1f5f9" }} />
+                                  )
+                                )
+
+                                  // {/* B. Logic exclusively for the Final Approver */}
+                                  : isFinalApproval && !isSystem ? (
+                                    isSchOverride && historyRowTime ? (
+                                      <Chip label={`Schedule Overridden to: ${formatDateTime(historyRowTime)}`} size="small" color="warning" variant="outlined" sx={{ height: 22, fontSize: "0.7rem", fontWeight: "bold" }} />
+                                    ) : isImmOverride ? (
+                                      <Chip label="Overridden to Immediate Execution" size="small" color="warning" variant="outlined" sx={{ height: 22, fontSize: "0.7rem", fontWeight: "bold" }} />
+                                    ) : isKeptSchedule && historyRowTime ? (
+                                      <Chip label={`Original Schedule Kept: ${formatDateTime(historyRowTime)}`} size="small" color="info" variant="outlined" sx={{ height: 22, fontSize: "0.7rem", fontWeight: "bold" }} />
+                                    ) : (
+                                      <Chip label="Immediate Execution" size="small" color="default" variant="outlined" sx={{ height: 22, fontSize: "0.7rem", fontWeight: "bold", backgroundColor: "#f1f5f9" }} />
+                                    )
+                                  ) : null}
+
+                              </Stack>
+                              <Typography variant="body2" color="text.primary" sx={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                                {history.REMARKS || "Voucher Batch Created."}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        );
+                      })}
+
+                    </Stack>
+                  </>
+                )}
+              </Box>
             </Box>
-          ) : (
-            <>
-              <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
-                <Table size="small" stickyHeader>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell
-                        align="left"
-                        sx={{ bgcolor: theme.palette.grey[50] }}
-                      >
-                        <strong>Circle Name</strong>
-                      </TableCell>
-                      {/* Changed to align Right */}
-                      <TableCell
-                        align="right"
-                        sx={{ bgcolor: theme.palette.grey[50] }}
-                      >
-                        <strong>Total Profit/Loss</strong>
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {summaryData.map((row, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell align="left">{row.circleName}</TableCell>
-                        {/* Changed to align Right */}
-                        <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                          {Number(row.totalProfitLoss).toLocaleString("en-IN", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ p: 2, justifyContent: "space-between" }}>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={handleDownload}
-            disabled={summaryData.length === 0}
-          >
-            Download Excel
-          </Button>
+          </DialogContent>
 
-          <Button
-            variant="contained"
-            disabled={
-              anyPendingRequests ||
-              summaryData.length === 0 ||
-              isSubmitting ||
-              rowContext?.processStatus !== 2 ||
-              !isEligibleToInitiate
-            }
-            onClick={handleSubmitLhoRequest}
-            startIcon={
-              isSubmitting && <CircularProgress size={16} color="inherit" />
-            }
-          >
-            {isSubmitting ? "Submitting..." : "Submit Request"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+          {/* --- STICKY BOTTOM ACTION BAR (Where Delete lives now) --- */}
+          <DialogActions sx={{ p: 3, borderTop: "1px solid", borderColor: "divider", backgroundColor: "white", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Box sx={{ flexGrow: 1 }}>
+              {/* Left aligned spacing element anchor */}
+            </Box>
+            <Stack direction="row" spacing={2} alignItems="center">
+
+              {isViewingSelfCreated && isBatchDeletable && (
+                <Button
+                  variant="contained"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  onClick={() => {
+                    setIsViewModalOpen(false); // Dismount detail modal view
+                    handleOpenModal({ batchId: viewingBatchId }); // Initialize confirmation dialog box stages
+                  }}
+                  sx={{ minWidth: 160, fontWeight: 'bold', py: 1 }}
+                >
+                  Cancel Voucher Batch
+                </Button>
+              )}
+
+            </Stack>
+          </DialogActions>
+        </Dialog>
+      </Box>
+    </Paper>
   );
 }
