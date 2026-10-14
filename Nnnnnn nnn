@@ -1,1354 +1,2217 @@
+// import React, { useState } from "react";
+// import { DataGrid } from "@mui/x-data-grid";
+// import { Button, Stack, Box, Chip, IconButton } from "@mui/material";
+// import EditIcon from "@mui/icons-material/Edit";
+// import SaveIcon from "@mui/icons-material/Save";
+// import CloseIcon from "@mui/icons-material/Close";
+// import EditableCell from "./EditableCell";
+// import useApi from "../../hooks/useApi";
+// import useCustomSnackbar from "../../utils/useCustomSnackbar";
+// import {
+//   Dialog,
+//   DialogTitle,
+//   DialogContent,
+//   DialogActions,
+// } from "@mui/material";
 
-import React, { useEffect, useState } from "react";
-import { useSelector } from "react-redux";
+// const hasAnyEditableFlag = (reason) => {
+//   if (!reason) return false;
+
+//   const flags = reason.split(",").map((x) => x.trim());
+
+//   return flags.includes("B") || flags.includes("C") || flags.includes("G");
+// };
+
+// const GLRectificationTable = ({
+//   rows,
+//   page,
+//   setPage,
+//   pageSize,
+//   setPageSize,
+//   totalElements,
+//   fetchData,
+//   fetchSummary,
+//   fetchGroups,
+//   selectedGroup,
+// }) => {
+//   const { callApi } = useApi();
+
+//   const showSnackBar = useCustomSnackbar();
+
+//   const [editingId, setEditingId] = useState(null);
+
+//   const [editedRow, setEditedRow] = useState({});
+
+//   const [originalRow, setOriginalRow] = useState(null);
+//   const [confirmOpen, setConfirmOpen] = useState(false);
+
+//   const [pendingBulkPayload, setPendingBulkPayload] = useState(null);
+
+//   const [errors, setErrors] = useState({});
+
+//   const [validatedFields, setValidatedFields] = useState({});
+
+//   const handleEdit = (row) => {
+//     setEditingId(row.id);
+
+//     setOriginalRow({ ...row });
+
+//     setEditedRow({ ...row });
+
+//     setErrors({});
+//     setValidatedFields({});
+//   };
+
+//   const handleCancel = () => {
+//     setEditedRow(originalRow || {});
+//     setEditingId(null);
+//     setErrors({});
+//   };
+
+//   const hasChanges = () => {
+//     if (!originalRow) {
+//       return false;
+//     }
+
+//     return (
+//       (editedRow.branchCode || "").trim() !==
+//         (originalRow.branchCode || "").trim() ||
+//       (editedRow.currency || "").trim() !==
+//         (originalRow.currency || "").trim() ||
+//       (editedRow.cgl || "").trim() !== (originalRow.cgl || "").trim()
+//     );
+//   };
+
+//   const handleChange = (field, value, isSelected = false) => {
+//     setEditedRow((prev) => ({
+//       ...prev,
+//       [field]: value,
+//     }));
+
+//     if (isSelected) {
+//       setValidatedFields((prev) => ({
+//         ...prev,
+//         [field]: true,
+//       }));
+//     }
+
+//     const labels = {
+//       branchCode: "Branch",
+//       currency: "Currency",
+//       cgl: "CGL",
+//     };
+
+//     setErrors((prev) => {
+//       const updated = { ...prev };
+
+//       if (!value?.trim()) {
+//         updated[field] = `${labels[field]} is required`;
+//       } else {
+//         delete updated[field];
+//       }
+
+//       return updated;
+//     });
+//   };
+
+//   const validate = () => {
+//     const newErrors = {};
+
+//     const reason = editedRow.reason || "";
+
+//     // ===== Branch =====
+//     if (reason.includes("B")) {
+//       if (!editedRow.branchCode?.trim()) {
+//         newErrors.branchCode = "Branch is required";
+//       } else if (!validatedFields.branchCode) {
+//         newErrors.branchCode = "Select Branch from dropdown";
+//       }
+//     }
+
+//     // ===== Currency =====
+//     if (reason.includes("C")) {
+//       if (!editedRow.currency?.trim()) {
+//         newErrors.currency = "Currency is required";
+//       } else if (!validatedFields.currency) {
+//         newErrors.currency = "Select Currency from dropdown";
+//       }
+//     }
+
+//     // ===== CGL =====
+//     if (reason.includes("G")) {
+//       if (!editedRow.cgl?.trim()) {
+//         newErrors.cgl = "CGL is required";
+//       } else if (!validatedFields.cgl) {
+//         newErrors.cgl = "Select CGL from dropdown";
+//       }
+//     }
+
+//     setErrors(newErrors);
+
+//     return Object.keys(newErrors).length === 0;
+//   };
+//   //   const hasChanged = (field) => {
+//   //     return (editedRow[field] || "") !== (originalRow?.[field] || "");
+//   //   };
+
+//   const isAllRequiredFieldsValidated = () => {
+//     const reason = editedRow.reason || "";
+
+//     if (reason.includes("B") && !validatedFields.branchCode) {
+//       return false;
+//     }
+//     if (reason.includes("C") && !validatedFields.currency) {
+//       return false;
+//     }
+//     if (reason.includes("G") && !validatedFields.cgl) {
+//       return false;
+//     }
+
+//     return true;
+//   };
+//   const handleBulkConfirm = async () => {
+//     if (!pendingBulkPayload) {
+//       return;
+//     }
+
+//     try {
+//       const res = await callApi(
+//         "/CM/gl-invalid/bulk-rectify",
+//         pendingBulkPayload,
+//         "PUT",
+//       );
+
+//       showSnackBar(`${res?.data?.updatedCount || 0} rows updated`);
+
+//       setEditingId(null);
+
+//       fetchData(page, pageSize, selectedGroup);
+
+//       fetchSummary();
+
+//       fetchGroups();
+//     } catch {
+//       showSnackBar("Bulk rectification failed");
+//     } finally {
+//       setConfirmOpen(false);
+
+//       setPendingBulkPayload(null);
+//     }
+//   };
+
+//   const handleSave = () => {
+//     if (!validate()) {
+//       return;
+//     }
+
+//     let type = "";
+//     let oldValue = "";
+//     let newValue = "";
+
+//     if (editedRow.branchCode !== originalRow.branchCode) {
+//       type = "BRANCH";
+//       oldValue = originalRow.branchCode;
+//       newValue = editedRow.branchCode;
+//     } else if (editedRow.currency !== originalRow.currency) {
+//       type = "CURRENCY";
+//       oldValue = originalRow.currency;
+//       newValue = editedRow.currency;
+//     } else if (editedRow.cgl !== originalRow.cgl) {
+//       type = "CGL";
+//       oldValue = originalRow.cgl;
+//       newValue = editedRow.cgl;
+//     }
+
+//     setPendingBulkPayload({
+//       type,
+//       oldValue,
+//       newValue,
+//     });
+
+//     setConfirmOpen(true);
+//   };
+//   const columns = [
+//     {
+//       field: "branchCode",
+//       headerName: "Branch",
+//       flex: 1,
+//       renderCell: (params) => (
+//         <EditableCell
+//           type="branchCode"
+//           row={params.row}
+//           editingId={editingId}
+//           editedRow={editedRow}
+//           error={errors.branchCode}
+//           validatedFields={validatedFields}
+//           onChange={handleChange}
+//         />
+//       ),
+//     },
+//     {
+//       field: "newBranchCode",
+//       headerName: "Updated Branch",
+//       flex: 1,
+//     },
+
+//     {
+//       field: "currency",
+//       headerName: "Currency",
+//       flex: 1,
+//       renderCell: (params) => (
+//         <EditableCell
+//           type="currency"
+//           row={params.row}
+//           editingId={editingId}
+//           editedRow={editedRow}
+//           error={errors.currency}
+//           validatedFields={validatedFields}
+//           onChange={handleChange}
+//         />
+//       ),
+//     },
+//     { field: "newCurrency", headerName: "Updated Currency", flex: 1 },
+
+//     {
+//       field: "cgl",
+//       headerName: "CGL",
+//       flex: 1.5,
+//       renderCell: (params) => (
+//         <EditableCell
+//           type="cgl"
+//           row={params.row}
+//           editingId={editingId}
+//           editedRow={editedRow}
+//           error={errors.cgl}
+//           validatedFields={validatedFields}
+//           onChange={handleChange}
+//         />
+//       ),
+//     },
+//     { field: "newCgl", headerName: "Updated CGL", flex: 1.5 },
+
+//     // {
+//     //   field: "narration",
+//     //   headerName: "Narration",
+//     //   flex: 1,
+//     // },
+
+//     {
+//       field: "debitAmount",
+//       headerName: "Debit",
+//       flex: 1,
+//       renderCell: (params) => <span>{Math.abs(params.value)}</span>,
+//     },
+
+//     {
+//       field: "creditAmount",
+//       headerName: "Credit",
+//       flex: 1,
+//     },
+//     {
+//       field: "status",
+//       headerName: "Status",
+//       width: 120,
+
+//       renderCell: (params) => (
+//         <Chip
+//           label={params.row.rectification === "M" ? "Modified" : "Invalid"}
+//           color={params.row.rectification === "M" ? "success" : "error"}
+//           size="small"
+//         />
+//       ),
+//     },
+
+//     // {
+//     //   field: "reason",
+//     //   headerName: "Reason",
+//     //   flex: 1,
+//     // },
+//     {
+//       field: "reason",
+//       headerName: "Reason",
+//       flex: 1.8,
+//       sortable: false,
+
+//       renderCell: (params) => {
+//         const reason = params.row.reason || "";
+
+//         const getChipColor = (flag, field) => {
+//           if (!reason.includes(flag)) {
+//             return {
+//               border: "#9e9e9e",
+//               text: "#9e9e9e",
+//             };
+//           }
+
+//           if (params.row.rectification === "M") {
+//             return {
+//               border: "#2e7d32",
+//               text: "#2e7d32",
+//             };
+//           }
+
+//           if (editingId !== params.row.id) {
+//             return {
+//               border: "#d32f2f",
+//               text: "#d32f2f",
+//             };
+//           }
+//           const isValid = validatedFields[field];
+
+//           return isValid
+//             ? {
+//                 border: "#2e7d32",
+//                 text: "#2e7d32",
+//               }
+//             : {
+//                 border: "#d32f2f",
+//                 text: "#d32f2f",
+//               };
+//         };
+
+//         return (
+//           <Box
+//             sx={{
+//               display: "flex",
+//               alignItems: "center",
+//               gap: 0.5,
+//               flexWrap: "wrap",
+//               height: "100%",
+//             }}
+//           >
+//             {reason.includes("B") && (
+//               <Chip
+//                 label="Branch"
+//                 size="small"
+//                 variant="outlined"
+//                 sx={{
+//                   backgroundColor:
+//                     getChipColor("B", "branchCode").text === "#2e7d32"
+//                       ? "#ecfdf3"
+//                       : "#fdecec",
+//                   color: getChipColor("B", "branchCode").text,
+//                   fontWeight: 600,
+//                 }}
+//               />
+//             )}
+
+//             {reason.includes("C") && (
+//               <Chip
+//                 label="Currency"
+//                 size="small"
+//                 variant="outlined"
+//                 sx={{
+//                   backgroundColor:
+//                     getChipColor("C", "currency").text === "#2e7d32"
+//                       ? "#ecfdf3"
+//                       : "#fdecec",
+//                   color: getChipColor("C", "currency").text,
+//                   fontWeight: 600,
+//                 }}
+//               />
+//             )}
+
+//             {reason.includes("G") && (
+//               <Chip
+//                 label="CGL"
+//                 size="small"
+//                 variant="outlined"
+//                 sx={{
+//                   backgroundColor:
+//                     getChipColor("G", "cgl").text === "#2e7d32"
+//                       ? "#ecfdf3"
+//                       : "#fdecec",
+//                   color: getChipColor("G", "cgl").text,
+//                   fontWeight: 600,
+//                 }}
+//               />
+//             )}
+//           </Box>
+//         );
+//       },
+//     },
+
+//     {
+//       field: "actions",
+//       headerName: "Actions",
+//       flex: 1.3,
+
+//       renderCell: (params) => {
+//         const editable =
+//           params.row.rectification !== "M" &&
+//           hasAnyEditableFlag(params.row.reason);
+
+//         if (!editable) {
+//           return (
+//             <IconButton size="small" variant="filled" disabled>
+//               <EditIcon fontSize="small" />
+//             </IconButton>
+//           );
+//         }
+
+//         return editingId === params.row.id ? (
+//           <Box
+//             sx={{
+//               display: "flex",
+//               alignItems: "center",
+//               height: "100%",
+//               gap: 0.5,
+//               overflowX: "auto",
+//             }}
+//           >
+//             <IconButton
+//               color="success"
+//               disabled={
+//                 Object.keys(errors).length > 0 ||
+//                 !hasChanges() ||
+//                 !isAllRequiredFieldsValidated()
+//               }
+//               onClick={handleSave}
+//             >
+//               <SaveIcon fontSize="small" />
+//             </IconButton>
+
+//             <IconButton color="error" onClick={handleCancel}>
+//               <CloseIcon fontSize="small" />
+//             </IconButton>
+//           </Box>
+//         ) : (
+//           <IconButton color="primary" onClick={() => handleEdit(params.row)}>
+//             <EditIcon fontSize="small" />
+//           </IconButton>
+//         );
+//       },
+//     },
+//   ];
+
+//   return (
+//     <Box
+//       sx={{
+//         height: "calc(100vh - 220px)",
+//         width: "100%",
+//         display: "flex",
+//         flexDirection: "column",
+//         pt: 1,
+//         minHeight: 0,
+//       }}
+//     >
+//       <Box
+//         sx={{
+//           borderRadius: 3,
+//           flex: 1,
+//           display: "flex",
+//           flexDirection: "column",
+//           minHeight: 0,
+//         }}
+//       >
+//         {selectedGroup && (
+//           <Box
+//             sx={{
+//               px: 2,
+//               py: 1,
+//               display: "flex",
+//               alignItems: "center",
+//               gap: 1,
+//             }}
+//           >
+//             <Chip
+//               label={`${selectedGroup.type} : ${selectedGroup.invalidValue}`}
+//               color="primary"
+//               onDelete={() => {
+//                 fetchData(0, pageSize, null);
+//               }}
+//             />
+//           </Box>
+//         )}
+
+//         <DataGrid
+//           rows={rows}
+//           columns={[
+//             {
+//               field: "branchCode",
+//               headerName: "Branch",
+//               flex: 1,
+//               minWidth: 130,
+//               headerAlign: "left",
+
+//               renderCell: (params) => (
+//                 <EditableCell
+//                   type="branchCode"
+//                   row={params.row}
+//                   editingId={editingId}
+//                   editedRow={editedRow}
+//                   error={errors.branchCode}
+//                   validatedFields={validatedFields}
+//                   onChange={handleChange}
+//                 />
+//               ),
+//             },
+
+//             {
+//               field: "newBranchCode",
+//               headerName: "Updated Branch",
+//               flex: 1,
+//               minWidth: 140,
+//             },
+
+//             {
+//               field: "currency",
+//               headerName: "Currency",
+//               flex: 1,
+//               minWidth: 120,
+
+//               renderCell: (params) => (
+//                 <EditableCell
+//                   type="currency"
+//                   row={params.row}
+//                   editingId={editingId}
+//                   editedRow={editedRow}
+//                   error={errors.currency}
+//                   validatedFields={validatedFields}
+//                   onChange={handleChange}
+//                 />
+//               ),
+//             },
+
+//             {
+//               field: "newCurrency",
+//               headerName: "Updated Currency",
+//               flex: 1,
+//               minWidth: 140,
+//             },
+
+//             {
+//               field: "cgl",
+//               headerName: "CGL",
+//               flex: 1.5,
+//               minWidth: 170,
+
+//               renderCell: (params) => (
+//                 <EditableCell
+//                   type="cgl"
+//                   row={params.row}
+//                   editingId={editingId}
+//                   editedRow={editedRow}
+//                   error={errors.cgl}
+//                   validatedFields={validatedFields}
+//                   onChange={handleChange}
+//                 />
+//               ),
+//             },
+
+//             {
+//               field: "newCgl",
+//               headerName: "Updated CGL",
+//               flex: 1.5,
+//               minWidth: 170,
+//             },
+
+//             // {
+//             //   field: "narration",
+//             //   headerName: "Narration",
+//             //   flex: 1.2,
+//             //   minWidth: 180,
+//             // },
+
+//             {
+//               field: "debitAmount",
+//               headerName: "Debit",
+//               width: 120,
+//               align: "right",
+//               headerAlign: "right",
+
+//               renderCell: (params) => <span>{Math.abs(params.value)}</span>,
+//             },
+
+//             {
+//               field: "creditAmount",
+//               headerName: "Credit",
+//               width: 120,
+//               align: "right",
+//               headerAlign: "right",
+//             },
+
+//             {
+//               field: "status",
+//               headerName: "Status",
+//               width: 120,
+
+//               renderCell: (params) => (
+//                 <Chip
+//                   label={
+//                     params.row.rectification === "M" ? "Modified" : "Invalid"
+//                   }
+//                   color={params.row.rectification === "M" ? "success" : "error"}
+//                   size="small"
+//                 />
+//               ),
+//             },
+
+//             {
+//               field: "reason",
+//               headerName: "Reason",
+//               width: 170,
+//               sortable: false,
+
+//               renderCell: (params) => {
+//                 const reason = params.row.reason || "";
+
+//                 const getChipColor = (flag, field) => {
+//                   if (!reason.includes(flag)) {
+//                     return {
+//                       text: "#9e9e9e",
+//                     };
+//                   }
+
+//                   if (params.row.rectification === "M") {
+//                     return {
+//                       text: "#2e7d32",
+//                     };
+//                   }
+
+//                   if (editingId !== params.row.id) {
+//                     return {
+//                       text: "#d32f2f",
+//                     };
+//                   }
+
+//                   const isValid = validatedFields[field];
+
+//                   return isValid ? { text: "#2e7d32" } : { text: "#d32f2f" };
+//                 };
+
+//                 return (
+//                   <Box
+//                     sx={{
+//                       display: "flex",
+//                       alignItems: "center",
+//                       gap: 0.5,
+//                       flexWrap: "wrap",
+//                     }}
+//                   >
+//                     {reason.includes("B") && (
+//                       <Chip
+//                         label="Branch"
+//                         size="small"
+//                         variant="outlined"
+//                         sx={{
+//                           backgroundColor:
+//                             getChipColor("B", "branchCode").text === "#2e7d32"
+//                               ? "#ecfdf3"
+//                               : "#fdecec",
+
+//                           color: getChipColor("B", "branchCode").text,
+
+//                           fontWeight: 600,
+//                         }}
+//                       />
+//                     )}
+
+//                     {reason.includes("C") && (
+//                       <Chip
+//                         label="Currency"
+//                         size="small"
+//                         variant="outlined"
+//                         sx={{
+//                           backgroundColor:
+//                             getChipColor("C", "currency").text === "#2e7d32"
+//                               ? "#ecfdf3"
+//                               : "#fdecec",
+
+//                           color: getChipColor("C", "currency").text,
+
+//                           fontWeight: 600,
+//                         }}
+//                       />
+//                     )}
+
+//                     {reason.includes("G") && (
+//                       <Chip
+//                         label="CGL"
+//                         size="small"
+//                         variant="outlined"
+//                         sx={{
+//                           backgroundColor:
+//                             getChipColor("G", "cgl").text === "#2e7d32"
+//                               ? "#ecfdf3"
+//                               : "#fdecec",
+
+//                           color: getChipColor("G", "cgl").text,
+
+//                           fontWeight: 600,
+//                         }}
+//                       />
+//                     )}
+//                   </Box>
+//                 );
+//               },
+//             },
+
+//             {
+//               field: "actions",
+//               headerName: "Actions",
+//               width: 110,
+
+//               renderCell: (params) => {
+//                 const editable =
+//                   params.row.rectification !== "M" &&
+//                   hasAnyEditableFlag(params.row.reason);
+
+//                 if (!editable) {
+//                   return (
+//                     <IconButton disabled size="small">
+//                       <EditIcon fontSize="small" />
+//                     </IconButton>
+//                   );
+//                 }
+
+//                 return editingId === params.row.id ? (
+//                   <Box
+//                     sx={{
+//                       display: "flex",
+//                       alignItems: "center",
+//                       gap: 0.5,
+//                     }}
+//                   >
+//                     <IconButton
+//                       color="success"
+//                       disabled={
+//                         Object.keys(errors).length > 0 ||
+//                         !hasChanges() ||
+//                         !isAllRequiredFieldsValidated()
+//                       }
+//                       onClick={handleSave}
+//                     >
+//                       <SaveIcon fontSize="small" />
+//                     </IconButton>
+
+//                     <IconButton color="error" onClick={handleCancel}>
+//                       <CloseIcon fontSize="small" />
+//                     </IconButton>
+//                   </Box>
+//                 ) : (
+//                   <IconButton
+//                     color="primary"
+//                     onClick={() => handleEdit(params.row)}
+//                   >
+//                     <EditIcon fontSize="small" />
+//                   </IconButton>
+//                 );
+//               },
+//             },
+//           ]}
+//           pagination
+//           paginationMode="server"
+//           rowCount={totalElements}
+//           disableRowSelectionOnClick
+//           density="standard"
+//           rowHeight={52}
+//           columnHeaderHeight={52}
+//           paginationModel={{
+//             page,
+//             pageSize,
+//           }}
+//           pageSizeOptions={[25, 50, 100]}
+//           onPaginationModelChange={(model) => {
+//             setPage(model.page);
+
+//             setPageSize(model.pageSize);
+
+//             fetchData(model.page, model.pageSize);
+//           }}
+//           initialState={{
+//             pinnedColumns: {
+//               right: ["actions"],
+//             },
+//           }}
+//           getRowClassName={(params) => {
+//             if (params.row.rectification === "M") {
+//               return "modified-row";
+//             }
+
+//             if (params.id === editingId) {
+//               return "editing-row";
+//             }
+
+//             return "";
+//           }}
+//           sx={{
+//             flex: 1,
+//             border: "none",
+//           }}
+//         />
+//       </Box>
+
+//       <Dialog
+//         open={confirmOpen}
+//         onClose={() => setConfirmOpen(false)}
+//         maxWidth="xs"
+//         fullWidth
+//       >
+//         <DialogTitle
+//           sx={{
+//             fontWeight: 700,
+//           }}
+//         >
+//           Confirm Bulk Rectification
+//         </DialogTitle>
+
+//         <DialogContent>
+//           Apply this correction to all matching records?
+//         </DialogContent>
+
+//         <DialogActions
+//           sx={{
+//             px: 3,
+//             pb: 2,
+//           }}
+//         >
+//           <Button
+//             onClick={() => setConfirmOpen(false)}
+//             variant="text"
+//             sx={{
+//               color: "#5f6368",
+//               fontWeight: 600,
+//             }}
+//           >
+//             Cancel
+//           </Button>
+
+//           <Button
+//             variant="contained"
+//             onClick={handleBulkConfirm}
+//             sx={{
+//               fontWeight: 700,
+//               borderRadius: 2,
+//               px: 3,
+//             }}
+//           >
+//             Confirm
+//           </Button>
+//         </DialogActions>
+//       </Dialog>
+//     </Box>
+//   );
+// };
+
+// export default GLRectificationTable;
+
+import React, { useState } from "react";
+
+import { DataGrid } from "@mui/x-data-grid";
+
 import {
-  Alert,
   Box,
-  Paper,
-  Button,
-  Card,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  FormHelperText,
+  Chip,
   IconButton,
-  InputLabel,
-  MenuItem,
-  Select,
-  Snackbar,
-  TextField,
-  Typography,
-  Checkbox,
-  Autocomplete,
-  Chip
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
 } from "@mui/material";
-import { findMenuById } from "../../utils/CommonUtilities";
 
+import EditIcon from "@mui/icons-material/Edit";
+import SaveIcon from "@mui/icons-material/Save";
+import CloseIcon from "@mui/icons-material/Close";
 
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import AddIcon from "@mui/icons-material/Add";
+import EditableCell from "./EditableCell";
 
 import useApi from "../../hooks/useApi";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
 
-import ViewVoucherRequestScreen from "./ViewVoucherRequestScreen";
-import { useNavigate } from "react-router-dom";
-
-const RequestVoucherScreen = () => {
-  const navigate = useNavigate();
-
-  const menus = useSelector((state) => state.menus);
-  const menuItems = menus.menus;
-  console.log("menu bnmnmnmkn", menuItems)
-  const selectedMenuItem = menus.selectedMenuItem;
-  console.log("selected", selectedMenuItem)
-
-  const [customIssueError, setCustomIssueError] =
-    useState("");
-
-  const [showCustomIssue, setShowCustomIssue] =
-    useState(false);
-
-  const [customIssueInput, setCustomIssueInput] =
-    useState("");
-
-  const [customIssues, setCustomIssues] =
-    useState([]);
-
-  const [issueList, setIssueList] =
-    useState([]);
-  const [selectedIssues, setSelectedIssues] =
-    useState([]);
-
-  const [issueOpen, setIssueOpen] =
-    useState(false);
-
-
-  const { user } = useSelector((state) => state.auth);
-
-  const { callApi } = useApi();
-const [voucherCategories, setVoucherCategories] =
-    useState([]);
-
-  const [roles, setRoles] =
-    useState([]);
-
-  const [loading, setLoading] =
-    useState(false);
-
-  const [roleLoading, setRoleLoading] =
-    useState(false);
-
-  const [openDialog, setOpenDialog] =
-    useState(false);
-
-  const [createdVID, setCreatedVID] =
-    useState("");
-
-  const [errors, setErrors] =
-    useState({});
-
-  const [snackbar, setSnackbar] =
-    useState({
-      open: false,
-      message: "",
-      severity: "success",
-    });
-
-  const [formData, setFormData] =
-    useState({
-      categoryId: "",
-      otherCategory: "",
-      description: "",
-      roleId: "",
-      sdRequestNumber: "",
-    });
-
-  useEffect(() => {
-    fetchRoles();
-    fetchVoucherCategories();
-  }, []);
-
-  const fetchVoucherCategories =
-    async () => {
-      try {
-        const response = await callApi(
-          "/VE/voucher-transactions/voucher-categories",
-          null,
-          "GET"
-        );
-
-        console.log(
-          "Voucher Categories Response =>",
-          response
-        );
-
-        const categories =
-          Array.isArray(response)
-            ? response
-            : response?.data || [];
-
-        const sortedCategories = [...categories].sort((a, b) => {
-          if (a.categoryName === "Other") return 1;
-          if (b.categoryName === "Other") return -1;
-          return 0;
-        });
-
-        setVoucherCategories(sortedCategories);
-      } catch (error) {
-        console.error(
-          "Category API Error =>",
-          error
-        );
-
-        setVoucherCategories([]);
-      }
-    };
-
-  const fetchRoles = async () => {
-    setRoleLoading(true);
-
-    try {
-      const response = await callApi(
-        "/VE/voucher-transactions/allowed-roles?menuId=30",
-        null,
-        "GET"
-      );
-
-      console.log(
-        "Allowed Roles Response =>",
-        response
-      );
-
-      setRoles(
-        Array.isArray(response.data)
-          ? response.data
-          : []
-      );
-    } catch (error) {
-      console.error(
-        "Failed to fetch roles",
-        error
-      );
-
-      setSnackbar({
-        open: true,
-        message: "Failed to load roles",
-        severity: "error",
-      });
-    } finally {
-      setRoleLoading(false);
-    }
-  };
-
-
-  const handleChange = (e) => {
-    const { name, value } =
-      e.target;
-
-    if (
-      name === "description" &&
-      value.length > 500
-    ) {
-      return;
-    }
-
-    if (name === "otherCategory") {
-      const regex =
-        /^(?!.*\s{2,})[A-Za-z0-9 -]*$/;
-
-      if (!regex.test(value)) {
-        setErrors((prev) => ({
-          ...prev,
-          otherCategory: "Special Character and spaces not allowed",
-        }));
-        return;
-      }
-
-      if (value.length >= 21) {
-        setErrors((prev) => ({
-          ...prev,
-          otherCategory: "Maximum 20 characters allowed",
-        }));
-         setTimeout(() => {
-          setErrors((prev) => ({
-            ...prev,
-            otherCategory: "",
-
-          }))
-        }, 1000)
-        return;
-      }
-
-
-    }
-
-
-    if (name === "sdRequestNumber") {
-      const regex =
-        /^[0-9,]*$/;
-
-      if (!regex.test(value)) {
-        setErrors((prev) => ({
-          ...prev,
-          sdRequestNumber: "Character, Special Characters and space not allowed",
-        }));
-        setTimeout(() => {
-          setErrors((prev) => ({
-            ...prev,
-            sdRequestNumber: "",
-
-          }))
-        }, 1000)
-        return;
-      }
-
-      if (value.length >= 51) {
-        setErrors((prev) => ({
-          ...prev,
-          sdRequestNumber: "Maximum 50 number allowed",
-        }));
-        setTimeout(() => {
-          setErrors((prev) => ({
-            ...prev,
-            sdRequestNumber: "",
-
-          }))
-        }, 1000)
-        return;
-      }
-
-    }
-
-    if (name === "categoryId") {
-
-      const selectedCategory =
-        voucherCategories.find(
-          (item) => item.id == value
-        );
-      console.log(
-        "Selected Category =>",
-        selectedCategory
-      );
-
-      console.log(
-        "Issues =>",
-        selectedCategory?.issueCategories
-      );
-
-      setIssueList(
-        selectedCategory?.issueCategories || []
-      );
-
-      setSelectedIssues([]);
-      setCustomIssues([]);
-      setCustomIssueInput("");
-      setShowCustomIssue(false);
-    }
-
-if (name === "description") {
-    if (value.startsWith(" ")) {
-      setErrors((prev) => ({
-        ...prev,
-        description: "description should not start with a space or contain consecutive spaces..",
-      }));
-      return;
-    } else {
-      setErrors((prev) => ({
-        ...prev,
-        description: "",
-      }));
-    }
+const hasAnyEditableFlag = (reason) => {
+  if (!reason) {
+    return false;
   }
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
 
-    setErrors((prev) => ({
-      ...prev,
-      [name]: "",
-    }));
+  const flags = reason.split(",").map((x) => x.trim());
+
+  return flags.includes("B") || flags.includes("C") || flags.includes("G");
+};
+
+const GLRectificationTable = ({
+  rows,
+  page,
+  setPage,
+  pageSize,
+  setPageSize,
+  totalElements,
+  fetchData,
+  fetchSummary,
+  fetchGroups,
+  selectedGroup,
+  groups,
+}) => {
+  const { callApi } = useApi();
+
+  const showSnackBar = useCustomSnackbar();
+
+  const [editingId, setEditingId] = useState(null);
+
+  const [editedRow, setEditedRow] = useState({});
+
+  const [originalRow, setOriginalRow] = useState(null);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const [pendingBulkPayload, setPendingBulkPayload] = useState(null);
+
+  const [errors, setErrors] = useState({});
+
+  const [validatedFields, setValidatedFields] = useState({});
+  const [matchingCount, setMatchingCount] = useState(0);
+  const [saving, setSaving] = useState(false);
+
+  const handleEdit = (row) => {
+    setEditingId(row.id);
+
+    setOriginalRow({ ...row });
+
+    setEditedRow({ ...row });
+
+    setErrors({});
+
+    setValidatedFields({});
   };
 
+  const handleCancel = () => {
+    setEditedRow(originalRow || {});
 
-  const validateForm = () => {
-    let newErrors = {};
+    setEditingId(null);
 
-    if (!formData.categoryId) {
-      newErrors.categoryId =
-        "Voucher Category is required";
-    }
-
-    const selectedCategory =
-      voucherCategories.find(
-        (item) =>
-          String(item.id) ===
-          String(formData.categoryId)
-      );
-
-    console.log(
-      "Selected Category =>",
-      selectedCategory
-    );
-
-    console.log(
-      "Form Category Id =>",
-      formData.categoryId
-    );
-
-    console.log(
-      "Entered Other Category =>",
-      formData.otherCategory
-    );
-
-    if (
-      selectedCategory?.categoryName
-        ?.trim()
-        .toLowerCase() === "other" &&
-      !formData.otherCategory.trim()
-    ) {
-      newErrors.otherCategory =
-        "Please enter other category";
-    }
-
-    if (
-      selectedCategory?.categoryName
-        ?.trim()
-        .toLowerCase() === "other" &&
-      formData.otherCategory.trim()
-    ) {
-      const enteredCategory =
-        formData.otherCategory
-          .trim()
-          .toLowerCase();
-
-      const categoryExists =
-        voucherCategories.some(
-          (item) => {
-            const match =
-              item.categoryName
-                ?.trim()
-                .toLowerCase() ===
-              enteredCategory;
-
-            console.log(
-              "Comparing =>",
-              item.categoryName,
-              enteredCategory,
-              match
-            );
-
-            return match;
-          }
-        );
-
-      console.log(
-        "Category Exists =>",
-        categoryExists
-      );
-
-      if (categoryExists) {
-        newErrors.otherCategory =
-          "Category already exists";
-      }
-    }
-
-    if (
-      !formData.description.trim()
-    ) {
-      newErrors.description =
-        "Description is required";
-    }
-
-    if (
-      formData.description.length >
-      500
-    ) {
-      newErrors.description =
-        "Maximum 500 Characters Allowed";
-    }
-
-    if (!formData.roleId) {
-      newErrors.roleId =
-        "Allowed Role is required";
-    }
-
-    if (
-      selectedIssues.length === 0 &&
-      customIssues.filter(
-        (item) => item?.trim()
-      ).length === 0
-    ) {
-      newErrors.issues =
-        "At least one issue is required";
-    }
-
-    if (
-      selectedIssues.length === 0 &&
-      customIssues.length === 0
-    ) {
-      if (showCustomIssue) {
-        newErrors.customIssue =
-          "Please add the issue first";
-      } else {
-        newErrors.issues =
-          "Please select at least one issue";
-      }
-    }
-
-    if (
-      showCustomIssue &&
-      customIssueInput.trim() &&
-      customIssues.length === 0
-    ) {
-      newErrors.customIssue =
-        "Please add this issue first";
-    }
-
-    console.log(
-      "Validation Errors =>",
-      newErrors
-    );
-
-    setErrors(newErrors);
-
-    return (
-      Object.keys(newErrors)
-        .length === 0
-    );
-  };
-  const handleCreate =
-    async () => {
-      if (!validateForm()) {
-        return;
-      }
-
-      setLoading(true);
-
-      try {
-        const selectedCategory =
-          voucherCategories.find(
-            (item) =>
-              item.id ===
-              formData.categoryId
-          );
-
-        const payload = {
-          categoryId:
-            formData.categoryId,
-
-          customCategory:
-            selectedCategory?.categoryName ===
-              "Other"
-              ? formData.otherCategory
-              : "",
-
-          description:
-            formData.description,
-
-          allowedRole:
-            formData.roleId,
-
-          sdReqNo:
-            formData.sdRequestNumber,
-
-          createdBy: user.userId,
-
-          issueCategoryIds: selectedIssues.map(
-            (item) => item.id
-          ),
-
-
-          customIssueCategories:
-            customIssues.filter(
-              (item) => item?.trim()
-            ),
-
-
-        };
-
-        console.log(
-          "Create Payload =>",
-          JSON.stringify(payload, null, 2)
-        );
-
-        const response =
-          await callApi(
-            "/VE/voucher-transactions/create-vid",
-            payload,
-            "POST"
-          );
-
-        console.log(
-          "Create Response =>",
-          response
-        );
-
-        await fetchVoucherCategories();
-
-        const createdVid =
-          response?.vid ||
-          response?.data?.vid ||
-          "";
-
-        setCreatedVID(
-          createdVid
-        );
-
-        setOpenDialog(true);
-
-        setSnackbar({
-          open: true,
-          message:
-            "Voucher Request Created Successfully",
-          severity:
-            "success",
-        });
-
-        setFormData({
-          categoryId: "",
-          otherCategory: "",
-          description: "",
-          roleId: "",
-          sdRequestNumber: "",
-
-        });
-        setSelectedIssues([]);
-        setIssueList([]);
-        setCustomIssues([]);
-        setCustomIssueInput("");
-        setShowCustomIssue(false);
-        setIssueOpen(false);
-
-        setErrors({});
-      } catch (error) {
-        console.error(
-          "Create Voucher Error =>",
-          error
-        );
-
-        setSnackbar({
-          open: true,
-          message:
-            "Failed To Create Voucher",
-          severity: "error",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-  const handleReset = () => {
-    setFormData({
-      categoryId: "",
-      otherCategory: "",
-      description: "",
-      roleId: "",
-      sdRequestNumber: "",
-    });
-    setIssueList([]);
-    setSelectedIssues([]);
-    setCustomIssues([]);
-    setCustomIssueInput("");
-    setShowCustomIssue(false);
-    setIssueOpen(false);
     setErrors({});
   };
 
-  return (
-    <Paper
-      elevation={2}
-      sx={{
-        p: 2,
-        mb: 4,
+  const hasChanges = () => {
+    if (!originalRow) {
+      return false;
+    }
 
-        minHeight: 760
+    return (
+      (editedRow.branchCode || "").trim() !==
+        (originalRow.branchCode || "").trim() ||
+      (editedRow.currency || "").trim() !==
+        (originalRow.currency || "").trim() ||
+      (editedRow.cgl || "").trim() !== (originalRow.cgl || "").trim()
+    );
+  };
+
+  const handleChange = (field, value, isSelected = false) => {
+    setEditedRow((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+
+    if (isSelected) {
+      setValidatedFields((prev) => ({
+        ...prev,
+        [field]: true,
+      }));
+    }
+
+    const labels = {
+      branchCode: "Branch",
+      currency: "Currency",
+      cgl: "CGL",
+    };
+
+    setErrors((prev) => {
+      const updated = { ...prev };
+
+      if (!value?.trim()) {
+        updated[field] = `${labels[field]} is required`;
+      } else {
+        delete updated[field];
+      }
+
+      return updated;
+    });
+  };
+
+  const validate = () => {
+    const newErrors = {};
+
+    const reason = editedRow.reason || "";
+
+    if (reason.includes("B")) {
+      if (!editedRow.branchCode?.trim()) {
+        newErrors.branchCode = "Branch is required";
+      } else if (!validatedFields.branchCode) {
+        newErrors.branchCode = "Select Branch from dropdown";
+      }
+    }
+
+    if (reason.includes("C")) {
+      if (!editedRow.currency?.trim()) {
+        newErrors.currency = "Currency is required";
+      } else if (!validatedFields.currency) {
+        newErrors.currency = "Select Currency from dropdown";
+      }
+    }
+
+    if (reason.includes("G")) {
+      if (!editedRow.cgl?.trim()) {
+        newErrors.cgl = "CGL is required";
+      } else if (!validatedFields.cgl) {
+        newErrors.cgl = "Select CGL from dropdown";
+      }
+    }
+
+    setErrors(newErrors);
+
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const isAllRequiredFieldsValidated = () => {
+    const reason = editedRow.reason || "";
+
+    if (reason.includes("B") && !validatedFields.branchCode) {
+      return false;
+    }
+
+    if (reason.includes("C") && !validatedFields.currency) {
+      return false;
+    }
+
+    if (reason.includes("G") && !validatedFields.cgl) {
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSave = () => {
+    if (!validate()) {
+      return;
+    }
+
+    let type = "";
+
+    let oldValue = "";
+
+    let newValue = "";
+
+    if (editedRow.branchCode !== originalRow.branchCode) {
+      type = "BRANCH";
+
+      oldValue = originalRow.branchCode;
+
+      newValue = editedRow.branchCode;
+    } else if (editedRow.currency !== originalRow.currency) {
+      type = "CURRENCY";
+
+      oldValue = originalRow.currency;
+
+      newValue = editedRow.currency;
+    } else if (editedRow.cgl !== originalRow.cgl) {
+      type = "CGL";
+
+      oldValue = originalRow.cgl;
+
+      newValue = editedRow.cgl;
+    }
+
+    let matchedGroup = null;
+
+    if (type === "BRANCH") {
+      matchedGroup = groups?.branches?.find(
+        (item) => item.invalidValue === oldValue,
+      );
+    }
+
+    if (type === "CURRENCY") {
+      matchedGroup = groups?.currencies?.find(
+        (item) => item.invalidValue === oldValue,
+      );
+    }
+
+    if (type === "CGL") {
+      matchedGroup = groups?.cgls?.find(
+        (item) => item.invalidValue === oldValue,
+      );
+    }
+
+    setMatchingCount(matchedGroup?.count || 0);
+
+    setPendingBulkPayload({
+      type,
+      oldValue,
+      newValue,
+    });
+
+    setConfirmOpen(true);
+  };
+
+  const handleBulkConfirm = async () => {
+    if (!pendingBulkPayload) {
+      return;
+    }
+
+    setConfirmOpen(false);
+
+    setSaving(true);
+
+    try {
+      const res = await callApi(
+        "/CM/gl-invalid/bulk-rectify",
+        pendingBulkPayload,
+        "PUT",
+      );
+
+      showSnackBar(`${res?.data?.updatedCount || 0} rows updated`);
+
+      setEditingId(null);
+
+      await Promise.all([
+        fetchData(page, pageSize, selectedGroup),
+        fetchSummary(),
+        fetchGroups(),
+      ]);
+    } catch {
+      showSnackBar("Bulk rectification failed");
+    } finally {
+      setSaving(false);
+
+      setPendingBulkPayload(null);
+    }
+  };
+
+  const renderEditableCell = (type, error) => (params) => (
+    <EditableCell
+      type={type}
+      row={params.row}
+      editingId={editingId}
+      editedRow={editedRow}
+      error={error}
+      validatedFields={validatedFields}
+      onChange={handleChange}
+    />
+  );
+
+  const getReasonChipColor = (reason, flag, field, rowId, rectification) => {
+    if (!reason.includes(flag)) {
+      return "#9e9e9e";
+    }
+
+    if (rectification === "M") {
+      return "#2e7d32";
+    }
+
+    if (editingId !== rowId) {
+      return "#d32f2f";
+    }
+
+    return validatedFields[field] ? "#2e7d32" : "#d32f2f";
+  };
+
+  const renderReasonChips = (params) => {
+    const reason = params.row.reason || "";
+    if (reason === "VALID") {
+      return (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "100%",
+            height: "100%",
+          }}
+        >
+          <Chip
+            label="No Issues"
+            size="small"
+            color="success"
+            sx={{
+              fontWeight: 600,
+            }}
+          />
+        </Box>
+      );
+    }
+
+    const renderChip = (flag, label, field) => {
+      if (!reason.includes(flag)) {
+        return null;
+      }
+
+      const color = getReasonChipColor(
+        reason,
+        flag,
+        field,
+        params.row.id,
+        params.row.rectification,
+      );
+
+      return (
+        <Chip
+          key={flag}
+          label={label}
+          size="small"
+          variant="outlined"
+          sx={{
+            backgroundColor: color === "#2e7d32" ? "#ecfdf3" : "#fdecec",
+            color,
+            fontWeight: 600,
+          }}
+        />
+      );
+    };
+
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 0.5,
+          flexWrap: "wrap",
+          width: "100%",
+          height: "100%",
+        }}
+      >
+        {renderChip("B", "Branch", "branchCode")}
+
+        {renderChip("C", "Currency", "currency")}
+
+        {renderChip("G", "CGL", "cgl")}
+      </Box>
+    );
+  };
+
+  const renderActionButtons = (params) => {
+    const editable =
+      params.row.rectification !== "M" && hasAnyEditableFlag(params.row.reason);
+
+    if (!editable) {
+      return (
+        <IconButton disabled size="small">
+          <EditIcon fontSize="small" />
+        </IconButton>
+      );
+    }
+
+    return editingId === params.row.id ? (
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 0.5,
+        }}
+      >
+        <IconButton
+          color="success"
+          disabled={
+            Object.keys(errors).length > 0 ||
+            !hasChanges() ||
+            !isAllRequiredFieldsValidated()
+          }
+          onClick={handleSave}
+        >
+          <SaveIcon fontSize="small" />
+        </IconButton>
+
+        <IconButton color="error" onClick={handleCancel}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Box>
+    ) : (
+      <IconButton color="primary" onClick={() => handleEdit(params.row)}>
+        <EditIcon fontSize="small" />
+      </IconButton>
+    );
+  };
+
+  const columns = [
+    {
+      field: "branchCode",
+      headerName: "Branch",
+      headerAlign: "center",
+      flex: 1,
+      // minWidth: 130,
+      renderCell: renderEditableCell("branchCode", errors.branchCode),
+    },
+
+    {
+      field: "newBranchCode",
+      headerName: "Updated Branch",
+      flex: 1,
+      headerAlign: "center",
+      // minWidth: 140,
+      renderCell: (params) =>
+        params.value ? (
+          params.value
+        ) : (
+          <span style={{ color: "#9ca3af" }}>Not Updated</span>
+        ),
+    },
+
+    {
+      field: "currency",
+      headerName: "Currency",
+      flex: 1,
+      headerAlign: "center",
+      // minWidth: 120,
+      renderCell: renderEditableCell("currency", errors.currency),
+    },
+
+    {
+      field: "newCurrency",
+      headerName: "Updated Currency",
+      flex: 1,
+      minWidth: 140,
+      headerAlign: "center",
+      renderCell: (params) =>
+        params.value ? (
+          params.value
+        ) : (
+          <span style={{ color: "#9ca3af" }}>Not Updated</span>
+        ),
+    },
+
+    {
+      field: "cgl",
+      headerName: "CGL",
+      flex: 1,
+      headerAlign: "center",
+      // minWidth: 170,
+      renderCell: renderEditableCell("cgl", errors.cgl),
+    },
+
+    {
+      field: "newCgl",
+      headerName: "Updated CGL",
+      flex: 1,
+      headerAlign: "center",
+      minWidth: 170,
+      renderCell: (params) =>
+        params.value ? (
+          params.value
+        ) : (
+          <span style={{ color: "#9ca3af" }}>Not Updated</span>
+        ),
+    },
+
+    {
+      field: "debitAmount",
+      headerName: "Debit",
+      flex: 0.8,
+      align: "right",
+      headerAlign: "right",
+      renderCell: (params) => <span>{Math.abs(params.value)}</span>,
+    },
+
+    {
+      field: "creditAmount",
+      headerName: "Credit",
+      flex: 0.8,
+      align: "right",
+      headerAlign: "right",
+      renderCell: (params) => <span>{Math.abs(params.value)}</span>,
+    },
+
+    {
+      field: "status",
+      headerName: "Status",
+      width: 120,
+      align: "center",
+      headerAlign: "center",
+      renderCell: (params) => (
+        <Chip
+          label={params.row.rectification === "M" ? "Modified" : "Invalid"}
+          color={params.row.rectification === "M" ? "success" : "error"}
+          size="small"
+        />
+      ),
+    },
+
+    {
+      field: "reason",
+      headerName: "Reason",
+      flex: 1.5,
+      align: "center",
+      headerAlign: "center",
+      // width: 180,
+      sortable: false,
+      filterable: false,
+      renderCell: renderReasonChips,
+    },
+
+    {
+      field: "actions",
+      headerName: "Actions",
+      width: 110,
+      headerAlign: "center",
+      sortable: false,
+      filterable: false,
+      renderCell: renderActionButtons,
+    },
+  ];
+
+  return (
+    <Box
+      sx={{
+        height: "calc(100vh - 220px)",
+        width: "100%",
+        display: "flex",
+        flexDirection: "column",
+        pt: 1,
+        minHeight: 0,
       }}
     >
-      <Box p={4}>
-        <Typography variant="h4" mb={6}>
-          Request Voucher
-        </Typography>
-        <Card
-          elevation={3}
-          sx={{
-            maxWidth: "1100px",
-            margin: "40px auto",
-            padding: 4,
-            borderRadius: 3,
-          }}
-        >
-
-
+      <Box
+        sx={{
+          borderRadius: 3,
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+        }}
+      >
+        {selectedGroup && (
           <Box
             sx={{
+              px: 2,
+              py: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+            }}
+          >
+            <Chip
+              label={`${selectedGroup.type} : ${selectedGroup.invalidValue}`}
+              color="primary"
+              onDelete={() => {
+                fetchData(0, pageSize, null);
+              }}
+            />
+          </Box>
+        )}
+
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          pagination
+          loading={saving}
+          paginationMode="server"
+          rowCount={totalElements}
+          disableRowSelectionOnClick
+          density="standard"
+          rowHeight={52}
+          columnHeaderHeight={52}
+          paginationModel={{
+            page,
+            pageSize,
+          }}
+          pageSizeOptions={[25, 50, 100]}
+          onPaginationModelChange={(model) => {
+            setPage(model.page);
+
+            setPageSize(model.pageSize);
+
+            fetchData(model.page, model.pageSize);
+          }}
+          initialState={{
+            pinnedColumns: {
+              right: ["actions"],
+            },
+          }}
+          getRowClassName={(params) => {
+            if (params.row.rectification === "M") {
+              return "modified-row";
+            }
+
+            if (params.id === editingId) {
+              return "editing-row";
+            }
+
+            return "";
+          }}
+          sx={{
+            flex: 1,
+            border: "none",
+
+            "& .MuiDataGrid-cell": {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            },
+            "& .MuiDataGrid-cllContent": {
               width: "100%",
               display: "flex",
-              flexDirection:
-                "column",
-              gap: 3,
-            }}
-          >
-            {/* Voucher Category + Other */}
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns:
-                  voucherCategories.find(
-                    (item) =>
-                      item.id ===
-                      formData.categoryId &&
-                      item.categoryName ===
-                      "Other"
-                  )
-                    ? "1fr 1fr"
-                    : "1fr",
-
-                gap: 3,
-
-                "@media (max-width:900px)":
-                {
-                  gridTemplateColumns:
-                    "1fr",
-                },
-              }}
-            >
-              {/* Voucher Category */}
-              <FormControl
-                fullWidth
-                error={
-                  !!errors.categoryId
-                }
-              >
-                <InputLabel>
-                  Voucher Category*
-                </InputLabel>
-
-                <Select
-                  disabled={loading}
-                  name="categoryId"
-                  value={
-                    formData.categoryId
-                  }
-                  onChange={
-                    handleChange
-                  }
-                  label="Voucher Category"
-                  MenuProps={{
-                    PaperProps: {
-                      sx: {
-                        maxHeight: 400,
-                        overflow: "auto",
-                      }
-                    }
-                  }}
-                >
-                  <MenuItem value="">
-                    <em>
-                      Select Category
-                    </em>
-                  </MenuItem>
-
-                  {voucherCategories?.map(
-                    (item) => (
-
-                      <MenuItem
-                        key={item.id}
-                        value={item.id}
-                      >
-                        {item.categoryName === "Other"
-                          ? "+ Other"
-                          : item.categoryName}
-                      </MenuItem>
-                    )
-                  )}
-                </Select>
-
-                <FormHelperText>
-                  {errors.categoryId
-                    ? errors.categoryId
-                    : "Select the voucher category to create the voucher request."}
-                </FormHelperText>
-              </FormControl>
-
-              {/* Other Category */}
-              {voucherCategories.find(
-                (item) =>
-                  item.id ===
-                  formData.categoryId &&
-                  item.categoryName ===
-                  "Other"
-              ) && (
-                  <TextField
-                    disabled={loading}
-                    fullWidth
-                    label="New Category *"
-                    name="otherCategory"
-                    value={
-                      formData.otherCategory
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    error={
-                      !!errors.otherCategory
-                    }
-                    inputProps={{
-                      maxLength: 21,
-                    }}
-                    helperText={
-                      errors.otherCategory
-                        ? errors.otherCategory
-                        : `Only character, numbers, hyphen and single space allowed.  (${formData.otherCategory.length}/20)`
-
-                    }
-                  />
-                )}
-            </Box>
-
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns:
-                  showCustomIssue
-                    ? "0.90fr 0.90fr"
-                    : "1fr",
-                gap: 3,
-
-                "@media (max-width:900px)": {
-                  gridTemplateColumns: "1fr",
-                },
-              }}
-            >
-              <Autocomplete
-                multiple
-                disableCloseOnSelect
-
-                open={issueOpen}
-
-                onOpen={() => {
-
-                  if (!formData.categoryId) {
-
-                    setErrors((prev) => ({
-                      ...prev,
-                      issues:
-                        "Please select Voucher Category first",
-                    }));
-
-                    return;
-                  }
-
-
-                  setIssueOpen(true);
-                }}
-                onClose={() => setIssueOpen(false)}
-
-                options={[
-                  ...issueList,
-
-                  ...(formData.categoryId
-                    ? [
-                      {
-                        id: "ADD_NEW",
-                        issueCategoryName:
-                          "+ Add Issue",
-                      },
-                    ]
-                    : []),
-                ]}
-                value={selectedIssues}
-
-                onChange={(
-                  event,
-                  newValue
-                ) => {
-                  const addIssueClicked =
-                    newValue.find(
-                      (item) =>
-                        item.id ===
-                        "ADD_NEW"
-                    );
-
-
-                  if (addIssueClicked) {
-                    setShowCustomIssue(true);
-                    setIssueOpen(false);
-
-                    setSelectedIssues(
-                      newValue.filter(
-                        (item) => item.id !== "ADD_NEW"
-                      )
-                    );
-
-                    return;
-                  }
-                  setSelectedIssues(
-                    newValue
-                  );
-                  if (newValue.length > 0) {
-                    setErrors((prev) => ({
-                      ...prev,
-                      issues: "",
-                    }))
-                  }
-                }}
-                getOptionLabel={(
-                  option
-                ) =>
-                  option.issueCategoryName ||
-                  ""
-                }
-                renderOption={(
-                  props,
-                  option,
-                  { selected }
-                ) => (
-                  <li {...props}>
-                    {option.id !==
-                      "ADD_NEW" && (
-                        <Checkbox
-                          checked={
-                            selected
-                          }
-                          size="small"
-                        />
-                      )}
-
-                    {
-                      option.issueCategoryName
-                    }
-                  </li>
-                )}
-                slotProps={{
-                  listbox: {
-                    sx: {
-                      maxHeight: 300,
-                      overflowY: "auto"
-                    }
-                  }
-                }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Search Issues*"
-                    placeholder="Search Issues"
-                    error={!!errors.issues}
-                    helperText={
-                      errors.issues
-                        ? errors.issues
-                        : "Select one or more issues. If not available, choose Add New Issues."
-                    }
-
-
-
-                  />
-                )}
-              />
-
-
-              {showCustomIssue && (
-                <Box >
-
-
-
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: 1,
-
-                    }}
-                  >
-                    <TextField
-                      fullWidth
-                      label="Enter New Issue"
-                      value={customIssueInput}
-
-                      onChange={(e) => {
-                        setCustomIssueInput(
-                          e.target.value
-                        );
-
-                        setErrors((prev) => ({
-                          ...prev,
-                          customIssue: "",
-                        }));
-                      }}
-                      error={!!errors.customIssue}
-                      inputProps={{
-                        maxLength: 100,
-                      }}
-                      helperText={
-                        errors.customIssue
-                          ? errors.customIssue
-                          : `Enter a new issue if it is not available in the list. All characters are allowed (${customIssueInput.length}/100)`
-                      }
-
-
-
-                    />
-
-                    <Button size="small" sx={{
-                      minWidth: "80px", height: "50px", mt: "4px"
-                    }}
-                      variant="contained"
-                      startIcon={<AddIcon />}
-                      onClick={() => {
-                        const newIssue =
-                          customIssueInput.trim();
-
-                        if (!newIssue) return;
-
-                        const alreadyExistsInMaster =
-                          issueList.some(
-                            (item) =>
-                              item.issueCategoryName
-                                ?.trim()
-                                .toLowerCase() ===
-                              newIssue.toLowerCase()
-                          );
-
-                        const alreadyExistsInCustom =
-                          customIssues.some(
-                            (item) =>
-                              item.trim().toLowerCase() ===
-                              newIssue.toLowerCase()
-                          );
-
-                        if (
-                          alreadyExistsInMaster ||
-                          alreadyExistsInCustom
-                        ) {
-                          setErrors((prev) => ({
-                            ...prev,
-                            customIssue:
-                              "Issue already exists",
-                          }));
-
-                          return;
-                        }
-
-                        setCustomIssues((prev) => [
-                          ...prev,
-                          newIssue,
-                        ]);
-
-                        setErrors((prev) => ({
-                          ...prev,
-                          issues: "",
-                          customIssue: "",
-                        }));
-
-                        setCustomIssueInput("");
-                      }}
-
-                    >
-                      Add
-                    </Button>
-
-
-
-                  </Box>
-
-
-
-                  {customIssues.length >
-                    0 && (
-                      <Box
-                        sx={{
-                          mt: 2,
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 1,
-                        }}
-                      >
-                        {customIssues.map(
-                          (
-                            issue,
-                            index
-                          ) => (
-                            <Chip
-                              key={index}
-                              label={issue}
-                              onDelete={() =>
-                                setCustomIssues(
-                                  customIssues.filter(
-                                    (
-                                      _,
-                                      i
-                                    ) =>
-                                      i !==
-                                      index
-                                  )
-                                )
-                              }
-                            />
-                          )
-                        )}
-                      </Box>
-                    )}
-                </Box>
-              )}
-            </Box>
-
-
-            {/* Allowed Role + SD */}
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns:
-                  "1fr 1fr",
-                gap: 3,
-
-                "@media (max-width:900px)":
-                {
-                  gridTemplateColumns:
-                    "1fr",
-                },
-              }}
-            >
-              {/* Role */}
-              <FormControl
-                fullWidth
-                error={
-                  !!errors.roleId
-                }
-              >
-                <InputLabel>
-                  Allowed Role*
-                </InputLabel>
-                <Select
-                  disabled={loading || roleLoading}
-                  name="roleId"
-                  value={formData.roleId}
-                  label="Allowed Role"
-                  onChange={handleChange}
-                  MenuProps={{
-                    PaperProps: {
-                      sx: {
-                        maxHeight: 250,
-                        overflow: "auto",
-                      }
-                    }
-                  }}
-
-                >
-
-                  <MenuItem value="">
-                    <em>Select Role</em>
-                  </MenuItem>
-
-                  {roles?.map((role) => (
-                    <MenuItem
-                      key={role.roleId}
-                      value={role.roleId}
-                    >
-                      {role.roleName}
-                    </MenuItem>
-                  ))}
-                </Select>
-                <FormHelperText>
-                  {errors.roleId
-                    ? errors.roleId
-                    : "Select the role that will be allowed to process this request."}
-                </FormHelperText>
-
-              </FormControl>
-
-              {/* SD */}
-              <TextField
-                disabled={loading}
-                fullWidth
-                label="SD Request Number"
-                name="sdRequestNumber"
-                value={
-                  formData.sdRequestNumber
-                }
-               
-                onChange={
-                  handleChange
-                }
-                error={
-                  !!errors.sdRequestNumber
-                }
-                inputProps={{
-                  maxLength: 51,
-                }}
-                helperText={
-                  errors.sdRequestNumber
-                    ? errors.sdRequestNumber
-                    : `Only numbers and commas allowed.  (${formData.sdRequestNumber.length}/50)`
-
-                }
-              />
-            </Box>
-
-            {/* Description */}
-            <TextField
-              disabled={loading}
-              fullWidth
-              multiline
-              rows={5}
-              label="Description*"
-              name="description"
-              value={
-                formData.description
-              }
-              onChange={
-                handleChange
-              }
-              error={
-                !!errors.description
-              }
-              inputProps={{
-                maxLength: 500,
-              }}
-              helperText={
-                errors.description
-                  ? errors.description
-                  : ` All characters are allowed .(${formData.description.length}/500)`
-              }
-            />
-
-
-
-
-            {/* Buttons */}
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent:
-                  "flex-end",
-                gap: 2,
-              }}
-            >
-              <Button
-                variant="outlined"
-                onClick={
-                  handleReset
-                }
-                disabled={loading}
-                sx={{
-                  minWidth:
-                    "120px",
-                  textTransform:
-                    "none",
-                  borderRadius:
-                    "8px",
-                  "&:hover":
-                  {
-                    color:"#fff",
-                  },
-                }}
-              >
-                Reset
-              </Button>
-
-              <Button
-                variant="contained"
-                onClick={
-                  handleCreate
-                }
-                disabled={loading}
-                sx={{
-                  minWidth:
-                    "120px",
-                  textTransform:
-                    "none",
-                  borderRadius:
-                    "8px",
-                }}
-              >
-                {loading
-                  ? "Creating..."
-                  : "Create"}
-              </Button>
-            </Box>
-          </Box>
-        </Card>
-
-        {/* Success Dialog */}
-        <Dialog
-
-          open={openDialog}
-          disableEscapeKeyDown
-          hideBackdrop=
-          {false}
-          BackdropProps={{
-            sx:{pointerEvents:"auto",},
+              alignItems: "center",
+              justifyContent: "center",
+            },
           }}
-          onClose={(event, reason) => {
-            if(reason === "backdropClick") {return;}
-             
-               setOpenDialog(false)
-          }
-            
-          }
-          maxWidth="xs"
-          fullWidth
-        >
-          <DialogTitle>
-            Voucher Request Created
-          </DialogTitle>
-
-          <DialogContent>
-            <Typography mb={2}>
-              Voucher ID
-            </Typography>
-
-            <Box
-              sx={{
-                display: "flex",
-                alignItems:
-                  "center",
-                justifyContent:
-                  "space-between",
-                border:
-                  "1px solid #ccc",
-                borderRadius: 2,
-                px: 2,
-                py: 1.5,
-                background:
-                  "#f8f9fa",
-              }}
-            >
-              <Typography
-                fontWeight={700}
-                color="primary"
-              >
-                {createdVID}
-              </Typography>
-
-              <IconButton
-                onClick={() => {
-                  navigator.clipboard.writeText(
-                    createdVID
-                  );
-
-                  setSnackbar({
-                    open: true,
-                    message:
-                      "Voucher ID copied",
-                    severity:
-                      "success",
-                  });
-                }}
-              >
-                <ContentCopyIcon />
-              </IconButton>
-            </Box>
-          </DialogContent>
-
-          <DialogActions
-            sx={{
-              p: 3,
-              pt: 1,
-            }}
-          >
-            <Button
-              variant="outlined"
-              onClick={() => {
-                handleReset();
-                setOpenDialog(false);
-              }}
-            >
-              Create New Voucher
-            </Button>
-
-
-            <Button
-              variant="contained"
-              onClick={() => {
-                setOpenDialog(false);
-
-                const viewMenu = findMenuById(menuItems, 262);
-
-                navigate(viewMenu?.route || selectedMenuItem?.route);
-              }}
-            >
-              View Requests
-            </Button>
-
-
-
-
-          </DialogActions>
-        </Dialog>
-
-        {/* Snackbar */}
-        <Snackbar
-          open={snackbar.open}
-          autoHideDuration={
-            4000
-          }
-          onClose={() =>
-            setSnackbar(
-              (prev) => ({
-                ...prev,
-                open: false,
-              })
-            )
-          }
-          anchorOrigin={{
-            vertical: "top",
-            horizontal:
-              "center",
-          }}
-        >
-          <Alert
-            severity={
-              snackbar.severity
-            }
-            variant="filled"
-          >
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
+        />
       </Box>
-    </Paper>
+
+      <Dialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 700,
+          }}
+        >
+          Confirm Bulk Rectification
+        </DialogTitle>
+
+        <DialogContent
+          sx={{
+            fontSize: 15,
+            color: "#4b5563",
+          }}
+        >
+          Apply this correction to all <strong>{matchingCount}</strong> matching
+          records with invalid <strong>{pendingBulkPayload?.type}</strong> value{" "}
+          <strong>{pendingBulkPayload?.oldValue}</strong>?
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            px: 3,
+            pb: 2,
+          }}
+        >
+          <Button
+            onClick={() => setConfirmOpen(false)}
+            variant="text"
+            sx={{
+              color: "#5f6368",
+              fontWeight: 600,
+            }}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={handleBulkConfirm}
+            disabled={saving}
+            sx={{
+              fontWeight: 700,
+              borderRadius: 2,
+              px: 3,
+            }}
+          >
+            {saving ? "Saving..." : "Confirm"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 };
 
-export default RequestVoucherScreen;
+export default GLRectificationTable;
+import React from "react";
+import { Box, Paper, Typography } from "@mui/material";
+
+const GLRectificationSummary = ({ summary }) => {
+  const cards = [
+    {
+      label: "Invalid Branches",
+      value: summary?.invalidBranches || 0,
+      bg: "#fff5f5",
+      color: "#d32f2f",
+    },
+    {
+      label: "Invalid Currencies",
+      value: summary?.invalidCurrencies || 0,
+      bg: "#fff8f1",
+      color: "#ef6c00",
+    },
+    {
+      label: "Invalid CGLs",
+      value: summary?.invalidCgls || 0,
+      bg: "#f6f0ff",
+      color: "#7b1fa2",
+    },
+    {
+      label: "Modified Records",
+      value: summary?.modifiedRecords || 0,
+      bg: "#f1fff3",
+      color: "#2e7d32",
+    },
+  ];
+
+  return (
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: "repeat(4, 1fr)",
+        gap: 2,
+        mb: 2,
+      }}
+    >
+      {cards.map((card) => (
+        <Paper
+          key={card.label}
+          elevation={0}
+          sx={{
+            p: 2,
+            borderRadius: 3,
+            backgroundColor: card.bg,
+            border: `1px solid ${card.color}22`,
+            borderLeftWidth:"6px",
+            borderleft:`6px solid ${card.color}`,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 30,
+              fontWeight: 700,
+              color: card.color,
+              lineHeight: 1,
+            }}
+          >
+            {card.value}
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.5,
+              fontSize: 14,
+              color: "#5f6368",
+              fontWeight: 500,
+            }}
+          >
+            {card.label}
+          </Typography>
+        </Paper>
+      ))}
+    </Box>
+  );
+};
+
+export default GLRectificationSummary;
+import React, { useEffect, useState } from "react";
+import { Box, Chip, Typography } from "@mui/material";
+import GLRectificationTable from "./GLRectificationTable";
+import useApi from "../../hooks/useApi";
+import downloadFile from "../../utils/DownloadUtils";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import GLRectificationSummary from "./GLRectificationSummary";
+import GLInvalidGroups from "./GLInvalidGroups";
+import { Button, Dialog, DialogTitle, DialogContent } from "@mui/material";
+
+import FilterListIcon from "@mui/icons-material/FilterList";
+
+const GLRectificationPage = () => {
+  const { callApi } = useApi();
+  const [summary, setSummary] = useState({});
+  const showSnackBar = useCustomSnackbar();
+
+  const [rows, setRows] = useState([]);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalElements, setTotalElements] = useState(0);
+  const [groups, setGroups] = useState({});
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+
+  const [selectedGroup, setSelectedGroup] = useState(null);
+
+  const fetchData = async (
+    pageNo = 0,
+    size = pageSize,
+    filter = selectedGroup,
+  ) => {
+    try {
+      let url = `/CM/gl-invalid?page=${pageNo}&size=${size}`;
+
+      if (filter) {
+        url += `&type=${filter.type}` + `&value=${filter.invalidValue}`;
+      }
+
+      const res = await callApi(url, null, "GET");
+
+      const data = res?.data;
+
+      setRows(data?.data || []);
+
+      setPage(data?.currentPage || 0);
+
+      setTotalElements(data?.totalElements || 0);
+    } catch {
+      showSnackBar("Failed to fetch data");
+    }
+  };
+
+  const fetchGroups = async () => {
+    try {
+      const res = await callApi("/CM/gl-invalid/groups", null, "GET");
+
+      setGroups(res || {});
+    } catch {
+      showSnackBar("Failed to load groups");
+    }
+  };
+
+  const fetchSummary = async () => {
+    try {
+      const res = await callApi("/CM/gl-invalid/summary", null, "GET");
+
+      setSummary(res || {});
+    } catch {
+      showSnackBar("Failed to fetch summary");
+    }
+  };
+  const handleDownload = async () => {
+    try {
+      const res = await callApi(
+        "/CM/gl-invalid/download",
+        null,
+        "POST",
+        "arraybuffer",
+      );
+
+      if (res?.byteLength) {
+        downloadFile(res, "excel", "gl_rectification");
+      }
+    } catch {
+      showSnackBar("Failed to download excel");
+    }
+  };
+
+  useEffect(() => {
+    fetchData(0);
+
+    fetchSummary();
+
+    fetchGroups();
+  }, []);
+
+  return (
+    <Box
+      sx={{
+        p: 2,
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
+      <GLRectificationSummary summary={summary} />
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 2,
+        }}
+      >
+        <Button
+          variant="outlined"
+          startIcon={<FilterListIcon />}
+          onClick={() => setGroupDialogOpen(true)}
+          sx={{
+            borderRadius: 3,
+            textTransform: "none",
+            fontWeight: 700,
+            "&:hover":
+            {
+              color:"#fff",
+            },
+          }}
+        >
+          Filter Invalid Groups
+        </Button>
+
+        <Button variant="contained" onClick={handleDownload}>
+          Download Excel
+        </Button>
+
+        {selectedGroup && (
+          <Chip
+            label={`${selectedGroup.type} : ${selectedGroup.invalidValue}`}
+            color="primary"
+            onDelete={() => {
+              setSelectedGroup(null);
+
+              fetchData(0, pageSize, null);
+            }}
+          />
+        )}
+      </Box>
+
+      <GLRectificationTable
+        rows={rows}
+        page={page}
+        setPage={setPage}
+        pageSize={pageSize}
+        setPageSize={setPageSize}
+        totalElements={totalElements}
+        fetchData={fetchData}
+        fetchSummary={fetchSummary}
+        fetchGroups={fetchGroups}
+        selectedGroup={selectedGroup}
+        groups={groups}
+      />
+      <Dialog
+        open={groupDialogOpen}
+        onClose={() => setGroupDialogOpen(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 800,
+          }}
+        >
+          Invalid Groups
+        </DialogTitle>
+
+        <DialogContent>
+          <GLInvalidGroups
+            groups={groups}
+            selectedGroup={selectedGroup}
+            setSelectedGroup={(group) => {
+              setSelectedGroup(group);
+
+              fetchData(0, pageSize, group);
+
+              setGroupDialogOpen(false);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+    </Box>
+  );
+};
+
+export default GLRectificationPage;
+import React from "react";
+
+import { Box, Typography, Paper, Chip } from "@mui/material";
+
+const Section = ({ title, data, color, onSelect, selectedValue }) => {
+  return (
+    <Box mb={3}>
+      <Typography
+        sx={{
+          fontSize: 12,
+          fontWeight: 800,
+          mb: 1.2,
+          color: "#6b7280",
+          textTransform: "uppercase",
+          letterSpacing: 0.5,
+        }}
+      >
+        {title}
+      </Typography>
+
+      <Box
+        sx={{
+          display: "flex",
+          gap: 1.5,
+          overflowX: "auto",
+          pb: 1,
+
+          "&::-webkit-scrollbar": {
+            height: 6,
+          },
+
+          "&::-webkit-scrollbar-thumb": {
+            background: "#d1d5db",
+            borderRadius: 10,
+          },
+        }}
+      >
+        {data.map((item) => {
+          const selected = selectedValue === item.invalidValue;
+
+          return (
+            <Paper
+              key={item.invalidValue}
+              elevation={0}
+              onClick={() => onSelect(item)}
+              sx={{
+                minWidth: 150,
+                p: 1.5,
+                borderRadius: 3,
+                cursor: "pointer",
+                flexShrink: 0,
+
+                border: selected ? `2px solid ${color}` : "1px solid #ececec",
+
+                backgroundColor: selected ? `${color}12` : "#fff",
+
+                transition: "all 0.2s ease",
+
+                "&:hover": {
+                  borderColor: color,
+                  transform: "translateY(-1px)",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
+                },
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 15,
+                  fontWeight: 700,
+                  color: "#111827",
+                }}
+              >
+                {item.invalidValue}
+              </Typography>
+
+              <Typography
+                sx={{
+                  fontSize: 11,
+                  color: "#6b7280",
+                  mt: 0.5,
+                }}
+              >
+                Click to filter
+              </Typography>
+
+              <Chip
+                label={`${item.count} rows`}
+                size="small"
+                sx={{
+                  mt: 1.2,
+                  backgroundColor: `${color}15`,
+                  color,
+                  fontWeight: 700,
+                }}
+              />
+            </Paper>
+          );
+        })}
+      </Box>
+    </Box>
+  );
+};
+
+const GLInvalidGroups = ({ groups, selectedGroup, setSelectedGroup }) => {
+  return (
+    <Box
+      sx={{
+        p: 2,
+        mb: 2,
+      }}
+    >
+      <Typography
+        sx={{
+          fontSize: 18,
+          fontWeight: 800,
+          color: "#111827",
+          mb: 0.5,
+        }}
+      >
+        Invalid Groups
+      </Typography>
+
+      <Typography
+        sx={{
+          fontSize: 13,
+          color: "#6b7280",
+          mb: 2.5,
+        }}
+      >
+        Select a group to filter records
+      </Typography>
+
+      <Section
+        title="Invalid Branches"
+        data={groups?.branches || []}
+        color="#dc2626"
+        selectedValue={selectedGroup?.invalidValue}
+        onSelect={(item) =>
+          setSelectedGroup({
+            ...item,
+            type: "BRANCH",
+          })
+        }
+      />
+
+      <Section
+        title="Invalid Currencies"
+        data={groups?.currencies || []}
+        color="#ea580c"
+        selectedValue={selectedGroup?.invalidValue}
+        onSelect={(item) =>
+          setSelectedGroup({
+            ...item,
+            type: "CURRENCY",
+          })
+        }
+      />
+
+      <Section
+        title="Invalid CGLs"
+        data={groups?.cgls || []}
+        color="#9333ea"
+        selectedValue={selectedGroup?.invalidValue}
+        onSelect={(item) =>
+          setSelectedGroup({
+            ...item,
+            type: "CGL",
+          })
+        }
+      />
+    </Box>
+  );
+};
+
+export default GLInvalidGroups;
+import React, { useState, useEffect } from "react";
+import { Autocomplete, TextField } from "@mui/material";
+import { debounce } from "lodash";
+import useApi from "../../hooks/useApi";
+
+const hasFlag = (reason, flag) => {
+  if (!reason) return false;
+  return reason
+    .split(",")
+    .map((x) => x.trim())
+    .includes(flag);
+};
+
+const isEditable = (row, type) => {
+  const reason = row.reason;
+
+  if (type === "branchCode") return hasFlag(reason, "B");
+  if (type === "currency") return hasFlag(reason, "C");
+  if (type === "cgl") return hasFlag(reason, "G");
+
+  return false;
+};
+
+const EditableCell = ({
+  type,
+  row,
+  editingId,
+  editedRow,
+  onChange,
+  validatedFields,
+  error,
+}) => {
+  const { callApi } = useApi();
+  const [options, setOptions] = useState([]);
+  const [inputValue, setInputValue] = useState("");
+  useEffect(() => {
+    if (editingId === row.id) {
+      if (editedRow[type] !== undefined) {
+        setInputValue(editedRow[type]);
+      } else {
+        setInputValue(row[type] || "");
+      }
+    }
+  }, [editingId]);
+
+  const fetchOptions = debounce(async (value) => {
+    if (!value || value.length < 3) return;
+
+    const res = await callApi(
+      `/CM/gl-invalid/lookup/${type}?q=${value}`,
+      null,
+      "GET",
+    );
+
+    setOptions(res?.data || []);
+  }, 300);
+
+  if (editingId !== row.id || !isEditable(row, type)) {
+    return row[type];
+  }
+  //   const selectedValue =
+  //     options.find((x) => x.code === inputValue) ||
+  //     (inputValue ? { code: inputValue, name: "" } : null);
+  const getFieldStatus = () => {
+    const reason = row.reason || "";
+
+    const invalidInitially =
+      (type === "branchCode" && reason.includes("B")) ||
+      (type === "currency" && reason.includes("C")) ||
+      (type === "cgl" && reason.includes("G"));
+
+    if (!invalidInitially) {
+      return "normal";
+    }
+
+    return validatedFields?.[type] ? "valid" : "invalid";
+  };
+
+  const status = getFieldStatus();
+  return (
+    <Autocomplete
+      size="small"
+      options={options}
+      inputValue={inputValue}
+      //   value={selectedValue}
+      autoHighlight
+      clearOnBlur={false}
+      handleHomeEndKeys
+      filterOptions={(x) => x}
+      getOptionLabel={(opt) => opt?.code || ""}
+      renderOption={(props, option) => (
+        <li {...props}>
+          {option.code} - {option.name}
+        </li>
+      )}
+      onInputChange={(e, value, reason) => {
+        // if (reason === "reset") {
+        //   return;
+        // }
+        // onChange(type, value, false);
+        setInputValue(value);
+        if (reason == "input") {
+          fetchOptions(value);
+        }
+      }}
+      onChange={(e, value) => {
+        const code = value?.code || "";
+
+        setInputValue(code);
+
+        onChange(type, code, true);
+      }}
+      sx={{
+        "& .MuiOutlinedInput-root": {
+          ...(error && {
+            "& fieldset": {
+              borderColor: "red",
+            },
+          }),
+        },
+      }}
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          error={!!error}
+          title={error || ""}
+          sx={{
+            width: "100%",
+
+            "& .MuiOutlinedInput-root": {
+              ...(status === "invalid" && {
+                "& fieldset": {
+                  borderColor: "#d32f2f !important",
+                  borderWidth: "1.5px",
+                },
+
+                backgroundColor: "#fff5f5",
+              }),
+
+              ...(status === "valid" && {
+                "& fieldset": {
+                  borderColor: "#2e7d32 !important",
+                  borderWidth: "1.5px",
+                },
+
+                backgroundColor: "#f1fff3",
+              }),
+            },
+          }}
+        />
+      )}
+    />
+  );
+};
+
+export default EditableCell;
