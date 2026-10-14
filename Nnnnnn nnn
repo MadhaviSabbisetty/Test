@@ -1,718 +1,214 @@
-
-import React, { useState } from "react";
-
-import { DataGrid } from "@mui/x-data-grid";
-
-import {
-  Box,
-  Chip,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-} from "@mui/material";
-
-import EditIcon from "@mui/icons-material/Edit";
-import SaveIcon from "@mui/icons-material/Save";
-import CloseIcon from "@mui/icons-material/Close";
-
-import EditableCell from "./EditableCell";
-
+import React, { useEffect, useState } from "react";
+import { Box, Chip, Typography, Paper } from "@mui/material";
+import GLRectificationTable from "./GLRectificationTable";
 import useApi from "../../hooks/useApi";
+import downloadFile from "../../utils/DownloadUtils";
 import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import GLRectificationSummary from "./GLRectificationSummary";
+import GLInvalidGroups from "./GLInvalidGroups";
+import { Button, Dialog, DialogTitle, DialogContent } from "@mui/material";
 
-const hasAnyEditableFlag = (reason) => {
-  if (!reason) {
-    return false;
-  }
+import FilterListIcon from "@mui/icons-material/FilterList";
 
-  const flags = reason.split(",").map((x) => x.trim());
-
-  return flags.includes("B") || flags.includes("C") || flags.includes("G");
-};
-
-const GLRectificationTable = ({
-  rows,
-  page,
-  setPage,
-  pageSize,
-  setPageSize,
-  totalElements,
-  fetchData,
-  fetchSummary,
-  fetchGroups,
-  selectedGroup,
-  groups,
-}) => {
+const GLRectificationPage = () => {
   const { callApi } = useApi();
-
+  const [summary, setSummary] = useState({});
   const showSnackBar = useCustomSnackbar();
 
-  const [editingId, setEditingId] = useState(null);
+  const [rows, setRows] = useState([]);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalElements, setTotalElements] = useState(0);
+  const [groups, setGroups] = useState({});
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
 
-  const [editedRow, setEditedRow] = useState({});
+  const [selectedGroup, setSelectedGroup] = useState(null);
 
-  const [originalRow, setOriginalRow] = useState(null);
+  const fetchData = async (
+    pageNo = 0,
+    size = pageSize,
+    filter = selectedGroup,
+  ) => {
+    try {
+      let url = `/CM/gl-invalid?page=${pageNo}&size=${size}`;
 
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
-  const [pendingBulkPayload, setPendingBulkPayload] = useState(null);
-
-  const [errors, setErrors] = useState({});
-
-  const [validatedFields, setValidatedFields] = useState({});
-  const [matchingCount, setMatchingCount] = useState(0);
-  const [saving, setSaving] = useState(false);
-
-  const handleEdit = (row) => {
-    setEditingId(row.id);
-
-    setOriginalRow({ ...row });
-
-    setEditedRow({ ...row });
-
-    setErrors({});
-
-    setValidatedFields({});
-  };
-
-  const handleCancel = () => {
-    setEditedRow(originalRow || {});
-
-    setEditingId(null);
-
-    setErrors({});
-  };
-
-  const hasChanges = () => {
-    if (!originalRow) {
-      return false;
-    }
-
-    return (
-      (editedRow.branchCode || "").trim() !==
-        (originalRow.branchCode || "").trim() ||
-      (editedRow.currency || "").trim() !==
-        (originalRow.currency || "").trim() ||
-      (editedRow.cgl || "").trim() !== (originalRow.cgl || "").trim()
-    );
-  };
-
-  const handleChange = (field, value, isSelected = false) => {
-    setEditedRow((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-
-    if (isSelected) {
-      setValidatedFields((prev) => ({
-        ...prev,
-        [field]: true,
-      }));
-    }
-
-    const labels = {
-      branchCode: "Branch",
-      currency: "Currency",
-      cgl: "CGL",
-    };
-
-    setErrors((prev) => {
-      const updated = { ...prev };
-
-      if (!value?.trim()) {
-        updated[field] = `${labels[field]} is required`;
-      } else {
-        delete updated[field];
+      if (filter) {
+        url += `&type=${filter.type}` + `&value=${filter.invalidValue}`;
       }
 
-      return updated;
-    });
+      const res = await callApi(url, null, "GET");
+
+      const data = res?.data;
+
+      setRows(data?.data || []);
+
+      setPage(data?.currentPage || 0);
+
+      setTotalElements(data?.totalElements || 0);
+    } catch {
+      showSnackBar("Failed to fetch data");
+    }
   };
 
-  const validate = () => {
-    const newErrors = {};
+  const fetchGroups = async () => {
+    try {
+      const res = await callApi("/CM/gl-invalid/groups", null, "GET");
 
-    const reason = editedRow.reason || "";
-
-    if (reason.includes("B")) {
-      if (!editedRow.branchCode?.trim()) {
-        newErrors.branchCode = "Branch is required";
-      } else if (!validatedFields.branchCode) {
-        newErrors.branchCode = "Select Branch from dropdown";
-      }
+      setGroups(res || {});
+    } catch {
+      showSnackBar("Failed to load groups");
     }
-
-    if (reason.includes("C")) {
-      if (!editedRow.currency?.trim()) {
-        newErrors.currency = "Currency is required";
-      } else if (!validatedFields.currency) {
-        newErrors.currency = "Select Currency from dropdown";
-      }
-    }
-
-    if (reason.includes("G")) {
-      if (!editedRow.cgl?.trim()) {
-        newErrors.cgl = "CGL is required";
-      } else if (!validatedFields.cgl) {
-        newErrors.cgl = "Select CGL from dropdown";
-      }
-    }
-
-    setErrors(newErrors);
-
-    return Object.keys(newErrors).length === 0;
   };
 
-  const isAllRequiredFieldsValidated = () => {
-    const reason = editedRow.reason || "";
+  const fetchSummary = async () => {
+    try {
+      const res = await callApi("/CM/gl-invalid/summary", null, "GET");
 
-    if (reason.includes("B") && !validatedFields.branchCode) {
-      return false;
+      setSummary(res || {});
+    } catch {
+      showSnackBar("Failed to fetch summary");
     }
-
-    if (reason.includes("C") && !validatedFields.currency) {
-      return false;
-    }
-
-    if (reason.includes("G") && !validatedFields.cgl) {
-      return false;
-    }
-
-    return true;
   };
-
-  const handleSave = () => {
-    if (!validate()) {
-      return;
-    }
-
-    let type = "";
-
-    let oldValue = "";
-
-    let newValue = "";
-
-    if (editedRow.branchCode !== originalRow.branchCode) {
-      type = "BRANCH";
-
-      oldValue = originalRow.branchCode;
-
-      newValue = editedRow.branchCode;
-    } else if (editedRow.currency !== originalRow.currency) {
-      type = "CURRENCY";
-
-      oldValue = originalRow.currency;
-
-      newValue = editedRow.currency;
-    } else if (editedRow.cgl !== originalRow.cgl) {
-      type = "CGL";
-
-      oldValue = originalRow.cgl;
-
-      newValue = editedRow.cgl;
-    }
-
-    let matchedGroup = null;
-
-    if (type === "BRANCH") {
-      matchedGroup = groups?.branches?.find(
-        (item) => item.invalidValue === oldValue,
-      );
-    }
-
-    if (type === "CURRENCY") {
-      matchedGroup = groups?.currencies?.find(
-        (item) => item.invalidValue === oldValue,
-      );
-    }
-
-    if (type === "CGL") {
-      matchedGroup = groups?.cgls?.find(
-        (item) => item.invalidValue === oldValue,
-      );
-    }
-
-    setMatchingCount(matchedGroup?.count || 0);
-
-    setPendingBulkPayload({
-      type,
-      oldValue,
-      newValue,
-    });
-
-    setConfirmOpen(true);
-  };
-
-  const handleBulkConfirm = async () => {
-    if (!pendingBulkPayload) {
-      return;
-    }
-
-    setConfirmOpen(false);
-
-    setSaving(true);
-
+  const handleDownload = async () => {
     try {
       const res = await callApi(
-        "/CM/gl-invalid/bulk-rectify",
-        pendingBulkPayload,
-        "PUT",
+        "/CM/gl-invalid/download",
+        null,
+        "POST",
+        "arraybuffer",
       );
 
-      showSnackBar(`${res?.data?.updatedCount || 0} rows updated`);
-
-      setEditingId(null);
-
-      await Promise.all([
-        fetchData(page, pageSize, selectedGroup),
-        fetchSummary(),
-        fetchGroups(),
-      ]);
-    } catch {
-      showSnackBar("Bulk rectification failed");
-    } finally {
-      setSaving(false);
-
-      setPendingBulkPayload(null);
-    }
-  };
-
-  const renderEditableCell = (type, error) => (params) => (
-    <EditableCell
-      type={type}
-      row={params.row}
-      editingId={editingId}
-      editedRow={editedRow}
-      error={error}
-      validatedFields={validatedFields}
-      onChange={handleChange}
-    />
-  );
-
-  const getReasonChipColor = (reason, flag, field, rowId, rectification) => {
-    if (!reason.includes(flag)) {
-      return "#9e9e9e";
-    }
-
-    if (rectification === "M") {
-      return "#2e7d32";
-    }
-
-    if (editingId !== rowId) {
-      return "#d32f2f";
-    }
-
-    return validatedFields[field] ? "#2e7d32" : "#d32f2f";
-  };
-
-  const renderReasonChips = (params) => {
-    const reason = params.row.reason || "";
-    if (reason === "VALID") {
-      return (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "100%",
-            height: "100%",
-          }}
-        >
-          <Chip
-            label="No Issues"
-            size="small"
-            color="success"
-            sx={{
-              fontWeight: 600,
-            }}
-          />
-        </Box>
-      );
-    }
-
-    const renderChip = (flag, label, field) => {
-      if (!reason.includes(flag)) {
-        return null;
+      if (res?.byteLength) {
+        downloadFile(res, "excel", "gl_rectification");
       }
-
-      const color = getReasonChipColor(
-        reason,
-        flag,
-        field,
-        params.row.id,
-        params.row.rectification,
-      );
-
-      return (
-        <Chip
-          key={flag}
-          label={label}
-          size="small"
-          variant="outlined"
-          sx={{
-            backgroundColor: color === "#2e7d32" ? "#ecfdf3" : "#fdecec",
-            color,
-            fontWeight: 600,
-          }}
-        />
-      );
-    };
-
-    return (
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 0.5,
-          flexWrap: "wrap",
-          width: "100%",
-          height: "100%",
-        }}
-      >
-        {renderChip("B", "Branch", "branchCode")}
-
-        {renderChip("C", "Currency", "currency")}
-
-        {renderChip("G", "CGL", "cgl")}
-      </Box>
-    );
-  };
-
-  const renderActionButtons = (params) => {
-    const editable =
-      params.row.rectification !== "M" && hasAnyEditableFlag(params.row.reason);
-
-    if (!editable) {
-      return (
-        <IconButton disabled size="small">
-          <EditIcon fontSize="small" />
-        </IconButton>
-      );
+    } catch {
+      showSnackBar("Failed to download excel");
     }
-
-    return editingId === params.row.id ? (
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 0.5,
-        }}
-      >
-        <IconButton
-          color="success"
-          disabled={
-            Object.keys(errors).length > 0 ||
-            !hasChanges() ||
-            !isAllRequiredFieldsValidated()
-          }
-          onClick={handleSave}
-        >
-          <SaveIcon fontSize="small" />
-        </IconButton>
-
-        <IconButton color="error" onClick={handleCancel}>
-          <CloseIcon fontSize="small" />
-        </IconButton>
-      </Box>
-    ) : (
-      <IconButton color="primary" onClick={() => handleEdit(params.row)}>
-        <EditIcon fontSize="small" />
-      </IconButton>
-    );
   };
 
-  const columns = [
-    {
-      field: "branchCode",
-      headerName: "Branch",
-      headerAlign: "center",
-      flex: 1,
-      // minWidth: 130,
-      renderCell: renderEditableCell("branchCode", errors.branchCode),
-    },
+  useEffect(() => {
+    fetchData(0);
 
-    {
-      field: "newBranchCode",
-      headerName: "Updated Branch",
-      flex: 1,
-      headerAlign: "center",
-      // minWidth: 140,
-      renderCell: (params) =>
-        params.value ? (
-          params.value
-        ) : (
-          <span style={{ color: "#9ca3af" }}>Not Updated</span>
-        ),
-    },
+    fetchSummary();
 
-    {
-      field: "currency",
-      headerName: "Currency",
-      flex: 1,
-      headerAlign: "center",
-      // minWidth: 120,
-      renderCell: renderEditableCell("currency", errors.currency),
-    },
-
-    {
-      field: "newCurrency",
-      headerName: "Updated Currency",
-      flex: 1,
-      minWidth: 140,
-      headerAlign: "center",
-      renderCell: (params) =>
-        params.value ? (
-          params.value
-        ) : (
-          <span style={{ color: "#9ca3af" }}>Not Updated</span>
-        ),
-    },
-
-    {
-      field: "cgl",
-      headerName: "CGL",
-      flex: 1,
-      headerAlign: "center",
-      // minWidth: 170,
-      renderCell: renderEditableCell("cgl", errors.cgl),
-    },
-
-    {
-      field: "newCgl",
-      headerName: "Updated CGL",
-      flex: 1,
-      headerAlign: "center",
-      minWidth: 170,
-      renderCell: (params) =>
-        params.value ? (
-          params.value
-        ) : (
-          <span style={{ color: "#9ca3af" }}>Not Updated</span>
-        ),
-    },
-
-    {
-      field: "debitAmount",
-      headerName: "Debit",
-      flex: 0.8,
-      align: "right",
-      headerAlign: "right",
-      renderCell: (params) => <span>{Math.abs(params.value)}</span>,
-    },
-
-    {
-      field: "creditAmount",
-      headerName: "Credit",
-      flex: 0.8,
-      align: "right",
-      headerAlign: "right",
-      renderCell: (params) => <span>{Math.abs(params.value)}</span>,
-    },
-
-    {
-      field: "status",
-      headerName: "Status",
-      width: 120,
-      align: "center",
-      headerAlign: "center",
-      renderCell: (params) => (
-        <Chip
-          label={params.row.rectification === "M" ? "Modified" : "Invalid"}
-          color={params.row.rectification === "M" ? "success" : "error"}
-          size="small"
-        />
-      ),
-    },
-
-    {
-      field: "reason",
-      headerName: "Reason",
-      flex: 1.5,
-      align: "center",
-      headerAlign: "center",
-      // width: 180,
-      sortable: false,
-      filterable: false,
-      renderCell: renderReasonChips,
-    },
-
-    {
-      field: "actions",
-      headerName: "Actions",
-      width: 110,
-      headerAlign: "center",
-      sortable: false,
-      filterable: false,
-      renderCell: renderActionButtons,
-    },
-  ];
+    fetchGroups();
+  }, []);
 
   return (
+      <Paper
+        elevation={0}
+        sx={{
+          flex:1,
+          minHeight:0,
+          widows:"100%",
+          overflow:"hidden",
+          display:"flex",
+          flexDirection:"column",
+          borderRadius:3,
+        }}
+      > 
     <Box
       sx={{
-        // height: "calc(100vh - 220px)",
-        height:"100%",
-        width: "100%",
+        p: 2,
         display: "flex",
         flexDirection: "column",
-        // pt: 1,
-        minWidth:0,
-        minHeight: 0,
-        overflow:"hidden",
+        gap: 1,
+        height: "100%",
+        overflow: "hidden",
+        minHeight:0,
         boxSizing:"border-box",
       }}
     >
+      <GLRectificationSummary summary={summary} />
       <Box
         sx={{
-          // borderRadius: 3,
-          flex: 1,
           display: "flex",
-          flexDirection: "column",
-          minHeight: 0,
-          minWidth:0,
-          overflow:"hidden",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap:1,
+          mb: 0,
+          flexDirection:0,
         }}
       >
-        {selectedGroup && (
-          <Box
-            sx={{
-              px: 1.5,
-              py: 0.5,
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-            }}
-          >
-            <Chip
-              label={`${selectedGroup.type} : ${selectedGroup.invalidValue}`}
-              color="primary"
-              onDelete={() => {
-                fetchData(0, pageSize, null);
-              }}
-            />
-          </Box>
-        )}
-
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          pagination
-          loading={saving}
-          paginationMode="server"
-          rowCount={totalElements}
-          disableRowSelectionOnClick
-          density="standard"
-          rowHeight={52}
-          columnHeaderHeight={52}
-          paginationModel={{
-            page,
-            pageSize,
-          }}
-          pageSizeOptions={[25, 50, 100]}
-          onPaginationModelChange={(model) => {
-            setPage(model.page);
-
-            setPageSize(model.pageSize);
-
-            fetchData(model.page, model.pageSize);
-          }}
-          initialState={{
-            pinnedColumns: {
-              right: ["actions"],
-            },
-          }}
-          getRowClassName={(params) => {
-            if (params.row.rectification === "M") {
-              return "modified-row";
-            }
-
-            if (params.id === editingId) {
-              return "editing-row";
-            }
-
-            return "";
-          }}
+        <Button
+          variant="outlined"
+          startIcon={<FilterListIcon />}
+          onClick={() => setGroupDialogOpen(true)}
           sx={{
-            flex: 1,
-            border: "none",
-
-            "& .MuiDataGrid-cell": {
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            },
-            "& .MuiDataGrid-cllContent": {
-              width: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+            borderRadius: 3,
+            textTransform: "none",
+            fontWeight: 700,
+            "&:hover":
+            {
+              color:"#fff",
             },
           }}
-        />
+        >
+          Filter Invalid Groups
+        </Button>
+
+        <Button variant="contained" onClick={handleDownload}>
+          Download Excel
+        </Button>
+
+        {selectedGroup && (
+          <Chip
+            label={`${selectedGroup.type} : ${selectedGroup.invalidValue}`}
+            color="primary"
+            onDelete={() => {
+              setSelectedGroup(null);
+
+              fetchData(0, pageSize, null);
+            }}
+          />
+        )}
       </Box>
 
+      <GLRectificationTable
+        rows={rows}
+        page={page}
+        setPage={setPage}
+        pageSize={pageSize}
+        setPageSize={setPageSize}
+        totalElements={totalElements}
+        fetchData={fetchData}
+        fetchSummary={fetchSummary}
+        fetchGroups={fetchGroups}
+        selectedGroup={selectedGroup}
+        groups={groups}
+      />
+
       <Dialog
-        open={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        maxWidth="xs"
+        open={groupDialogOpen}
+        onClose={() => setGroupDialogOpen(false)}
+        maxWidth="lg"
         fullWidth
       >
         <DialogTitle
           sx={{
-            fontWeight: 700,
+            fontWeight: 800,
           }}
         >
-          Confirm Bulk Rectification
+          Invalid Groups
         </DialogTitle>
 
-        <DialogContent
-          sx={{
-            fontSize: 15,
-            color: "#4b5563",
-          }}
-        >
-          Apply this correction to all <strong>{matchingCount}</strong> matching
-          records with invalid <strong>{pendingBulkPayload?.type}</strong> value{" "}
-          <strong>{pendingBulkPayload?.oldValue}</strong>?
+        <DialogContent>
+          <GLInvalidGroups
+            groups={groups}
+            selectedGroup={selectedGroup}
+            setSelectedGroup={(group) => {
+              setSelectedGroup(group);
+
+              fetchData(0, pageSize, group);
+
+              setGroupDialogOpen(false);
+            }}
+          />
         </DialogContent>
-
-        <DialogActions
-          sx={{
-            px: 3,
-            pb: 2,
-          }}
-        >
-          <Button
-            onClick={() => setConfirmOpen(false)}
-            variant="text"
-            sx={{
-              color: "#5f6368",
-              fontWeight: 600,
-            }}
-          >
-            Cancel
-          </Button>
-
-          <Button
-            variant="contained"
-            onClick={handleBulkConfirm}
-            disabled={saving}
-            sx={{
-              fontWeight: 700,
-              borderRadius: 2,
-              px: 3,
-            }}
-          >
-            {saving ? "Saving..." : "Confirm"}
-          </Button>
-        </DialogActions>
       </Dialog>
     </Box>
+    </Paper>
   );
 };
 
-export default GLRectificationTable;
+export default GLRectificationPage;
