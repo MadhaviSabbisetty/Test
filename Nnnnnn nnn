@@ -1,997 +1,463 @@
+import React, { useState, useMemo, useEffect } from "react";
 import {
+  Box,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Stack,
-  TextField,
-  Grid,
   Typography,
-  Checkbox,
-  Autocomplete,
-  Divider,
-  List,
-  ListItemIcon,
   Tooltip,
-  Box,
-  Chip,
-} from "@mui/material";
-import { useEffect, useState, useCallback } from "react";
-import * as MuiIcons from "@mui/icons-material";
-import LockOpenIcon from "@mui/icons-material/LockOpen";
-import RestoreIcon from "@mui/icons-material/Restore";
-import { validations } from "../../../utils/Validations";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
-import useApi from "../../../hooks/useApi";
-import useCustomSnackbar from "../../../utils/useCustomSnackbar";
-import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import DraggablePermissionItem from "./DraggablePermissionItem";
-import _ from "lodash";
-
-// The list of IDs you want to exclude
-const MENUS_TO_REMOVE = [46, 47];
-const DESCRIPTION_REGEX = /^[a-zA-Z0-9\s/&().,-]*$/;
-
-export default function RolesDialog({
-  open,
-  form,
-  setForm,
-  fetchRoles,
-  initialForm = {},
-  screenActions = {},
-  onClose,
-  roles = {},
-  roleAccessList = [],
-}) {
-  const { callApi } = useApi();
-  const snackbar = useCustomSnackbar();
-  const [selectedPermissions, setSelectedPermissions] = useState([]);
-  const [originalOrder, setOriginalOrder] = useState([]);
-  const [isBlocked, setIsBlocked] = useState(form?.roleStatus === "BLOCKED");
-  const [permissionSearch, setPermissionSearch] = useState("");
-  const [allPermissions, setAllPermissions] = useState([]);
-
-  const handleStatusToggle = async () => {
-    const newStatus = form.roleStatus === "ACTIVE" ? "BLOCKED" : "ACTIVE";
-    setIsBlocked(!isBlocked);
-    form.roleStatus = newStatus;
-  };
-
-  const canSave =
-    (form.roleName || "").length > 2 &&
-    (form.description || "").length > 4 &&
-    Boolean(form.roleAccess) &&
-    selectedPermissions.length > 0;
-
-  const fetchAllPermissions = useCallback(
-    async (roleId) => {
-      try {
-        const response = await callApi(
-          `/UM/role/get-all-permissions?roleId=${roleId || ""}`,
-          {},
-          "GET",
-        );
-        const permits = response?.result ?? [];
-        const filteredPermissions =
-          roleId === 10
-            ? permits
-            : permits.filter((item) => !MENUS_TO_REMOVE.includes(item.id));
-
-        setAllPermissions(filteredPermissions);
-      } catch (error) {
-        console.error(error);
-        setAllPermissions([]);
-      }
-    },
-    [callApi],
-  );
-
-  useEffect(() => {
-    if (open) {
-      fetchAllPermissions(form?.roleId);
-      setIsBlocked(form?.roleStatus === "BLOCKED");
-
-      if (form?.permissions?.length) {
-        const withOrder = form.permissions.map((p, i) => ({
-          ...p,
-          order: p.order ?? i + 1,
-        }));
-        setSelectedPermissions(withOrder);
-        setOriginalOrder(withOrder);
-      } else {
-        setSelectedPermissions([]);
-        setOriginalOrder([]);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, fetchAllPermissions]);
-
-  const handleChange = (data, key, e, type) => {
-    let value = e.target.value;
-    if (value && !/^[A-Za-z0-9]$/.test(value[0])) {
-      snackbar("Should not start with special character", "error");
-      return;
-    }
-    const result = validations(type, e.target.value);
-    if (result === "") {
-      setForm({ ...data, [key]: e.target.value });
-    } else {
-      snackbar(result, "warning");
-    }
-  };
-
-  const moveItem = useCallback(
-    (from, to) => {
-      const updated = [...selectedPermissions];
-      const [moved] = updated.splice(from, 1);
-      updated.splice(to, 0, moved);
-      const reOrdered = updated.map((item, idx) => ({
-        ...item,
-        order: idx + 1,
-      }));
-      setSelectedPermissions(reOrdered);
-    },
-    [selectedPermissions],
-  );
-
-  const handleReset = () => setSelectedPermissions(originalOrder);
-
-  const handlePermissionsSelect = (e, newValue) => {
-    const withOrder = newValue.map((p, idx) => ({
-      ...p,
-      order: idx + 1,
-    }));
-    setSelectedPermissions(withOrder);
-  };
-
-  const hasDuplicateRoleData = () => {
-    const name = form.roleName?.trim().toLowerCase();
-    const desc = form.description?.trim().toLowerCase();
-
-    return (
-      roles.length > 0 &&
-      roles.some((r) => {
-        if (form.roleId && r.roleId === form.roleId) return false;
-        const roleNameMatch = r.roleName?.trim().toLowerCase() === name;
-        const roleDescMatch = r.description?.trim().toLowerCase() === desc;
-        return roleNameMatch || roleDescMatch;
-      })
-    );
-  };
-
-  const handleSave = async () => {
-    if (!form.roleName || !form.description) {
-      snackbar("Kindly fill all the required fields.", "warning");
-      return;
-    }
-
-    if (form.roleName.trim().length < 3) {
-      snackbar("Kindly provide valid role name.", "warning");
-      return;
-    }
-
-    if (!form.roleAccess) {
-      snackbar("Kindly select Role Access.", "warning");
-      return;
-    }
-
-    if (form.description.trim().length < 5) {
-      snackbar("Kindly provide valid role description.", "warning");
-      return;
-    }
-
-    if (selectedPermissions.length < 1) {
-      snackbar(
-        "Please select at least one permission for this role before saving",
-        "warning",
-      );
-      return;
-    }
-
-    if (hasDuplicateRoleData()) {
-      snackbar(
-        "Role name or description already exists. Please use unique values.",
-        "warning",
-      );
-      return;
-    }
-
-    const updatedForm = {
-      ...form,
-      permissions: selectedPermissions.map((p) => ({
-        id: p.id,
-        title: p.title,
-        order: p.order,
-        icon: p.icon,
-        description: p.description,
-        menuSubmenu: p.menuSubmenu,
-      })),
-    };
-
-    if (_.isEqual(initialForm, updatedForm)) {
-      snackbar("Kindly modify the data before saving", "warning");
-      return;
-    }
-
-    setForm(updatedForm);
-
-    const payload = {
-      requestType: form.roleId ? "MODIFY" : "CREATE",
-      targetRoleId: form.roleId || "",
-      requestPayload: updatedForm,
-    };
-
-    try {
-      const response = await callApi(
-        "/UM/role/create-role-request",
-        payload,
-        "POST",
-      );
-
-      if (response?.statusCode === 201 || response?.message) {
-        snackbar(
-          form.roleId
-            ? "Role update request submitted successfully with request id " +
-                response?.result?.requestId
-            : "Role creation request submitted successfully with request id " +
-                response?.result?.requestId,
-          "success",
-        );
-        onClose();
-        fetchRoles();
-      }
-    } catch (error) {
-      snackbar(error?.message || "Request failed", "error");
-    }
-  };
-
-  const renderIcon = (iconName) => {
-    const IconComp = MuiIcons[iconName];
-    return IconComp ? (
-      <IconComp fontSize="small" />
-    ) : (
-      <MuiIcons.HelpOutline fontSize="small" />
-    );
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Typography variant="h6" color="primary">
-            {form.roleId ? "Edit " : "Create New "} <b>{form.roleName}</b> Role
-          </Typography>
-          {screenActions.block && form.roleId && (
-            <Tooltip
-              title={
-                (!isBlocked ? "Block " : "Un-Block ") + form.roleName + " Role"
-              }
-            >
-              <Button
-                size="small"
-                color="secondary"
-                onClick={handleStatusToggle}
-                variant="outlined"
-                startIcon={
-                  !isBlocked ? (
-                    <LockOutlinedIcon color="error" sx={{ mr: 0.5 }} />
-                  ) : (
-                    <LockOpenIcon color="success" sx={{ mr: 0.5 }} />
-                  )
-                }
-                sx={{ align: "center", height: "100%" }}
-              >
-                {!isBlocked ? "BLOCK" : "UN-BLOCK"}
-              </Button>
-            </Tooltip>
-          )}
-        </Box>
-      </DialogTitle>
-
-      <Divider />
-
-      <DialogContent>
-        <Stack spacing={2}>
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="Role Name *"
-                value={form.roleName || ""}
-                onChange={(e) =>
-                  handleChange(form, "roleName", e, "inputValue2")
-                }
-                helperText="Allowed 3-20 characters (A-Z, 0-9, spaces, ,()&/-)"
-                error={
-                  form.roleName?.length > 0 &&
-                  (form.roleName.length < 3 ||
-                    !/[A-Za-z0-9]/.test(form.roleName))
-                }
-                fullWidth
-                slotProps={{ htmlInput: { maxLength: 20 } }}
-              />
-            </Grid>
-
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Autocomplete
-                options={roleAccessList}
-                getOptionLabel={(option) =>
-                  typeof option === "string" ? option : option.accessName || ""
-                }
-                value={
-                  roleAccessList.find(
-                    (item) =>
-                      item.accessFlag === form.roleAccess ||
-                      item.accessName === form.roleAccess,
-                  ) || null
-                }
-                onChange={(event, newValue) => {
-                  setForm({
-                    ...form,
-                    roleAccess: newValue ? newValue.accessFlag : "",
-                  });
-                }}
-                isOptionEqualToValue={(option, val) =>
-                  option.accessFlag === (val.accessFlag || val)
-                }
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Role Access *"
-                    placeholder="Select Role Access"
-                    helperText="Choose the access scope for this role"
-                    fullWidth
-                  />
-                )}
-                renderOption={(props, option) => (
-                  <li {...props} key={option.accessFlag}>
-                    <Box>
-                      <Typography variant="body2" fontWeight={600}>
-                        {option.accessName}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {option.accessDescription}
-                      </Typography>
-                    </Box>
-                  </li>
-                )}
-              />
-            </Grid>
-
-            <Grid size={{ xs: 12 }}>
-              <TextField
-                label="Description *"
-                value={form.description || ""}
-                onChange={(e) =>
-                  handleChange(form, "description", e, "inputValue2")
-                }
-                helperText="Allowed 5-200 characters (A-Z, 0-9, spaces, ,()&/-)"
-                error={
-                  form.description?.length > 0 &&
-                  (form.description.length < 5 ||
-                    !DESCRIPTION_REGEX.test(form.description))
-                }
-                fullWidth
-                multiline
-                rows={3}
-                slotProps={{ htmlInput: { maxLength: 200 } }}
-              />
-            </Grid>
-          </Grid>
-
-          <Divider sx={{ my: 1 }} />
-
-          <Autocomplete
-            multiple
-            autoHighlight
-            options={allPermissions}
-            value={selectedPermissions}
-            inputValue={permissionSearch}
-            clearOnBlur={false}
-            disableClearable
-            filterSelectedOptions={false}
-            disableCloseOnSelect
-            onInputChange={(event, newInputValue, reason) => {
-              if (reason === "input") {
-                setPermissionSearch(newInputValue);
-              }
-            }}
-            onChange={handlePermissionsSelect}
-            isOptionEqualToValue={(opt, val) => opt.id === val.id}
-            getOptionLabel={(option) =>
-              option.menuSubmenu
-                ? `${option.title} ${option.menuSubmenu}`
-                : option.title
-            }
-            renderOption={(props, option, { selected }) => {
-              // Extract key to avoid console warnings, leaving the rest to be spread
-              const { key, ...optionProps } = props;
-
-              // Robust check for restricted flag (Handles "Y", "y", or actual boolean true)
-              const isRestricted =
-                option.isRestricted === "Y" ||
-                option.isRestricted === "y" ||
-                option.isRestricted === true;
-
-              // Robust parsing for actions (handles arrays or comma/pipe separated strings)
-              let actions = [];
-              if (Array.isArray(option.menuAction)) {
-                actions = option.menuAction;
-              } else if (typeof option.menuAction === "string") {
-                actions = option.menuAction.split(/[|,]/).filter(Boolean);
-              }
-
-              return (
-                <li
-                  key={key || option.id}
-                  {...optionProps}
-                  style={{
-                    ...optionProps.style,
-                    alignItems: "flex-start", // Overrides MUI's flex-center
-                    padding: "8px 16px",
-                    borderBottom: "1px solid #f0f0f0",
-                  }}
-                >
-                  {/* Creating a totally new flex scope inside the LI prevents MUI from breaking the layout */}
-                  <Box display="flex" width="100%" alignItems="flex-start">
-                    <Checkbox
-                      checked={selected}
-                      sx={{ mr: 1.5, p: 0, mt: 0.2 }}
-                    />
-
-                    <Box
-                      display="flex"
-                      flexDirection="column"
-                      gap={0.5}
-                      width="100%"
-                    >
-                      {/* Top Row: Title, Submenu Chip, Restricted Badge */}
-                      <Box
-                        display="flex"
-                        alignItems="center"
-                        gap={1}
-                        flexWrap="wrap"
-                      >
-                        <ListItemIcon
-                          sx={{
-                            minWidth: "auto",
-                            color: isRestricted ? "error.main" : "primary.main",
-                          }}
-                        >
-                          {renderIcon(option.icon)}
-                        </ListItemIcon>
-
-                        <Typography
-                          variant="body2"
-                          fontWeight={selected ? 600 : 400}
-                        >
-                          {option.menuSubmenu
-                            ? option.menuSubmenu
-                            : option.title}
-                        </Typography>
-
-                        {option.menuSubmenu && (
-                          <Chip
-                            label={option.title}
-                            size="small"
-                            sx={{
-                              height: 20,
-                              fontSize: "0.65rem",
-                              bgcolor: "rgba(0,0,0,0.06)",
-                            }}
-                          />
-                        )}
-
-                        {isRestricted && (
-                          <Chip
-                            icon={
-                              <LockOutlinedIcon
-                                sx={{ fontSize: "14px !important" }}
-                              />
-                            }
-                            label="Restricted"
-                            size="small"
-                            color="error" // Matching drag item styling
-                            variant="outlined"
-                            sx={{
-                              height: 20,
-                              fontSize: "0.65rem",
-                              "& .MuiChip-icon": { ml: 0.5 },
-                            }}
-                          />
-                        )}
-                      </Box>
-
-                      {/* Bottom Row: Actions */}
-                      {actions.length > 0 && (
-                        <Stack
-                          direction="row"
-                          spacing={0.5}
-                          flexWrap="wrap"
-                          sx={{ ml: 4 }}
-                        >
-                          {actions.map((act, idx) => (
-                            <Chip
-                              key={idx}
-                              label={act.charAt(0).toUpperCase() + act.slice(1)}
-                              size="small"
-                              sx={{
-                                height: 18,
-                                fontSize: "0.65rem",
-                                bgcolor: "action.selected",
-                                border: "1px solid",
-                                borderColor: "divider",
-                              }}
-                            />
-                          ))}
-                        </Stack>
-                      )}
-                    </Box>
-                  </Box>
-                </li>
-              );
-            }}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Role Permissions *"
-                helperText="A role must include one or more permissions"
-                fullWidth
-              />
-            )}
-            renderTags={() => null}
-          />
-
-          <Stack spacing={1}>
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-            >
-              <Typography variant="subtitle2">
-                Allowed Permissions: {selectedPermissions.length}
-              </Typography>
-              <Tooltip title="Reset Permissions">
-                <Button
-                  size="small"
-                  color="primary"
-                  onClick={handleReset}
-                  variant="outlined"
-                  startIcon={<RestoreIcon />}
-                  sx={{ align: "center", height: "100%",
-                   "&:hover":
-                    {
-                      color:"#fff",
-                    },
-                   }}
-                >
-                  Reset
-                </Button>
-              </Tooltip>
-            </Stack>
-            <DndProvider backend={HTML5Backend}>
-              <List sx={{ minHeight: 400, overflowY: "auto", px: 0.5 }}>
-                {selectedPermissions.map((perm, index) => (
-                  <DraggablePermissionItem
-                    key={perm.id}
-                    perm={perm}
-                    index={index}
-                    icon={renderIcon(perm.icon)}
-                    moveItem={moveItem}
-                  />
-                ))}
-              </List>
-            </DndProvider>
-          </Stack>
-        </Stack>
-      </DialogContent>
-
-      <Divider />
-      <DialogActions sx={{ p: 2 }}>
-        <Button onClick={onClose}
-        sx=
-          {{
-            "&:hover":
-            {
-              color:"#fff",
-            },
-            }}>Cancel</Button>
-        <Button variant="contained" disabled={!canSave} onClick={handleSave}>
-          {form.roleId ? "Save Changes" : "Create Role"}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-import {
-  Box,
-  Chip,
   IconButton,
-  Paper,
-  Stack,
-  Tooltip,
-  Typography,
-  styled,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import EditIcon from "@mui/icons-material/Edit";
+import CancelIcon from "@mui/icons-material/Cancel";
 import VisibilityIcon from "@mui/icons-material/Visibility";
-import SecurityIcon from "@mui/icons-material/Security";
-import CustomChip from "../../../utils/CustomChip";
-import { useMemo } from "react";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import BlockFlippedIcon from "@mui/icons-material/BlockFlipped";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import AddBoxIcon from "@mui/icons-material/AddBox";
+import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
+import EditDocumentIcon from "@mui/icons-material/EditDocument";
+import GppBadIcon from "@mui/icons-material/GppBad";
+import useApi from "../../hooks/useApi";
+import CustomChip from "../../utils/CustomChip";
+import {
+  getPermissions,
+  timeStampFormatter,
+} from "../../utils/CommonUtilities";
+import InfoIcon from "@mui/icons-material/Info";
+import useCustomSnackbar from "../../utils/useCustomSnackbar";
+import { useSelector } from "react-redux";
+import ViewMyRequestDialog from "../common/ViewMyRequestDialog";
+import DatasetIcon from "@mui/icons-material/Dataset";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import TrendingDownIcon from "@mui/icons-material/TrendingDown";
+import NoteIcon from "@mui/icons-material/Note";
 
-const OverlayBox = styled(Box)(() => ({
-  display: "flex",
-  flexDirection: "column",
-  height: "100%",
-  justifyContent: "center",
-  alignItems: "center",
-}));
-
-const CustomNoRowsOverlay = () => {
+function CustomNoRowsOverlay() {
   return (
-    <OverlayBox>
-      <ErrorOutlineIcon fontSize="large" />
-      <Typography variant="h5" fontSize="1.2rem">
-        No data to display yet
-      </Typography>
-    </OverlayBox>
+    <Stack height="100%" alignItems="center" justifyContent="center">
+      <InfoIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+      <Typography variant="h6">No CGL Requests Found</Typography>
+      <Typography>You have not created any CGL requests.</Typography>
+    </Stack>
   );
-};
+}
 
-export default function RolesTable({
-  rows,
-  isLoading,
-  onEditRow,
-  screenActions,
-  roleAccessList = [],
-}) {
+const ACCOUNT_CLASSIFICATIONS = [
+  { value: "A", label: "Asset", icon: <DatasetIcon fontSize="small" /> },
+  {
+    value: "L",
+    label: "Liability",
+    icon: <AccountBalanceWalletIcon fontSize="small" />,
+  },
+  { value: "I", label: "Income", icon: <TrendingUpIcon fontSize="small" /> },
+  { value: "E", label: "Expense", icon: <TrendingDownIcon fontSize="small" /> },
+  { value: "M", label: "Memo A/c", icon: <NoteIcon fontSize="small" /> },
+];
+
+export default function MyCGLRequestsTab() {
+  const [cglList, setCglList] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState(false);
+  const [requestId, setRequestId] = useState(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewData, setViewData] = useState(null);
+  const { callApi } = useApi();
+  const showSnackBar = useCustomSnackbar();
+  const selectedMenuItem = useSelector((state) => state.menus.selectedMenuItem);
+  const permissions = getPermissions(selectedMenuItem);
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const payload = { requestType: "CGL_CODE" };
+      const response = await callApi("/CR/my-requests", payload, "POST");
+      const result = response.data?.map((row) => {
+        let parsedPayload = {};
+        parsedPayload = row.payload ? row.payload : {};
+        const { comp1 = "", segmentCode = "", comp2 = "" } = parsedPayload;
+        parsedPayload = {
+          ...parsedPayload,
+          ...row,
+        };
+        return {
+          ...parsedPayload,
+          cglNumber: `${comp1}${segmentCode}${comp2}`,
+        };
+      });
+      setCglList(result);
+    } catch (error) {
+      console.error(
+        "Something went wrong, Kindly try again after sometime.",
+        error,
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleCancelRequest = async () => {
+    try {
+      const payload = {
+        requestId,
+        remarks: "User canceled this Request",
+      };
+
+      const response = await callApi("/CR/cancel-request", payload, "PATCH");
+      if (response?.success) {
+        showSnackBar(
+          `Request Id ${requestId} Cancelled Successfully.`,
+          "success",
+        );
+      } else {
+        showSnackBar(
+          response?.message
+            ? response?.message
+            : "Failed to process your cancel request, Kindly try again",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      fetchData();
+      setConfirmDialog(false);
+    }
+  };
+
+  const handleViewClick = (data) => {
+    const {
+      comp1,
+      segmentCode,
+      comp2,
+      description,
+      acClassification,
+      balFwd,
+      defBalType,
+      status,
+      balCompare,
+      manualPosting,
+    } = data;
+
+    const accountClassifications = ACCOUNT_CLASSIFICATIONS.find(
+      (x) => x.value === acClassification,
+    );
+
+    const balanceForward = balFwd == "1" ? "Yes" : "No";
+
+    const defaultBalanceType =
+      defBalType == "C" ? "Credit" : defBalType == "D" ? "Debit" : "Memo";
+
+    const cglStatus = status == "1" ? "Active" : "Inactive";
+
+    const balanceCompare = balCompare == "1" ? "Include" : "Exclude";
+
+    const manualPostingAllowed = manualPosting == "1" ? "Yes" : "No";
+
+    const showData = {
+      "CGL Code": comp1 + segmentCode + comp2,
+      description,
+      accountClassification: accountClassifications.label,
+      comp1,
+      segmentCode,
+      comp2,
+      balanceForward,
+      // defaultBalanceType,
+      "CGL Status": cglStatus,
+      balanceCompare,
+      manualPostingAllowed,
+    };
+
+    data.showData = showData;
+    setViewData(data);
+    setViewOpen(true);
+  };
+
   const columns = useMemo(
     () => [
+      { field: "id", headerName: "Request Id", flex: 0.5, minWidth: 150 },
       {
-        field: "roleName",
-        headerName: "Role",
-        flex: 0.8,
-        minWidth: 120,
-        align: "left",
-        headerAlign: "left",
+        field: "cglNumber",
+        headerName: "CGL Code",
+        flex: 1,
+        minWidth: 150,
+        renderCell: (params) => (
+          <Box>
+            {params.value}
+          </Box>
+        ),
       },
       {
         field: "description",
-        headerName: "Role Description",
-        flex: 3,
+        headerName: "Description",
+        flex: 2,
         minWidth: 300,
+        sortable: true,
       },
       {
-        field: "roleAccess",
-        headerName: "Access Level",
-        flex: 0.7,
-        minWidth: 120,
+        field: "changeType",
+        headerName: "Request Type",
+        flex: 0.5,
+        minWidth: 150,
         headerAlign: "center",
         align: "center",
-        sortable: true,
         filterable: false,
+        sortable: false,
         disableColumnMenu: true,
         renderCell: (params) => {
-          const access = roleAccessList?.find(
-            (item) =>
-              String(item.accessFlag).trim() ===
-              String(params.row.roleAccess).trim(),
-          );
-
+          const val = params.value;
+          const color =
+            val === "ADD" ? "success" : val === "DELETE" ? "error" : "warning";
+          const icon =
+            val === "ADD" ? (
+              <AddBoxIcon />
+            ) : val === "DELETE" ? (
+              <AutoDeleteIcon />
+            ) : (
+              <EditDocumentIcon />
+            );
           return (
-            <Tooltip title={access?.accessDescription || ""} placement="top">
-              <span>
-                <CustomChip
-                sx={{
-                    width: access?.accessName ? 140 : 60,
-                    justifyContent:"flex-start",
-                  }}
-                  variant="outlined"
-                  size="sm"
-                  icon={<SecurityIcon sx={{ width: 15, height: 15 }} />}
-                  label={access?.accessName || params.row.roleAccess || "NA"}
-                />
-              </span>
-            </Tooltip>
+            <CustomChip
+            sx={{
+              width:105,
+              justifyContent:"flex-start",
+            }}
+              icon={icon}
+              label={
+                val === "ADD"
+                  ? "Added"
+                  : val === "DELETE"
+                    ? "Deleted"
+                    : "Modified"
+              }
+              color={color}
+              variant="outlined"
+            />
           );
         },
       },
+
       {
-        field: "action",
-        headerName: "Actions",
-        flex: 0.7,
-        minWidth: 120,
+        field: "reqDate",
+        headerName: "Requested Date",
+        flex: 1,
+        minWidth: 200,
+        filterable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => timeStampFormatter(params.value),
+      },
+      {
+        field: "reqStatus",
+        headerName: "Status",
+        flex: 1,
+        minWidth: 150,
         headerAlign: "center",
         align: "center",
         filterable: false,
         sortable: false,
         disableColumnMenu: true,
         renderCell: (params) => (
-          <Stack
-            direction="row"
-            spacing={1}
-            justifyContent="center"
-            alignItems="center"
-            sx={{ height: "100%" }}
-          >
-            <Tooltip title="View Permissions">
-              <IconButton
-                onClick={() => {
-                  onEditRow(params.row, false);
-                }}
-              >
-                <VisibilityIcon fontSize="inherit" />
-              </IconButton>
-            </Tooltip>
+          <Box>
+            <CustomChip
+              variant="outlined"
+              icon={
+                params.value === "REJECTED" ? (
+                  <BlockFlippedIcon />
+                ) : params.value === "ACCEPTED" ? (
+                  <CheckCircleIcon />
+                ) : params.value === "CANCELLED" ? (
+                  <GppBadIcon />
+                ) : (
+                  <PendingActionsIcon />
+                )
+              }
+              label={
+                params.value === "REJECTED"
+                  ? "Rejected"
+                  : params.value === "ACCEPTED"
+                    ? "Approved"
+                    : params.value === "CANCELLED"
+                      ? "Cancelled"
+                      : "Pending"
+              }
+              sx={{
+              width:120,
+              justifyContent:"flex-start",
+                color:
+                  params.value === "REJECTED"
+                    ? "error.dark"
+                    : params.value === "ACCEPTED"
+                      ? "success.dark"
+                      : params.value === "CANCELLED"
+                        ? "primary.dark"
+                        : "warning.dark",
 
-            {screenActions.modify && (
-              <Tooltip title="Edit Role">
-                <IconButton
-                  color="primary"
-                  onClick={() => onEditRow(params.row, true)}
-                >
-                  <EditIcon fontSize="inherit" />
-                </IconButton>
-              </Tooltip>
-            )}
-          </Stack>
+                "& .MuiChip-icon": {
+                  color:
+                    params.value === "REJECTED"
+                      ? "error.dark"
+                      : params.value === "ACCEPTED"
+                        ? "success.dark"
+                        : params.value === "CANCELLED"
+                          ? "primary.dark"
+                          : "warning.dark",
+                },
+              }}
+            />
+           </Box>
         ),
       },
+      {
+        field: "action",
+        headerName: "Action",
+        flex: 0.6,
+        minWidth: 150,
+        headerAlign: "center",
+        align: "center",
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => {
+          return (
+            <Stack
+              direction="row"
+              spacing={1}
+              justifyContent="center"
+              alignItems="center"
+              height="100%"
+            >
+              {permissions.view && (
+                <Tooltip title="View">
+                  <IconButton
+                    // color="primary"
+                    onClick={() => handleViewClick(params.row)}
+                  >
+                    <VisibilityIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              {params.row.reqStatus === "PENDING" && permissions.cancel && (
+                <Tooltip title={"Cancel Request"}>
+                  <IconButton
+                    onClick={() => {
+                      setConfirmDialog(true);
+                      setRequestId(params.row.id);
+                    }}
+                  >
+                    <CancelIcon fontSize="inherit" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Stack>
+          );
+        },
+      },
     ],
-    [onEditRow, roleAccessList, screenActions.modify],
+    [permissions.cancel, permissions.view],
   );
 
   const filteredColumns = useMemo(() => {
-    if (screenActions.modify) {
+    if (permissions.view || permissions.cancel) {
       return columns;
     }
-    return columns.filter((column) => column.field !== "action");
-  }, [screenActions.modify, columns]); // Added columns to dependencies to prevent stale state
+    // Otherwise, filter out the column where field name is 'action'.
+    else {
+      return columns.filter((column) => column.field !== "action");
+    }
+  }, [columns, permissions]);
 
   return (
-      <DataGrid
-        rows={rows}
-        columns={filteredColumns}
-        disableRowSelectionOnClick
-        pageSizeOptions={[5, 10, 25, 50]}
-        getRowId={(row) => row.roleId}
-        loading={isLoading}
-        autoHeight
-        initialState={{
-          pagination: { paginationModel: { pageSize: 10, page: 0 } },
-          sorting: { sortModel: [{ field: "roleId", sort: "asc" }] },
-        }}
-        slots={{
-          noRowsOverlay: CustomNoRowsOverlay,
-        }}
-        slotProps={{
-          loadingOverlay: {
-            variant: "skeleton",
-          },
-        }}
-        sx={{
-          height:"100%",
+    <>
+      <Box>
+        <Box>
+          <DataGrid
+            loading={isLoading}
+            rows={cglList}
+            columns={filteredColumns}
+            getRowId={(row) => row.id}
+            disableRowSelectionOnClick
+            pageSizeOptions={[5, 10, 25, 50]}
+            initialState={{
+              pagination: { paginationModel: { pageSize: 10, page: 0 } },
+              sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] },
+            }}
+            slots={{
+              noRowsOverlay: CustomNoRowsOverlay,
+            }}
+          sx={{
+          minHeight: 760,
           width: "100%",
-         "& .MuiDataGrid-columnHeaders": {
+          "& .MuiDataGrid-columnHeaders": {
           backgroundColor: "#f5f5f5 !important",
           fontWeight: 700,
           borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
           position: 'sticky',
           top: 0,
           zIndex: 1,
-        },
-        }}
-      />
-  );
-}
-import { useCallback, useEffect, useState } from "react";
-import useApi from "../../hooks/useApi";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import { Box, Fab, Paper, Typography, styled } from "@mui/material";
-import _ from "lodash";
-import PermissionsDialog from "./components/PermissionsDialog";
-import RolesTable from "./components/RolesTable";
-import RolesDialog from "./components/RolesDialog";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
-import { RollTab1Addicon, FabStyle } from "./roleManagementStyles";
-
-const OverlayBox = styled(Box)(() => ({
-  display: "flex",
-  flexDirection: "column",
-  height: "100%",
-  justifyContent: "center",
-  alignItems: "center",
-}));
-
-const CustomNoRowsOverlay = () => {
-  return (
-    <OverlayBox>
-      <ErrorOutlineIcon fontSize="large" />
-      <Typography variant="h5" fontSize="1.2rem">
-        No data to display yet
-      </Typography>
-    </OverlayBox>
-  );
-};
-
-export default function RoleManagementTab1(props) {
-  const screenActions = props?.permissions || {};
-  const { callApi } = useApi();
-  const snackbar = useCustomSnackbar();
-  const emptyForm = {
-    roleId: "",
-    roleName: "",
-    description: "",
-    roleAccess: null,
-    roleStatus: "ACTIVE",
-    permissions: [],
-  };
-  const [rows, setRows] = useState([]);
-  const [form, setForm] = useState(emptyForm);
-  const [initialForm, setInitialForm] = useState(emptyForm);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [permDialogOpen, setPermDialogOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [roleAccessList, setRoleAccessList] = useState([]);
-
-  const fetchRoles = useCallback(async () => {
-    setIsLoading(true);
-    setPermDialogOpen(false);
-    setDialogOpen(false);
-    try {
-      const data = await callApi(
-        "/UM/role/get-roles",
-        { permissions: true },
-        "GET",
-      );
-
-      const roles = data?.result?.roles ?? [];
-      setRows(roles);
-    } catch (e) {
-      console.error(e);
-      setRows([]);
-      snackbar("Failed to fetch roles. Check API or network.", "error");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [callApi, snackbar]);
-
-  const fetchRoleAccessList = useCallback(async () => {
-    try {
-      const response = await callApi(
-        "/UM/role/get-role-access-list",
-        {},
-        "GET",
-      );
-      const list = response?.result?.roleAccessList ?? [];
-      setRoleAccessList(list);
-    } catch (error) {
-      console.error("Failed to fetch role access list:", error);
-      setRoleAccessList([]);
-    }
-  }, [callApi]);
-
-  useEffect(() => {
-    fetchRoles();
-    fetchRoleAccessList();
-  }, [fetchRoles, fetchRoleAccessList]);
-
-  const handleEditRow = (row, isEdit) => {
-    setForm({ ...row });
-    setInitialForm({ ...row });
-    isEdit ? setDialogOpen(true) : setPermDialogOpen(true);
-  };
-
-  const handleSavePermissionOrder = async (ordered, original) => {
-    const isSameOrder = _.isEqual(original, ordered);
-
-    if (isSameOrder) {
-      snackbar("Kindly Change the order before saving it", "warning");
-      return;
-    }
-
-    try {
-      const payload = {
-        selectedRole: form?.roleId,
-        permissions: ordered,
-      };
-      console.log(payload);
-      const response = await callApi(
-        "/UM/role/save-permission-order",
-        payload,
-        "PATCH",
-      );
-      snackbar(response?.message, "success");
-    } catch (err) {
-      console.error(err);
-      snackbar("Error while processing request", "error");
-    }
-    fetchRoles();
-  };
-
-  return (
-    <Box>
-      <RolesTable
-        rows={rows}
-        isLoading={isLoading}
-        onEditRow={(row, isEdit) => handleEditRow(row, isEdit)}
-        screenActions={screenActions}
-        roleAccessList={roleAccessList}
-      />
-
-      <RolesDialog
-        open={dialogOpen}
-        form={form}
-        setForm={setForm}
-        fetchRoles={fetchRoles}
-        initialForm={initialForm}
-        screenActions={screenActions}
-        onClose={() => setDialogOpen(false)}
-        roles={rows}
-        roleAccessList={roleAccessList}
-      />
-
-      <PermissionsDialog
-        open={permDialogOpen}
-        handleSavePermissionOrder={(ordered, original) =>
-          handleSavePermissionOrder(ordered, original)
-        }
-        onClose={() => {
-          setPermDialogOpen(false);
-        }}
-        permissions={form?.permissions || []}
-        roleName={form?.roleName || ""}
-      />
-
-      {screenActions.create && (
-      
-      <Box
-          sx={{
-            height:64,
-            flexShrink:0,
-            display:"flex",
-            justifyContent:"flex-end",
-            alignItems:"center",
-            px:1,
-            pb:1,
+          },
           }}
-      >
-        <Box
-        className="fab-hover-area"
-        sx={{
-          position:"relative",
-          width:180,
-          height:48,
-          flexShrink:0,
-          transform:"translateY(8px)",
-        }}>
-        <FabStyle
-          onClick={() => {
-            setForm(emptyForm);
-            setDialogOpen(true);
-          }}
-          color="primary"
-        >
-
-          <span className="create-circle-text">
-            Create Role
-          </span>
-          
-          <RollTab1Addicon />
-          
-        </FabStyle>
+          />
         </Box>
       </Box>
-      )}
-    </Box>
+
+      {/* View Dialog */}
+      <ViewMyRequestDialog
+        open={viewOpen}
+        handleClose={() => setViewOpen(false)}
+        data={viewData}
+      />
+
+      {/* Cancel Dialog */}
+      <Dialog
+        open={confirmDialog}
+        // onClose={() => {
+        //   setConfirmDialog(false);
+        // }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>
+          Cancel Request ID: {requestId}
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ p: 1 }}>
+            Are you sure you want to cancel this request, please confirm ?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setConfirmDialog(false);
+            }}
+            variant="outlined"
+            sx=
+          {{
+            "&:hover":
+            {
+              color:"#fff",
+            },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCancelRequest}
+            color="error"
+            variant="contained"
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 }
