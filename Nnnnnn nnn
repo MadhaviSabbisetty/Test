@@ -1,841 +1,1425 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
+  Box,
+  Paper,
   Button,
   Typography,
-  Grid,
-  Box,
-  Divider,
-  Stack,
-  IconButton,
+  TextField,
+  MenuItem,
+  FormControl,
+  InputLabel ,
+  Select, 
+  paperClasses
 } from "@mui/material";
-import * as MuiIcons from "@mui/icons-material";
-import {
-  timeStampFormatter,
-  toPascalKebabCase,
-  formatKeyForDisplay,
-} from "../../../utils/CommonUtilities";
-import CustomChip from "../../../utils/CustomChip";
-import CloseIcon from "@mui/icons-material/Close";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 
-// returns icon component based on the string name from payload
-const getIcon = (iconName) => {
-  if (!iconName) return null;
-  const IconComp = MuiIcons[iconName];
-  return IconComp ? <IconComp fontSize="small" /> : null;
+import { DataGrid } from "@mui/x-data-grid";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import dayjs from "dayjs";
+import useApi from "../../hooks/useApi";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
+ import { alpha } from "@mui/material/styles";
+const styles = {
+  mainContainer: {
+    padding: 3,
+    height: "100%",
+    width: "100%",
+  },
+ dataGridContainer: {
+    height: "100%",
+    width: "100%",
+    backgroundColor: "background.paper",
+    boxShadow: 2,
+    borderRadius: 2,
+    border: 1,
+    borderColor: "divider",
+    "& .MuiDataGrid-columnHeaders": {
+      backgroundColor: "#f5f5f5 !important",
+      fontWeight: 700,
+      borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+      position: 'sticky',
+      top: 0,
+      zIndex: 1,
+    },
+    "& .MuiDataGrid-row:hover": {
+      backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04),
+    },
+   
+    "& .MuiDataGrid-menuIcon": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
+    "& .MuiDataGrid-iconButtonContainer": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
+  },
+  tableContainer: {
+    maxHeight: 450,
+    overflowY: "auto",
+    border: 1,
+    borderColor: "divider",
+    mt: 1
+  },
+  fixedContentBox: {
+    minHeight: 400,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  tableHeaderCell: {
+    fontWeight: "bold",
+    backgroundColor: "#f5f6f8",
+    color: "text.primary",
+    whiteSpace: "nowrap",
+    zIndex: 10,
+  },
+  stickyHeaderColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    top: 0,
+    zIndex: 20,
+    backgroundColor: "background.paper",
+    borderBottom: 1,
+    borderRight: 1,
+    borderColor: "divider",
+    fontWeight: "bold",
+  }),
+  stickyBodyColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    zIndex: 5,
+    backgroundColor: "background.paper",
+    borderRight: 1,
+    borderColor: "divider",
+  }),
+  dialogTitle: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    pb: 1,
+  },
+  dialogActions: { p: 2, borderTop: 1, borderColor: "divider" },
+  loadingContainer: {
+    height: "100%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  helperText: {
+    fontSize: "0.75rem",
+    color: "text.secondary",
+    marginTop: "4px",
+  }
 };
 
-const RoleRequestView = ({ open, handleClose, data }) => {
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(false);
+const CGLSearch = () => {
+  const { callApi } = useApi();
+const [showTable, setShowTable] = useState(false);
 
-  const dragRef = useRef({
-    startX: 0,
-    startY: 0,
-    startPositionX: 0,
-    startPositionY: 0,
-    width: 0,
-    height: 0,
-    initialLeft: 0,
-    initialTop: 0,
+ const [isSearched, setIsSearched] = useState(false);
+
+  const [cgl, setcgl] = useState("");
+  const [branchCode, setbranchCode] = useState("");   
+  const [branchCodeError, setbranchCodeError] = useState("");
+  const [transactionDate, setTransactionDate] = useState(null); 
+
+  
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [rowCount, setRowCount] = useState(0);
+
+  const [errors, setErrors] = useState({});
+  const [cglError, setcglError] = useState("");
+  
+
+  const [paginationModel, setPaginationModel] = useState({
+    page: 0,
+    pageSize: 25,
   });
 
-  const handleDragStart = (event) => {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    if (event.target.closest("button")) return;
 
-    const paper = event.currentTarget.closest(".MuiDialog-paper");
-    if (!paper) return;
+ 
 
-    const rect = paper.getBoundingClientRect();
+  const handleReset = () => { 
+    setcgl("");
+    setbranchCode(""); 
+    setTransactionDate(null);
+    setRows([]);
+    setRowCount(0);
+    setPaginationModel({
+    page: 0,
+    pageSize: 25,
+  });
+   setbranchCodeError("");
+ setcglError("");
+  setErrors({});
+  setShowTable(false);
+  
+setIsSearched(false);
+  
+};
+const handleExportPdfButton = async () => {
+  if (!isSearched) {
+    alert("Please search records first.");
+    return;
+  }
 
-    event.preventDefault();
-
-    dragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      startPositionX: position.x,
-      startPositionY: position.y,
-      width: rect.width,
-      height: rect.height,
-      initialLeft: rect.left,
-      initialTop: rect.top,
+  try {
+    const payload = {
+      cgl,
+      branchCode,
+      transactionDate: transactionDate
+        ? dayjs(transactionDate).format("DD-MM-YYYY")
+        : null,
     };
 
-    setDragging(true);
-  };
+    console.log("PDF Export Payload =>", payload);
 
-  useEffect(() => {
-    if (!dragging) return;
+    const response = await callApi(
+      "/VE/voucher-transactions/export-pdf",
+      payload,
+      "POST",
+      "blob",
+      "application/json",
+      {},
+      false
+    );
 
-    const handlePointerMove = (event) => {
-      const {
-        startX,
-        startY,
-        startPositionX,
-        startPositionY,
-        width,
-        height,
-        initialLeft,
-        initialTop,
-      } = dragRef.current;
+    const blob = new Blob([response.data], {
+      type: "application/pdf",
+    });
 
-      const margin = 30;
+    const url = window.URL.createObjectURL(blob);
 
-      let newX = startPositionX + (event.clientX - startX);
-      let newY = startPositionY + (event.clientY - startY);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "MIS_REPORTS.pdf";
 
-      const minX = margin - initialLeft + startPositionX;
-      const maxX =
-        window.innerWidth - margin - width - initialLeft + startPositionX;
+    document.body.appendChild(link);
+    link.click();
 
-      const minY = margin - initialTop + startPositionY;
-      const maxY =
-        window.innerHeight - margin - height - initialTop + startPositionY;
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
 
-      newX = Math.max(minX, Math.min(newX, maxX));
-      newY = Math.max(minY, Math.min(newY, maxY));
+  } catch (err) {
+    console.error("PDF Export Error =>", err);
+  }
+};
 
-      setPosition({ x: newX, y: newY });
+const handleExportButton = async () => {
+  if (!isSearched) {
+    alert("Please search records first.");
+    return;
+  }
+
+  try {
+    const payload = {
+      cgl,
+      branchCode,
+      transactionDate: transactionDate
+        ? dayjs(transactionDate).format("DD-MM-YYYY")
+        : null,
     };
 
-    const handlePointerUp = () => {
-      setDragging(false);
-    };
+    console.log("Export Payload =>", payload);
 
-    document.addEventListener("pointermove", handlePointerMove);
-    document.addEventListener("pointerup", handlePointerUp);
+    const response = await callApi(
+      "/VE/voucher-transactions/export",
+      payload,
+      "POST",
+      "blob",
+      "application/json",
+      {},
+      false
+    );
 
-    return () => {
-      document.removeEventListener("pointermove", handlePointerMove);
-      document.removeEventListener("pointerup", handlePointerUp);
-    };
-  }, [dragging]);
+    const blob = new Blob([response.data], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
 
-  useEffect(() => {
-    if (open) {
-      setPosition({ x: 0, y: 0 });
-      setDragging(false);
-    }
-  }, [open]);
+    const url = window.URL.createObjectURL(blob);
 
-  if (!data || !data.requestPayload) return null;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "MIS_REPORTS.xlsx";
 
-  const payload = JSON.parse(data.requestPayload) || {};
+    document.body.appendChild(link);
+    link.click();
 
-  const { roleName, description, permissions } = payload;
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("Export Error =>", err);
+  }
+};
 
-  const roleAccess = data
-    ? `${data.accessName || "NA"} (${data.accessDescription || "NA"})`
-    : "NA";
 
-  const viewData = {
-    roleName: roleName || "NA",
-    roleAccess,
-    roleDescription: description || "NA",
-    permissions: permissions || [],
-  };
 
-  const mainDetails = [
-    { label: "Requestor ID", value: data.requestorUserId, size: 2 },
-    {
-      label: "Request Type",
-      value: data.requestType === "CREATE" ? "Created" : "Modified",
-      size: 2.5,
-    },
-    {
-      label: "Request Status",
-      value: toPascalKebabCase(data.requestStatus),
-      size: 2.5,
-    },
-    {
-      label: "Requested Date",
-      value: timeStampFormatter(data.requestDate),
-      size: 5,
-    },
-  ];
+ const validate = () => {
+  const temp = {};
+
+  if (!transactionDate) {
+    temp.fromDate = " Date is required";
+  }
+
+  
+  if (
+    transactionDate &&
+    dayjs(transactionDate).isAfter(
+      dayjs(),
+      "day"
+    )
+  ) {
+    temp.transactionDate =
+      "Future date is not allowed";
+  }
+
+
+  setErrors(temp);
 
   return (
-    <Dialog
-      open={open}
-      onClose={(event, reason) => {
-        if (reason === "backdropClick") return;
-        handleClose();
-      }}
-      maxWidth="md"
-      fullWidth
-      slotProps={{
-        paper: {
-          sx: {
-            transform: `translate(${position.x}px, ${position.y}px)`,
-            transition: dragging ? "none" : "transform 0.15s ease",
-            maxHeight: "90vh",
-          },
-        },
-      }}
-    >
-      <DialogTitle
-        onPointerDown={handleDragStart}
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          pr: 1,
-          cursor: dragging ? "grabbing" : "grab",
-          userSelect: "none",
-          touchAction: "none",
-        }}
-      >
-        <Typography variant="h6" fontWeight={700}>
-          Request Details - <b>ID: {data.REQUEST_ID}</b>
-        </Typography>
-
-        <IconButton
-          size="small"
-          onPointerDown={(event) => {
-            event.stopPropagation();
-          }}
-          onClick={handleClose}
-        >
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-
-      <Divider />
-
-      <DialogContent>
-        {/* Main Details */}
-        <Grid container spacing={2}>
-          {mainDetails.map(
-            (item) =>
-              item.label !== "roleId" && (
-                <Grid xs={12} size={{ xs: 12, sm: item.size }} key={item.label}>
-                  <Box sx={{ display: "flex", flexDirection: "column" }}>
-                    <Typography
-                      variant="subtitle2"
-                      sx={{
-                        fontWeight: 800,
-                        color: "text.secondary",
-                      }}
-                    >
-                      {item.label}
-                    </Typography>
-                    <Typography variant="body1" sx={{ color: "text.primary" }}>
-                      {item.value ?? "N/A"}
-                    </Typography>
-                  </Box>
-                </Grid>
-              ),
-          )}
-        </Grid>
-
-        {data.requestStatus !== "PENDING" && (
-          <Grid container spacing={2} sx={{ mt: 1.5 }}>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <Box sx={{ display: "flex", flexDirection: "column" }}>
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    fontWeight: 800,
-                    color: "text.secondary",
-                  }}
-                >
-                  {`${toPascalKebabCase(data.requestStatus)} By`}
-                </Typography>
-                <Typography variant="body1" sx={{ color: "text.primary" }}>
-                  {data.approverId ?? "N/A"}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid size={{ xs: 12, md: 5 }}>
-              <Box sx={{ display: "flex", flexDirection: "column" }}>
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    fontWeight: 800,
-                    color: "text.secondary",
-                  }}
-                >
-                  {`${toPascalKebabCase(data.requestStatus)} Date`}
-                </Typography>
-                <Typography variant="body1" sx={{ color: "text.primary" }}>
-                  {timeStampFormatter(data.approvalDate) || "N/A"}
-                </Typography>
-              </Box>
-            </Grid>
-            {data.requestStatus === "REJECTED" && (
-              <Grid size={{ xs: 12, md: 5 }}>
-                <Box sx={{ display: "flex", flexDirection: "column" }}>
-                  <Typography
-                    variant="subtitle2"
-                    sx={{
-                      fontWeight: 800,
-                      color: "text.secondary",
-                    }}
-                  >
-                    Rejection Remarks
-                  </Typography>
-                  <Typography variant="body1" sx={{ color: "text.primary" }}>
-                    {data.rejectionReason || "N/A"}
-                  </Typography>
-                </Box>
-              </Grid>
-            )}
-          </Grid>
-        )}
-
-        <Divider sx={{ my: 2 }} />
-
-        {/* PAYLOAD VIEW */}
-
-        <Grid container spacing={2}>
-          {Object.entries(viewData).map(([key, value]) => (
-            <Grid
-              xs={12}
-              size={key === "permissions" ? {} : { xs: 12, sm: 6 }}
-              key={key}
-            >
-              <Box sx={{ display: "flex", flexDirection: "column" }}>
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    fontWeight: 800,
-                    color: "text.secondary",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {formatKeyForDisplay(key)}
-                </Typography>
-
-                {/* SPECIAL CASE: PERMISSIONS LIST  */}
-                {key === "permissions" && Array.isArray(value) ? (
-                  <Stack
-                    direction="row"
-                    gap={0.5}
-                    spacing={1}
-                    flexWrap="wrap"
-                    sx={{ p: 1 }}
-                  >
-                    {value.map((p) => (
-                      <CustomChip
-                        key={p.id}
-                        icon={getIcon(p.icon)}
-                        size="small"
-                        color="default"
-                        label={`${p.title}${
-                          p.menuSubmenu ? " (" + p.menuSubmenu + ")" : ""
-                        }`}
-                        variant="outlined"
-                      />
-                    ))}
-                  </Stack>
-                ) : (
-                  <Typography
-                    variant="body1"
-                    sx={{ color: "text.primary", wordBreak: "break-word" }}
-                  >
-                    {Array.isArray(value)
-                      ? JSON.stringify(value)
-                      : typeof value === "object" && value !== null
-                        ? JSON.stringify(value, null, 2)
-                        : String(value ?? "N/A")}
-                  </Typography>
-                )}
-              </Box>
-            </Grid>
-          ))}
-        </Grid>
-      </DialogContent>
-    </Dialog>
+    Object.keys(temp).length === 0
   );
 };
 
-export default RoleRequestView;
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import {
-  Box,
-  Card,
-  Divider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Typography,
-  Button,
-  Stack,
-  Tooltip,
-  IconButton,
-} from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
-import { Check, Clear, Visibility } from "@mui/icons-material";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import InfoIcon from "@mui/icons-material/Info";
-import AutoDeleteIcon from "@mui/icons-material/AutoDelete";
-import EditDocumentIcon from "@mui/icons-material/EditDocument";
-import AccountCircleIcon from "@mui/icons-material/AccountCircle";
-import SecurityIcon from "@mui/icons-material/Security"; // Imported Security Icon
-import { useSelector } from "react-redux";
 
-import useApi from "../../hooks/useApi";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import RequestAnalytics from "../common/RequestAnalytics";
-import {
-  timeStampFormatter,
-  toPascalKebabCase,
-} from "../../utils/CommonUtilities";
-import CustomChip from "../../utils/CustomChip";
-import { styles } from "../common/CommonRequestScreenStyles";
-import LoadingOverlay from "../../utils/LoadingOverlay";
-import RoleRequestView from "./components/RoleRequestView";
+ 
+ 
+const handleCLGChange = (e) => {
+  const value = e.target.value; 
 
-const REMARKS_REGEX = /^(?!.* {2})[a-zA-Z0-9\s/&(),.-]*$/;
+  if (value.length > 10) {
+    setcglError("Maximum 10 numbers allowed");
+      setTimeout(()=>{
+         setcglError("")
+        },1500)
+    return;
+  }  
+  if (    
+    !/^[0-9-]*$/.test(value)
+  ) {
+    setcglError(
+      "Only numbers!"
+    );
 
-export default function RoleApprovals() {
-  const selectedMenuItem = useSelector((s) => s.menus.selectedMenuItem);
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
+   setTimeout(()=>{
+         setcglError("")
+        },1500)
+    return;
+  }
+  setErrors({});
+  setcglError("");
+  setcgl(value);
+};
 
-  const [rows, setRows] = useState([]);
-  const [roleAccessList, setRoleAccessList] = useState([]); // State for Access Level mapping
-  const [remarks, setRemarks] = useState("");
-  const [viewOpen, setViewOpen] = useState(false);
-  const [viewData, setViewData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [dataGridLoading, setDataGridLoading] = useState(true);
-  const [confirmDialog, setConfirmDialog] = useState(false);
-  const [selectedType, setSelectedType] = useState(null);
-  const [selectedRequestId, setSelectedRequestId] = useState(null);
+    
 
-  const fetchData = useCallback(async () => {
-    try {
-      const response = await callApi(
-        "/UM/role/pending-role-requests",
-        {},
-        "GET",
-      );
-      const result = response?.result?.pendingRequests || [];
-      const processedResult = result.map((row) => {
-        const parsed = JSON.parse(row?.requestPayload || "") || {};
-        const status =
-          row.requestType === "CREATE"
-            ? "ADD"
-            : row.requestType === "MODIFY"
-              ? "UPDATE"
-              : row.requestType;
-        return {
-          ...row,
-          ...parsed,
-          changeType: status,
-          reqStatus: row.requestStatus,
-          reqDate: row.requestDate,
-        };
-      });
-      setRows(processedResult);
-    } catch (err) {
-      console.error(err);
-      showSnackBar(err.message || "Error fetching data", "error");
-    } finally {
-      setDataGridLoading(false);
-    }
-  }, [callApi, showSnackBar]);
 
-  const fetchRoleAccessList = useCallback(async () => {
-    try {
-      const response = await callApi(
-        "/UM/role/get-role-access-list",
-        {},
-        "GET",
-      );
-      const list = response?.result?.roleAccessList ?? [];
-      setRoleAccessList(list);
-    } catch (error) {
-      console.error("Something went wrong", error);
-      setRoleAccessList([]);
-    }
-  }, [callApi]);
+const handlebranchCodeChange = (e) => {
+  const value = e.target.value; 
+ 
+  if (value.length > 5) {
+    setbranchCodeError("Maximum 5 numbers allowed");
+    setTimeout(()=>{
+         setbranchCodeError("")
+        },1500)
+    return;
+  }  
+  if (    
+    !/^[0-9-]*$/.test(value)
+  ) {
+    setbranchCodeError(
+      "Only numbers!"
+    );
+      setTimeout(()=>{
+         setbranchCodeError("")
+        },1500)
+    return;
+  }
+  setErrors({});
+  setbranchCodeError("");
+  setbranchCode(value);
+}; 
 
-  useEffect(() => {
-    fetchData();
-    fetchRoleAccessList(); // Trigger API call
-  }, [fetchData, fetchRoleAccessList]);
-
-  const handleViewClick = useCallback(
-    (data) => {
-      // Robust string mapping for Access Level
-      const access = roleAccessList?.find(
-        (item) =>
-          String(item.accessFlag).trim() === String(data.roleAccess).trim(),
-      );
-      const newData = { ...data, ...access };
-      setViewData(newData);
-      setViewOpen(true);
-    },
-    [roleAccessList],
-  );
-
-  const closeConfirmDialog = useCallback(() => {
-    setRemarks("");
-    setConfirmDialog(false);
-  }, []);
-
-  const handleConfirm = async () => {
-    if (selectedType === "reject" && remarks.trim().length < 5) {
-      showSnackBar(
-        "Please provide minimum 5 characters remarks before rejecting",
-        "warning",
-      );
+  const handleSearch = async (
+    page = paginationModel.page,
+    pageSize = paginationModel.pageSize
+  ) => {  
+    if (!validate()) {
       return;
     }
+    
     setLoading(true);
 
     try {
       const payload = {
-        requestId: selectedRequestId,
-        actionFlag: selectedType,
-        remarks: selectedType === "reject" ? remarks.trim() : "No Remarks",
+     
+        cgl:cgl,
+        branchCode:branchCode,
+        transactionDate: dayjs(transactionDate).format("DD-MM-YYYY"),
+        pageNumber: page,
+        pageSize: pageSize,
       };
 
-      console.log(payload);
+      console.log("Search Payload =>", payload);
 
-      const res = await callApi(
-        "/UM/role/role-request-action",
+      const response = await callApi(
+        "/VE/voucher-transactions/search",
         payload,
-        "POST",
+        "POST"
       );
 
-      if (res?.result?.status) {
-        showSnackBar(
-          `Request Id ${selectedRequestId} ${
-            selectedType === "reject" ? "Rejected" : "Approved"
-          } Successfully`,
-          "success",
-        );
-        fetchData();
-      } else {
-        showSnackBar("Failed to process request", "error");
-      }
-    } catch (err) {
-      console.error(err);
-      showSnackBar("Error while processing request", "error");
+      console.log(
+        "Search Response =>",
+        response
+      );
+
+      const result = response?.data || {};
+
+      console.log(
+        "Content =>",
+        result?.content
+      );
+
+      setRows(
+        (result?.content || []).map(
+          (item, index) => ({
+            id: `${item.transactionId}-${index}`,
+            transactionId:
+              item.transactionId,
+            batchId: item.batchId,
+            journalId: item.journalId,
+            transactionDate:
+              item.transactionDate,
+            postDate: item.postDate,
+            cgl: item.cgl,
+            currency:
+              item.currency,
+            branchCode:
+              item.branchCode,
+                 debitAmount:
+              item.debitAmount,
+              creditAmount:
+              item.creditAmount,  
+              narration:
+              item.narration, 
+          })
+        )
+      );
+
+      setRowCount(
+        result?.totalElements || 0
+      );
+    setShowTable(true);
+setIsSearched(true);
+    } catch (error) {
+      console.error(
+        "  Search  Error =>",
+        error
+      );
     } finally {
-      closeConfirmDialog();
       setLoading(false);
     }
   };
+  const handlePaginationChange = (model) => {
+    setPaginationModel(model);
 
-  const openConfirmDialog = useCallback((type, rowId) => {
-    setSelectedType(type);
-    setSelectedRequestId(rowId);
-    setConfirmDialog(true);
-  }, []);
+    handleSearch(
+      model.page,
+      model.pageSize
+    );
+  };
 
-  const handleRemarksChange = useCallback(
-    (e) => {
-      const value = e.target.value;
 
-      if (value && !/^[A-Za-z0-9]$/.test(value[0])) {
-        showSnackBar("Should not start with a special character", "error");
-        return;
-      }
-
-      const error = REMARKS_REGEX.test(value)
-        ? ""
-        : "Only alphabets, spaces (single spaces only between words) and ,()&,/-. are allowed!";
-
-      if (error) {
-        showSnackBar(error, "error");
-        return;
-      }
-
-      setRemarks(value);
-    },
-    [showSnackBar],
-  );
 
   const columns = useMemo(
     () => [
+      
       {
-        field: "requestId",
-        headerName: "Request Id",
-        flex: 0.5,
+        field: "batchId",
+        headerName: "Batch ID",
+        flex: 1,
+        minWidth: 140,
+      },
+      {
+        field: "journalId",
+        headerName: "Journal ID",
+        flex: 1,
+        minWidth: 160,
+      },
+      {
+        field: "transactionDate",
+        headerName: "Transaction Date",
+        flex: 1.2,
+        minWidth: 150,
+      },
+       {
+        field: "branchCode",
+        headerName: "Branch Code",
+        flex: 1,
         minWidth: 130,
       },
-      { field: "roleName", headerName: "Role Name", flex: 0.5, minWidth: 150 },
-      {
-        field: "description",
-        headerName: "Role Description",
-        flex: 1.2,
-        minWidth: 220,
-      },
-      {
-        field: "roleAccess",
-        headerName: "Access Level",
-        flex: 0.7,
-        minWidth: 140,
-        headerAlign: "center",
-        align: "center",
-        sortable: true,
-        filterable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => {
-          // Robust mapping
-          const access = roleAccessList?.find(
-            (item) =>
-              String(item.accessFlag).trim() ===
-              String(params.row.roleAccess).trim(),
-          );
-
-          return (
-            <Tooltip title={access?.accessDescription || ""} placement="top">
-              <span>
-                <CustomChip
-                  variant="outlined"
-                  size="sm"
-                  icon={<SecurityIcon sx={{ width: 15, height: 15 }} />}
-                  label={access?.accessName || params.row.roleAccess || "NA"}
-                />
-              </span>
-            </Tooltip>
-          );
-        },
-      },
-      {
-        field: "requestType",
-        headerName: "Type",
-        flex: 0.6,
-        minWidth: 120,
-        headerAlign: "center",
-        align: "center",
-        renderCell: (params) => {
-          const val = params.value;
-          return (
-            <CustomChip
-              icon={
-                val === "CREATE" ? (
-                  <AddBoxIcon />
-                ) : val === "DELETE" ? (
-                  <AutoDeleteIcon />
-                ) : (
-                  <EditDocumentIcon />
-                )
-              }
-              label={toPascalKebabCase(val)}
-              color={
-                val === "CREATE"
-                  ? "success"
-                  : val === "DELETE"
-                    ? "error"
-                    : "warning"
-              }
-              size="small"
-              variant="outlined"
-            />
-          );
-        },
-      },
-      {
-        field: "requestorUserId",
-        headerName: "Creator",
+       {
+        field: "currency",
+        headerName: "Currency",
         flex: 0.8,
-        minWidth: 150,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => (
-          <CustomChip
-            icon={<AccountCircleIcon />}
-            size="small"
-            color="info"
-            label={params.value}
-            variant="outlined"
-          />
-        ),
+        minWidth: 100,
       },
-      {
-        field: "requestDate",
-        headerName: "Requested Date",
+       {
+        field: "cgl",
+        headerName: "CGL",
         flex: 1,
-        minWidth: 210,
-        disableColumnMenu: true,
-        renderCell: (p) => (
-          <Typography variant="body1" component="span" sx={styles.requestDate}>
-            {timeStampFormatter(p.value)}
-          </Typography>
-        ),
+        minWidth: 150,
       },
+      
       {
-        field: "actions",
-        headerName: "Actions",
-        flex: 0.7,
-        minWidth: 160,
-        headerAlign: "center",
-        align: "center",
-        filterable: false,
-        sortable: false,
-        disableColumnMenu: true,
-        renderCell: (p) => (
-          <Stack
-            direction="row"
-            spacing={1}
-            alignItems="center"
-            justifyContent="center"
-            sx={{ height: "100%" }}
-          >
-            <Tooltip title="View">
-              <IconButton onClick={() => handleViewClick(p.row)}>
-                <Visibility />
-              </IconButton>
-            </Tooltip>
-
-            <Tooltip title="Approve">
-              <IconButton
-                color="success"
-                onClick={() => openConfirmDialog("accept", p.row.requestId)}
-              >
-                <Check />
-              </IconButton>
-            </Tooltip>
-
-            <Tooltip title="Reject">
-              <IconButton
-                color="error"
-                onClick={() => openConfirmDialog("reject", p.row.requestId)}
-              >
-                <Clear />
-              </IconButton>
-            </Tooltip>
-          </Stack>
-        ),
+        field: "debitAmount",
+        headerName: "Debit Amount",
+        flex: 1.3,
+        minWidth: 180,
       },
+         {
+        field: "creditAmount",
+        headerName: "Credit Amount",
+        flex: 1.3,
+        minWidth: 180,
+      },
+         {
+        field: "narration",
+        headerName: "Narration",
+        flex: 1.3,
+        minWidth: 180,
+      },
+      
+      
     ],
-    [openConfirmDialog, handleViewClick, roleAccessList], // Fixed dependencies
+    []
   );
 
   return (
-    <Box sx={styles.container}>
-      <Card
+  <Paper
+  elevation={2}
+  sx={{
+    height:"calc(100vh - 120px)",
+    maxHeight:"calc(100vh - 120px)",
+    minHeight:0,
+    width:"100%",
+    overflow:"hidden",
+    boxSizing:"border-box",
+    display:"flex",
+    flexDirection:"column",
+  }}
+>
+    <LocalizationProvider
+      dateAdapter={AdapterDayjs}
+    > 
+    <Box sx={{ 
+      p: 3,
+      height:"100%",
+      minHeight:0,
+      maxHeight:"100%",
+      boxSizing:"border-box",
+      display:"flex",
+      flexDirection:"column",
+      overflow:"hidden",
+     }}>
+       
+        <Typography variant="h5" mb={2}>
+         CGLwise Search
+        </Typography>     
+
+
+  <Box
+  sx={{
+    display: "grid",
+    gridTemplateColumns:"1fr 1fr 1fr auto auto",
+    gap: 2,
+    alignItems: "baseline",
+    mb:3,   
+    flexShrink:0, 
+  }}
+>
+
+  <DatePicker
+  label="Date *"
+  value={transactionDate}
+  minDate={dayjs("2026-04-01")}
+  maxDate={dayjs()}
+  disableFuture
+  format="DD-MM-YYYY"
+  onChange={(value) => {
+    setTransactionDate(value);
+    setErrors((prev) => ({
+      ...prev,
+      transactionDate: "",
+    }));
+  }}
+  slotProps={{
+    field: {
+      readOnly: true,
+    },
+    textField: {
+      fullWidth: true,
+      size: "small",
+      error: !!errors.transactionDate,
+      helperText:
+        errors.transactionDate || "Select Date",
+      onKeyDown: (e) => e.preventDefault(),
+      onPaste: (e) => e.preventDefault(),
+    },
+  }}
+/>
+  <FormControl size="small"
+    fullWidth
+     >
+    <InputLabel>
+ 
+    </InputLabel>
+   
+
+<TextField
+  label="CGL"
+  size="small"
+  value={cgl}
+  error={Boolean(cglError)}
+  helperText={cglError || "Enter CGL number. (Maximum 10 digits)."}
+  
+  onChange={handleCLGChange}
+  fullWidth
+/>
+  </FormControl>
+ 
+  <FormControl size="small"
+    fullWidth
+     >
+    <InputLabel>
+     
+    </InputLabel>
+    <TextField
+  label="Branch Code"
+  size="small"
+  value={branchCode}
+  error={Boolean(branchCodeError)}
+  helperText={
+    branchCodeError ||
+    "Enter Branch Code (Maximum 5 digits)."
+  }
+  onChange={handlebranchCodeChange}
+  fullWidth
+/>
+       
+  </FormControl>
+
+  <Button
+  variant="contained"
+  onClick={() =>
+    handleSearch(
+      paginationModel.page,
+      paginationModel.pageSize
+    )
+  }
+   sx={{
+      minWidth: 90,
+      height: 45,
+      
+    }}
+>
+  Search
+</Button>
+
+  <Button
+    variant="outlined"
+    onClick={handleReset}
+    sx={{
+      minWidth: 90,
+      height: 45,
+      "&:hover":
+      {
+        color:"#fff",
+      },
+    }}
+  >
+    Reset
+  </Button>
+</Box>
+
+
+{showTable && (
+  <>
+  <Box
+  sx={{
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 1,
+    mb: 1,
+    flexShrink:0,
+  }}
+>
+  {/* Excel Export */}
+  <Button
+    variant="contained"
+    startIcon={<FileDownloadIcon />}
+    size="small"
+    onClick={handleExportButton}
+    disabled={loading}
+    sx={{
+      textTransform: "none",
+      minWidth: 120,
+      height: 43,
+    }}
+  >
+   MIS Excel Export
+  </Button>
+
+  {/* PDF Export */}
+  <Button
+    variant="contained"
+    startIcon={<FileDownloadIcon />}
+    size="small"
+    onClick={handleExportPdfButton}
+    disabled={loading}
+    sx={{
+      textTransform: "none",
+      minWidth: 120,
+      height: 43,
+    }}
+  >
+      MIS PDF Export 
+  </Button>
+</Box>
+
+      <Box
         sx={{
           width: "100%",
-          height: "calc(100vh - 125px)",
-          minHeight: 0,
-          boxShadow: 3,
-          borderRadius: 2,
-          bgcolor: "background.paper",
-          overflow: "hidden",
+          height:"100%",
+          minHeight:0,
+          overflow:"hidden",
         }}
       >
-        <RequestAnalytics data={rows} />
-
-        <Divider />
-
         <DataGrid
           rows={rows}
           columns={columns}
-          loading={dataGridLoading}
+          loading={loading}
+          rowCount={rowCount}
+          paginationMode="server"
+          paginationModel={paginationModel}
+          onPaginationModelChange={handlePaginationChange}
+          pageSizeOptions={[25, 50, 100]}
           disableRowSelectionOnClick
-          pageSizeOptions={[5, 10, 25, 50]}
-          initialState={{
-            pagination: { paginationModel: { pageSize: 5, page: 0 } },
-            sorting: { sortModel: [{ field: "reqDate", sort: "desc" }] },
-          }}
-          getRowId={(row) => row.requestId}
-          sx={{
-            ...styles.dataGrid,
-            border: "none",
-            "& .MuiDataGrid-columnHeaders": {
-              borderTop: "none",
-            },
-          }}
-          slots={{
-            noRowsOverlay: () => (
-              <Stack height="100%" alignItems="center" justifyContent="center">
-                <InfoIcon
-                  sx={{ fontSize: 48, color: "text.secondary", mb: 2 }}
-                />
-                <Typography variant="h6">No Pending Requests Found</Typography>
-                <Typography>
-                  All {selectedMenuItem?.title} have been processed.
-                </Typography>
-              </Stack>
-            ),
-          }}
+          sx={styles.dataGridContainer}
         />
-      </Card>
-
-      <RoleRequestView
-        open={viewOpen}
-        handleClose={() => setViewOpen(false)}
-        data={viewData}
-      />
-
-      <Dialog
-        open={confirmDialog}
-        onClose={closeConfirmDialog}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ fontWeight: 600 }}>
-          {selectedType === "accept" ? "Confirm Approval" : "Confirm Rejection"}
-        </DialogTitle>
-        <DialogContent>
-          <Typography sx={{ p: 1 }}>
-            {selectedType === "accept"
-              ? "Are you sure you want to approve this request?"
-              : "Are you sure you want to reject this request? Please enter remarks."}
-          </Typography>
-          {selectedType === "reject" && (
-            <TextField
-              fullWidth
-              label="Rejection Remarks *"
-              value={remarks}
-              onChange={handleRemarksChange}
-              multiline
-              rows={2}
-              margin="dense"
-              slotProps={{
-                htmlInput: {
-                  maxLength: 100,
-                },
-              }}
-              helperText={
-                remarks?.length > 0 && remarks?.length < 5
-                  ? "Enter at least 5 characters"
-                  : "Allowed 5-100 characters (alphabets, numbers, spaces,()&,/-.)"
-              }
-              error={remarks?.length > 0 && remarks?.length < 5}
-            />
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeConfirmDialog} variant="outlined"
-          sx=
-          {{
-            "&:hover":
-            {
-              color:"#fff",
-            },
-            }}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleConfirm}
-            color={selectedType === "accept" ? "success" : "error"}
-            variant="contained"
-          >
-            {selectedType === "accept" ? "Approve" : "Reject"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <LoadingOverlay loading={loading} />
-    </Box>
+      </Box>
+  </>
+)}
+      </Box>
+     </LocalizationProvider>
+     </Paper>
   );
-}
+};
+
+
+
+export default CGLSearch;
+
+import React, { useMemo, useState } from "react";
+import {
+  Box,
+  Paper,
+  Grid,
+  Button,
+  Typography,
+  TextField,
+  MenuItem,
+  FormControl,
+  InputLabel ,
+  Select 
+} from "@mui/material";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+
+import { DataGrid } from "@mui/x-data-grid";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import dayjs from "dayjs";
+import useApi from "../../hooks/useApi";
+import FormHelperText from "@mui/material/FormHelperText";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import { alpha } from "@mui/material/styles";
+
+const styles = {
+  mainContainer: {
+    padding: 3,
+    height: "100%",
+    width: "100%",
+  },
+ dataGridContainer: {
+    height: "100%",
+    minHeight:0,
+    width: "100%",
+    backgroundColor: "background.paper",
+    boxShadow: 2,
+    borderRadius: 2,
+    border: 1,
+    borderColor: "divider",
+    "& .MuiDataGrid-columnHeaders": {
+      backgroundColor: "#f5f5f5 !important",
+      fontWeight: 700,
+      borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
+      position: 'sticky',
+      top: 0,
+      zIndex: 1,
+    },
+    "& .MuiDataGrid-row:hover": {
+      backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04),
+    },
+   
+    "& .MuiDataGrid-menuIcon": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
+    "& .MuiDataGrid-iconButtonContainer": {
+      visibility: "visible !important",
+      width: "auto !important",
+    },
+  },
+  tableContainer: {
+    maxHeight: 450,
+    overflowY: "auto",
+    border: 1,
+    borderColor: "divider",
+    mt: 1
+  },
+  fixedContentBox: {
+    minHeight: 400,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  tableHeaderCell: {
+    fontWeight: "bold",
+    backgroundColor: "#f5f6f8",
+    color: "text.primary",
+    whiteSpace: "nowrap",
+    zIndex: 10,
+  },
+  stickyHeaderColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    top: 0,
+    zIndex: 20,
+    backgroundColor: "background.paper",
+    borderBottom: 1,
+    borderRight: 1,
+    borderColor: "divider",
+    fontWeight: "bold",
+  }),
+  stickyBodyColumn: (leftOffset) => ({
+    position: "sticky",
+    left: leftOffset,
+    zIndex: 5,
+    backgroundColor: "background.paper",
+    borderRight: 1,
+    borderColor: "divider",
+  }),
+  dialogTitle: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    pb: 1,
+  },
+  dialogActions: { p: 2, borderTop: 1, borderColor: "divider" },
+  loadingContainer: {
+    height: "100%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  helperText: {
+    fontSize: "0.75rem",
+    color: "text.secondary",
+    marginTop: "4px",
+  }
+};
+
+
+const DateWiseSearch = () => {
+  const { callApi } = useApi();
+const [showTable, setShowTable] = useState(false);
+ const [isSearched, setIsSearched] = useState(false);
+  const [assetClassification, setAssetClassification] = useState("");
+  const [fromDate, setFromDate] = useState(null);
+  const [toDate, setToDate] = useState(null);
+
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [rowCount, setRowCount] = useState(0);
+
+  const [errors, setErrors] = useState({});
+
+  const [paginationModel, setPaginationModel] = useState({
+    page: 0,
+    pageSize: 25,
+  });
+
+  const assetClassificationOptions = [
+    { value: "A", label: "Asset" },
+    { value: "L", label: "Liability" },
+    { value: "I", label: "Income" },
+    { value: "E", label: "Expense" },
+    { value: "M", label: "Memo A/c" },
+  ];
+ const validate = () => {
+  const temp = {};
+
+  if (!fromDate) {
+    temp.fromDate = "From Date is required";
+  }
+
+  if (!toDate) {
+    temp.toDate = "To Date is required";
+  }
+
+  if (
+    fromDate &&
+    dayjs(fromDate).isAfter(
+      dayjs(),
+      "day"
+    )
+  ) {
+    temp.fromDate =
+      "Future date is not allowed";
+  }
+
+  if (
+    toDate &&
+    dayjs(toDate).isAfter(
+      dayjs(),
+      "day"
+    )
+  ) {
+    temp.toDate =
+      "Future date is not allowed";
+  }
+
+  setErrors(temp);
+
+  return (
+    Object.keys(temp).length === 0
+  );
+};
+
+  const handleExportPdfButton = async () => {
+  if (!isSearched) {
+    alert("Please search records first.");
+    return;
+  }
+
+  try {
+    const payload = {
+      acClassification: assetClassification,
+      fromDate: dayjs(fromDate).format("DD-MM-YYYY"),
+      toDate: dayjs(toDate).format("DD-MM-YYYY"),
+    };
+
+    console.log("PDF Export Payload =>", payload);
+
+    const response = await callApi(
+      "/VE/voucher-transactions/export-pdf",
+      payload,
+      "POST",
+      "blob",
+      "application/json",
+      {},
+      false
+    );
+
+    const blob = new Blob([response.data], {
+      type: "application/pdf",
+    });
+
+    const url = window.URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "MIS_REPORTS.pdf";
+
+    document.body.appendChild(link);
+    link.click();
+
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("PDF Export Error =>", err);
+  }
+};
+//pdf export
+const handleExportButton = async () => {
+  if (!isSearched) {
+    alert("Please search records first.");
+    return;
+  }
+
+  try {
+    const payload = {
+      acClassification: assetClassification,
+      fromDate: dayjs(fromDate).format("DD-MM-YYYY"),
+      toDate: dayjs(toDate).format("DD-MM-YYYY"),
+    };
+
+    console.log("Export Payload =>", payload);
+
+    const response = await callApi(
+      "/VE/voucher-transactions/export",
+      payload,
+      "POST",
+      "blob",
+      "application/json",
+      {},
+      false
+    );
+
+    const blob = new Blob([response.data], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    const url = window.URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "MIS_REPORTS.xlsx";
+
+    document.body.appendChild(link);
+    link.click();
+
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("Export Error =>", err);
+  }
+};
+  const handleReset = () => {
+  setAssetClassification("");
+  setFromDate(null);
+  setToDate(null);
+
+  setRows([]);
+  setRowCount(0);
+
+  setPaginationModel({
+    page: 0,
+    pageSize: 25,
+  });
+
+  setErrors({});
+
+  setShowTable(false);
+  setIsSearched(false);
+};
+
+
+  const handleSearch = async (
+    page = paginationModel.page,
+    pageSize = paginationModel.pageSize
+  ) => {
+    if (!validate()) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const payload = {
+        acClassification: assetClassification,
+        fromDate: dayjs(fromDate).format("DD-MM-YYYY"),
+        toDate: dayjs(toDate).format("DD-MM-YYYY"),
+        pageNumber: page,
+        pageSize: pageSize,
+      };
+
+      console.log("Search Payload =>", payload);
+
+      const response = await callApi(
+        "/VE/voucher-transactions/search",
+        payload,
+        "POST"
+      );
+
+      console.log(
+        "Search Response =>",
+        response
+      );
+
+      const result = response?.data || {};
+
+      console.log(
+        "Content =>",
+        result?.content
+      );
+
+      setRows(
+        (result?.content || []).map(
+          (item, index) => ({
+            id: `${item.transactionId}-${index}`,
+             transactionId:
+              item.transactionId,
+            batchId: item.batchId,
+            journalId: item.journalId,
+            transactionDate:
+              item.transactionDate,
+            postDate: item.postDate,
+            cgl: item.cgl,
+            currency: item.currency,
+            branchCode:
+              item.branchCode,
+             debitAmount:
+              item.debitAmount,
+              creditAmount:
+              item.creditAmount,  
+              narration:
+              item.narration, 
+          })
+        )
+      );
+
+      setRowCount(
+        result?.totalElements || 0
+      );
+      setShowTable(true);
+      setIsSearched(true);
+    } catch (error) {
+      console.error(
+        "Date Wise Search Error =>",
+        error
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+  const handlePaginationChange = (model) => {
+    setPaginationModel(model);
+
+    handleSearch(
+      model.page,
+      model.pageSize
+    );
+  };
+
+
+
+  const columns = useMemo(
+    () => [
+       {
+        field: "batchId",
+        headerName: "Batch ID",
+        flex: 1,
+        minWidth: 140,
+      },
+      {
+        field: "journalId",
+        headerName: "Journal ID",
+        flex: 1,
+        minWidth: 160,
+      },
+      {
+        field: "transactionDate",
+        headerName: "Transaction Date",
+        flex: 1.2,
+        minWidth: 150,
+      },
+       {
+        field: "branchCode",
+        headerName: "Branch Code",
+        flex: 1,
+        minWidth: 130,
+      },
+       {
+        field: "currency",
+        headerName: "Currency",
+        flex: 0.8,
+        minWidth: 100,
+      },
+       {
+        field: "cgl",
+        headerName: "CGL",
+        flex: 1,
+        minWidth: 150,
+      },
+      
+      {
+        field: "debitAmount",
+        headerName: "Debit Amount",
+        flex: 1.3,
+        minWidth: 180,
+      },
+         {
+        field: "creditAmount",
+        headerName: "Credit Amount",
+        flex: 1.3,
+        minWidth: 180,
+      },
+         {
+        field: "narration",
+        headerName: "Narration",
+        flex: 1.3,
+        minWidth: 180,
+      },
+      
+    ],
+    []
+  );
+
+  return (
+    <Paper
+      elevation={2}
+      sx={{
+        p: 2,
+        height:"calc(100vh - 120px)",
+        maxHeight:"calc(100vh - 120px)",
+        minHeight:0,
+        width:"100%",
+        overflow:"hidden",
+        boxSizing:"border-box",
+        display:"flex",
+        flexDirection:"column",
+      }}
+    > 
+
+    <LocalizationProvider
+      dateAdapter={AdapterDayjs}
+    >
+      <Box sx={{ p: 3 ,
+        height:"100%",
+        minHeight:0,
+        maxHeight:"100%",
+        boxSizing:"border-box",
+        display:"flex",
+        flexDirection:"column",
+        overflow:"hidden",
+      }}>
+
+  <Typography
+      variant="h6"
+      sx={{ mb: 2, fontWeight: 500 }}
+    >
+      Date Wise Search
+    </Typography>
+   
+
+ <Box
+  sx={{
+    display: "grid",
+    gridTemplateColumns: "1.2fr 1fr 1fr auto",
+    gap: 2,
+    alignItems: "start",
+    mb: 2,
+    flexShrink:0,
+  }}
+>
+
+<DatePicker
+  label="From Date *"
+  value={fromDate}
+  minDate={dayjs("2026-04-01")}
+  maxDate={dayjs()}
+  disableFuture
+  format="DD-MM-YYYY"
+  onChange={(value) => {
+    setFromDate(value);
+    setErrors((prev) => ({
+      ...prev,
+      fromDate: "",
+    }));
+  }}
+  slotProps={{
+    field: {
+      readOnly: true,
+    },
+    textField: {
+      fullWidth: true,
+      size: "small",
+      error: !!errors.fromDate,
+      helperText:
+        errors.fromDate || "Select From Date",
+      onKeyDown: (e) => e.preventDefault(),
+      onPaste: (e) => e.preventDefault(),
+    },
+  }}
+/>
+
+<DatePicker
+  label="To Date *"
+  value={toDate}
+  minDate={dayjs("2026-04-01")}
+  maxDate={dayjs()}
+  disableFuture
+  format="DD-MM-YYYY"
+  onChange={(value) => {
+    setToDate(value);
+    setErrors((prev) => ({
+      ...prev,
+      toDate: "",
+    }));
+  }}
+  slotProps={{
+    field: {
+      readOnly: true,
+    },
+    textField: {
+      fullWidth: true,
+      size: "small",
+      error: !!errors.toDate,
+      helperText:
+        errors.toDate || "Select To Date",
+      onKeyDown: (e) => e.preventDefault(),
+      onPaste: (e) => e.preventDefault(),
+    },
+  }}
+/>
+
+  <FormControl size="small"
+    fullWidth
+    error={!!errors.assetClassification}
+  >
+    <InputLabel>
+      Classification
+    </InputLabel>
+  <Select
+    value={assetClassification}
+    label="Classification *"
+    onChange={(e) => {
+      setAssetClassification(e.target.value);
+      setErrors((prev) => ({
+        ...prev,
+        assetClassification: "",
+      }));
+    }}
+  >
+    {assetClassificationOptions.map((option) => (
+      <MenuItem key={option.value} value={option.value}>
+        {option.label}
+      </MenuItem>
+    ))}
+  </Select>
+    <FormHelperText>
+    {errors.assetClassification ||
+      "Select the asset classification to filter the records."}
+  </FormHelperText>
+  </FormControl>
+
+ <Box
+  sx={{
+    display: "flex",
+    gap: 1,
+    alignItems: "flex-start",
+    pt: "2px",
+  }}
+>
+  <Button
+    variant="contained"
+    onClick={() =>
+      handleSearch(
+        paginationModel.page,
+        paginationModel.pageSize
+      )
+    }
+    sx={{
+      minWidth: 90,
+      height: 40,
+    }}
+  >
+    Search
+  </Button>
+
+  <Button
+    variant="outlined"
+    onClick={handleReset}
+    sx={{
+      minWidth: 90,
+      height: 40,
+      "&:hover":
+      {
+        color:"#fff",
+      },
+    }}
+  >
+    Reset
+  </Button>
+</Box>
+</Box>
+
+
+{showTable && (
+  <>
+  <Box
+  sx={{
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 1,
+    mb: 1,
+    flexShrink:0,
+  }}
+>
+  {/* Excel Export */}
+  <Button
+    variant="contained"
+    startIcon={<FileDownloadIcon />}
+    size="small"
+    onClick={handleExportButton}
+    disabled={loading}
+    sx={{
+      textTransform: "none",
+      minWidth: 120,
+      height: 43,
+    }}
+  >
+    MIS Excel Export
+  </Button>
+
+  {/* PDF Export */}
+  <Button
+    variant="contained"
+    startIcon={<FileDownloadIcon />}
+    size="small"
+    onClick={handleExportPdfButton}
+    disabled={loading}
+    sx={{
+      textTransform: "none",
+      minWidth: 120,
+      height: 43,
+    }}
+  >
+    MIS PDF Export
+  </Button>
+</Box>
+
+      <Box
+        sx={{
+          width: "100%",
+          height:"100%",
+          minHeight:0,
+          overflow:"hidden",
+        }}
+      >
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          loading={loading}
+          rowCount={rowCount}
+          paginationMode="server"
+          paginationModel={paginationModel}
+          onPaginationModelChange={handlePaginationChange}
+          pageSizeOptions={[25, 50, 100]}
+          disableRowSelectionOnClick
+          sx={styles.dataGridContainer}
+        />
+      </Box>
+  </>
+)}
+      </Box>
+    </LocalizationProvider>
+    </Paper>
+  );
+};
+
+export default DateWiseSearch;
