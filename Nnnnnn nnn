@@ -1,1425 +1,163 @@
-import React, { useMemo, useState } from "react";
-import {
-  Box,
-  Paper,
-  Button,
-  Typography,
-  TextField,
-  MenuItem,
-  FormControl,
-  InputLabel ,
-  Select, 
-  paperClasses
-} from "@mui/material";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+package com.fincore.ReportService.controller;
 
-import { DataGrid } from "@mui/x-data-grid";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import dayjs from "dayjs";
-import useApi from "../../hooks/useApi";
-import FileDownloadIcon from "@mui/icons-material/FileDownload";
- import { alpha } from "@mui/material/styles";
-const styles = {
-  mainContainer: {
-    padding: 3,
-    height: "100%",
-    width: "100%",
-  },
- dataGridContainer: {
-    height: "100%",
-    width: "100%",
-    backgroundColor: "background.paper",
-    boxShadow: 2,
-    borderRadius: 2,
-    border: 1,
-    borderColor: "divider",
-    "& .MuiDataGrid-columnHeaders": {
-      backgroundColor: "#f5f5f5 !important",
-      fontWeight: 700,
-      borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
-      position: 'sticky',
-      top: 0,
-      zIndex: 1,
-    },
-    "& .MuiDataGrid-row:hover": {
-      backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04),
-    },
-   
-    "& .MuiDataGrid-menuIcon": {
-      visibility: "visible !important",
-      width: "auto !important",
-    },
-    "& .MuiDataGrid-iconButtonContainer": {
-      visibility: "visible !important",
-      width: "auto !important",
-    },
-  },
-  tableContainer: {
-    maxHeight: 450,
-    overflowY: "auto",
-    border: 1,
-    borderColor: "divider",
-    mt: 1
-  },
-  fixedContentBox: {
-    minHeight: 400,
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-between",
-  },
-  tableHeaderCell: {
-    fontWeight: "bold",
-    backgroundColor: "#f5f6f8",
-    color: "text.primary",
-    whiteSpace: "nowrap",
-    zIndex: 10,
-  },
-  stickyHeaderColumn: (leftOffset) => ({
-    position: "sticky",
-    left: leftOffset,
-    top: 0,
-    zIndex: 20,
-    backgroundColor: "background.paper",
-    borderBottom: 1,
-    borderRight: 1,
-    borderColor: "divider",
-    fontWeight: "bold",
-  }),
-  stickyBodyColumn: (leftOffset) => ({
-    position: "sticky",
-    left: leftOffset,
-    zIndex: 5,
-    backgroundColor: "background.paper",
-    borderRight: 1,
-    borderColor: "divider",
-  }),
-  dialogTitle: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    pb: 1,
-  },
-  dialogActions: { p: 2, borderTop: 1, borderColor: "divider" },
-  loadingContainer: {
-    height: "100%",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  helperText: {
-    fontSize: "0.75rem",
-    color: "text.secondary",
-    marginTop: "4px",
-  }
-};
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
-const CGLSearch = () => {
-  const { callApi } = useApi();
-const [showTable, setShowTable] = useState(false);
+import com.fincore.ReportService.dto.*;
+import com.fincore.commonutilities.jwt.JwtUtil;
 
- const [isSearched, setIsSearched] = useState(false);
+import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 
-  const [cgl, setcgl] = useState("");
-  const [branchCode, setbranchCode] = useState("");   
-  const [branchCodeError, setbranchCodeError] = useState("");
-  const [transactionDate, setTransactionDate] = useState(null); 
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-  
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [rowCount, setRowCount] = useState(0);
+import com.fincore.ReportService.service.ReportService;
 
-  const [errors, setErrors] = useState({});
-  const [cglError, setcglError] = useState("");
-  
 
-  const [paginationModel, setPaginationModel] = useState({
-    page: 0,
-    pageSize: 25,
-  });
+@Slf4j
+@RestController
+@RequestMapping("/api/reports")
+public class ReportController {
 
+    private final ReportService reportService;
+    private final JwtUtil jwtUtil; // Declare an instance field
 
- 
-
-  const handleReset = () => { 
-    setcgl("");
-    setbranchCode(""); 
-    setTransactionDate(null);
-    setRows([]);
-    setRowCount(0);
-    setPaginationModel({
-    page: 0,
-    pageSize: 25,
-  });
-   setbranchCodeError("");
- setcglError("");
-  setErrors({});
-  setShowTable(false);
-  
-setIsSearched(false);
-  
-};
-const handleExportPdfButton = async () => {
-  if (!isSearched) {
-    alert("Please search records first.");
-    return;
-  }
-
-  try {
-    const payload = {
-      cgl,
-      branchCode,
-      transactionDate: transactionDate
-        ? dayjs(transactionDate).format("DD-MM-YYYY")
-        : null,
-    };
-
-    console.log("PDF Export Payload =>", payload);
-
-    const response = await callApi(
-      "/VE/voucher-transactions/export-pdf",
-      payload,
-      "POST",
-      "blob",
-      "application/json",
-      {},
-      false
-    );
-
-    const blob = new Blob([response.data], {
-      type: "application/pdf",
-    });
-
-    const url = window.URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "MIS_REPORTS.pdf";
-
-    document.body.appendChild(link);
-    link.click();
-
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-
-  } catch (err) {
-    console.error("PDF Export Error =>", err);
-  }
-};
-
-const handleExportButton = async () => {
-  if (!isSearched) {
-    alert("Please search records first.");
-    return;
-  }
-
-  try {
-    const payload = {
-      cgl,
-      branchCode,
-      transactionDate: transactionDate
-        ? dayjs(transactionDate).format("DD-MM-YYYY")
-        : null,
-    };
-
-    console.log("Export Payload =>", payload);
-
-    const response = await callApi(
-      "/VE/voucher-transactions/export",
-      payload,
-      "POST",
-      "blob",
-      "application/json",
-      {},
-      false
-    );
-
-    const blob = new Blob([response.data], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-
-    const url = window.URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "MIS_REPORTS.xlsx";
-
-    document.body.appendChild(link);
-    link.click();
-
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  } catch (err) {
-    console.error("Export Error =>", err);
-  }
-};
-
-
-
- const validate = () => {
-  const temp = {};
-
-  if (!transactionDate) {
-    temp.fromDate = " Date is required";
-  }
-
-  
-  if (
-    transactionDate &&
-    dayjs(transactionDate).isAfter(
-      dayjs(),
-      "day"
-    )
-  ) {
-    temp.transactionDate =
-      "Future date is not allowed";
-  }
-
-
-  setErrors(temp);
-
-  return (
-    Object.keys(temp).length === 0
-  );
-};
-
-
- 
- 
-const handleCLGChange = (e) => {
-  const value = e.target.value; 
-
-  if (value.length > 10) {
-    setcglError("Maximum 10 numbers allowed");
-      setTimeout(()=>{
-         setcglError("")
-        },1500)
-    return;
-  }  
-  if (    
-    !/^[0-9-]*$/.test(value)
-  ) {
-    setcglError(
-      "Only numbers!"
-    );
-
-   setTimeout(()=>{
-         setcglError("")
-        },1500)
-    return;
-  }
-  setErrors({});
-  setcglError("");
-  setcgl(value);
-};
-
-    
-
-
-const handlebranchCodeChange = (e) => {
-  const value = e.target.value; 
- 
-  if (value.length > 5) {
-    setbranchCodeError("Maximum 5 numbers allowed");
-    setTimeout(()=>{
-         setbranchCodeError("")
-        },1500)
-    return;
-  }  
-  if (    
-    !/^[0-9-]*$/.test(value)
-  ) {
-    setbranchCodeError(
-      "Only numbers!"
-    );
-      setTimeout(()=>{
-         setbranchCodeError("")
-        },1500)
-    return;
-  }
-  setErrors({});
-  setbranchCodeError("");
-  setbranchCode(value);
-}; 
-
-  const handleSearch = async (
-    page = paginationModel.page,
-    pageSize = paginationModel.pageSize
-  ) => {  
-    if (!validate()) {
-      return;
-    }
-    
-    setLoading(true);
-
-    try {
-      const payload = {
-     
-        cgl:cgl,
-        branchCode:branchCode,
-        transactionDate: dayjs(transactionDate).format("DD-MM-YYYY"),
-        pageNumber: page,
-        pageSize: pageSize,
-      };
-
-      console.log("Search Payload =>", payload);
-
-      const response = await callApi(
-        "/VE/voucher-transactions/search",
-        payload,
-        "POST"
-      );
-
-      console.log(
-        "Search Response =>",
-        response
-      );
-
-      const result = response?.data || {};
-
-      console.log(
-        "Content =>",
-        result?.content
-      );
-
-      setRows(
-        (result?.content || []).map(
-          (item, index) => ({
-            id: `${item.transactionId}-${index}`,
-            transactionId:
-              item.transactionId,
-            batchId: item.batchId,
-            journalId: item.journalId,
-            transactionDate:
-              item.transactionDate,
-            postDate: item.postDate,
-            cgl: item.cgl,
-            currency:
-              item.currency,
-            branchCode:
-              item.branchCode,
-                 debitAmount:
-              item.debitAmount,
-              creditAmount:
-              item.creditAmount,  
-              narration:
-              item.narration, 
-          })
-        )
-      );
-
-      setRowCount(
-        result?.totalElements || 0
-      );
-    setShowTable(true);
-setIsSearched(true);
-    } catch (error) {
-      console.error(
-        "  Search  Error =>",
-        error
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-  const handlePaginationChange = (model) => {
-    setPaginationModel(model);
-
-    handleSearch(
-      model.page,
-      model.pageSize
-    );
-  };
-
-
-
-  const columns = useMemo(
-    () => [
-      
-      {
-        field: "batchId",
-        headerName: "Batch ID",
-        flex: 1,
-        minWidth: 140,
-      },
-      {
-        field: "journalId",
-        headerName: "Journal ID",
-        flex: 1,
-        minWidth: 160,
-      },
-      {
-        field: "transactionDate",
-        headerName: "Transaction Date",
-        flex: 1.2,
-        minWidth: 150,
-      },
-       {
-        field: "branchCode",
-        headerName: "Branch Code",
-        flex: 1,
-        minWidth: 130,
-      },
-       {
-        field: "currency",
-        headerName: "Currency",
-        flex: 0.8,
-        minWidth: 100,
-      },
-       {
-        field: "cgl",
-        headerName: "CGL",
-        flex: 1,
-        minWidth: 150,
-      },
-      
-      {
-        field: "debitAmount",
-        headerName: "Debit Amount",
-        flex: 1.3,
-        minWidth: 180,
-      },
-         {
-        field: "creditAmount",
-        headerName: "Credit Amount",
-        flex: 1.3,
-        minWidth: 180,
-      },
-         {
-        field: "narration",
-        headerName: "Narration",
-        flex: 1.3,
-        minWidth: 180,
-      },
-      
-      
-    ],
-    []
-  );
-
-  return (
-  <Paper
-  elevation={2}
-  sx={{
-    height:"calc(100vh - 120px)",
-    maxHeight:"calc(100vh - 120px)",
-    minHeight:0,
-    width:"100%",
-    overflow:"hidden",
-    boxSizing:"border-box",
-    display:"flex",
-    flexDirection:"column",
-  }}
->
-    <LocalizationProvider
-      dateAdapter={AdapterDayjs}
-    > 
-    <Box sx={{ 
-      p: 3,
-      height:"100%",
-      minHeight:0,
-      maxHeight:"100%",
-      boxSizing:"border-box",
-      display:"flex",
-      flexDirection:"column",
-      overflow:"hidden",
-     }}>
-       
-        <Typography variant="h5" mb={2}>
-         CGLwise Search
-        </Typography>     
-
-
-  <Box
-  sx={{
-    display: "grid",
-    gridTemplateColumns:"1fr 1fr 1fr auto auto",
-    gap: 2,
-    alignItems: "baseline",
-    mb:3,   
-    flexShrink:0, 
-  }}
->
-
-  <DatePicker
-  label="Date *"
-  value={transactionDate}
-  minDate={dayjs("2026-04-01")}
-  maxDate={dayjs()}
-  disableFuture
-  format="DD-MM-YYYY"
-  onChange={(value) => {
-    setTransactionDate(value);
-    setErrors((prev) => ({
-      ...prev,
-      transactionDate: "",
-    }));
-  }}
-  slotProps={{
-    field: {
-      readOnly: true,
-    },
-    textField: {
-      fullWidth: true,
-      size: "small",
-      error: !!errors.transactionDate,
-      helperText:
-        errors.transactionDate || "Select Date",
-      onKeyDown: (e) => e.preventDefault(),
-      onPaste: (e) => e.preventDefault(),
-    },
-  }}
-/>
-  <FormControl size="small"
-    fullWidth
-     >
-    <InputLabel>
- 
-    </InputLabel>
-   
-
-<TextField
-  label="CGL"
-  size="small"
-  value={cgl}
-  error={Boolean(cglError)}
-  helperText={cglError || "Enter CGL number. (Maximum 10 digits)."}
-  
-  onChange={handleCLGChange}
-  fullWidth
-/>
-  </FormControl>
- 
-  <FormControl size="small"
-    fullWidth
-     >
-    <InputLabel>
-     
-    </InputLabel>
-    <TextField
-  label="Branch Code"
-  size="small"
-  value={branchCode}
-  error={Boolean(branchCodeError)}
-  helperText={
-    branchCodeError ||
-    "Enter Branch Code (Maximum 5 digits)."
-  }
-  onChange={handlebranchCodeChange}
-  fullWidth
-/>
-       
-  </FormControl>
-
-  <Button
-  variant="contained"
-  onClick={() =>
-    handleSearch(
-      paginationModel.page,
-      paginationModel.pageSize
-    )
-  }
-   sx={{
-      minWidth: 90,
-      height: 45,
-      
-    }}
->
-  Search
-</Button>
-
-  <Button
-    variant="outlined"
-    onClick={handleReset}
-    sx={{
-      minWidth: 90,
-      height: 45,
-      "&:hover":
-      {
-        color:"#fff",
-      },
-    }}
-  >
-    Reset
-  </Button>
-</Box>
-
-
-{showTable && (
-  <>
-  <Box
-  sx={{
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 1,
-    mb: 1,
-    flexShrink:0,
-  }}
->
-  {/* Excel Export */}
-  <Button
-    variant="contained"
-    startIcon={<FileDownloadIcon />}
-    size="small"
-    onClick={handleExportButton}
-    disabled={loading}
-    sx={{
-      textTransform: "none",
-      minWidth: 120,
-      height: 43,
-    }}
-  >
-   MIS Excel Export
-  </Button>
-
-  {/* PDF Export */}
-  <Button
-    variant="contained"
-    startIcon={<FileDownloadIcon />}
-    size="small"
-    onClick={handleExportPdfButton}
-    disabled={loading}
-    sx={{
-      textTransform: "none",
-      minWidth: 120,
-      height: 43,
-    }}
-  >
-      MIS PDF Export 
-  </Button>
-</Box>
-
-      <Box
-        sx={{
-          width: "100%",
-          height:"100%",
-          minHeight:0,
-          overflow:"hidden",
-        }}
-      >
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          loading={loading}
-          rowCount={rowCount}
-          paginationMode="server"
-          paginationModel={paginationModel}
-          onPaginationModelChange={handlePaginationChange}
-          pageSizeOptions={[25, 50, 100]}
-          disableRowSelectionOnClick
-          sx={styles.dataGridContainer}
-        />
-      </Box>
-  </>
-)}
-      </Box>
-     </LocalizationProvider>
-     </Paper>
-  );
-};
-
-
-
-export default CGLSearch;
-
-import React, { useMemo, useState } from "react";
-import {
-  Box,
-  Paper,
-  Grid,
-  Button,
-  Typography,
-  TextField,
-  MenuItem,
-  FormControl,
-  InputLabel ,
-  Select 
-} from "@mui/material";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-
-import { DataGrid } from "@mui/x-data-grid";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import dayjs from "dayjs";
-import useApi from "../../hooks/useApi";
-import FormHelperText from "@mui/material/FormHelperText";
-import FileDownloadIcon from "@mui/icons-material/FileDownload";
-import { alpha } from "@mui/material/styles";
-
-const styles = {
-  mainContainer: {
-    padding: 3,
-    height: "100%",
-    width: "100%",
-  },
- dataGridContainer: {
-    height: "100%",
-    minHeight:0,
-    width: "100%",
-    backgroundColor: "background.paper",
-    boxShadow: 2,
-    borderRadius: 2,
-    border: 1,
-    borderColor: "divider",
-    "& .MuiDataGrid-columnHeaders": {
-      backgroundColor: "#f5f5f5 !important",
-      fontWeight: 700,
-      borderBottom: "2px solid rgba(88, 70, 159, 0.2)",
-      position: 'sticky',
-      top: 0,
-      zIndex: 1,
-    },
-    "& .MuiDataGrid-row:hover": {
-      backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04),
-    },
-   
-    "& .MuiDataGrid-menuIcon": {
-      visibility: "visible !important",
-      width: "auto !important",
-    },
-    "& .MuiDataGrid-iconButtonContainer": {
-      visibility: "visible !important",
-      width: "auto !important",
-    },
-  },
-  tableContainer: {
-    maxHeight: 450,
-    overflowY: "auto",
-    border: 1,
-    borderColor: "divider",
-    mt: 1
-  },
-  fixedContentBox: {
-    minHeight: 400,
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-between",
-  },
-  tableHeaderCell: {
-    fontWeight: "bold",
-    backgroundColor: "#f5f6f8",
-    color: "text.primary",
-    whiteSpace: "nowrap",
-    zIndex: 10,
-  },
-  stickyHeaderColumn: (leftOffset) => ({
-    position: "sticky",
-    left: leftOffset,
-    top: 0,
-    zIndex: 20,
-    backgroundColor: "background.paper",
-    borderBottom: 1,
-    borderRight: 1,
-    borderColor: "divider",
-    fontWeight: "bold",
-  }),
-  stickyBodyColumn: (leftOffset) => ({
-    position: "sticky",
-    left: leftOffset,
-    zIndex: 5,
-    backgroundColor: "background.paper",
-    borderRight: 1,
-    borderColor: "divider",
-  }),
-  dialogTitle: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    pb: 1,
-  },
-  dialogActions: { p: 2, borderTop: 1, borderColor: "divider" },
-  loadingContainer: {
-    height: "100%",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  helperText: {
-    fontSize: "0.75rem",
-    color: "text.secondary",
-    marginTop: "4px",
-  }
-};
-
-
-const DateWiseSearch = () => {
-  const { callApi } = useApi();
-const [showTable, setShowTable] = useState(false);
- const [isSearched, setIsSearched] = useState(false);
-  const [assetClassification, setAssetClassification] = useState("");
-  const [fromDate, setFromDate] = useState(null);
-  const [toDate, setToDate] = useState(null);
-
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [rowCount, setRowCount] = useState(0);
-
-  const [errors, setErrors] = useState({});
-
-  const [paginationModel, setPaginationModel] = useState({
-    page: 0,
-    pageSize: 25,
-  });
-
-  const assetClassificationOptions = [
-    { value: "A", label: "Asset" },
-    { value: "L", label: "Liability" },
-    { value: "I", label: "Income" },
-    { value: "E", label: "Expense" },
-    { value: "M", label: "Memo A/c" },
-  ];
- const validate = () => {
-  const temp = {};
-
-  if (!fromDate) {
-    temp.fromDate = "From Date is required";
-  }
-
-  if (!toDate) {
-    temp.toDate = "To Date is required";
-  }
-
-  if (
-    fromDate &&
-    dayjs(fromDate).isAfter(
-      dayjs(),
-      "day"
-    )
-  ) {
-    temp.fromDate =
-      "Future date is not allowed";
-  }
-
-  if (
-    toDate &&
-    dayjs(toDate).isAfter(
-      dayjs(),
-      "day"
-    )
-  ) {
-    temp.toDate =
-      "Future date is not allowed";
-  }
-
-  setErrors(temp);
-
-  return (
-    Object.keys(temp).length === 0
-  );
-};
-
-  const handleExportPdfButton = async () => {
-  if (!isSearched) {
-    alert("Please search records first.");
-    return;
-  }
-
-  try {
-    const payload = {
-      acClassification: assetClassification,
-      fromDate: dayjs(fromDate).format("DD-MM-YYYY"),
-      toDate: dayjs(toDate).format("DD-MM-YYYY"),
-    };
-
-    console.log("PDF Export Payload =>", payload);
-
-    const response = await callApi(
-      "/VE/voucher-transactions/export-pdf",
-      payload,
-      "POST",
-      "blob",
-      "application/json",
-      {},
-      false
-    );
-
-    const blob = new Blob([response.data], {
-      type: "application/pdf",
-    });
-
-    const url = window.URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "MIS_REPORTS.pdf";
-
-    document.body.appendChild(link);
-    link.click();
-
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  } catch (err) {
-    console.error("PDF Export Error =>", err);
-  }
-};
-//pdf export
-const handleExportButton = async () => {
-  if (!isSearched) {
-    alert("Please search records first.");
-    return;
-  }
-
-  try {
-    const payload = {
-      acClassification: assetClassification,
-      fromDate: dayjs(fromDate).format("DD-MM-YYYY"),
-      toDate: dayjs(toDate).format("DD-MM-YYYY"),
-    };
-
-    console.log("Export Payload =>", payload);
-
-    const response = await callApi(
-      "/VE/voucher-transactions/export",
-      payload,
-      "POST",
-      "blob",
-      "application/json",
-      {},
-      false
-    );
-
-    const blob = new Blob([response.data], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-
-    const url = window.URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "MIS_REPORTS.xlsx";
-
-    document.body.appendChild(link);
-    link.click();
-
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  } catch (err) {
-    console.error("Export Error =>", err);
-  }
-};
-  const handleReset = () => {
-  setAssetClassification("");
-  setFromDate(null);
-  setToDate(null);
-
-  setRows([]);
-  setRowCount(0);
-
-  setPaginationModel({
-    page: 0,
-    pageSize: 25,
-  });
-
-  setErrors({});
-
-  setShowTable(false);
-  setIsSearched(false);
-};
-
-
-  const handleSearch = async (
-    page = paginationModel.page,
-    pageSize = paginationModel.pageSize
-  ) => {
-    if (!validate()) {
-      return;
+    public ReportController(ReportService reportService, JwtUtil jwtUtil) {
+        this.reportService = reportService;
+        this.jwtUtil = jwtUtil;
     }
 
-    setLoading(true);
-
-    try {
-      const payload = {
-        acClassification: assetClassification,
-        fromDate: dayjs(fromDate).format("DD-MM-YYYY"),
-        toDate: dayjs(toDate).format("DD-MM-YYYY"),
-        pageNumber: page,
-        pageSize: pageSize,
-      };
-
-      console.log("Search Payload =>", payload);
-
-      const response = await callApi(
-        "/VE/voucher-transactions/search",
-        payload,
-        "POST"
-      );
-
-      console.log(
-        "Search Response =>",
-        response
-      );
-
-      const result = response?.data || {};
-
-      console.log(
-        "Content =>",
-        result?.content
-      );
-
-      setRows(
-        (result?.content || []).map(
-          (item, index) => ({
-            id: `${item.transactionId}-${index}`,
-             transactionId:
-              item.transactionId,
-            batchId: item.batchId,
-            journalId: item.journalId,
-            transactionDate:
-              item.transactionDate,
-            postDate: item.postDate,
-            cgl: item.cgl,
-            currency: item.currency,
-            branchCode:
-              item.branchCode,
-             debitAmount:
-              item.debitAmount,
-              creditAmount:
-              item.creditAmount,  
-              narration:
-              item.narration, 
-          })
-        )
-      );
-
-      setRowCount(
-        result?.totalElements || 0
-      );
-      setShowTable(true);
-      setIsSearched(true);
-    } catch (error) {
-      console.error(
-        "Date Wise Search Error =>",
-        error
-      );
-    } finally {
-      setLoading(false);
+    @PostMapping("/types")
+    public List<ReportTypeDto> getReportTypes(@RequestHeader("Authorization") String token,
+                                              @RequestBody ReportTypesRequest request) {
+        log.info("Received request to fetch all available report types for" +
+                        "module: {} for role: {}", request.getModuleType(),
+                jwtUtil.getUserRoleFromToken(token));
+        return reportService.getReportTypes(jwtUtil.getUserRoleFromToken(token), request.getModuleType());
     }
-  };
-  const handlePaginationChange = (model) => {
-    setPaginationModel(model);
 
-    handleSearch(
-      model.page,
-      model.pageSize
-    );
-  };
-
-
-
-  const columns = useMemo(
-    () => [
-       {
-        field: "batchId",
-        headerName: "Batch ID",
-        flex: 1,
-        minWidth: 140,
-      },
-      {
-        field: "journalId",
-        headerName: "Journal ID",
-        flex: 1,
-        minWidth: 160,
-      },
-      {
-        field: "transactionDate",
-        headerName: "Transaction Date",
-        flex: 1.2,
-        minWidth: 150,
-      },
-       {
-        field: "branchCode",
-        headerName: "Branch Code",
-        flex: 1,
-        minWidth: 130,
-      },
-       {
-        field: "currency",
-        headerName: "Currency",
-        flex: 0.8,
-        minWidth: 100,
-      },
-       {
-        field: "cgl",
-        headerName: "CGL",
-        flex: 1,
-        minWidth: 150,
-      },
-      
-      {
-        field: "debitAmount",
-        headerName: "Debit Amount",
-        flex: 1.3,
-        minWidth: 180,
-      },
-         {
-        field: "creditAmount",
-        headerName: "Credit Amount",
-        flex: 1.3,
-        minWidth: 180,
-      },
-         {
-        field: "narration",
-        headerName: "Narration",
-        flex: 1.3,
-        minWidth: 180,
-      },
-      
-    ],
-    []
-  );
-
-  return (
-    <Paper
-      elevation={2}
-      sx={{
-        p: 2,
-        height:"calc(100vh - 120px)",
-        maxHeight:"calc(100vh - 120px)",
-        minHeight:0,
-        width:"100%",
-        overflow:"hidden",
-        boxSizing:"border-box",
-        display:"flex",
-        flexDirection:"column",
-      }}
-    > 
-
-    <LocalizationProvider
-      dateAdapter={AdapterDayjs}
-    >
-      <Box sx={{ p: 3 ,
-        height:"100%",
-        minHeight:0,
-        maxHeight:"100%",
-        boxSizing:"border-box",
-        display:"flex",
-        flexDirection:"column",
-        overflow:"hidden",
-      }}>
-
-  <Typography
-      variant="h6"
-      sx={{ mb: 2, fontWeight: 500 }}
-    >
-      Date Wise Search
-    </Typography>
-   
-
- <Box
-  sx={{
-    display: "grid",
-    gridTemplateColumns: "1.2fr 1fr 1fr auto",
-    gap: 2,
-    alignItems: "start",
-    mb: 2,
-    flexShrink:0,
-  }}
->
-
-<DatePicker
-  label="From Date *"
-  value={fromDate}
-  minDate={dayjs("2026-04-01")}
-  maxDate={dayjs()}
-  disableFuture
-  format="DD-MM-YYYY"
-  onChange={(value) => {
-    setFromDate(value);
-    setErrors((prev) => ({
-      ...prev,
-      fromDate: "",
-    }));
-  }}
-  slotProps={{
-    field: {
-      readOnly: true,
-    },
-    textField: {
-      fullWidth: true,
-      size: "small",
-      error: !!errors.fromDate,
-      helperText:
-        errors.fromDate || "Select From Date",
-      onKeyDown: (e) => e.preventDefault(),
-      onPaste: (e) => e.preventDefault(),
-    },
-  }}
-/>
-
-<DatePicker
-  label="To Date *"
-  value={toDate}
-  minDate={dayjs("2026-04-01")}
-  maxDate={dayjs()}
-  disableFuture
-  format="DD-MM-YYYY"
-  onChange={(value) => {
-    setToDate(value);
-    setErrors((prev) => ({
-      ...prev,
-      toDate: "",
-    }));
-  }}
-  slotProps={{
-    field: {
-      readOnly: true,
-    },
-    textField: {
-      fullWidth: true,
-      size: "small",
-      error: !!errors.toDate,
-      helperText:
-        errors.toDate || "Select To Date",
-      onKeyDown: (e) => e.preventDefault(),
-      onPaste: (e) => e.preventDefault(),
-    },
-  }}
-/>
-
-  <FormControl size="small"
-    fullWidth
-    error={!!errors.assetClassification}
-  >
-    <InputLabel>
-      Classification
-    </InputLabel>
-  <Select
-    value={assetClassification}
-    label="Classification *"
-    onChange={(e) => {
-      setAssetClassification(e.target.value);
-      setErrors((prev) => ({
-        ...prev,
-        assetClassification: "",
-      }));
-    }}
-  >
-    {assetClassificationOptions.map((option) => (
-      <MenuItem key={option.value} value={option.value}>
-        {option.label}
-      </MenuItem>
-    ))}
-  </Select>
-    <FormHelperText>
-    {errors.assetClassification ||
-      "Select the asset classification to filter the records."}
-  </FormHelperText>
-  </FormControl>
-
- <Box
-  sx={{
-    display: "flex",
-    gap: 1,
-    alignItems: "flex-start",
-    pt: "2px",
-  }}
->
-  <Button
-    variant="contained"
-    onClick={() =>
-      handleSearch(
-        paginationModel.page,
-        paginationModel.pageSize
-      )
+    @GetMapping("/adhoc-types")
+    public List<ReportTypeDto> getAdhocReportTypes(@RequestHeader("Authorization") String token) {
+        log.info("Received request to fetch all available report types for" +
+                "for role: {}", jwtUtil.getUserRoleFromToken(token));
+        return reportService.getAdhocReportTypes(jwtUtil.getUserRoleFromToken(token));
     }
-    sx={{
-      minWidth: 90,
-      height: 40,
-    }}
-  >
-    Search
-  </Button>
-
-  <Button
-    variant="outlined"
-    onClick={handleReset}
-    sx={{
-      minWidth: 90,
-      height: 40,
-      "&:hover":
-      {
-        color:"#fff",
-      },
-    }}
-  >
-    Reset
-  </Button>
-</Box>
-</Box>
 
 
-{showTable && (
-  <>
-  <Box
-  sx={{
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 1,
-    mb: 1,
-    flexShrink:0,
-  }}
->
-  {/* Excel Export */}
-  <Button
-    variant="contained"
-    startIcon={<FileDownloadIcon />}
-    size="small"
-    onClick={handleExportButton}
-    disabled={loading}
-    sx={{
-      textTransform: "none",
-      minWidth: 120,
-      height: 43,
-    }}
-  >
-    MIS Excel Export
-  </Button>
+    @PostMapping("/download")
+    public ResponseEntity<StreamingResponseBody> downloadReport(
+            @RequestHeader("Authorization") String token,
+            @RequestBody ReportDownloadRequest request) {
 
-  {/* PDF Export */}
-  <Button
-    variant="contained"
-    startIcon={<FileDownloadIcon />}
-    size="small"
-    onClick={handleExportPdfButton}
-    disabled={loading}
-    sx={{
-      textTransform: "none",
-      minWidth: 120,
-      height: 43,
-    }}
-  >
-    MIS PDF Export
-  </Button>
-</Box>
+        @PostMapping("/download")
+        public ResponseEntity<StreamingResponseBody> downloadReport(
+                @RequestHeader("Authorization") String token,
+                @Valid @RequestBody ReportDownloadRequest request) {
 
-      <Box
-        sx={{
-          width: "100%",
-          height:"100%",
-          minHeight:0,
-          overflow:"hidden",
-        }}
-      >
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          loading={loading}
-          rowCount={rowCount}
-          paginationMode="server"
-          paginationModel={paginationModel}
-          onPaginationModelChange={handlePaginationChange}
-          pageSizeOptions={[25, 50, 100]}
-          disableRowSelectionOnClick
-          sx={styles.dataGridContainer}
-        />
-      </Box>
-  </>
-)}
-      </Box>
-    </LocalizationProvider>
-    </Paper>
-  );
-};
+        log.info(
+                "Received report download request: fileName={}, date={}, branchCode={}, format={}",
+                request.getFileName(),
+                request.getDate(),
+                request.getBranchCode(),
+                request.getFormat()
+        );
 
-export default DateWiseSearch;
+        ReportStreamResponse response =
+                reportService.downloadReportStream(
+                        request.getFileName(),
+                        request.getDate(),
+                        jwtUtil.getUserRoleFromToken(token),
+                        jwtUtil.getUserIdFromToken(token),
+                        request.getBranchCode(),
+                        request.getFormat()
+                );
+
+        return ResponseEntity.ok()
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition
+                                .attachment()
+                                .filename(response.getDownloadFileName())
+                                .build()
+                                .toString()
+                )
+                .contentType(
+                        MediaType.parseMediaType(
+                                response.getContentType()
+                        )
+                )
+                .body(response.getStreamBody());
+        }
+
+        return reportService.generateReports(requestBody);
+    }
+
+    @PostMapping("/download-temp-reports")
+    public ResponseEntity<StreamingResponseBody> downloadTemporaryReports(
+            @RequestHeader("Authorization") String token,
+            @RequestBody ReportDownloadRequest request) throws IOException {
+
+        log.info("Received request to download temp report from HDFS for this criteria: {}", request);
+
+        ReportStreamResponse response = reportService.downloadTempReportStream(
+                request.getFileName(),
+                request.getDate(),
+                jwtUtil.getUserRoleFromToken(token),
+                jwtUtil.getUserIdFromToken(token),
+                request.getRunId());
+
+        return ResponseEntity.ok()
+                // This header tells the browser "This is a file download"
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + response.getDownloadFileName() + "\"")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(response.getStreamBody());
+    }
+
+                ReportStreamResponse response = reportService.downloadTempReportStream(
+                                request.getFileName(),
+                                request.getDate(),
+                                jwtUtil.getUserRoleFromToken(token),
+                                jwtUtil.getUserIdFromToken(token),
+                                request.getRunId(), request.getFormat());
+
+        ReportBase64ResponseDTO response = reportService.generateReportBase64(request);
+
+        return ResponseEntity.ok(response);
+    }
+
+
+        @PostMapping("/attachment/download")
+        public ResponseEntity<ApiResponse<AttachmentDownloadResponse>> downloadAttachments(@RequestBody AttachmentDownloadRequest request){
+
+                               try{
+                                        log.info("inside report controller attachment endpoint");
+                                        AttachmentDownloadResponse response=reportService.downloadAttachments(request);
+                                        return ResponseEntity.ok(ApiResponse.success(response,"Attachment downloaded successfully"));
+                               }
+                               catch(IOException e){
+                                        log.error("Attachment download failed",e);
+                                        return ResponseEntity.ok(
+                                                ApiResponse.error(e.getMessage() == null ?"Attachment download failed.":e.getMessage())
+                                );
+                               }
+
+    }
+
+
+    @PostMapping("/attachment/downloadV1")
+    public ResponseEntity<@NonNull StreamingResponseBody> downloadAttachmentsV1(@RequestBody AttachmentDownloadRequest request) throws IOException {
+        log.info("inside report controller attachment endpoint");
+        StreamingResponseBody body=reportService.downloadAttachmentsV1(request);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"attachments.zip\"")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(body);
+    }
+}
