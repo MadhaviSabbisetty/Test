@@ -1,163 +1,444 @@
-package com.fincore.ReportService.controller;
+import React, { useMemo } from "react";
+import {
+  Box,
+  Typography,
+  Button,
+  CircularProgress,
+  Stack,
+  Chip,
+} from "@mui/material";
+import { DataGrid, GridToolbar } from "@mui/x-data-grid";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import dayjs from "dayjs";
+import { useTheme, useMediaQuery } from "@mui/material";
 
-import java.io.IOException;
-import java.util.List;
-import java.util.Map;
+const LedgerDataGrid = ({
+  rows,
+  loading,
+  rowCount,
+  paginationModel,
+  setPaginationModel,
+  sortModel,
+  setSortModel,
+  filterModel,
+  setFilterModel,
+  onExcelExport,
+  exporting,
+  selectedCurrency,
+  selectedCircle,
+  sourceOptions,
+  branchOptions,
+  circleOptions,
+  currencyOptions,
+  selectedCgl,
+}) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const isTablet = useMediaQuery(theme.breakpoints.between("sm", "lg"));
 
-import com.fincore.ReportService.dto.*;
-import com.fincore.commonutilities.jwt.JwtUtil;
+  // Format CGL for display (Splitting "9999999999 - Name" into distinct parts)
+  const [cglCode, ...cglNameParts] = (selectedCgl || "").split(" - ");
+  const cglName = cglNameParts.join(" - ");
 
-import jakarta.validation.Valid;
-import lombok.extern.slf4j.Slf4j;
+  const transactionColumns = useMemo(() => {
+    const cols = [
+      {
+        field: "transactionDate",
+        headerName: "Date",
+        flex: 0.6,
+        minWidth: 120,
+        filterable: false,
+        valueFormatter: (v) => (v ? dayjs(v).format("DD-MM-YYYY") : "-"),
+      },
+      {
+        field: "branchCode",
+        headerName: "Branch",
+        flex: 1,
+        minWidth: 180,
+        ...(branchOptions?.length
+          ? { type: "singleSelect", valueOptions: branchOptions }
+          : { type: "string" }),
+        renderCell: (params) => (
+          <Box sx={{ lineHeight: "1.2", py: 0.5 }}>
+            <Typography
+              variant="body2"
+              sx={{ fontWeight: 700, fontSize: "0.8rem" }}
+            >
+              {params.row.branchCode}
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{ color: "text.secondary", fontSize: "0.7rem" }}
+            >
+              {params.row.branchName}
+            </Typography>
+          </Box>
+        ),
+      },
+      { field: "narration", headerName: "Narration", flex: 1.5, minWidth: 250 },
 
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+      {
+        field: "debitAmount",
+        headerName: "Debit",
+        flex: 1,
+        minWidth: 160,
+        headerAlign: "right",
+        align: "right",
+        filterable: false,
+        renderCell: (params) => {
+          const val = Number(params.value);
+          // if (!val || val === 0) return "-";
 
-import com.fincore.ReportService.service.ReportService;
+          const formattedAmount = new Intl.NumberFormat("en-IN", {
+            minimumFractionDigits: 4,
+            maximumFractionDigits: 4,
+          }).format(Math.abs(val || 0));
 
+          return (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                height: "100%",
+                width: "100%",
+              }}
+            >
+              <Typography
+                variant="body2"
+                sx={{ color: "#d32f2f", fontWeight: 600 }}
+              >
+                {formattedAmount}
+              </Typography>
+            </Box>
+          );
+        },
+      },
+      {
+        field: "creditAmount",
+        headerName: "Credit",
+        flex: 1,
+        minWidth: 160,
+        headerAlign: "right",
+        align: "right",
+        filterable: false,
+        renderCell: (params) => {
+          const val = Number(params.value);
+          // if (!val || val === 0) return "-";
 
-@Slf4j
-@RestController
-@RequestMapping("/api/reports")
-public class ReportController {
+          const formattedAmount = new Intl.NumberFormat("en-IN", {
+            minimumFractionDigits: 4,
+            maximumFractionDigits: 4,
+          }).format(Math.abs(val || 0));
 
-    private final ReportService reportService;
-    private final JwtUtil jwtUtil; // Declare an instance field
+          return (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                height: "100%",
+                width: "100%",
+              }}
+            >
+              <Typography
+                variant="body2"
+                sx={{ color: "#2e7d32", fontWeight: 600 }}
+              >
+                {formattedAmount}
+              </Typography>
+            </Box>
+          );
+        },
+      },
+      {
+        field: "sourceFlag",
+        headerName: "Source",
+        flex: 0.8,
+        minWidth: 150,
+        type: "singleSelect",
+        valueOptions:
+          sourceOptions?.map((flag) => ({
+            value: flag.flagId,
+            label: flag.flagName,
+          })) || [],
+        valueFormatter: (value) => {
+          const matchedFlag = sourceOptions?.find(
+            (flag) => flag.flagId === value,
+          );
+          return matchedFlag?.flagName || value || "-";
+        },
+      },
+    ];
 
-    public ReportController(ReportService reportService, JwtUtil jwtUtil) {
-        this.reportService = reportService;
-        this.jwtUtil = jwtUtil;
+    if (selectedCircle === "ALL") {
+      cols.splice(1, 0, {
+        field: "circleCode",
+        headerName: "Circle",
+        flex: 1,
+        minWidth: 150,
+        type: "singleSelect",
+        valueOptions: circleOptions,
+        renderCell: (params) => (
+          <Box sx={{ lineHeight: "1.2", py: 0.5 }}>
+            <Typography
+              variant="body2"
+              sx={{ fontWeight: 700, fontSize: "0.8rem" }}
+            >
+              {params.row.circleCode}
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{ color: "text.secondary", fontSize: "0.7rem" }}
+            >
+              {params.row.circleName}
+            </Typography>
+          </Box>
+        ),
+      });
     }
 
-    @PostMapping("/types")
-    public List<ReportTypeDto> getReportTypes(@RequestHeader("Authorization") String token,
-                                              @RequestBody ReportTypesRequest request) {
-        log.info("Received request to fetch all available report types for" +
-                        "module: {} for role: {}", request.getModuleType(),
-                jwtUtil.getUserRoleFromToken(token));
-        return reportService.getReportTypes(jwtUtil.getUserRoleFromToken(token), request.getModuleType());
+    // CHECK IF CURRENCY COLUMN SHOULD RENDER
+    const shouldShowCurrency = Array.isArray(selectedCurrency)
+      ? selectedCurrency.includes("ALL") || selectedCurrency.length > 1
+      : selectedCurrency === "All Currencies" || selectedCurrency === "ALL";
+
+    if (shouldShowCurrency) {
+      // Find where "Source" column is to insert Currency right before it dynamically
+      const sourceIndex = cols.findIndex((c) => c.field === "sourceFlag");
+      const insertIndex = sourceIndex !== -1 ? sourceIndex : cols.length;
+
+      cols.splice(insertIndex, 0, {
+        field: "currency",
+        headerName: "Currency",
+        flex: 1,
+        minWidth: 150,
+        type: "singleSelect",
+        valueOptions: currencyOptions,
+        renderCell: (params) => (
+          <Box sx={{ lineHeight: "1.2", py: 0.5 }}>
+            <Typography
+              variant="body2"
+              sx={{ fontWeight: 700, fontSize: "0.8rem" }}
+            >
+              {params.row.currency}
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{ color: "text.secondary", fontSize: "0.7rem" }}
+            >
+              {params.row.currencyName}
+            </Typography>
+          </Box>
+        ),
+      });
     }
+    return cols;
+  }, [
+    branchOptions,
+    sourceOptions,
+    selectedCircle,
+    selectedCurrency,
+    circleOptions,
+    currencyOptions,
+  ]);
 
-    @GetMapping("/adhoc-types")
-    public List<ReportTypeDto> getAdhocReportTypes(@RequestHeader("Authorization") String token) {
-        log.info("Received request to fetch all available report types for" +
-                "for role: {}", jwtUtil.getUserRoleFromToken(token));
-        return reportService.getAdhocReportTypes(jwtUtil.getUserRoleFromToken(token));
-    }
+  const columnVisibilityModel = useMemo(
+    () => ({
+      branchName: false,
+      circleName: false,
+      ...(isMobile && {
+        narration: false,
+        sourceFlag: false,
+        circleCode: false,
+      }),
+      ...(isTablet && { narration: false }),
+    }),
+    [isMobile, isTablet],
+  );
 
+  const CustomNoRowsOverlay = () => (
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      <ErrorOutlineIcon fontSize="large" color="action" />
+      <Typography variant="h5" fontSize="1.2rem" color="text.secondary">
+        No transactions available for the selected criteria
+      </Typography>
+    </Box>
+  );
 
-    @PostMapping("/download")
-    public ResponseEntity<StreamingResponseBody> downloadReport(
-            @RequestHeader("Authorization") String token,
-            @RequestBody ReportDownloadRequest request) {
+  return (
+    <Box sx={{ width: "100%", height: "100%", mt: 3 }}>
+      {/* SEPARATE HEADER SECTION */}
+      <Box
+        sx={{
+          p: 2.5,
+          mb: 3,
+          borderRadius: "20px",
+          background: "rgba(255, 255, 255, 0.4)",
+          backdropFilter: "blur(12px)",
+          border: "1px solid rgba(255, 255, 255, 0.3)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.05)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 2.5,
+        }}
+      >
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={2}
+          justifyContent="space-between"
+          alignItems={{ xs: "stretch", sm: "center" }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 1.5,
+              flexWrap: "wrap",
+            }}
+          >
+            <Typography
+              variant="h6"
+              fontWeight={800}
+              sx={{ color: "#1a1a1a", letterSpacing: "-0.5px" }}
+            >
+              Transactions Ledger
+            </Typography>
 
-        @PostMapping("/download")
-        public ResponseEntity<StreamingResponseBody> downloadReport(
-                @RequestHeader("Authorization") String token,
-                @Valid @RequestBody ReportDownloadRequest request) {
+            {/* NEW CGL BADGE */}
+            {selectedCgl && (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  bgcolor: "rgba(88, 70, 159, 0.06)",
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: 2,
+                  border: "1px solid rgba(88, 70, 159, 0.15)",
+                }}
+              >
+                <AccountBalanceWalletIcon
+                  sx={{ fontSize: 18, color: "#58469f", mr: 1 }}
+                />
+                <Typography
+                  variant="body2"
+                  sx={{ fontWeight: 800, color: "#58469f", mr: 0.5 }}
+                >
+                  {cglCode}
+                </Typography>
+                {cglName && (
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "text.secondary",
+                      fontWeight: 600,
+                      borderLeft: "1px solid rgba(0,0,0,0.1)",
+                      pl: 0.5,
+                    }}
+                  >
+                    {cglName}
+                  </Typography>
+                )}
+              </Box>
+            )}
 
-        log.info(
-                "Received report download request: fileName={}, date={}, branchCode={}, format={}",
-                request.getFileName(),
-                request.getDate(),
-                request.getBranchCode(),
-                request.getFormat()
-        );
+            <Chip
+              label={
+                rowCount > 0
+                  ? `${rowCount.toLocaleString("en-IN")} Records Found`
+                  : "No Records"
+              }
+              size="small"
+              sx={{
+                fontWeight: 700,
+                color: "#58469f",
+                bgcolor: "rgba(88, 70, 159, 0.1)",
+                borderRadius: "8px",
+              }}
+            />
+          </Box>
+          <Button
+            variant="contained"
+            size={isMobile ? "medium" : "small"}
+            startIcon={
+              exporting ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <FileDownloadIcon />
+              )
+            }
+            onClick={onExcelExport}
+            disabled={!rowCount || loading || exporting}
+            sx={{
+              textTransform: "none",
+              bgcolor: "#58469f",
+              fontWeight: 700,
+              borderRadius: "8px",
+              px: 3,
+              "&:hover": { bgcolor: "#45357a" },
+            }}
+          >
+            {exporting ? "Preparing..." : "Export"}
+          </Button>
+        </Stack>
 
-        ReportStreamResponse response =
-                reportService.downloadReportStream(
-                        request.getFileName(),
-                        request.getDate(),
-                        jwtUtil.getUserRoleFromToken(token),
-                        jwtUtil.getUserIdFromToken(token),
-                        request.getBranchCode(),
-                        request.getFormat()
-                );
+        {/* DATA GRID SECTION */}
+        <Box
+          sx={{
+            width: "100%",
+            overflowX: "auto",
+            height: { xs: "65vh", sm: "70vh", md: 600 },
+          }}
+        >
+          <DataGrid
+            rows={rows}
+            columns={transactionColumns}
+            rowCount={rowCount}
+            loading={loading}
+            getRowId={(row) => row.transactionId}
+            pagination
+            paginationMode="server"
+            sortingMode="server"
+            filterMode="server"
+            pageSizeOptions={[10, 20, 50, 100]}
+            paginationModel={paginationModel}
+            onPaginationModelChange={setPaginationModel}
+            sortModel={sortModel}
+            onSortModelChange={setSortModel}
+            filterModel={filterModel}
+            onFilterModelChange={setFilterModel}
+            rowHeight={50}
+            disableRowSelectionOnClick
+            slots={{ noRowsOverlay: CustomNoRowsOverlay }}
+            initialState={{
+              columns: { columnVisibilityModel },
+            }}
+            sx={{
+              borderRadius: "20px",
+              backgroundColor: "rgba(255,255,255,0.4)",
+              border: "1px solid rgba(255,255,255,0.3)",
+              "& .MuiDataGrid-columnHeaders": {
+                bgcolor: "#f8f9fa",
+                fontWeight: 700,
+              },
+            }}
+          />
+        </Box>
+      </Box>
+    </Box>
+  );
+};
 
-        return ResponseEntity.ok()
-                .header(
-                        HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition
-                                .attachment()
-                                .filename(response.getDownloadFileName())
-                                .build()
-                                .toString()
-                )
-                .contentType(
-                        MediaType.parseMediaType(
-                                response.getContentType()
-                        )
-                )
-                .body(response.getStreamBody());
-        }
-
-        return reportService.generateReports(requestBody);
-    }
-
-    @PostMapping("/download-temp-reports")
-    public ResponseEntity<StreamingResponseBody> downloadTemporaryReports(
-            @RequestHeader("Authorization") String token,
-            @RequestBody ReportDownloadRequest request) throws IOException {
-
-        log.info("Received request to download temp report from HDFS for this criteria: {}", request);
-
-        ReportStreamResponse response = reportService.downloadTempReportStream(
-                request.getFileName(),
-                request.getDate(),
-                jwtUtil.getUserRoleFromToken(token),
-                jwtUtil.getUserIdFromToken(token),
-                request.getRunId());
-
-        return ResponseEntity.ok()
-                // This header tells the browser "This is a file download"
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + response.getDownloadFileName() + "\"")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .body(response.getStreamBody());
-    }
-
-                ReportStreamResponse response = reportService.downloadTempReportStream(
-                                request.getFileName(),
-                                request.getDate(),
-                                jwtUtil.getUserRoleFromToken(token),
-                                jwtUtil.getUserIdFromToken(token),
-                                request.getRunId(), request.getFormat());
-
-        ReportBase64ResponseDTO response = reportService.generateReportBase64(request);
-
-        return ResponseEntity.ok(response);
-    }
-
-
-        @PostMapping("/attachment/download")
-        public ResponseEntity<ApiResponse<AttachmentDownloadResponse>> downloadAttachments(@RequestBody AttachmentDownloadRequest request){
-
-                               try{
-                                        log.info("inside report controller attachment endpoint");
-                                        AttachmentDownloadResponse response=reportService.downloadAttachments(request);
-                                        return ResponseEntity.ok(ApiResponse.success(response,"Attachment downloaded successfully"));
-                               }
-                               catch(IOException e){
-                                        log.error("Attachment download failed",e);
-                                        return ResponseEntity.ok(
-                                                ApiResponse.error(e.getMessage() == null ?"Attachment download failed.":e.getMessage())
-                                );
-                               }
-
-    }
-
-
-    @PostMapping("/attachment/downloadV1")
-    public ResponseEntity<@NonNull StreamingResponseBody> downloadAttachmentsV1(@RequestBody AttachmentDownloadRequest request) throws IOException {
-        log.info("inside report controller attachment endpoint");
-        StreamingResponseBody body=reportService.downloadAttachmentsV1(request);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"attachments.zip\"")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .body(body);
-    }
-}
+export default LedgerDataGrid;
