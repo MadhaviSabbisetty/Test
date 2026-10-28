@@ -1,503 +1,3 @@
-import React, {
-  useState,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-} from "react";
-import { useSelector } from "react-redux";
-import { Box } from "@mui/material";
-import { LocalizationProvider } from "@mui/x-date-pickers";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import dayjs from "dayjs";
-import debounce from "lodash/debounce";
-import LedgerForm from "./components/BalanceLedgerForm";
-import LedgerDataGrid from "./components/BalanceLedgerDataGrid";
-import useApi from "../../hooks/useApi";
-import useCustomSnackbar from "../../utils/useCustomSnackbar";
-import downloadFile from "../../utils/DownloadUtils";
-
-const DEFAULT_PAGE_SIZE = 20;
-const FOREIGN_CIRCLE_CODE = "021";
-
-const CIRCLE_GROUPS = {
-  ALL: "ALL",
-  DOMESTIC: "DOMESTIC",
-  FOREIGN: "FOREIGN",
-};
-
-const LedgerWiseBalanceEnquiry = () => {
-  const { callApi } = useApi();
-  const showSnackBar = useCustomSnackbar();
-  const user = useSelector((state) => state.auth.user);
-  const menu = useSelector((state) => state.menus.selectedMenuItem);
-
-  const MIN_ALLOWED_DATE = dayjs("2026-03-31");
-  const DATE_FORMAT = "DD/MM/YYYY";
-
-  const hasWholeBank = user?.roleAccess === "W";
-  const isCircleUser = user?.roleAccess === "C";
-
-  const [circles, setCircles] = useState([]);
-  const [initialState, setInitialState] = useState({
-    enquiryType: "COLLATION",
-    level: "BRANCH",
-    circle: "ALL",
-    branches: ["All Branches"],
-    currencies: ["All Currencies"],
-    cgl: [],
-    balanceDate: null,
-  });
-
-  const [currencies, setCurrencies] = useState([]);
-  const [etlDate, setEtlDate] = useState(null);
-
-  const [rows, setRows] = useState(null);
-  const [rowCount, setRowCount] = useState(0);
-  const [fetchError, setFetchError] = useState(null);
-
-  const [loading, setLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
-
-  const [paginationModel, setPaginationModel] = useState({
-    page: 0,
-    pageSize: DEFAULT_PAGE_SIZE,
-  });
-
-  const [sortModel, setSortModel] = useState([
-    {
-      field: "balanceDate",
-      sort: "desc",
-    },
-  ]);
-
-  const [filterModel, setFilterModel] = useState({
-    items: [],
-  });
-
-  /* INITIAL FILTERS */
-  const initialDetails = useMemo(() => {
-    return {
-      enquiryType: "COLLATION",
-      level: hasWholeBank ? "BANK" : isCircleUser ? "CIRCLE" : "BRANCH",
-      circle: hasWholeBank ? "ALL" : user?.circleCode,
-      branches:
-        user?.roleAccess === "B"
-          ? [`${user?.branch}-${user?.branchName}`]
-          : ["All Branches"],
-      currencies: ["All Currencies", ...(currencies || [])],
-      cgl: ["All CGLs"],
-      fromDate: null,
-      toDate: null,
-    };
-  }, [
-    hasWholeBank,
-    isCircleUser,
-    user?.circleCode,
-    user?.roleAccess,
-    user?.branch,
-    user?.branchName,
-    currencies,
-  ]);
-
-  const [filters, setFilters] = useState(initialState);
-  const [searchQuery, setSearchQuery] = useState(null);
-  const [filtersExpanded, setFiltersExpanded] = useState(true);
-  useEffect(() => {
-    setInitialState(initialDetails);
-    setFilters(initialDetails);
-  }, [initialDetails]);
-
-  const isCollationMode = !hasWholeBank || filters.enquiryType === "COLLATION";
-
-  /* FETCH MASTERS */
-  const fetchMasters = useCallback(async () => {
-    try {
-      const [dateRes, currRes] = await Promise.all([
-        callApi("/PS/file/fincore-date", {}, "GET"),
-        callApi("/CM/common-master/currency-code-name-only", null, "GET"),
-      ]);
-
-      /* ETL DATE */
-      if (dateRes?.data?.userDate) {
-        setEtlDate(dayjs(dateRes.data.userDate, "YYYY-MM-DD"));
-      }
-
-      /* CURRENCIES */
-      const formattedCurrencies =
-        currRes?.data?.map((c) => `${c.currencyCode} - ${c.currencyName}`) ||
-        [];
-
-      const sortedCurrencies = formattedCurrencies.sort((a, b) => {
-        const aCode = a.split(" ")[0];
-        const bCode = b.split(" ")[0];
-
-        // INR always on top
-        if (aCode === "INR") return -1;
-        if (bCode === "INR") return 1;
-
-        // Remaining alphabetical
-        return a.localeCompare(b);
-      });
-
-      setCurrencies(sortedCurrencies);
-
-      /* CIRCLES */
-      if (hasWholeBank) {
-        const circleRes = await callApi(
-          "/CM/common-master/circle-codes",
-          null,
-          "GET",
-        );
-        setCircles(circleRes?.data || []);
-      }
-    } catch (error) {
-      console.error(error);
-      showSnackBar("Failed to load master configuration", "error");
-    }
-  }, [callApi, hasWholeBank, showSnackBar]);
-
-  useEffect(() => {
-    fetchMasters();
-  }, [fetchMasters]);
-
-  /* BRANCH OPTIONS */
-  const selectedBranchOptions = useMemo(() => {
-    if (
-      !filters.branches?.length ||
-      filters.branches.includes("All Branches")
-    ) {
-      return [];
-    }
-    return filters.branches.map((branch) => ({
-      value: branch.split("-")[0],
-      label: branch,
-    }));
-  }, [filters.branches]);
-
-  /* CIRCLE OPTIONS */
-  const selectedCircleOptions = useMemo(() => {
-    const formattedCircles = circles.map((circle) => ({
-      value: circle.circleCode,
-      label:
-        circle.circleCode === FOREIGN_CIRCLE_CODE
-          ? `${circle.circleCode} - Foreign`
-          : `${circle.circleCode} - ${circle.circleName}`,
-    }));
-
-    // ALL/GROUP OPTIONS
-    if (
-      filters.circle === CIRCLE_GROUPS.ALL ||
-      filters.circle === CIRCLE_GROUPS.DOMESTIC ||
-      filters.circle === CIRCLE_GROUPS.FOREIGN
-    ) {
-      return formattedCircles;
-    }
-
-    return formattedCircles.filter((circle) => circle.value === filters.circle);
-  }, [filters.circle, circles]);
-
-  /* CURRENCY OPTIONS */
-  const selectedCurrencyOptions = useMemo(() => {
-    if (
-      !filters.currencies?.length ||
-      filters.currencies.includes("All Currencies")
-    ) {
-      return currencies.map((currency) => ({
-        value: currency.split(" (")[0],
-        label: currency,
-      }));
-    }
-    return (filters.currencies || []).map((currency) => ({
-      value: currency.split(" (")[0],
-      label: currency,
-    }));
-  }, [filters.currencies, currencies]);
-
-  /* PAYLOAD */
-  const buildPayload = useCallback(() => {
-    if (!searchQuery) return null;
-
-    const gridFilters =
-      filterModel.items
-        ?.filter(
-          (item) =>
-            item.field &&
-            item.operator &&
-            item.value !== undefined &&
-            item.value !== null &&
-            item.value !== "",
-        )
-        .map((item) => ({
-          field: item.field,
-          operator: item.operator,
-          value: item.value,
-        })) || [];
-
-    return {
-      enquiryType: searchQuery.enquiryType,
-      circle: searchQuery.circle,
-      cgls: searchQuery.cgl?.includes("All CGLs")
-        ? ["ALL"]
-        : searchQuery.cgl?.map((c) => c.split("-")[0].trim()) || [],
-      cglName: searchQuery.cgl?.includes("All CGLs")
-        ? ["ALL"]
-        : searchQuery.cgl?.map((c) => c.split("-")[1]) || [],
-      currencies: searchQuery.currencies?.includes("All Currencies")
-        ? ["ALL"]
-        : searchQuery.currencies?.map((currency) => currency.split("(")[0]) ||
-          [],
-      branches:
-        searchQuery.enquiryType === "CONSOLIDATED"
-          ? []
-          : searchQuery.branches.includes("All Branches")
-            ? ["ALL"]
-            : searchQuery.branches.map((b) => b.split("-")[0]),
-      balanceDate: dayjs(searchQuery.balanceDate).format("DD/MM/YYYY"),
-      page: paginationModel.page,
-      size: paginationModel.pageSize,
-      sortField: sortModel?.[0]?.field || "balanceDate",
-      sortOrder: sortModel?.[0]?.sort || "desc",
-      gridFilters,
-    };
-  }, [searchQuery, paginationModel, sortModel, filterModel]);
-
-  /* FETCH ROWS */
-  const fetchRows = useCallback(async () => {
-    const payload = buildPayload();
-    console.log("payload", payload);
-    if (!payload) return;
-    try {
-      setLoading(true);
-      console.log(payload);
-      const res = await callApi(
-        "/ES/ledger-wise-balances/search",
-        payload,
-        "POST",
-      );
-      console.log("api response", res);
-      setRows(res?.data?.content || []);
-      setRowCount(res?.data?.page?.totalElements || 0);
-    } catch (error) {
-      console.error(error);
-      setFetchError(error?.message || "Unable to load results. Please try again.",);
-      setRows([]);
-      setRowCount(0);
-      showSnackBar(error?.message || "Enquiry failed", "error");
-    }
-    finally {
-      setLoading(false);
-    }
-  }, [callApi, buildPayload, showSnackBar]);
-
-  /* --- NEW DEBOUNCE IMPLEMENTATION --- */
-  const fetchRowsRef = useRef(fetchRows);
-  useEffect(() => {
-    fetchRowsRef.current = fetchRows;
-  }, [fetchRows]);
-
-  /* DEBOUNCED FETCH */
-  const debouncedFetch = useMemo(
-    () =>
-      debounce(() => {
-        if (fetchRowsRef.current) fetchRowsRef.current();
-      }, 300),
-    [], // Empty dependency array ensures the debounce instance is never recreated
-  );
-
-  useEffect(() => {
-    if (!searchQuery) return;
-    debouncedFetch();
-    return () => {
-      debouncedFetch.cancel();
-    };
-  }, [paginationModel, sortModel, filterModel, searchQuery, debouncedFetch]);
-
-  const handleSearch = useCallback(() => {
-    const { cgl, balanceDate } = filters;
-
-    if (cgl.length === 0 || filters.currencies.length === 0 || !balanceDate) {
-      showSnackBar("Please fill all required fields", "warning");
-      return;
-    }
-
-    if (!balanceDate?.isValid?.()) {
-      showSnackBar("Invalid date selected", "warning");
-      return;
-    }
-
-    if (balanceDate.isBefore(MIN_ALLOWED_DATE, "day")) {
-      showSnackBar(
-        `Date cannot be earlier than ${MIN_ALLOWED_DATE.format(DATE_FORMAT)}`,
-        "warning",
-      );
-      return;
-    }
-
-    if (etlDate?.isValid?.() && balanceDate.isAfter(etlDate, "day")) {
-      showSnackBar(
-        `Date cannot exceed ETL date ${etlDate.format(DATE_FORMAT)}`,
-        "warning",
-      );
-      return;
-    }
-
-    setPaginationModel({
-      page: 0,
-      pageSize: paginationModel.pageSize,
-    });
-
-    setSortModel([
-      {
-        field: "balanceDate",
-        sort: "desc",
-      },
-    ]);
-
-    setFilterModel({
-      items: [],
-    });
-
-    setSearchQuery({
-      ...filters,
-    });
-    setFiltersExpanded(false);
-  }, [
-    filters,
-    etlDate,
-    MIN_ALLOWED_DATE,
-    DATE_FORMAT,
-    paginationModel.pageSize,
-    showSnackBar,
-  ]);
-
-  /* RESET */
-  const handleReset = useCallback(() => {
-    setFilters(initialState);
-    setSearchQuery(null);
-    setFiltersExpanded(true);
-    setRows(null);
-    setRowCount(0);
-    setPaginationModel({
-      page: 0,
-      pageSize: DEFAULT_PAGE_SIZE,
-    });
-    setSortModel([
-      {
-        field: "balanceDate",
-        sort: "desc",
-      },
-    ]);
-    setFilterModel({
-      items: [],
-    });
-  }, [initialState]);
-
-  /* EXPORT */
-  const handleExcelExport = useCallback(async () => {
-    const payload = { ...buildPayload(), menuId: menu.id };
-    if (!payload) return;
-    try {
-      setExporting(true);
-      console.log(payload);
-      const response = await callApi(
-        "/ES/ledger-wise-balances/export-excel",
-        payload,
-        "POST",
-        "arraybuffer",
-      );
-      const fileName = `GL_Balance_${payload?.enquiryType === "COLLATION" ? "Collation" : "Consolidation"}_Report`;
-      if (response?.byteLength) {
-        downloadFile(response, "excel", fileName);
-      } else {
-        showSnackBar(
-          "Failed to download, Something went wrong Kindly try again",
-          "error",
-        );
-      }
-    } catch (error) {
-      showSnackBar(
-        error?.message ||
-          "Failed to export, Something went wrong Kindly try again",
-        "error",
-      );
-    } finally {
-      setExporting(false);
-    }
-  }, [buildPayload, callApi, showSnackBar, menu.id]);
-
-  return (
-    <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Box
-        sx={{
-          p: { xs: 1, sm: 2, md: 2.5 },
-          width: "100%",
-          boxSizing: "border-box",
-        }}
-      >
-        <LedgerForm
-          filters={filters}
-          filtersExpanded={filtersExpanded}
-          setFiltersExpanded={setFiltersExpanded}
-          onFilterChange={(field, value) => {
-            if (field === "enquiryType") {
-              setRows(null);
-              setRowCount(0);
-              setSearchQuery(null);
-              setFilters({
-                ...initialDetails,
-                enquiryType: value,
-              });
-              return;
-            }
-            setFilters((prev) => ({
-              ...prev,
-              [field]: value,
-            }));
-          }}
-          onReset={handleReset}
-          onFetch={handleSearch}
-          user={user}
-          circles={circles}
-          currencies={currencies}
-          FOREIGN_CIRCLE_CODE={FOREIGN_CIRCLE_CODE}
-          CIRCLE_GROUPS={CIRCLE_GROUPS}
-          minLimit={MIN_ALLOWED_DATE}
-          maxLimit={etlDate || dayjs()}
-          fetchLoading={loading}
-          isCollationMode={isCollationMode}
-        />
-
-        {searchQuery && rows && (
-          <LedgerDataGrid
-            rows={rows}
-            loading={loading}
-            fetchError={fetchError}
-            rowCount={rowCount}
-            paginationModel={paginationModel}
-            setPaginationModel={setPaginationModel}
-            sortModel={sortModel}
-            setSortModel={setSortModel}
-            filterModel={filterModel}
-            setFilterModel={setFilterModel}
-            onExcelExport={handleExcelExport}
-            exporting={exporting}
-            selectedCurrency={searchQuery?.currencies || "ALL"}
-            selectedCircle={searchQuery?.circle || "ALL"}
-            branchOptions={selectedBranchOptions}
-            circleOptions={selectedCircleOptions}
-            currencyOptions={selectedCurrencyOptions}
-            searchPerformed={!!searchQuery}
-            enquiryType={filters.enquiryType}
-            selectedCgl={filters.cgl}
-          />
-        )}
-      </Box>
-    </LocalizationProvider>
-  );
-};
-
-export default React.memo(LedgerWiseBalanceEnquiry);
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   Card,
@@ -530,6 +30,8 @@ import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import DateRangeIcon from "@mui/icons-material/DateRange";
 import SummarizeIcon from "@mui/icons-material/Summarize";
 
+import ManageSearchOutlinedIcon from "@mui/icons-material/ManageSearchOutlined";
+
 // Utilities & Hooks
 import { debounce } from "lodash";
 import useApi from "../../../hooks/useApi";
@@ -538,7 +40,8 @@ import CustomChip from "../../../utils/CustomChip";
 const BalanceLedgerForm = ({
   filters,
   filtersExpanded,
-  setFiltersExpanded,
+  searchPerformed,
+  onToggleFilters,
   onFilterChange,
   onReset,
   onFetch,
@@ -823,31 +326,6 @@ const BalanceLedgerForm = ({
 
   return (
     <Box sx={{ position: "relative", mb: 2 }}>
-      {!filtersExpanded && (
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "flex-end",
-            mb: 1,
-          }}
-        >
-          <Button
-            variant="outlined"
-            startIcon={<VisibilityIcon />}
-            onClick={() => setFiltersExpanded(true)}
-            sx={{
-              borderRadius: 2,
-              textTransform: "none",
-              fontWeight: 700,
-              color: "#58469f",
-              borderColor: "#58469f",
-            }}
-          >
-            Edit Filters
-          </Button>
-        </Box>
-      )}
-      <Collapse in={filtersExpanded} timeout="auto">
       <Card
         sx={{
           borderRadius: "24px",
@@ -878,6 +356,110 @@ const BalanceLedgerForm = ({
                 Ledger Balance search and analysis
               </Typography>
             </Box>
+            {searchPerformed &&(
+                         <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={<ManageSearchOutlinedIcon/>}
+                          onClick={onToggleFilters}
+                          sx={{
+                            textTransform: "none",
+                                borderRadius: "8px",
+                                fontWeight: 600,
+                                minWidth: {
+                                  xs: "100%",
+                                  sm: "140px",
+                                },
+                                width: {
+                                  xs: "100%",
+                                  sm: "auto",
+                                },
+                                height: {
+                                  xs: 38,
+                                  sm: 32,
+                                },
+                                px: 1.5,
+                                fontSize: {
+                                  xs: "0.8rem",
+                                  sm: "0.82rem",
+                                },
+                          }}>
+                          {filtersExpanded ? "Hide Filters" : "Edit Filters"}
+                        </Button>
+                )}
+            {/* Selected filter summary after search */}
+                      {searchPerformed && !filtersExpanded && (
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          useFlexGap
+                          flexWrap="wrap"
+                          sx={{ mb: 1.5 }}
+                        >
+                          {filters.branches?.length > 0 && (
+                            <Chip
+                              size="small"
+                              label={`Branch: ${
+                                filters.branches.includes("ALL")
+                                  ? "All Branches"
+                                  : filters.branches.join(", ")
+                              }`}
+                              variant="outlined"
+                            />
+                          )}
+            
+                          {filters.circle && (
+                            <Chip
+                              size="small"
+                              label={`Circle: ${filters.circle}`}
+                              variant="outlined"
+                            />
+                          )}
+            
+                          {filters.cgl && (
+                            <Chip
+                              size="small"
+                              label={`CGL: ${filters.cgl}`}
+                              variant="outlined"
+                            />
+                          )}
+            
+                          {filters.currencies?.length > 0 && (
+                            <Chip
+                              size="small"
+                              label={`Currency: ${
+                                filters.currencies.includes("ALL")
+                                  ? "All Currencies"
+                                  : filters.currencies.join(", ")
+                              }`}
+                              variant="outlined"
+                            />
+                          )}
+            
+                          {filters.fromDate?.isValid?.() &&
+                            filters.toDate?.isValid?.() && (
+                              <Chip
+                                size="small"
+                                label={`Date: ${filters.fromDate.format(
+                                  "DD-MM-YYYY"
+                                )} - ${filters.toDate.format("DD-MM-YYYY")}`}
+                                variant="outlined"
+                              />
+                            )}
+            
+                          {filters.sourceFlags?.length > 0 && (
+                            <Chip
+                              size="small"
+                              label={`Transaction Type: ${
+                                filters.sourceFlags.length === sourceOptions.length
+                                  ? "All Types"
+                                  : filters.sourceFlags.map((item) => item.flagName).join(", ")
+                              }`}
+                              variant="outlined"
+                            />
+                          )}
+                        </Stack>
+                      )}
             {!isBranchUser && (
               <Paper
                 elevation={3}
@@ -949,7 +531,7 @@ const BalanceLedgerForm = ({
               </Paper>
             )}
           </Stack>
-
+          {filtersExpanded && (
           {/* 1. HIERARCHY ZONE */}
           <Grid
             container
@@ -1980,6 +1562,7 @@ const BalanceLedgerForm = ({
               </Paper>
             </Grid>
           </Grid>
+          )}
 
           <Grid size={{ xs: 12 }}>
             {validationMessages.length > 0 && (
@@ -2009,6 +1592,7 @@ const BalanceLedgerForm = ({
           </Grid>
 
           {/* UPDATED ACTION BUTTONS: Flex adjustments so buttons span full width on tiny screens */}
+          {filtersExpanded && (
           <Box
             sx={{
               mt: 3,
@@ -2061,660 +1645,11 @@ const BalanceLedgerForm = ({
               Search
             </Button>
           </Box>
+          )}
         </CardContent>
       </Card>
-    </Collapse>
     </Box>
   );
 };
 
 export default BalanceLedgerForm;
-import React, { useMemo } from "react";
-import {
-  Box,
-  Typography,
-  Button,
-  CircularProgress,
-  Stack,
-  Chip,
-} from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
-import FileDownloadIcon from "@mui/icons-material/FileDownload";
-import { useTheme, useMediaQuery } from "@mui/material";
-import CustomChip from "../../../utils/CustomChip";
-
-const BalanceLedgerDataGrid = ({
-  rows,
-  loading,
-  fetchError,
-  rowCount,
-  paginationModel,
-  setPaginationModel,
-  sortModel,
-  setSortModel,
-  filterModel,
-  setFilterModel,
-  onExcelExport,
-  exporting,
-  selectedCurrency,
-  selectedCircle,
-  branchOptions,
-  circleOptions,
-  currencyOptions,
-  enquiryType,
-  selectedCgl,
-}) => {
-  const theme = useTheme();
-
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const isTablet = useMediaQuery(theme.breakpoints.between("sm", "lg"));
-
-  console.log("selected currency:", selectedCurrency);
-
-  const collationColumns = useMemo(() => {
-    const cols = [
-      // {
-      //   field: "balanceDate",
-      //   headerName: "Balance Date",
-      //   flex: 0.8,
-      //   minWidth: 130, // slightly reduced to help mobile scrolling
-      //   valueFormatter: (v) => (v ? dayjs(v).format("DD/MM/YYYY") : "-"),
-      // },
-      {
-        field: "branchCode",
-        headerName: "Branch",
-        flex: 1,
-        minWidth: 160,
-        ...(branchOptions?.length
-          ? {
-              type: "singleSelect",
-              valueOptions: branchOptions,
-            }
-          : {}),
-        renderCell: (params) => (
-          <Box sx={{ lineHeight: "1.2", py: 0.5 }}>
-            <Typography
-              variant="body2"
-              sx={{ fontWeight: 700, fontSize: "0.8rem" }}
-            >
-              {params.row.branchCode}
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{ color: "text.secondary", fontSize: "0.7rem" }}
-            >
-              {params.row.branchName}
-            </Typography>
-          </Box>
-        ),
-      },
-      {
-        field: "cgl",
-        headerName: "CGL",
-        flex: 1,
-        minWidth: 160,
-        type: selectedCgl.includes("All CGLs") ? "string" : "singleSelect",
-        valueOptions: selectedCgl
-          .filter((c) => c !== "All CGLs")
-          .map((c) => c.split("-")[0].trim(" ")),
-        renderCell: (params) => (
-          <Box sx={{ lineHeight: 1.2, py: 0.5 }}>
-            <Typography
-              variant="body2"
-              sx={{ fontWeight: 700, fontSize: "0.8rem" }}
-            >
-              {params.row.cgl}
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{ color: "text.secondary", fontSize: "0.7rem" }}
-            >
-              {params.row.description}
-            </Typography>
-          </Box>
-        ),
-      },
-      {
-        field: "currency",
-        headerName: "Currency",
-        flex: 1,
-        minWidth: 150,
-        type: "singleSelect",
-        valueOptions: currencyOptions,
-        renderCell: (params) => (
-          <Box sx={{ lineHeight: 1.2, py: 0.5 }}>
-            <Typography
-              variant="body2"
-              sx={{ fontWeight: 700, fontSize: "0.8rem" }}
-            >
-              {params.row.currency}
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{ color: "text.secondary", fontSize: "0.7rem" }}
-            >
-              {params.row.currencyName}
-            </Typography>
-          </Box>
-        ),
-      },
-      {
-        field: "balance",
-        headerName: "Balance",
-        flex: 1,
-        minWidth: 200,
-        headerAlign: "right",
-        align: "right",
-        sortable: false,
-        renderCell: (params) => {
-          const val = Number(params.value);
-          const isNegative = val < 0;
-          const type = isNegative ? "Dr" : "Cr";
-
-          const formattedAmount = new Intl.NumberFormat("en-IN", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          }).format(Math.abs(val));
-
-          return (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-end",
-                height: "100%",
-                width: "100%",
-                // pr: 2, // Right padding for better spacing
-              }}
-            >
-              {/* Amount with dynamic color */}
-              <Typography
-                variant="body"
-                fontWeight="600"
-                sx={{
-                  color: isNegative ? "#d32f2f" : "#2e7d32",
-                  mr: 1,
-                }}
-              >
-                {formattedAmount}
-              </Typography>
-
-              {/* Type as a small, subtle chip */}
-              <CustomChip
-                label={type}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.7rem",
-                  fontWeight: "700",
-                  bgcolor: isNegative
-                    ? "rgba(211, 47, 47, 0.08)"
-                    : "rgba(46, 125, 50, 0.08)",
-                  color: isNegative ? "#d32f2f" : "#2e7d32",
-                  border: `1px solid ${isNegative ? "rgba(211, 47, 47, 0.2)" : "rgba(46, 125, 50, 0.2)"}`,
-                }}
-              />
-            </Box>
-          );
-        },
-      },
-
-      {
-        field: "inrBalance",
-        headerName: "INR Balance",
-        flex: 1,
-        minWidth: 180,
-        headerAlign: "right",
-        align: "right",
-        sortable: false,
-        renderCell: (params) => {
-          const val = Number(params.value);
-          const isNegative = val < 0;
-          const type = isNegative ? "Dr" : "Cr";
-
-          const formattedAmount = new Intl.NumberFormat("en-IN", {
-            style: "currency",
-            currency: "INR",
-            minimumFractionDigits: 2,
-          }).format(Math.abs(val || 0));
-
-          return (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-end",
-                height: "100%",
-                width: "100%",
-                // pr: 2, // Right padding for better spacing
-              }}
-            >
-              {/* Amount with dynamic color */}
-              <Typography
-                variant="body2"
-                fontWeight="600"
-                sx={{
-                  color: isNegative ? "#d32f2f" : "#2e7d32",
-                  mr: 1,
-                }}
-              >
-                {formattedAmount}
-              </Typography>
-
-              {/* Type as a small, subtle chip */}
-              <CustomChip
-                label={type}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.7rem",
-                  fontWeight: "700",
-                  bgcolor: isNegative
-                    ? "rgba(211, 47, 47, 0.08)"
-                    : "rgba(46, 125, 50, 0.08)",
-                  color: isNegative ? "#d32f2f" : "#2e7d32",
-                  border: `1px solid ${isNegative ? "rgba(211, 47, 47, 0.2)" : "rgba(46, 125, 50, 0.2)"}`,
-                }}
-              />
-            </Box>
-          );
-        },
-      },
-    ];
-
-    if (selectedCircle === "ALL") {
-      cols.splice(1, 0, {
-        field: "circleCode",
-        headerName: "Circle",
-        flex: 1,
-        minWidth: 150,
-        type: "singleSelect",
-        valueOptions: circleOptions,
-        renderCell: (params) => (
-          <Box sx={{ lineHeight: "1.2", py: 0.5 }}>
-            <Typography
-              variant="body2"
-              sx={{ fontWeight: 700, fontSize: "0.8rem" }}
-            >
-              {params.row.circleCode}
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{ color: "text.secondary", fontSize: "0.7rem" }}
-            >
-              {params.row.circleName}
-            </Typography>
-          </Box>
-        ),
-      });
-    }
-
-    return cols;
-  }, [branchOptions, selectedCircle, circleOptions, selectedCgl]);
-
-  const consolidatedColumns = useMemo(
-    () => [
-      {
-        field: "cgl",
-        headerName: "CGL",
-        flex: 1,
-        minWidth: 160,
-        type: selectedCgl.includes("All CGLs") ? "string" : "singleSelect",
-        valueOptions: selectedCgl
-          .filter((c) => c !== "All CGLs")
-          .map((c) => c.split("-")[0].trim(" ")),
-        renderCell: (params) => (
-          <Box sx={{ lineHeight: 1.2, py: 0.5 }}>
-            <Typography
-              variant="body2"
-              sx={{ fontWeight: 700, fontSize: "0.8rem" }}
-            >
-              {params.row.cgl}
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{ color: "text.secondary", fontSize: "0.7rem" }}
-            >
-              {params.row.description}
-            </Typography>
-          </Box>
-        ),
-      },
-      {
-        field: "currency",
-        headerName: "Currency",
-        flex: 1,
-        minWidth: 150,
-        type: "singleSelect",
-        valueOptions: currencyOptions,
-        renderCell: (params) => (
-          <Box sx={{ lineHeight: 1.2, py: 0.5 }}>
-            <Typography
-              variant="body2"
-              sx={{ fontWeight: 700, fontSize: "0.8rem" }}
-            >
-              {params.row.currency}
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{ color: "text.secondary", fontSize: "0.7rem" }}
-            >
-              {params.row.currencyName}
-            </Typography>
-          </Box>
-        ),
-      },
-      {
-        field: "balance",
-        headerName: "Balance",
-        flex: 1,
-        minWidth: 200,
-        headerAlign: "right",
-        align: "right",
-        sortable: false,
-        renderCell: (params) => {
-          const val = Number(params.value);
-          const isNegative = val < 0;
-          const type = isNegative ? "Dr" : "Cr";
-
-          const formattedAmount = new Intl.NumberFormat("en-IN", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          }).format(Math.abs(val));
-
-          return (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-end",
-                height: "100%",
-                width: "100%",
-                pr: 2, // Right padding for better spacing
-              }}
-            >
-              {/* Amount with dynamic color */}
-              <Typography
-                variant="body2"
-                fontWeight="600"
-                sx={{
-                  color: isNegative ? "#d32f2f" : "#2e7d32",
-                  mr: 1,
-                }}
-              >
-                {formattedAmount}
-              </Typography>
-
-              {/* Type as a small, subtle chip */}
-              <CustomChip
-                label={type}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.7rem",
-                  fontWeight: "700",
-                  bgcolor: isNegative
-                    ? "rgba(211, 47, 47, 0.08)"
-                    : "rgba(46, 125, 50, 0.08)",
-                  color: isNegative ? "#d32f2f" : "#2e7d32",
-                  border: `1px solid ${isNegative ? "rgba(211, 47, 47, 0.2)" : "rgba(46, 125, 50, 0.2)"}`,
-                }}
-              />
-            </Box>
-          );
-        },
-      },
-      {
-        field: "inrBalance",
-        headerName: "INR Balance",
-        flex: 1,
-        minWidth: 180,
-        headerAlign: "right",
-        align: "right",
-        sortable: false,
-        renderCell: (params) => {
-          const val = Number(params.value);
-          const isNegative = val < 0;
-          const type = isNegative ? "Dr" : "Cr";
-
-          const formattedAmount = new Intl.NumberFormat("en-IN", {
-            style: "currency",
-            currency: "INR",
-            minimumFractionDigits: 2,
-          }).format(Math.abs(val || 0));
-
-          return (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-end",
-                height: "100%",
-                width: "100%",
-                // pr: 2, // Right padding for better spacing
-              }}
-            >
-              {/* Amount with dynamic color */}
-              <Typography
-                variant="body2"
-                fontWeight="600"
-                sx={{
-                  color: isNegative ? "#d32f2f" : "#2e7d32",
-                  mr: 1,
-                }}
-              >
-                {formattedAmount}
-              </Typography>
-
-              {/* Type as a small, subtle chip */}
-              <CustomChip
-                label={type}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.7rem",
-                  fontWeight: "700",
-                  bgcolor: isNegative
-                    ? "rgba(211, 47, 47, 0.08)"
-                    : "rgba(46, 125, 50, 0.08)",
-                  color: isNegative ? "#d32f2f" : "#2e7d32",
-                  border: `1px solid ${isNegative ? "rgba(211, 47, 47, 0.2)" : "rgba(46, 125, 50, 0.2)"}`,
-                }}
-              />
-            </Box>
-          );
-        },
-      },
-    ],
-    [branchOptions, selectedCircle, circleOptions, selectedCgl],
-  );
-
-  const balanceColumns =
-    enquiryType === "CONSOLIDATED" ? consolidatedColumns : collationColumns;
-
-  const columnVisibilityModel = useMemo(
-    () => ({
-      branchName: false,
-      circleName: false,
-      ...(isMobile && {
-        narration: false,
-        circleCode: false,
-        inrBalance: false, // Optional: Hiding INR balance on very small screens saves horizontal scroll space
-      }),
-      ...(isTablet && {
-        narration: false,
-      }),
-    }),
-    [isMobile, isTablet],
-  );
-
-  const CustomNoRowsOverlay = () => (
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        justifyContent: "center",
-        alignItems: "center",
-        p: 2,
-        textAlign: "center",
-      }}
-    >
-      <ErrorOutlineIcon fontSize="large" color="action" />
-      <Typography
-        variant="h6"
-        fontSize={{ xs: "1rem", sm: "1.2rem" }}
-        color="text.secondary"
-        mt={1}
-      >
-        {fetchError 
-        ?"Unable to lod results. Please try again." : "No balances available for the selected criteria"}
-      </Typography>
-    </Box>
-  );
-
-  return (
-    <Box
-      sx={{
-        width: "100%",
-        height: "100%",
-        mt: { xs: 2, sm: 3 },
-        boxSizing: "border-box",
-      }}
-    >
-      <Box
-        sx={{
-          p: { xs: 1.5, sm: 2.5 },
-          mb: { xs: 2, sm: 3 },
-          borderRadius: { xs: "12px", sm: "20px" },
-          background: "rgba(255, 255, 255, 0.4)",
-          backdropFilter: "blur(12px)",
-          border: "1px solid rgba(255, 255, 255, 0.3)",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.05)",
-          display: "flex",
-          flexDirection: "column",
-          gap: { xs: 1.5, sm: 2.5 },
-        }}
-      >
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          spacing={2}
-          justifyContent="space-between"
-          alignItems={{ xs: "stretch", sm: "center" }}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: { xs: "column", sm: "row" },
-              alignItems: { xs: "flex-start", sm: "baseline" },
-              gap: { xs: 1, sm: 1.5 },
-            }}
-          >
-            <Typography
-              variant="h6"
-              fontWeight={800}
-              sx={{
-                color: "#1a1a1a",
-                letterSpacing: "-0.5px",
-                fontSize: { xs: "1.1rem", sm: "1.25rem" },
-              }}
-            >
-              Balance Ledger
-            </Typography>
-
-            <Chip
-              label={
-                rowCount > 0
-                  ? `${rowCount.toLocaleString("en-IN")} Records Found`
-                  : "No Records"
-              }
-              size="small"
-              sx={{
-                fontWeight: 700,
-                color: "#58469f",
-                bgcolor: "rgba(88, 70, 159, 0.1)",
-                borderRadius: "8px",
-                width: { xs: "fit-content", sm: "auto" },
-              }}
-            />
-          </Box>
-          <Button
-            variant="contained"
-            size={isMobile ? "medium" : "small"}
-            startIcon={
-              exporting ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <FileDownloadIcon />
-              )
-            }
-            onClick={onExcelExport}
-            disabled={!rowCount || loading || exporting}
-            sx={{
-              textTransform: "none",
-              bgcolor: "#58469f",
-              fontWeight: 700,
-              borderRadius: "8px",
-              px: 3,
-              width: { xs: "100%", sm: "auto" }, // Expands completely on mobile
-              "&:hover": { bgcolor: "#45357a" },
-            }}
-          >
-            {exporting ? "Preparing..." : "Export"}
-          </Button>
-        </Stack>
-
-        <Box
-          sx={{
-            width: "100%",
-            overflowX: "auto",
-            height: {
-              xs: "55vh",
-              sm: "65vh",
-              md: 600,
-            },
-          }}
-        >
-          <DataGrid
-            rows={rows}
-            columns={balanceColumns}
-            rowCount={rowCount}
-            loading={loading}
-            getRowId={(row) => row.id}
-            pagination
-            paginationMode="server"
-            sortingMode="server"
-            filterMode="server"
-            pageSizeOptions={[10, 20, 50, 100]}
-            paginationModel={paginationModel}
-            onPaginationModelChange={setPaginationModel}
-            sortModel={sortModel}
-            onSortModelChange={setSortModel}
-            filterModel={filterModel}
-            onFilterModelChange={setFilterModel}
-            rowHeight={50}
-            disableRowSelectionOnClick
-            slots={{ noRowsOverlay: CustomNoRowsOverlay }}
-            initialState={{
-              columns: {
-                columnVisibilityModel,
-              },
-            }}
-            sx={{
-              borderRadius: { xs: "12px", sm: "20px" },
-              backgroundColor: "rgba(255,255,255,0.4)",
-              border: "1px solid rgba(255,255,255,0.3)",
-              "& .MuiDataGrid-columnHeaders": {
-                bgcolor: "#f8f9fa",
-                fontWeight: 700,
-              },
-            }}
-          />
-        </Box>
-      </Box>
-    </Box>
-  );
-};
-
-export default BalanceLedgerDataGrid;
