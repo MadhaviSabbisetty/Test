@@ -54,6 +54,8 @@ const LedgerWiseEnquiry = () => {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
+
   const [paginationModel, setPaginationModel] = useState({
     page: 0,
     pageSize: DEFAULT_PAGE_SIZE,
@@ -381,6 +383,7 @@ const LedgerWiseEnquiry = () => {
     setSearchQuery({
       ...filters,
     });
+    setFiltersExpanded(false);
   }, [
     filters,
     etlDate,
@@ -396,6 +399,7 @@ const LedgerWiseEnquiry = () => {
     setSearchQuery(null);
     setRows(null);
     setRowCount(0);
+    setFiltersExpanded(true);
     setPaginationModel({
       page: 0,
       pageSize: DEFAULT_PAGE_SIZE,
@@ -453,6 +457,8 @@ const LedgerWiseEnquiry = () => {
       >
         <LedgerForm
           filters={filters}
+          filtersExpanded={filtersExpanded}
+          onToggleFilters={() => setFiltersExpanded((prev) => !prev)}
           onFilterChange={(field, value) =>
             setFilters((prev) => ({
               ...prev,
@@ -538,6 +544,8 @@ import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import { createFilterOptions } from "@mui/material/Autocomplete";
 
+import ManageSearchOutlinedIcon from "@mui/icons-material/ManageSearchOutlined";
+
 // Utilities & Hooks
 import { debounce } from "lodash";
 import useApi from "../../../hooks/useApi";
@@ -550,6 +558,8 @@ import {
 
 const LedgerForm = ({
   filters,
+  filtersExpanded,
+  onToggleFilters,
   onFilterChange,
   onReset,
   onFetch,
@@ -884,8 +894,37 @@ const LedgerForm = ({
                 Hierarchical data filtering & enquiry
               </Typography>
             </Box>
+             <Button
+              variant="contained"
+              size="small"
+              startIcon={<ManageSearchOutlinedIcon/>}
+              onClick={onToggleFilters}
+              sx={{
+                textTransform: "none",
+                    borderRadius: "8px",
+                    fontWeight: 600,
+                    minWidth: {
+                      xs: "100%",
+                      sm: "140px",
+                    },
+                    width: {
+                      xs: "100%",
+                      sm: "auto",
+                    },
+                    height: {
+                      xs: 38,
+                      sm: 32,
+                    },
+                    px: 1.5,
+                    fontSize: {
+                      xs: "0.8rem",
+                      sm: "0.82rem",
+                    },
+              }}>
+              {filtersExpanded ? "Hide Filters" : "Edit Filters"}
+            </Button>
           </Stack>
-
+        {filtersExpanded && (
           <Grid container spacing={4}>
             {/* 1. HIERARCHY ZONE */}
             {(isCircleVisible || isBranchVisible) && (
@@ -1704,6 +1743,7 @@ const LedgerForm = ({
               </Paper>
             </Grid>
           </Grid>
+        )}
 
           {/* Validation Messages Bottom Block */}
           <Grid size={{ xs: 12 }}>
@@ -2188,8 +2228,12 @@ const LedgerDataGrid = ({
         <Box
           sx={{
             width: "100%",
-            overflowX: "auto",
-            height: { xs: "65vh", sm: "70vh", md: 600 },
+            // overflowX: "auto",
+            minHeight:0,
+            overflow:"hidden",
+            display:"flex",
+            flexDirection:"column",
+            height: { xs: "55vh", sm: "60vh", md: 480 },
           }}
         >
           <DataGrid
@@ -2216,6 +2260,10 @@ const LedgerDataGrid = ({
               columns: { columnVisibilityModel },
             }}
             sx={{
+              flex:1,
+              minHeight:0,
+              minWidth:0,
+              width:"100%",
               borderRadius: "20px",
               backgroundColor: "rgba(255,255,255,0.4)",
               border: "1px solid rgba(255,255,255,0.3)",
