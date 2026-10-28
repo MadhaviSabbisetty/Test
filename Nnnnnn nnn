@@ -54,6 +54,7 @@ const LedgerWiseBalanceEnquiry = () => {
 
   const [rows, setRows] = useState(null);
   const [rowCount, setRowCount] = useState(0);
+  const [fetchError, setFetchError] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -101,7 +102,7 @@ const LedgerWiseBalanceEnquiry = () => {
 
   const [filters, setFilters] = useState(initialState);
   const [searchQuery, setSearchQuery] = useState(null);
-
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
   useEffect(() => {
     setInitialState(initialDetails);
     setFilters(initialDetails);
@@ -279,8 +280,12 @@ const LedgerWiseBalanceEnquiry = () => {
       setRowCount(res?.data?.page?.totalElements || 0);
     } catch (error) {
       console.error(error);
+      setFetchError(error?.message || "Unable to load results. Please try again.",);
+      setRows([]);
+      setRowCount(0);
       showSnackBar(error?.message || "Enquiry failed", "error");
-    } finally {
+    }
+    finally {
       setLoading(false);
     }
   }, [callApi, buildPayload, showSnackBar]);
@@ -356,6 +361,7 @@ const LedgerWiseBalanceEnquiry = () => {
     setSearchQuery({
       ...filters,
     });
+    setFiltersExpanded(false);
   }, [
     filters,
     etlDate,
@@ -369,6 +375,7 @@ const LedgerWiseBalanceEnquiry = () => {
   const handleReset = useCallback(() => {
     setFilters(initialState);
     setSearchQuery(null);
+    setFiltersExpanded(true);
     setRows(null);
     setRowCount(0);
     setPaginationModel({
@@ -430,6 +437,8 @@ const LedgerWiseBalanceEnquiry = () => {
       >
         <LedgerForm
           filters={filters}
+          filtersExpanded={filtersExpanded}
+          setFiltersExpanded={setFiltersExpanded}
           onFilterChange={(field, value) => {
             if (field === "enquiryType") {
               setRows(null);
@@ -463,6 +472,7 @@ const LedgerWiseBalanceEnquiry = () => {
           <LedgerDataGrid
             rows={rows}
             loading={loading}
+            fetchError={fetchError}
             rowCount={rowCount}
             paginationModel={paginationModel}
             setPaginationModel={setPaginationModel}
@@ -527,6 +537,8 @@ import CustomChip from "../../../utils/CustomChip";
 
 const BalanceLedgerForm = ({
   filters,
+  filtersExpanded,
+  setFiltersExpanded,
   onFilterChange,
   onReset,
   onFetch,
@@ -811,6 +823,31 @@ const BalanceLedgerForm = ({
 
   return (
     <Box sx={{ position: "relative", mb: 2 }}>
+      {!filtersExpanded && (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "flex-end",
+            mb: 1,
+          }}
+        >
+          <Button
+            variant="outlined"
+            startIcon={<VisibilityIcon />}
+            onClick={() => setFiltersExpanded(true)}
+            sx={{
+              borderRadius: 2,
+              textTransform: "none",
+              fontWeight: 700,
+              color: "#58469f",
+              borderColor: "#58469f",
+            }}
+          >
+            Edit Filters
+          </Button>
+        </Box>
+      )}
+      <Collapse in={filtersExpanded} timeout="auto">
       <Card
         sx={{
           borderRadius: "24px",
@@ -2026,6 +2063,7 @@ const BalanceLedgerForm = ({
           </Box>
         </CardContent>
       </Card>
+    </Collapse>
     </Box>
   );
 };
@@ -2049,6 +2087,7 @@ import CustomChip from "../../../utils/CustomChip";
 const BalanceLedgerDataGrid = ({
   rows,
   loading,
+  fetchError,
   rowCount,
   paginationModel,
   setPaginationModel,
@@ -2529,7 +2568,8 @@ const BalanceLedgerDataGrid = ({
         color="text.secondary"
         mt={1}
       >
-        No balances available for the selected criteria
+        {fetchError 
+        ?"Unable to lod results. Please try again." : "No balances available for the selected criteria"}
       </Typography>
     </Box>
   );
